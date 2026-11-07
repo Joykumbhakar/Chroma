@@ -1353,7 +1353,7 @@ private fun FlashEmptyState(onUpload: () -> Unit) {
         Spacer(Modifier.height(28.dp))
         GlassButton(
             onClick = onUpload,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE)),
             shape = RoundedCornerShape(32.dp),
             modifier = Modifier.height(50.dp)
         ) {

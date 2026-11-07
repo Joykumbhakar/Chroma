@@ -46,7 +46,7 @@ fun PrivacyPolicyTermsScreen(
 ) {
     val colors = LocalOscellionColors.current
     val isDark = colors.isDark
-    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
+    val screenBg = if (isDark) Color(0xFF080808) else Color(0xFFFAFAFA)
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Privacy Policy, 1 = Terms & Conditions
     var hasAgreed by remember { mutableStateOf(!isFirstLaunch) }
@@ -70,7 +70,7 @@ fun PrivacyPolicyTermsScreen(
                         Icon(
                             imageVector = Lucide.ChevronLeft,
                             contentDescription = "Back",
-                            tint = if (isDark) Color.White else Color(0xFF0F172A),
+                            tint = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000),
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -79,7 +79,7 @@ fun PrivacyPolicyTermsScreen(
                         fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = InterFontFamily,
-                        color = if (isDark) Color.White else Color(0xFF0F172A)
+                        color = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000)
                     )
                 }
             }
@@ -97,7 +97,7 @@ fun PrivacyPolicyTermsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(18.dp))
-                            .background(if (isDark) Color(0xFF10141E) else Color.White)
+                            .background(if (isDark) Color(0xFF17171A) else Color(0xFFFFFFFF))
                             .doubleEdgeGlassBorder(cornerRadius = 18.dp)
                             .clickable { hasAgreed = !hasAgreed }
                             .padding(horizontal = 16.dp, vertical = 12.dp)
@@ -113,7 +113,7 @@ fun PrivacyPolicyTermsScreen(
                             Text(
                                 text = "I agree to the Privacy Policy and Terms of Service",
                                 fontSize = 13.5.sp,
-                                color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155),
+                                color = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000),
                                 lineHeight = 18.sp,
                                 fontFamily = InterFontFamily,
                                 fontWeight = FontWeight.Medium,
@@ -144,7 +144,7 @@ fun PrivacyPolicyTermsScreen(
                             .shadow(8.dp, CircleShape, ambientColor = Color(0x40000000), spotColor = Color(0x60000000))
                             .clip(CircleShape)
                             .background(
-                                if (hasAgreed) Brush.horizontalGradient(listOf(Color(0xFF0066FF), Color(0xFF0052CC)))
+                                if (hasAgreed) Brush.horizontalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE)))
                                 else Brush.horizontalGradient(listOf(Color(0xFF334155), Color(0xFF1E293B)))
                             )
                             .clickable(
@@ -177,7 +177,7 @@ fun PrivacyPolicyTermsScreen(
                         Text(
                             text = "Decline & Exit App",
                             fontSize = 13.5.sp,
-                            color = Color(0xFFEF4444),
+                            color = Color(0xFFF53B57),
                             fontWeight = FontWeight.Medium,
                             fontFamily = InterFontFamily
                         )
@@ -188,7 +188,7 @@ fun PrivacyPolicyTermsScreen(
                             .fillMaxWidth()
                             .height(50.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF0066FF))
+                            .background(Color(0xFF0381FE))
                             .clickable(role = Role.Button, onClick = onBack),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
@@ -228,8 +228,8 @@ fun PrivacyPolicyTermsScreen(
                             .background(
                                 Brush.linearGradient(
                                     listOf(
-                                        Color(0xFF0066FF).copy(alpha = 0.22f),
-                                        Color(0xFF38BDF8).copy(alpha = 0.12f)
+                                        Color(0xFF0381FE).copy(alpha = 0.22f),
+                                        Color(0xFF3E91FF).copy(alpha = 0.12f)
                                     )
                                 )
                             )
@@ -239,7 +239,7 @@ fun PrivacyPolicyTermsScreen(
                         Icon(
                             imageVector = Lucide.ShieldCheck,
                             contentDescription = null,
-                            tint = Color(0xFF38BDF8),
+                            tint = Color(0xFF3E91FF),
                             modifier = Modifier.size(32.dp)
                         )
                     }
@@ -251,7 +251,7 @@ fun PrivacyPolicyTermsScreen(
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = InterFontFamily,
-                        color = if (isDark) Color.White else Color(0xFF0F172A),
+                        color = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000),
                         letterSpacing = (-0.6).sp,
                         textAlign = TextAlign.Center
                     )
@@ -261,7 +261,7 @@ fun PrivacyPolicyTermsScreen(
                     Text(
                         text = "Please review how Oscillom protects your creative rights, encrypted data, and privacy.",
                         fontSize = 13.5.sp,
-                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                        color = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A),
                         textAlign = TextAlign.Center,
                         lineHeight = 19.sp,
                         fontFamily = InterFontFamily,
@@ -276,7 +276,7 @@ fun PrivacyPolicyTermsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(18.dp))
-                        .background(if (isDark) Color(0xFF10141E) else Color(0xFFE2E8F0))
+                        .background(if (isDark) Color(0xFF17171A) else Color(0xFFF2F4F7))
                         .doubleEdgeGlassBorder(cornerRadius = 18.dp)
                         .padding(4.dp)
                 ) {
@@ -292,7 +292,7 @@ fun PrivacyPolicyTermsScreen(
                                 .height(38.dp)
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(
-                                    if (privacyActive) Color(0xFF0066FF)
+                                    if (privacyActive) Color(0xFF0381FE)
                                     else Color.Transparent
                                 )
                                 .clickable { selectedTab = 0 },
@@ -302,7 +302,7 @@ fun PrivacyPolicyTermsScreen(
                                 text = "Privacy Policy",
                                 fontSize = 13.5.sp,
                                 fontWeight = if (privacyActive) FontWeight.Bold else FontWeight.Medium,
-                                color = if (privacyActive) Color.White else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)),
+                                color = if (privacyActive) Color.White else (if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)),
                                 fontFamily = InterFontFamily
                             )
                         }
@@ -315,7 +315,7 @@ fun PrivacyPolicyTermsScreen(
                                 .height(38.dp)
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(
-                                    if (termsActive) Color(0xFF0066FF)
+                                    if (termsActive) Color(0xFF0381FE)
                                     else Color.Transparent
                                 )
                                 .clickable { selectedTab = 1 },
@@ -325,7 +325,7 @@ fun PrivacyPolicyTermsScreen(
                                 text = "Terms of Service",
                                 fontSize = 13.5.sp,
                                 fontWeight = if (termsActive) FontWeight.Bold else FontWeight.Medium,
-                                color = if (termsActive) Color.White else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)),
+                                color = if (termsActive) Color.White else (if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)),
                                 fontFamily = InterFontFamily
                             )
                         }
@@ -425,7 +425,7 @@ private fun OneUiLegalItem(
             text = title,
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
-            color = if (isDark) Color.White else Color(0xFF0F172A),
+            color = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000),
             fontFamily = InterFontFamily,
             letterSpacing = (-0.2).sp
         )
@@ -433,7 +433,7 @@ private fun OneUiLegalItem(
         Text(
             text = description,
             fontSize = 13.sp,
-            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+            color = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A),
             lineHeight = 19.sp,
             fontFamily = InterFontFamily
         )

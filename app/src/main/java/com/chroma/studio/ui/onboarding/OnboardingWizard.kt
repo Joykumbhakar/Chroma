@@ -184,12 +184,12 @@ fun OnboardingWizard(
 
     val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
     val isDark = colors.isDark
-    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
-    val cardBg = if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
-    val fieldBg = if (isDark) Color(0xFF0A0D18) else Color(0xFFF4F6F9)
+    val screenBg = if (isDark) Color(0xFF080808) else Color(0xFFFAFAFA)
+    val cardBg = if (isDark) Color(0xFF17171A) else Color(0xFFFFFFFF)
+    val fieldBg = if (isDark) Color(0xFF222226) else Color(0xFFF2F4F7)
     val fieldBorder = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000)
-    val textPrimary = if (isDark) Color.White else Color(0xFF0A0A0C)
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF71717A)
+    val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000)
+    val textMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)
 
     Box(
         modifier = Modifier
@@ -271,7 +271,7 @@ fun OnboardingWizard(
                                     .width(36.dp)
                                     .height(4.dp)
                                     .clip(CircleShape)
-                                    .background(if (active) Color(0xFF0066FF) else Color(0x33FFFFFF))
+                                    .background(if (active) Color(0xFF0381FE) else Color(0x33FFFFFF))
                             )
                         }
                     }
@@ -357,7 +357,7 @@ fun OnboardingWizard(
                                         .size(100.dp)
                                         .clip(CircleShape)
                                         .background(Color(0xFF1E2536))
-                                        .border(BorderStroke(2.dp, Color(0xFF0066FF)), CircleShape)
+                                        .border(BorderStroke(2.dp, Color(0xFF0381FE)), CircleShape)
                                         .clickable { avatarGalleryLauncher.launch("image/*") },
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -390,7 +390,7 @@ fun OnboardingWizard(
                                             .align(Alignment.BottomEnd)
                                             .size(30.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFF0066FF))
+                                            .background(Color(0xFF0381FE))
                                             .border(BorderStroke(2.dp, Color(0xFF030510)), CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -709,7 +709,7 @@ fun OnboardingWizard(
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(18.dp))
-                                                .background(if (isSelected) Color(0xFF0066FF) else Color(0xFF10141E))
+                                                .background(if (isSelected) Color(0xFF0381FE) else Color(0xFF10141E))
                                                 .doubleEdgeGlassBorder(cornerRadius = 18.dp)
                                                 .clickable {
                                                     if (isSelected) {
@@ -755,7 +755,7 @@ fun OnboardingWizard(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(38.dp),
                                     strokeWidth = 3.dp,
-                                    color = Color(0xFF0066FF)
+                                    color = Color(0xFF0381FE)
                                 )
                             }
                         }
@@ -779,7 +779,7 @@ fun OnboardingWizard(
                         .fillMaxWidth()
                         .height(52.dp)
                         .clip(CircleShape)
-                        .background(if (canProceed) Color(0xFF0066FF) else Color(0xFF1E2433))
+                        .background(if (canProceed) Color(0xFF0381FE) else if (isDark) Color(0xFF222226) else Color(0xFFE2E8F0))
                         .clickable(enabled = canProceed, role = Role.Button) {
                             when (currentStep) {
                                 WizardStep.IDENTITY -> currentStep = WizardStep.PERSONAL_DETAILS
@@ -809,7 +809,7 @@ fun OnboardingWizard(
                 ) {
                     Text(
                         text = if (currentStep == WizardStep.INTERESTS) "Complete Setup" else "Continue",
-                        color = if (canProceed) Color.White else Color(0xFF64748B),
+                        color = if (canProceed) Color.White else textMuted,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -817,7 +817,7 @@ fun OnboardingWizard(
                     Icon(
                         imageVector = Lucide.ArrowRight,
                         contentDescription = null,
-                        tint = if (canProceed) Color.White else Color(0xFF64748B),
+                        tint = if (canProceed) Color.White else textMuted,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -839,12 +839,12 @@ fun OnboardingWizard(
                             showDatePicker = false
                         }
                     }) {
-                        Text("Confirm", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                        Text("Confirm", color = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE), fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showDatePicker = false }) {
-                        Text("Cancel", color = Color(0xFF94A3B8))
+                        Text("Cancel", color = textMuted)
                     }
                 }
             ) {

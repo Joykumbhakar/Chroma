@@ -46,7 +46,7 @@ object AppleBluePalette {
     val KeyLightCyan = Color(0xFF5AC8FA)
     val HighlightSky = Color(0xFF4CC9FF)
     val ElectricAzure = Color(0xFF1A96FF)
-    val SystemBlue = Color(0xFF007AFF)
+    val SystemBlue = Color(0xFF0381FE)
     val RoyalCobalt = Color(0xFF0051D5)
     val DeepSapphire = Color(0xFF002E8A)
     val MidnightCavity = Color(0xFF001238)

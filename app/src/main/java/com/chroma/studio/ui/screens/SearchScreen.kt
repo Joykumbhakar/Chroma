@@ -108,8 +108,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // ── One UI Design Tokens ──────────────────────────────────────────────────────
-private val OneUiBlueLight = Color(0xFF0A84FF)
-private val OneUiBlueDark = Color(0xFF0A84FF)
+private val OneUiBlueLight = Color(0xFF0381FE)
+private val OneUiBlueDark = Color(0xFF0381FE)
 private val OneUiSurfaceLight = Color(0xFFF2F2F7)
 private val OneUiSurfaceDark = Color(0xFF000000)
 private val OneUiCardLight = Color(0xFFFFFFFF)
@@ -201,7 +201,7 @@ fun GalaxyAiSparkleIcon(
     val auroraGradient = remember {
         Brush.linearGradient(
             colors = listOf(
-                Color(0xFF0A84FF), // Blue
+                Color(0xFF0381FE), // Blue
                 Color(0xFFA855F7), // Purple
                 Color(0xFF06B6D4), // Cyan
                 Color(0xFF22C55E)  // Emerald
@@ -249,7 +249,7 @@ fun GalaxyAiSearchButton(
     val auroraBrush = remember {
         Brush.linearGradient(
             colors = listOf(
-                Color(0xFF0A84FF),
+                Color(0xFF0381FE),
                 Color(0xFFA855F7),
                 Color(0xFF06B6D4),
                 Color(0xFF22C55E)
@@ -335,7 +335,7 @@ fun GalaxyAiAuroraSearchBar(
         if (isFocused) {
             Brush.linearGradient(
                 listOf(
-                    Color(0xFF0A84FF),
+                    Color(0xFF0381FE),
                     Color(0xFF9333EA),
                     Color(0xFF0891B2),
                     Color(0xFF059669)

@@ -35,7 +35,7 @@ enum class VerifiedBadgeTier {
 // Official Signature Verified Blue (Apple Cupertino / Instagram)
 val VerifiedBadgeBlueGradient = listOf(
     Color(0xFF2F80ED),
-    Color(0xFF007AFF),
+    Color(0xFF0381FE),
     Color(0xFF0056D6)
 )
 
@@ -119,7 +119,7 @@ fun VerifiedBadge(
 
     val glowColor = remember(tier, badgeColor) {
         badgeColor?.copy(alpha = 0.35f) ?: when (tier) {
-            VerifiedBadgeTier.BLUE -> Color(0xFF007AFF).copy(alpha = 0.35f)
+            VerifiedBadgeTier.BLUE -> Color(0xFF0381FE).copy(alpha = 0.35f)
             VerifiedBadgeTier.GOLD -> Color(0xFFFFA500).copy(alpha = 0.35f)
             VerifiedBadgeTier.CHROMA -> Color(0xFF7C3AED).copy(alpha = 0.35f)
             VerifiedBadgeTier.SILVER -> Color(0xFF94A3B8).copy(alpha = 0.35f)
@@ -256,7 +256,7 @@ fun IosVerificationBadge(
 fun ScallopedVerifiedBadge(
     modifier: Modifier = Modifier,
     size: Dp = 14.dp,
-    badgeColor: Color = Color(0xFF007AFF),
+    badgeColor: Color = Color(0xFF0381FE),
     tier: VerifiedBadgeTier = VerifiedBadgeTier.BLUE,
     animated: Boolean = false
 ) {

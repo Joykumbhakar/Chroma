@@ -306,7 +306,7 @@ fun LiveBubblePreviewCard(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 fontFamily = InterFontFamily,
-                color = Color(0xFF0A84FF)
+                color = Color(0xFF0381FE)
             )
         }
 
@@ -696,7 +696,7 @@ fun BubbleStylesSubScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(
-                                    if (selected) Color(0xFF0A84FF)
+                                    if (selected) Color(0xFF0381FE)
                                     else if (colors.isLight) Color(0xFFE5E5EA)
                                     else Color(0xFF2C2C2E)
                                 )
@@ -740,7 +740,7 @@ fun BubbleStylesSubScreen(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            OneUiIconBadge(icon = Lucide.MessageCircle, iconColor = Color(0xFF0A84FF))
+                            OneUiIconBadge(icon = Lucide.MessageCircle, iconColor = Color(0xFF0381FE))
                             Spacer(Modifier.width(13.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
@@ -761,7 +761,7 @@ fun BubbleStylesSubScreen(
                                 Icon(
                                     imageVector = Lucide.Check,
                                     contentDescription = null,
-                                    tint = Color(0xFF0A84FF),
+                                    tint = Color(0xFF0381FE),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -916,7 +916,7 @@ fun CornerGeometrySubScreen(
                             iconColor = Color(0xFF0055FF),
                             showChevron = false,
                             valueText = if (isSelected) "✓" else null,
-                            valueTextColor = Color(0xFF0A84FF),
+                            valueTextColor = Color(0xFF0381FE),
                             onClick = {
                                 SoundManager.playReaction()
                                 onUpdateCustomCorners(currentCustomCorners.copy(pointyCornerStyle = style))
@@ -979,7 +979,7 @@ fun AnimationsSubScreen(
                         iconColor = Color(0xFF0055FF),
                         showChevron = false,
                         valueText = if (isSelected) "✓" else null,
-                        valueTextColor = Color(0xFF0A84FF),
+                        valueTextColor = Color(0xFF0381FE),
                         onClick = {
                             SoundManager.playReaction()
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -1045,7 +1045,7 @@ fun VoiceGlobeSubScreen(
                         iconGradient = globe.previewGradient,
                         showChevron = false,
                         valueText = if (isSelected) "✓" else null,
-                        valueTextColor = Color(0xFF0A84FF),
+                        valueTextColor = Color(0xFF0381FE),
                         onClick = {
                             SoundManager.playReaction()
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -1205,7 +1205,7 @@ fun AppearanceSettingsScreen(
                                 .size(7.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (oneUiGradient == OneUiGradientStyle.SOLID) Color(0xFF0A84FF)
+                                    if (oneUiGradient == OneUiGradientStyle.SOLID) Color(0xFF0381FE)
                                     else oneUiGradient.orbColor
                                 )
                         )
@@ -1222,7 +1222,7 @@ fun AppearanceSettingsScreen(
                     text = "Done",
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (oneUiGradient == OneUiGradientStyle.SOLID) Color(0xFF0A84FF) else oneUiGradient.primaryColor,
+                    color = if (oneUiGradient == OneUiGradientStyle.SOLID) Color(0xFF0381FE) else oneUiGradient.primaryColor,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {

@@ -155,7 +155,7 @@ fun StoriesSection(
                         Spacer(modifier = Modifier.height(5.dp))
                         Text(
                             text = if (isUploading) "Uploading..." else "Your story",
-                            color = if (isUploading) Color(0xFF007AFF) else if (hasMyStory) colors.textMain else colors.textMain.copy(alpha = 0.82f),
+                            color = if (isUploading) Color(0xFF0381FE) else if (hasMyStory) colors.textMain else colors.textMain.copy(alpha = 0.82f),
                             fontSize = 11.5.sp,
                             fontWeight = if (isUploading || hasMyStory) FontWeight.SemiBold else FontWeight.Medium,
                             maxLines = 1,

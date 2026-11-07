@@ -157,7 +157,7 @@ fun ChatWallpaperPickerSheet(
             }
 
             val previewOutgoingBg = if (previewConfig.customOutgoingColor != null) {
-                try { SolidColor(Color(android.graphics.Color.parseColor(previewConfig.customOutgoingColor))) } catch (e: Exception) { SolidColor(Color(0xFF0A84FF)) }
+                try { SolidColor(Color(android.graphics.Color.parseColor(previewConfig.customOutgoingColor))) } catch (e: Exception) { SolidColor(Color(0xFF0381FE)) }
             } else {
                 Brush.linearGradient(
                     when (chatTheme) {
@@ -166,7 +166,7 @@ fun ChatWallpaperPickerSheet(
                         ChatTheme.EMERALD -> listOf(Color(0xFF34C759), Color(0xFF00C7BE))
                         ChatTheme.LAVENDER -> listOf(Color(0xFFAF52DE), Color(0xFF5E5CE6))
                         ChatTheme.MONOCHROME -> listOf(Color(0xFF3A3A3C), Color(0xFF1C1C1E))
-                        else -> listOf(Color(0xFF0A84FF), Color(0xFF005CE6))
+                        else -> listOf(Color(0xFF0381FE), Color(0xFF005CE6))
                     }
                 )
             }
@@ -274,7 +274,7 @@ fun ChatWallpaperPickerSheet(
                                     .background(color)
                                     .border(
                                         width = if (isSelected) 3.dp else 1.dp,
-                                        color = if (isSelected) Color(0xFF0A84FF) else Color(0x33000000),
+                                        color = if (isSelected) Color(0xFF0381FE) else Color(0x33000000),
                                         shape = CircleShape
                                     )
                                     .clickable {
@@ -286,7 +286,7 @@ fun ChatWallpaperPickerSheet(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (isSelected) {
-                                    Icon(Lucide.Check, null, tint = if (hex.startsWith("#1") || hex.startsWith("#0") || hex.startsWith("#2")) Color.White else Color(0xFF0A84FF), modifier = Modifier.size(16.dp))
+                                    Icon(Lucide.Check, null, tint = if (hex.startsWith("#1") || hex.startsWith("#0") || hex.startsWith("#2")) Color.White else Color(0xFF0381FE), modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
@@ -388,7 +388,7 @@ fun ChatWallpaperPickerSheet(
                                     .size(36.dp)
                                     .clip(CircleShape)
                                     .background(color)
-                                    .border(if (isSelected) 3.dp else 1.dp, if (isSelected) Color(0xFF0A84FF) else Color(0x33000000), CircleShape)
+                                    .border(if (isSelected) 3.dp else 1.dp, if (isSelected) Color(0xFF0381FE) else Color(0x33000000), CircleShape)
                                     .clickable {
                                         previewConfig = previewConfig.copy(
                                             type = WallpaperType.DOODLE,
@@ -399,7 +399,7 @@ fun ChatWallpaperPickerSheet(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (isSelected) {
-                                    Icon(Lucide.Check, null, tint = if (hex.startsWith("#1") || hex.startsWith("#0")) Color.White else Color(0xFF0A84FF), modifier = Modifier.size(16.dp))
+                                    Icon(Lucide.Check, null, tint = if (hex.startsWith("#1") || hex.startsWith("#0")) Color.White else Color(0xFF0381FE), modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
@@ -416,7 +416,7 @@ fun ChatWallpaperPickerSheet(
                             .fillMaxWidth()
                             .height(48.dp),
                         shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE))
                     ) {
                         Icon(Lucide.Camera, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -512,7 +512,7 @@ fun ChatWallpaperPickerSheet(
                         items(ChatWallpaperPresets.solidColors) { hex ->
                             val color = try { Color(android.graphics.Color.parseColor(hex)) } catch (e: Exception) { Color.LightGray }
                             Box(
-                                modifier = Modifier.size(36.dp).clip(CircleShape).background(color).border(if (previewConfig.customIncomingColor == hex) 3.dp else 1.dp, if (previewConfig.customIncomingColor == hex) Color(0xFF0A84FF) else Color(0x33000000), CircleShape)
+                                modifier = Modifier.size(36.dp).clip(CircleShape).background(color).border(if (previewConfig.customIncomingColor == hex) 3.dp else 1.dp, if (previewConfig.customIncomingColor == hex) Color(0xFF0381FE) else Color(0x33000000), CircleShape)
                                 .clickable { previewConfig = previewConfig.copy(customIncomingColor = hex) }
                             )
                         }
@@ -531,7 +531,7 @@ fun ChatWallpaperPickerSheet(
                         items(ChatWallpaperPresets.solidColors) { hex ->
                             val color = try { Color(android.graphics.Color.parseColor(hex)) } catch (e: Exception) { Color.LightGray }
                             Box(
-                                modifier = Modifier.size(36.dp).clip(CircleShape).background(color).border(if (previewConfig.customOutgoingColor == hex) 3.dp else 1.dp, if (previewConfig.customOutgoingColor == hex) Color(0xFF0A84FF) else Color(0x33000000), CircleShape)
+                                modifier = Modifier.size(36.dp).clip(CircleShape).background(color).border(if (previewConfig.customOutgoingColor == hex) 3.dp else 1.dp, if (previewConfig.customOutgoingColor == hex) Color(0xFF0381FE) else Color(0x33000000), CircleShape)
                                 .clickable { previewConfig = previewConfig.copy(customOutgoingColor = hex) }
                             )
                         }
@@ -551,7 +551,7 @@ fun ChatWallpaperPickerSheet(
                         items(listOf("#FFFFFF", "#000000", "#FF3B30", "#007AFF", "#34C759", "#FF9500")) { hex ->
                             val color = try { Color(android.graphics.Color.parseColor(hex)) } catch (e: Exception) { Color.LightGray }
                             Box(
-                                modifier = Modifier.size(36.dp).clip(CircleShape).background(color).border(if (previewConfig.customIncomingTextColor == hex) 3.dp else 1.dp, if (previewConfig.customIncomingTextColor == hex) Color(0xFF0A84FF) else Color(0x33000000), CircleShape)
+                                modifier = Modifier.size(36.dp).clip(CircleShape).background(color).border(if (previewConfig.customIncomingTextColor == hex) 3.dp else 1.dp, if (previewConfig.customIncomingTextColor == hex) Color(0xFF0381FE) else Color(0x33000000), CircleShape)
                                 .clickable { previewConfig = previewConfig.copy(customIncomingTextColor = hex) }
                             )
                         }
@@ -570,7 +570,7 @@ fun ChatWallpaperPickerSheet(
                         items(listOf("#FFFFFF", "#000000", "#FF3B30", "#007AFF", "#34C759", "#FF9500")) { hex ->
                             val color = try { Color(android.graphics.Color.parseColor(hex)) } catch (e: Exception) { Color.LightGray }
                             Box(
-                                modifier = Modifier.size(36.dp).clip(CircleShape).background(color).border(if (previewConfig.customOutgoingTextColor == hex) 3.dp else 1.dp, if (previewConfig.customOutgoingTextColor == hex) Color(0xFF0A84FF) else Color(0x33000000), CircleShape)
+                                modifier = Modifier.size(36.dp).clip(CircleShape).background(color).border(if (previewConfig.customOutgoingTextColor == hex) 3.dp else 1.dp, if (previewConfig.customOutgoingTextColor == hex) Color(0xFF0381FE) else Color(0x33000000), CircleShape)
                                 .clickable { previewConfig = previewConfig.copy(customOutgoingTextColor = hex) }
                             )
                         }

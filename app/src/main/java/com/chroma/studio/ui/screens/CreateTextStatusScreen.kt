@@ -37,7 +37,7 @@ import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 
 private val COLOR_PRESETS = listOf(
-    Color(0xFF007AFF), // Blue
+    Color(0xFF0381FE), // Blue
     Color(0xFFFF2D55), // Pink/Red
     Color(0xFF34C759), // Green
     Color(0xFFFF9500), // Orange
@@ -102,7 +102,7 @@ fun CreateTextStatusScreen(
                             Icon(
                                 imageVector = if (privacy == "Followers") Lucide.Users else Lucide.Globe,
                                 contentDescription = null,
-                                tint = Color(0xFF007AFF),
+                                tint = Color(0xFF0381FE),
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
@@ -130,7 +130,7 @@ fun CreateTextStatusScreen(
                         ) {
                             DropdownMenuItem(
                                 leadingIcon = {
-                                    Icon(Lucide.Users, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
+                                    Icon(Lucide.Users, null, tint = Color(0xFF0381FE), modifier = Modifier.size(18.dp))
                                 },
                                 text = { Text("Followers Only", color = colors.textMain, fontWeight = FontWeight.Medium) },
                                 onClick = {
@@ -230,7 +230,7 @@ fun CreateTextStatusScreen(
                                 lineHeight = 26.sp,
                                 fontWeight = FontWeight.Normal
                             ),
-                            cursorBrush = SolidColor(Color(0xFF007AFF)),
+                            cursorBrush = SolidColor(Color(0xFF0381FE)),
                             decorationBox = { innerTextField ->
                                 if (textValue.text.isEmpty()) {
                                     Text(
@@ -363,7 +363,7 @@ fun CreateTextStatusScreen(
                             icon = Lucide.Palette,
                             tooltip = "Color",
                             colors = colors,
-                            tintOverride = if (showColorPalette) Color(0xFF007AFF) else null,
+                            tintOverride = if (showColorPalette) Color(0xFF0381FE) else null,
                             onClick = { showColorPalette = !showColorPalette }
                         )
                     }

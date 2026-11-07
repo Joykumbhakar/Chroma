@@ -221,7 +221,7 @@ fun AccountCenterScreen(
     val dividerColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
     val textDark = if (!isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
     val textMuted = if (!isDark) Color(0xFF71717A) else Color(0xFF8E8E93)
-    val activeAccent = if (gradientStyle == OneUiGradientStyle.SOLID) Color(0xFF0A84FF) else gradientStyle.primaryColor
+    val activeAccent = if (gradientStyle == OneUiGradientStyle.SOLID) Color(0xFF0381FE) else gradientStyle.primaryColor
 
     val currentExpandedHeightDp = with(density) {
         (maxCollapsePx - collapseOffsetPx).coerceAtLeast(0f).toDp()

@@ -100,7 +100,7 @@ enum class OneUiGradientStyle(
     GALAXY_AI(
         label = "Galaxy Ice",
         badgeText = "One UI 7.0 Pure Ice Blue",
-        primaryColor = Color(0xFF0A84FF),    // Samsung Royal Blue
+        primaryColor = Color(0xFF0381FE),    // Samsung One UI Primary Blue
         secondaryColor = Color(0xFF60A5FA),  // Crisp Clean Sky Blue
         orbColor = Color(0xFFBAE6FD)        // Pure Ice White-Blue
     ),
@@ -122,7 +122,7 @@ enum class OneUiGradientStyle(
         label = "Royal Blue",
         badgeText = "One UI 7.0 Royal Sapphire",
         primaryColor = Color(0xFF1D4ED8),    // Deep Royal Sapphire
-        secondaryColor = Color(0xFF0A84FF),  // True Blue
+        secondaryColor = Color(0xFF3E91FF),  // One UI Color Control Active
         orbColor = Color(0xFFDBEAFE)        // Soft White Blue
     ),
     SOLID(

@@ -79,7 +79,7 @@ private object AppleBevelTokens {
 
     // Default Apple Blue State (#007AFF core)
     val BlueTop = Color(0xFF148EFF)
-    val BlueMid = Color(0xFF007AFF)
+    val BlueMid = Color(0xFF0381FE)
     val BlueBottom = Color(0xFF0062CC)
     val BlueBorder = Color(0xFF0051A8)
     val BluePressedTop = Color(0xFF0062CC)

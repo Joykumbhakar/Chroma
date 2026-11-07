@@ -224,7 +224,7 @@ fun ChatListScreen(
                                 .size(48.dp)
                                 .border(
                                     width = 1.5.dp,
-                                    brush = if (myStory != null) Brush.linearGradient(listOf(Color(0xFF007AFF), Color(0xFF00C6FF))) else androidx.compose.ui.graphics.SolidColor(if (isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6)),
+                                    brush = if (myStory != null) Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF00C6FF))) else androidx.compose.ui.graphics.SolidColor(if (isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6)),
                                     shape = CircleShape
                                 )
                                 .padding(2.dp)

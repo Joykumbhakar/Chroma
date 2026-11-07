@@ -767,7 +767,7 @@ private fun ExpandedRecordingView(
             }
 
             // Send voice note button (Matches active globe theme accent)
-            val sendAccent = globeStyle.previewGradient.getOrNull(1) ?: Color(0xFF007AFF)
+            val sendAccent = globeStyle.previewGradient.getOrNull(1) ?: Color(0xFF0381FE)
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(18.dp))

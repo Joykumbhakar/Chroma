@@ -345,11 +345,11 @@ fun ChatHeader(
                                     Icon(
                                         imageVector = Lucide.Info,
                                         contentDescription = null,
-                                        tint = Color(0xFF0A84FF),
+                                        tint = Color(0xFF0381FE),
                                         modifier = Modifier.size(16.dp)
                                     )
                                 },
-                                iconBgColor = Color(0xFF0A84FF).copy(alpha = 0.14f),
+                                iconBgColor = Color(0xFF0381FE).copy(alpha = 0.14f),
                                 onClick = { showMenu = false; onProfileClick() }
                             )
                             AppleMenuItem(

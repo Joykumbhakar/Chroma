@@ -342,7 +342,7 @@ fun GlassFloatingActionButton(
 val PrimaryButtonGradient = Brush.verticalGradient(
     listOf(
         Color(0xFF4DA6FF), // 0%
-        Color(0xFF0A84FF), // 52%
+        Color(0xFF0381FE), // 52%
         Color(0xFF0051D5)  // 100%
     )
 )
@@ -417,7 +417,7 @@ object ChromaPillColors {
     val BlueBody = Brush.verticalGradient(
         listOf(
             Color(0xFF4DA6FF),
-            Color(0xFF0A84FF),
+            Color(0xFF0381FE),
             Color(0xFF0051D5)
         )
     )
@@ -425,7 +425,7 @@ object ChromaPillColors {
     val SecondaryBorder = Brush.linearGradient(
         listOf(
             Color.White,
-            Color(0xFF0A84FF).copy(alpha = 0.28f),
+            Color(0xFF0381FE).copy(alpha = 0.28f),
             Color(0xFF93C5FD).copy(alpha = 0.55f)
         ),
         start = androidx.compose.ui.geometry.Offset.Zero,

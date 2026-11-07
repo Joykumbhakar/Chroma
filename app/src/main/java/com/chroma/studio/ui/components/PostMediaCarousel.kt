@@ -247,7 +247,7 @@ fun PostScrollDotsIndicator(
 
             val dotColor by animateColorAsState(
                 targetValue = when {
-                    isSelected -> Color(0xFF007AFF)
+                    isSelected -> Color(0xFF0381FE)
                     isEdge -> edgeInactiveColor
                     else -> baseInactiveColor
                 },

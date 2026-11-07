@@ -48,7 +48,7 @@ fun SecurityScreen(
                 text = if (hasChanges) "Save" else "Done",
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0A84FF),
+                color = Color(0xFF0381FE),
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .clickable {

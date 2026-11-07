@@ -65,10 +65,10 @@ fun DuplicateAccountDialog(
         ) {
             val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
             val isDark = colors.isDark
-            val dialogBg = if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
-            val fieldBg = if (isDark) Color(0xFF0A0D18) else Color(0xFFF4F6F9)
-            val textPrimary = if (isDark) Color.White else Color(0xFF0A0A0C)
-            val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF71717A)
+            val dialogBg = if (isDark) Color(0xFF17171A) else Color(0xFFFFFFFF)
+            val fieldBg = if (isDark) Color(0xFF222226) else Color(0xFFF2F4F7)
+            val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000)
+            val textMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)
 
             Box(
                 modifier = Modifier
@@ -127,7 +127,7 @@ fun DuplicateAccountDialog(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
-                            .background(Color(0xFF1E2433))
+                            .background(if (isDark) Color(0xFF222226) else Color(0xFFF2F4F7))
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Row(
@@ -141,7 +141,7 @@ fun DuplicateAccountDialog(
                             )
                             Text(
                                 text = email,
-                                color = Color(0xFFCBD5E1),
+                                color = textMuted,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -157,7 +157,7 @@ fun DuplicateAccountDialog(
                         .fillMaxWidth()
                         .height(48.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF0066FF))
+                        .background(Color(0xFF0381FE))
                         .clickable(role = Role.Button, onClick = onGoToLogin)
                         .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.Center,
@@ -186,7 +186,7 @@ fun DuplicateAccountDialog(
                         .fillMaxWidth()
                         .height(46.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF1E2536))
+                        .background(if (isDark) Color(0xFF222226) else Color(0xFFF2F4F7))
                         .clickable(role = Role.Button, onClick = onUseDifferentAccount)
                         .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.Center,
@@ -195,13 +195,13 @@ fun DuplicateAccountDialog(
                     Icon(
                         imageVector = Lucide.RefreshCw,
                         contentDescription = null,
-                        tint = Color(0xFF93C5FD),
+                        tint = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE),
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = "Use a different Google account",
-                        color = Color(0xFF93C5FD),
+                        color = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE),
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -212,7 +212,7 @@ fun DuplicateAccountDialog(
                 // Cancel Link
                 Text(
                     text = "Cancel",
-                    color = Color(0xFF64748B),
+                    color = textMuted,
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier

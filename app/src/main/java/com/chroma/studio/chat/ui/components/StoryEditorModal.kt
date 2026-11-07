@@ -77,7 +77,7 @@ fun StoryEditorModal(
     // Gradient Background Presets
     val gradients = remember {
         listOf(
-            StoryGradientPreset("Ocean Blue", listOf(Color(0xFF007AFF), Color(0xFF005ECB), Color(0xFF003882))),
+            StoryGradientPreset("Ocean Blue", listOf(Color(0xFF0381FE), Color(0xFF005ECB), Color(0xFF003882))),
             StoryGradientPreset("Sunset Glow", listOf(Color(0xFFFF5E3A), Color(0xFFFF2A68), Color(0xFF9B51E0))),
             StoryGradientPreset("Cyberpunk Neon", listOf(Color(0xFF8B5CF6), Color(0xFFEC4899), Color(0xFF3B82F6))),
             StoryGradientPreset("Midnight Nebula", listOf(Color(0xFF181B34), Color(0xFF241C48), Color(0xFF0F172A))),
@@ -289,7 +289,7 @@ fun StoryEditorModal(
                                     text = opt.text,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF007AFF)
+                                    color = Color(0xFF0381FE)
                                 )
                                 LiquidGlassPollOptionMeter(
                                     progress = if (optIdx == 0) 0.65f else 0.35f,
@@ -724,7 +724,7 @@ fun StoryEditorModal(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                LucideBarChart2(tint = Color(0xFF007AFF), size = 16.dp)
+                                LucideBarChart2(tint = Color(0xFF0381FE), size = 16.dp)
                                 Text("Poll", fontSize = 13.sp, color = Color(0xFF1C1C1E), fontWeight = FontWeight.Bold)
                             }
                         }

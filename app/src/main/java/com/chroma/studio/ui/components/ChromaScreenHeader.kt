@@ -32,7 +32,7 @@ import com.composables.icons.lucide.Lucide
 fun ChromaScreenHeader(
     title: String,
     badgeText: String? = null,
-    badgeColor: Color = Color(0xFF007AFF),
+    badgeColor: Color = Color(0xFF0381FE),
     showBrandLogo: Boolean = false,
     showBackButton: Boolean = false,
     circularBackButton: Boolean = true,
@@ -200,7 +200,7 @@ fun ChromaHeaderActionButton(
     text: String,
     icon: ImageVector? = null,
     enabled: Boolean = true,
-    accentColor: Color = Color(0xFF007AFF),
+    accentColor: Color = Color(0xFF0381FE),
     isLoading: Boolean = false,
     onClick: () -> Unit
 ) {

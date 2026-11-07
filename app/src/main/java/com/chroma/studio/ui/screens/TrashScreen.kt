@@ -90,7 +90,7 @@ fun TrashScreen(
     val buttonCorner = CircleShape
 
     val primaryGradient = Brush.linearGradient(
-        listOf(Color(0xFF0A84FF), Color(0xFF1D4ED8))
+        listOf(Color(0xFF0381FE), Color(0xFF1D4ED8))
     )
     val dangerGradient = Brush.linearGradient(
         listOf(Color(0xFFDC2626), Color(0xFFB91C1C))
@@ -100,7 +100,7 @@ fun TrashScreen(
         listOf(Color(0xFF38BDF8), Color(0xFF6366F1), Color(0xFFA855F7))
     )
     val restoreIconGradient = Brush.linearGradient(
-        listOf(Color(0xFF34D399), Color(0xFF06B6D4), Color(0xFF0A84FF))
+        listOf(Color(0xFF34D399), Color(0xFF06B6D4), Color(0xFF0381FE))
     )
     val dangerIconGradient = Brush.linearGradient(
         listOf(Color(0xFFFF6B6B), Color(0xFFEF4444), Color(0xFFDC2626))
@@ -168,7 +168,7 @@ fun TrashScreen(
                     Icon(
                         imageVector = if (allSelected) Lucide.CheckCheck else Lucide.ListCheck,
                         contentDescription = if (allSelected) "Deselect All" else "Select All",
-                        tint = if (allSelected) Color(0xFF0A84FF) else textDark,
+                        tint = if (allSelected) Color(0xFF0381FE) else textDark,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -188,7 +188,7 @@ fun TrashScreen(
                     Icon(
                         imageVector = Lucide.RefreshCcw,
                         contentDescription = "Restore Selected",
-                        tint = Color(0xFF0A84FF),
+                        tint = Color(0xFF0381FE),
                         modifier = Modifier.size(19.dp)
                     )
                 }
@@ -453,10 +453,10 @@ fun TrashCard(
     val layers = remember(work.layersJson) { repository.deserializeLayers(work.layersJson) }
 
     val primaryGradient = Brush.linearGradient(
-        listOf(Color(0xFF0A84FF), Color(0xFF1D4ED8))
+        listOf(Color(0xFF0381FE), Color(0xFF1D4ED8))
     )
     val restoreIconGradient = Brush.linearGradient(
-        listOf(Color(0xFF34D399), Color(0xFF06B6D4), Color(0xFF0A84FF))
+        listOf(Color(0xFF34D399), Color(0xFF06B6D4), Color(0xFF0381FE))
     )
     val dangerIconGradient = Brush.linearGradient(
         listOf(Color(0xFFFF6B6B), Color(0xFFEF4444), Color(0xFFDC2626))

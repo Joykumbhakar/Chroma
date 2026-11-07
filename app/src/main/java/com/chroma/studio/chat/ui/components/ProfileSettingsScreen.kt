@@ -345,7 +345,7 @@ fun ProfileSettingsScreen(
                 SettingsSectionContainer(title = "NOTIFICATIONS & SOUNDS") {
                     // In-App Sound Effects Toggle
                     SettingsToggleRow(
-                        icon = { LucideVolume2(tint = Color(0xFF007AFF), size = 18.dp) },
+                        icon = { LucideVolume2(tint = Color(0xFF0381FE), size = 18.dp) },
                         title = "Sound Effects",
                         subtitle = "Play tones for sent, received messages & reactions",
                         checked = soundsEnabled,
@@ -388,7 +388,7 @@ fun ProfileSettingsScreen(
                 SettingsSectionContainer(title = "PRIVACY & SECURITY") {
                     // Read Receipts Double Ticks
                     SettingsToggleRow(
-                        icon = { LucideCheckCheck(tint = Color(0xFF007AFF), size = 18.dp) },
+                        icon = { LucideCheckCheck(tint = Color(0xFF0381FE), size = 18.dp) },
                         title = "Read Receipts",
                         subtitle = "Send & view blue double checkmarks",
                         checked = readReceiptsEnabled,

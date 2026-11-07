@@ -80,12 +80,12 @@ fun OneUiCollapsingHeaderLayout(
         }
     }
 
-    val screenBgColor = if (!isDark) Color(0xFFF2F4F7) else Color(0xFF000000)
+    val screenBgColor = if (!isDark) Color(0xFFFAFAFA) else Color(0xFF080808)
     val cardBorderColor = if (!isDark) Color.Black.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.07f)
     val dividerColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
-    val textDark = if (!isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
+    val textDark = if (!isDark) Color(0xFF000000) else Color(0xFFFAFAFA)
     val textMuted = if (!isDark) Color(0xFF71717A) else Color(0xFF8E8E93)
-    val activeAccent = if (gradientStyle == OneUiGradientStyle.SOLID) Color(0xFF0A84FF) else gradientStyle.primaryColor
+    val activeAccent = if (gradientStyle == OneUiGradientStyle.SOLID) Color(0xFF0381FE) else gradientStyle.primaryColor
 
     // One UI Collapsing Engine
     val maxCollapsePx = remember(density, expandedHeightDp) { with(density) { expandedHeightDp.toPx() } }
@@ -367,7 +367,7 @@ fun OneUiSquircleSearchBar(
 ) {
     val isDark = LocalOscellionColors.current.isDark
     val cardBorderColor = if (!isDark) Color.Black.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.07f)
-    val textDark = if (!isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
+    val textDark = if (!isDark) Color(0xFF000000) else Color(0xFFFAFAFA)
     val textMuted = if (!isDark) Color(0xFF71717A) else Color(0xFF8E8E93)
 
     Box(
@@ -410,7 +410,7 @@ fun OneUiSquircleSearchBar(
                         color = textDark,
                         fontWeight = FontWeight.Normal
                     ),
-                    cursorBrush = SolidColor(if (!isDark) Color(0xFF0A84FF) else Color(0xFF0A84FF)),
+                    cursorBrush = SolidColor(if (!isDark) Color(0xFF0381FE) else Color(0xFF0381FE)),
                     modifier = Modifier.fillMaxWidth()
                 )
             }

@@ -351,7 +351,7 @@ fun ChromaInAppBrowser(
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .fillMaxWidth(animatedProgress)
-                                    .background(Color(0xFF007AFF))
+                                    .background(Color(0xFF0381FE))
                             )
                         }
                     }
@@ -497,7 +497,7 @@ fun ChromaInAppBrowser(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFF007AFF))
+                                    .background(Color(0xFF0381FE))
                                     .clickable {
                                         hasError = false
                                         webView?.reload()

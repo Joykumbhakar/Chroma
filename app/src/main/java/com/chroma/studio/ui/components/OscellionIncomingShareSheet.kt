@@ -62,7 +62,7 @@ fun OscellionIncomingShareSheet(
     val cardBorder = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
     val textMain = if (isDark) Color(0xFFF2F2F7) else Color(0xFF0A0A0C)
     val textMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)
-    val brandBlue = Color(0xFF0A84FF)
+    val brandBlue = Color(0xFF0381FE)
 
     // Scrim overlay
     Box(
@@ -131,7 +131,7 @@ fun OscellionIncomingShareSheet(
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(
                                     Brush.linearGradient(
-                                        listOf(Color(0xFF0A84FF), Color(0xFF0051D5))
+                                        listOf(Color(0xFF0381FE), Color(0xFF0051D5))
                                     )
                                 )
                                 .border(0.75.dp, Color.White.copy(0.35f), RoundedCornerShape(12.dp)),

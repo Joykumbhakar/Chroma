@@ -50,8 +50,8 @@ object LiquidGlassTokens {
     val CanvasBg = Color(0xFFF4F7FB)
     val SurfaceCard = Color(0xFFFFFFFF)
     val BorderFlat = Color(0xFFDFE8F3)
-    val AccentBlue = Color(0xFF007AFF)
-    val AppleSystemBlue = Color(0xFF007AFF)
+    val AccentBlue = Color(0xFF0381FE)
+    val AppleSystemBlue = Color(0xFF0381FE)
     val AppleSystemBlueActive = Color(0xFF0066D6)
     val AppleSystemBlueHover = Color(0xFF0071EB)
     val TextPrimary = Color(0xFF0F172A)
@@ -60,7 +60,7 @@ object LiquidGlassTokens {
     val PrimaryBlueGradient = Brush.verticalGradient(
         listOf(
             Color(0xFF4DA6FF),
-            Color(0xFF0A84FF),
+            Color(0xFF0381FE),
             Color(0xFF0051D5)
         )
     )
@@ -160,7 +160,7 @@ fun LiquidGlassPrimaryButton(
         targetValue = when {
             !enabled -> Color(0xFF94A3B8)
             isPressed -> Color(0xFF0066D6)
-            else -> Color(0xFF007AFF)
+            else -> Color(0xFF0381FE)
         },
         animationSpec = tween(140),
         label = "btnBgColor"
@@ -299,7 +299,7 @@ fun LiquidGlassSecondaryButton(
         Brush.linearGradient(
             listOf(
                 Color.White.copy(alpha = 0.98f),
-                Color(0xFF0A84FF).copy(alpha = 0.25f),
+                Color(0xFF0381FE).copy(alpha = 0.25f),
                 Color(0xFF93C5FD).copy(alpha = 0.65f)
             ),
             start = Offset.Zero,
@@ -607,7 +607,7 @@ object LiquidGlassProgressGradients {
     val PrimaryBlue = Brush.horizontalGradient(
         listOf(
             Color(0xFF4DA6FF),
-            Color(0xFF0A84FF),
+            Color(0xFF0381FE),
             Color(0xFF0051D5)
         )
     )
@@ -662,7 +662,7 @@ fun LiquidGlassCheckbox(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     size: Dp = 22.dp,
-    checkedColor: Color = Color(0xFF0A84FF),
+    checkedColor: Color = Color(0xFF0381FE),
     uncheckedColor: Color? = null
 ) {
     val isDark = isAppInDark
@@ -819,7 +819,7 @@ fun LiquidGlassRadio(
 
             // Outer ring
             drawCircle(
-                color = if (selected) Color(0xFF0A84FF) else Color(0xFF94A3B8),
+                color = if (selected) Color(0xFF0381FE) else Color(0xFF94A3B8),
                 radius = r,
                 center = Offset(cx, cy),
                 style = Stroke(width = 1.75.dp.toPx())
@@ -927,7 +927,7 @@ fun LiquidGlassThreeDotsMenu(
         Icon(
             imageVector = Lucide.Ellipsis,
             contentDescription = "Options",
-            tint = Color(0xFF0A84FF),
+            tint = Color(0xFF0381FE),
             modifier = Modifier.size(18.dp)
         )
     }
@@ -1133,7 +1133,7 @@ fun LiquidGlassSlider(
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     modifier: Modifier = Modifier,
     steps: Int = 0,
-    activeColor: Color = Color(0xFF0A84FF),
+    activeColor: Color = Color(0xFF0381FE),
     inactiveColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE5E5EA),
     trackHeight: Dp = 6.dp
 ) {

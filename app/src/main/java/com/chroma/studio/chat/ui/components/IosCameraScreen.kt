@@ -261,7 +261,7 @@ enum class ProCameraFilter(
         ),
         beautyGlowStrength = 0f,
         swatchColor = Color(0xFF64B5F6),
-        liveOverlayColor = Color(0xFF007AFF),
+        liveOverlayColor = Color(0xFF0381FE),
         liveOverlayAlpha = 0.08f
     ),
     DRAMATIC_NOIR(
@@ -2098,7 +2098,7 @@ fun IosCameraReviewScreen(
                     onValueChange = onCaptionChange,
                     modifier = Modifier.weight(1f),
                     textStyle = TextStyle(fontSize = 14.5.sp, color = Color.White),
-                    cursorBrush = SolidColor(Color(0xFF007AFF)),
+                    cursorBrush = SolidColor(Color(0xFF0381FE)),
                     decorationBox = { innerTextField ->
                         if (captionText.isEmpty()) {
                             Text(
@@ -2113,7 +2113,7 @@ fun IosCameraReviewScreen(
 
                 // Send Button
                 PhosphorSendArrowIcon(
-                    tint = Color(0xFF007AFF),
+                    tint = Color(0xFF0381FE),
                     size = 28.dp,
                     modifier = Modifier
                         .clickable {

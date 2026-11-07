@@ -65,7 +65,7 @@ object Apple3DShaderPalette {
     fun bodyBrush(s: Float) = Brush.linearGradient(
         0.00f to Color(0xFF4CC9FF),
         0.22f to Color(0xFF1A96FF),
-        0.52f to Color(0xFF007AFF),
+        0.52f to Color(0xFF0381FE),
         0.78f to Color(0xFF0051D5),
         1.00f to Color(0xFF002E8A),
         start = Offset(s * 0.16f, s * 0.06f),
@@ -154,7 +154,7 @@ object AppleHigBluePalette {
     fun bodyBrush(scale: Float) = Brush.linearGradient(
         0.00f to Color(0xFF56D0FF),
         0.22f to Color(0xFF1E99FF),
-        0.52f to Color(0xFF007AFF),
+        0.52f to Color(0xFF0381FE),
         0.78f to Color(0xFF0051D5),
         1.00f to Color(0xFF002B82),
         start = Offset(140f * scale, 60f * scale),
@@ -176,7 +176,7 @@ object AppleHigBluePalette {
     fun lidTopBrush(scale: Float) = Brush.linearGradient(
         0.00f to Color(0xFF9BE8FF),
         0.28f to Color(0xFF42B9FF),
-        0.62f to Color(0xFF007AFF),
+        0.62f to Color(0xFF0381FE),
         0.88f to Color(0xFF0051D5),
         1.00f to Color(0xFF003599),
         start = Offset(200f * scale, 160f * scale),
@@ -185,7 +185,7 @@ object AppleHigBluePalette {
 
     fun secondaryLayerBrush(scale: Float) = Brush.linearGradient(
         0.00f to Color(0xFF70D6FF),
-        0.45f to Color(0xFF0A84FF),
+        0.45f to Color(0xFF0381FE),
         0.85f to Color(0xFF0049C2),
         1.00f to Color(0xFF00256E),
         start = Offset(180f * scale, 180f * scale),
@@ -195,7 +195,7 @@ object AppleHigBluePalette {
     fun handleBrush(scale: Float) = Brush.linearGradient(
         0.00f to Color(0xFFA8ECFF),
         0.30f to Color(0xFF3DB8FF),
-        0.68f to Color(0xFF007AFF),
+        0.68f to Color(0xFF0381FE),
         1.00f to Color(0xFF0047BF),
         start = Offset(250f * scale, 150f * scale),
         end = Offset(750f * scale, 650f * scale)
@@ -479,7 +479,7 @@ private fun DrawScope.drawFloorShadow(cx: Float = 50f, cy: Float = 88f, rx: Floa
         brush = Brush.radialGradient(
             colors = listOf(
                 Color(0xFF003DA6).copy(alpha = 0.28f),
-                Color(0xFF007AFF).copy(alpha = 0.08f),
+                Color(0xFF0381FE).copy(alpha = 0.08f),
                 Color.Transparent
             ),
             center = Offset(cx, cy),
@@ -587,7 +587,7 @@ fun AppleHomeGraphic(
                     brush = Brush.radialGradient(
                         colors = listOf(
                             Color(0xFF5AC8FA).copy(alpha = 0.7f * openProgress),
-                            Color(0xFF007AFF).copy(alpha = 0.3f * openProgress),
+                            Color(0xFF0381FE).copy(alpha = 0.3f * openProgress),
                             Color.Transparent
                         ),
                         center = Offset(50f, 36f),
@@ -950,7 +950,7 @@ val AppleSystemPaintWells = listOf(
         center = Offset(636f, 332f),
         highlightColor = Color(0xFFE0F7FF),
         midColor = Color(0xFF00C7BE),
-        deepColor = Color(0xFF007AFF),
+        deepColor = Color(0xFF0381FE),
         abyssColor = Color(0xFF0043A8),
         causticRimColor = Color(0xFF99EEF8),
         dipDelta = Offset(82f, -138f)
@@ -968,7 +968,7 @@ enum class AppleBlueFinish(
         bodyStops = listOf(
             0.00f to Color(0xFF7CE1FF),
             0.18f to Color(0xFF38B6FF),
-            0.45f to Color(0xFF007AFF),
+            0.45f to Color(0xFF0381FE),
             0.75f to Color(0xFF0058DE),
             1.00f to Color(0xFF003FA8)
         ),
@@ -981,7 +981,7 @@ enum class AppleBlueFinish(
         crownStops = listOf(
             0.00f to Color(0xFFB8F0FF),
             0.30f to Color(0xFF56C4FF),
-            0.68f to Color(0xFF007AFF),
+            0.68f to Color(0xFF0381FE),
             1.00f to Color(0xFF004EB8)
         )
     ),
@@ -1259,7 +1259,7 @@ fun AppleLucidePaletteAndPenIcon(
         Brush.linearGradient(
             0.00f to Color.White.copy(alpha = 0.36f),
             0.15f to Color(0xFF7CE1FF).copy(alpha = 0.20f),
-            0.35f to Color(0xFF007AFF).copy(alpha = 0.04f),
+            0.35f to Color(0xFF0381FE).copy(alpha = 0.04f),
             0.65f to Color(0xFF003FA8).copy(alpha = 0.12f),
             0.85f to Color(0xFF002268).copy(alpha = 0.22f),
             1.00f to Color(0xFF56C4FF).copy(alpha = 0.35f),
@@ -2154,7 +2154,7 @@ private fun DrawScope.drawIosSquirclePlinth(alpha: Float) {
 }
 
 private fun DrawScope.drawAppleHigConstructionGrid(alpha: Float) {
-    val gridBlue = Color(0xFF007AFF).copy(alpha = 0.55f * alpha)
+    val gridBlue = Color(0xFF0381FE).copy(alpha = 0.55f * alpha)
     val dashEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
 
     // Squircle Safe Area Boundary (824x824)
@@ -2363,7 +2363,7 @@ fun AppleLucidePaletteStudioScreen() {
                     text = state.selectedWell.name,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF007AFF)
+                    color = Color(0xFF0381FE)
                 )
             }
         }
@@ -2465,13 +2465,13 @@ private fun StudioActionButton(
     onClick: () -> Unit
 ) {
     val bgColor = when {
-        isPrimary -> Color(0xFF007AFF)
+        isPrimary -> Color(0xFF0381FE)
         isActive -> Color(0x24007AFF)
         else -> Color.Transparent
     }
     val textColor = when {
         isPrimary -> Color.White
-        isActive -> Color(0xFF007AFF)
+        isActive -> Color(0xFF0381FE)
         isDark -> Color(0xFFE2E8F0)
         else -> Color(0xFF334155)
     }
@@ -2850,7 +2850,7 @@ fun AppleSavedWorksGraphic(
                 // Band 1: Cyan / Apple Blue Gradient (Vector Mesh Layer)
                 drawRoundRect(
                     brush = Brush.horizontalGradient(
-                        listOf(Color(0xFF00E5FF), Color(0xFF007AFF), Color(0xFF004FD6))
+                        listOf(Color(0xFF00E5FF), Color(0xFF0381FE), Color(0xFF004FD6))
                     ),
                     topLeft = Offset(26f, 35f),
                     size = Size(42f, 7f),
@@ -2964,7 +2964,7 @@ fun AppleSavedWorksGraphic(
                 // Top folded loop wrapping over edge
                 drawRoundRect(
                     brush = Brush.verticalGradient(
-                        listOf(Color(0xFF75D8FF), Color(0xFF007AFF), Color(0xFF004AB8)),
+                        listOf(Color(0xFF75D8FF), Color(0xFF0381FE), Color(0xFF004AB8)),
                         startY = 11f,
                         endY = 17f
                     ),
@@ -3025,7 +3025,7 @@ fun AppleSavedWorksGraphic(
                 drawPath(
                     path = leftFacet,
                     brush = Brush.linearGradient(
-                        listOf(Color(0xFF42B9FF), Color(0xFF007AFF), Color(0xFF0056CC)),
+                        listOf(Color(0xFF42B9FF), Color(0xFF0381FE), Color(0xFF0056CC)),
                         start = Offset(52f, 15f),
                         end = Offset(62f, 76f)
                     )
@@ -4268,7 +4268,7 @@ fun AppleNotificationGraphic(
                 val crownBrush = Brush.linearGradient(
                     0.00f to Color(0xFF94E5FF),
                     0.28f to Color(0xFF3DB8FF),
-                    0.65f to Color(0xFF007AFF),
+                    0.65f to Color(0xFF0381FE),
                     1.00f to Color(0xFF0047BF),
                     start = Offset(415f * scale, 108f * scale),
                     end = Offset(585f * scale, 248f * scale)
@@ -4314,7 +4314,7 @@ fun AppleNotificationGraphic(
                 val domeBrush = Brush.linearGradient(
                     0.00f to Color(0xFF4CC9FF),
                     0.22f to Color(0xFF1A96FF),
-                    0.52f to Color(0xFF007AFF),
+                    0.52f to Color(0xFF0381FE),
                     0.78f to Color(0xFF0051D5),
                     1.00f to Color(0xFF002E8A),
                     start = Offset(234f * scale, 222f * scale),
@@ -4457,7 +4457,7 @@ fun AppleNotificationGraphic(
                     val clapperSphereBrush = Brush.radialGradient(
                         0.00f to Color(0xFFB8F0FF),
                         0.22f to Color(0xFF4CC9FF),
-                        0.55f to Color(0xFF007AFF),
+                        0.55f to Color(0xFF0381FE),
                         0.84f to Color(0xFF003DA6),
                         1.00f to Color(0xFF001B52),
                         center = Offset((500f - 56f * 0.32f) * scale, (764f - 56f * 0.32f) * scale),
@@ -4513,7 +4513,7 @@ fun AppleNotificationGraphic(
                 val rimTopBrush = Brush.linearGradient(
                     0.00f to Color(0xFF8AE2FF),
                     0.35f to Color(0xFF38B2FF),
-                    0.72f to Color(0xFF007AFF),
+                    0.72f to Color(0xFF0381FE),
                     1.00f to Color(0xFF0051D5),
                     start = Offset(150f * scale, 620f * scale),
                     end = Offset(850f * scale, 682f * scale)

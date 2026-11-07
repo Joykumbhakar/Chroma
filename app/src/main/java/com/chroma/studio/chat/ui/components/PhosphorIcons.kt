@@ -1233,7 +1233,7 @@ fun LucideCheckCheck(tint: Color = Color(0xFF34C759), size: Dp = 16.dp, modifier
 
 // Lucide Chevron Left
 @Composable
-fun LucideChevronLeft(tint: Color = Color(0xFF007AFF), size: Dp = 24.dp, modifier: Modifier = Modifier) {
+fun LucideChevronLeft(tint: Color = Color(0xFF0381FE), size: Dp = 24.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
         val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -1259,7 +1259,7 @@ fun LucideX(tint: Color = Color(0xFF8E8E93), size: Dp = 16.dp, modifier: Modifie
 
 // Lucide Phone
 @Composable
-fun LucidePhone(tint: Color = Color(0xFF007AFF), size: Dp = 24.dp, modifier: Modifier = Modifier) {
+fun LucidePhone(tint: Color = Color(0xFF0381FE), size: Dp = 24.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
         val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -1287,7 +1287,7 @@ fun LucidePhone(tint: Color = Color(0xFF007AFF), size: Dp = 24.dp, modifier: Mod
 
 // Lucide Search
 @Composable
-fun LucideSearch(tint: Color = Color(0xFF007AFF), size: Dp = 24.dp, modifier: Modifier = Modifier) {
+fun LucideSearch(tint: Color = Color(0xFF0381FE), size: Dp = 24.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
         val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -1309,7 +1309,7 @@ fun LucideSearch(tint: Color = Color(0xFF007AFF), size: Dp = 24.dp, modifier: Mo
 
 // Lucide Mail
 @Composable
-fun LucideMail(tint: Color = Color(0xFF007AFF), size: Dp = 24.dp, modifier: Modifier = Modifier) {
+fun LucideMail(tint: Color = Color(0xFF0381FE), size: Dp = 24.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
         val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -1331,7 +1331,7 @@ fun LucideMail(tint: Color = Color(0xFF007AFF), size: Dp = 24.dp, modifier: Modi
 
 // Lucide Share
 @Composable
-fun LucideShare(tint: Color = Color(0xFF007AFF), size: Dp = 18.dp, modifier: Modifier = Modifier) {
+fun LucideShare(tint: Color = Color(0xFF0381FE), size: Dp = 18.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
         val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -1354,7 +1354,7 @@ fun LucideShare(tint: Color = Color(0xFF007AFF), size: Dp = 18.dp, modifier: Mod
 
 // Lucide Star
 @Composable
-fun LucideStar(tint: Color = Color(0xFF007AFF), size: Dp = 18.dp, modifier: Modifier = Modifier) {
+fun LucideStar(tint: Color = Color(0xFF0381FE), size: Dp = 18.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
         val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -1461,7 +1461,7 @@ fun UiverseFolderUploadIcon(tint: Color = Color(0xFFAAAAAA), size: Dp = 20.dp, m
 
 // Lucide Sparkles -> Replaced with new Purple Wave Sphere AI Icon
 @Composable
-fun LucideSparkles(tint: Color = Color(0xFF007AFF), size: Dp = 18.dp, modifier: Modifier = Modifier) {
+fun LucideSparkles(tint: Color = Color(0xFF0381FE), size: Dp = 18.dp, modifier: Modifier = Modifier) {
     com.chroma.studio.ui.components.AiWaveSphereIcon(modifier = modifier.size(size))
 }
 
@@ -1500,7 +1500,7 @@ fun LucideChevronRight(tint: Color = Color(0xFF8E8E93), size: Dp = 18.dp, modifi
 
 // Phosphor Sun
 @Composable
-fun PhosphorSun(tint: Color = Color(0xFF007AFF), size: Dp = 22.dp, modifier: Modifier = Modifier) {
+fun PhosphorSun(tint: Color = Color(0xFF0381FE), size: Dp = 22.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
         val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -1524,7 +1524,7 @@ fun PhosphorSun(tint: Color = Color(0xFF007AFF), size: Dp = 22.dp, modifier: Mod
 
 // Phosphor Moon
 @Composable
-fun PhosphorMoon(tint: Color = Color(0xFF007AFF), size: Dp = 22.dp, modifier: Modifier = Modifier) {
+fun PhosphorMoon(tint: Color = Color(0xFF0381FE), size: Dp = 22.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
         val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -1814,12 +1814,12 @@ fun LucideBarChart2(tint: Color = Color(0xFF8E8E93), size: Dp = 18.dp, modifier:
 }
 
 @Composable
-fun LucideShare2(tint: Color = Color(0xFF007AFF), size: Dp = 18.dp, modifier: Modifier = Modifier) {
+fun LucideShare2(tint: Color = Color(0xFF0381FE), size: Dp = 18.dp, modifier: Modifier = Modifier) {
     LucideShare(tint = tint, size = size, modifier = modifier)
 }
 
 @Composable
-fun LucideLink(tint: Color = Color(0xFF007AFF), size: Dp = 18.dp, modifier: Modifier = Modifier) {
+fun LucideLink(tint: Color = Color(0xFF0381FE), size: Dp = 18.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
         val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)

@@ -498,10 +498,10 @@ fun UserProfileBioDetailsSection(
         val roleAnimatedBrush = remember(roleGradientShift) {
             Brush.linearGradient(
                 colors = listOf(
-                    Color(0xFF0A84FF),
+                    Color(0xFF0381FE),
                     Color(0xFF00C6FF),
                     Color(0xFF34C759),
-                    Color(0xFF0A84FF)
+                    Color(0xFF0381FE)
                 ),
                 start = Offset(roleGradientShift, 0f),
                 end = Offset(roleGradientShift + 250f, 0f)
@@ -647,7 +647,7 @@ fun UserProfileBioDetailsSection(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
-                            .background(if (colors.isDark) Color(0xFF0A84FF).copy(alpha = 0.18f) else Color(0xFFF1F5FE))
+                            .background(if (colors.isDark) Color(0xFF0381FE).copy(alpha = 0.18f) else Color(0xFFF1F5FE))
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Row(
@@ -731,7 +731,7 @@ fun UserProfileBioDetailsSection(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
-                            .background(if (colors.isDark) Color(0xFF0A84FF).copy(alpha = 0.15f) else Color(0xFFEFF5FF))
+                            .background(if (colors.isDark) Color(0xFF0381FE).copy(alpha = 0.15f) else Color(0xFFEFF5FF))
                             .clickable {
                                 try {
                                     val target = if (webUrl.startsWith("http://") || webUrl.startsWith("https://")) webUrl else "https://$webUrl"
@@ -1580,7 +1580,7 @@ fun ProfileAvatarActionBottomSheet(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF0A84FF)), // In-App Brand Blue
+                            .background(Color(0xFF0381FE)), // In-App Brand Blue
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

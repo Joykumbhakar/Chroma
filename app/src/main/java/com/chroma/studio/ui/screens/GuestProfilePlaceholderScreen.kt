@@ -40,9 +40,9 @@ fun GuestProfilePlaceholderScreen(
 
     val cardBg = if (isDark) Color(0xFF16181F) else Color(0xFFF7F8FC)
     val cardBorder = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
-    val accentBlue = Color(0xFF0A84FF)
+    val accentBlue = Color(0xFF0381FE)
     val accentGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF0A84FF), Color(0xFF5E5CE6), Color(0xFFFF2D55))
+        colors = listOf(Color(0xFF0381FE), Color(0xFF5E5CE6), Color(0xFFFF2D55))
     )
 
     Box(

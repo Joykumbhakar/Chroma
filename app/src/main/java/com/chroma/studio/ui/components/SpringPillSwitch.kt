@@ -195,7 +195,7 @@ data class PillSwitchColors(
             @Composable
             get() = PillSwitchColors(
                 offTrackColor = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE9E9EA),
-                onTrackColor = Color(0xFF0A84FF),
+                onTrackColor = Color(0xFF0381FE),
                 thumbColor = Color.White
             )
 

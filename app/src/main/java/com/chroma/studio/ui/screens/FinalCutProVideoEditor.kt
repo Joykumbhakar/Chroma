@@ -742,7 +742,7 @@ data class FcpClip(
     val effectIntensity: Float = 0.8f,
     val animationEffect: FcpClipAnimation = FcpClipAnimation.NONE,
     val animationIntensity: Float = 0.8f,
-    val roleColor: Color = Color(0xFF0A84FF),
+    val roleColor: Color = Color(0xFF0381FE),
     val scale: Float = 1f,
     val panX: Float = 0f,
     val panY: Float = 0f,
@@ -4268,7 +4268,7 @@ private fun TimelineClipCard(
                     .align(Alignment.TopCenter)
                     .offset(y = (-14).dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF007AFF))
+                    .background(Color(0xFF0381FE))
                     .border(0.5.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
                     .padding(horizontal = 6.dp, vertical = 2.dp)
                     .zIndex(150f)
@@ -6067,7 +6067,7 @@ private fun AudioTabContent(
                                     isBipolar = false,
                                     formatValue = { String.format("%.1fs", it) },
                                     onValueChange = onFadeInChange,
-                                    gradientColors = listOf(Color(0xFF0A84FF), Color(0xFF5AC8FA))
+                                    gradientColors = listOf(Color(0xFF0381FE), Color(0xFF5AC8FA))
                                 )
                             }
                             Box(modifier = Modifier.weight(1f)) {
@@ -6356,7 +6356,7 @@ private fun FcpEffectThumbnailCard(
                                 )
                             }
                             drawRect(
-                                color = Color(0xFF0A84FF).copy(alpha = 0.12f),
+                                color = Color(0xFF0381FE).copy(alpha = 0.12f),
                                 size = Size(w, h)
                             )
                         }
@@ -6674,7 +6674,7 @@ private fun EffectsTabContent(
                                 value = effectIntensity,
                                 onValueChange = onIntensityChange,
                                 valueRange = 0.1f..1.0f,
-                                gradientColors = listOf(Color(0xFF007AFF), Color(0xFF38BDF8)),
+                                gradientColors = listOf(Color(0xFF0381FE), Color(0xFF38BDF8)),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(32.dp)
@@ -10471,7 +10471,7 @@ private fun FcpVisualEffectsOverlay(
                     y += spacing
                 }
                 drawRect(
-                    color = Color(0xFF0A84FF).copy(alpha = 0.05f * clampedIntensity),
+                    color = Color(0xFF0381FE).copy(alpha = 0.05f * clampedIntensity),
                     size = size
                 )
             }
@@ -10604,11 +10604,11 @@ private fun FcpVisualEffectsOverlay(
                     brush = Brush.horizontalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color(0xFF007AFF).copy(alpha = 0.35f * clampedIntensity),
+                            Color(0xFF0381FE).copy(alpha = 0.35f * clampedIntensity),
                             Color(0xFF00F0FF).copy(alpha = 0.65f * clampedIntensity),
                             Color.White.copy(alpha = 0.85f * clampedIntensity),
                             Color(0xFF00F0FF).copy(alpha = 0.65f * clampedIntensity),
-                            Color(0xFF007AFF).copy(alpha = 0.35f * clampedIntensity),
+                            Color(0xFF0381FE).copy(alpha = 0.35f * clampedIntensity),
                             Color.Transparent
                         )
                     ),
@@ -11870,7 +11870,7 @@ fun FcpTransitionDialog(
                             .weight(1.3f)
                             .height(44.dp),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE))
                     ) {
                         Icon(
                             imageVector = Lucide.Check,
@@ -11973,7 +11973,7 @@ fun FcpTransitionPreviewCard(
             Icon(
                 imageVector = transitionType.icon,
                 contentDescription = "Transition effect",
-                tint = Color(0xFF0A84FF),
+                tint = Color(0xFF0381FE),
                 modifier = Modifier.size(12.dp)
             )
             Text(
@@ -11997,7 +11997,7 @@ fun FcpTransitionPreviewCard(
                     .fillMaxWidth(rawProgress.coerceIn(0f, 1f))
                     .background(
                         Brush.horizontalGradient(
-                            listOf(Color(0xFF0A84FF), Color(0xFF64D2FF))
+                            listOf(Color(0xFF0381FE), Color(0xFF64D2FF))
                         )
                     )
             )
@@ -12877,7 +12877,7 @@ fun PlaybackTransportControlBar(
                     modifier = Modifier
                         .size(width = 8.dp, height = 3.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(if (isAutoReplay) Color(0xFF007AFF) else Color.Transparent)
+                        .background(if (isAutoReplay) Color(0xFF0381FE) else Color.Transparent)
                 )
             }
         }
@@ -12898,7 +12898,7 @@ fun FcpExitConfirmationDialog(
     val titleColor = if (isDark) Color.White else Color.Black
     val messageColor = if (isDark) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.8f)
     val dividerColor = if (isDark) Color(0x36545458) else Color(0x363C3C43)
-    val blueColor = Color(0xFF0A84FF)
+    val blueColor = Color(0xFF0381FE)
     val redColor = Color(0xFFFF3B30)
 
     Dialog(
@@ -13043,7 +13043,7 @@ fun FcpDurationWarningDialog(
     val titleColor = if (isDark) Color.White else Color.Black
     val messageColor = if (isDark) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.8f)
     val dividerColor = if (isDark) Color(0x36545458) else Color(0x363C3C43)
-    val blueColor = Color(0xFF0A84FF)
+    val blueColor = Color(0xFF0381FE)
     val greenColor = Color(0xFF34C759)
 
     Dialog(
@@ -13501,7 +13501,7 @@ private fun FcpTopHeaderBar(
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = "Studio",
-                                color = Color(0xFF007AFF),
+                                color = Color(0xFF0381FE),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp,
                                 letterSpacing = (-0.3).sp
@@ -13600,8 +13600,8 @@ private fun FcpTopHeaderBar(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF007AFF).copy(alpha = 0.15f))
-                .border(0.5.dp, Color(0xFF007AFF).copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                .background(Color(0xFF0381FE).copy(alpha = 0.15f))
+                .border(0.5.dp, Color(0xFF0381FE).copy(alpha = 0.35f), RoundedCornerShape(10.dp))
                 .padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -13609,7 +13609,7 @@ private fun FcpTopHeaderBar(
             Icon(
                 imageVector = Lucide.Sparkles,
                 contentDescription = "Remix",
-                tint = Color(0xFF007AFF),
+                tint = Color(0xFF0381FE),
                 modifier = Modifier.size(16.dp)
             )
             Text(

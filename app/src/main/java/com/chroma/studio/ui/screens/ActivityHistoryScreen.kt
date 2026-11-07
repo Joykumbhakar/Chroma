@@ -247,12 +247,12 @@ fun ActivityHistoryScreen(
                             Icon(
                                 imageVector = tabIcon,
                                 contentDescription = null,
-                                tint = if (isSelected) Color(0xFF0A84FF) else colors.textMuted,
+                                tint = if (isSelected) Color(0xFF0381FE) else colors.textMuted,
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
                                 text = tab.title,
-                                color = if (isSelected) Color(0xFF0A84FF) else colors.textMuted,
+                                color = if (isSelected) Color(0xFF0381FE) else colors.textMuted,
                                 fontSize = 13.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
@@ -260,13 +260,13 @@ fun ActivityHistoryScreen(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(9999.dp))
-                                        .background(if (isSelected) Color(0xFF0A84FF).copy(alpha = 0.15f) else colors.glassBorder.copy(alpha = 0.3f))
+                                        .background(if (isSelected) Color(0xFF0381FE).copy(alpha = 0.15f) else colors.glassBorder.copy(alpha = 0.3f))
                                         .padding(horizontal = 7.dp, vertical = 1.5.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = count.toString(),
-                                        color = if (isSelected) Color(0xFF0A84FF) else colors.textMuted,
+                                        color = if (isSelected) Color(0xFF0381FE) else colors.textMuted,
                                         fontSize = 10.5.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -288,7 +288,7 @@ fun ActivityHistoryScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        OscellionLoadingSpinner(color = Color(0xFF0A84FF))
+                        OscellionLoadingSpinner(color = Color(0xFF0381FE))
                     }
                 } else if (currentList.isEmpty()) {
                     val emptyGraphicId = when (selectedTab) {

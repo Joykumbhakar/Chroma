@@ -353,14 +353,14 @@ val AppleStatusOnlyFriendGradient = listOf(
 val AppleStatusVibrantGradient = listOf(
     Color(0xFFFF2D55), // Hot Rose / Coral
     Color(0xFFAF52DE), // Royal Violet
-    Color(0xFF007AFF), // Apple Blue
+    Color(0xFF0381FE), // Apple Blue
     Color(0xFF00C6FF), // Bright Cyan
     Color(0xFFFF9500), // Amber
     Color(0xFFFF2D55)  // Loop to Hot Rose
 )
 
 val AppleStatusBlueGradient = listOf(
-    Color(0xFF007AFF), // Apple System Blue
+    Color(0xFF0381FE), // Apple System Blue
     Color(0xFF00C6FF)  // Simple Sky Blue
 )
 
@@ -505,7 +505,7 @@ fun AppleStatusAvatar(
                         if (showAddBadge) {
                             Modifier.border(
                                 1.5.dp,
-                                if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFF007AFF).copy(alpha = 0.22f),
+                                if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFF0381FE).copy(alpha = 0.22f),
                                 CircleShape
                             )
                         } else Modifier
@@ -535,7 +535,7 @@ fun AppleStatusAvatar(
                     .clip(CircleShape)
                     .background(
                         Brush.linearGradient(
-                            listOf(Color(0xFF007AFF), Color(0xFF0051D5))
+                            listOf(Color(0xFF0381FE), Color(0xFF0051D5))
                         )
                     )
                     .then(
@@ -659,7 +659,7 @@ fun IosSegmentedControl(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(5.dp))
-                                    .background(if (isSelected) Color(0xFF007AFF) else Color(0x308E8E93))
+                                    .background(if (isSelected) Color(0xFF0381FE) else Color(0x308E8E93))
                                     .padding(horizontal = 5.dp, vertical = 1.dp)
                             ) {
                                 Text(
@@ -683,7 +683,7 @@ fun ProfileSeamlessTabBar(
     selectedIndex: Int,
     onItemSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    selectedColor: Color = Color(0xFF007AFF),
+    selectedColor: Color = Color(0xFF0381FE),
     unselectedColor: Color = Color(0xFF8E8E93)
 ) {
     val tabCount = icons.size
@@ -780,7 +780,7 @@ fun IosIconSegmentedControl(
     selectedIndex: Int,
     onItemSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    selectedColor: Color = Color(0xFF007AFF),
+    selectedColor: Color = Color(0xFF0381FE),
     unselectedColor: Color = Color(0xFF8E8E93)
 ) {
     ProfileSeamlessTabBar(
@@ -825,7 +825,7 @@ fun VoiceWaveform(isRecording: Boolean) {
                     .clip(CircleShape)
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color(0xFF30D158), Color(0xFF0A84FF))
+                            listOf(Color(0xFF30D158), Color(0xFF0381FE))
                         )
                     )
             )

@@ -1216,7 +1216,7 @@ fun TransitionTimeRangeSlider(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
-                    color = Color(0xFF007AFF)
+                    color = Color(0xFF0381FE)
                 )
             )
         }
@@ -1354,7 +1354,7 @@ fun AppleVideoTransitionStudio(
                 BasicText(
                     text = if (selectedEffect == null) "CUT" else "${(liveProgress * 100).toInt()}%",
                     style = TextStyle(
-                        color = if (selectedEffect == null) textSecondary else Color(0xFF007AFF),
+                        color = if (selectedEffect == null) textSecondary else Color(0xFF0381FE),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace
@@ -1419,11 +1419,11 @@ fun AppleVideoTransitionStudio(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
                             .background(
-                                if (isSelected) Color(0xFF007AFF).copy(alpha = 0.14f) else tabInactiveBg
+                                if (isSelected) Color(0xFF0381FE).copy(alpha = 0.14f) else tabInactiveBg
                             )
                             .border(
                                 1.dp,
-                                if (isSelected) Color(0xFF007AFF) else Color.Transparent,
+                                if (isSelected) Color(0xFF0381FE) else Color.Transparent,
                                 RoundedCornerShape(6.dp)
                             )
                             .clickable { onEasingChange(easingItem) }
@@ -1432,7 +1432,7 @@ fun AppleVideoTransitionStudio(
                         BasicText(
                             text = easingItem.label,
                             style = TextStyle(
-                                color = if (isSelected) Color(0xFF007AFF) else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155)),
+                                color = if (isSelected) Color(0xFF0381FE) else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155)),
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
@@ -1475,15 +1475,15 @@ fun AppleVideoTransitionStudio(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .background(if (isSelected) Color(0xFF007AFF).copy(alpha = 0.15f) else tabInactiveBg)
-                        .border(1.dp, if (isSelected) Color(0xFF007AFF) else Color.Transparent, RoundedCornerShape(6.dp))
+                        .background(if (isSelected) Color(0xFF0381FE).copy(alpha = 0.15f) else tabInactiveBg)
+                        .border(1.dp, if (isSelected) Color(0xFF0381FE) else Color.Transparent, RoundedCornerShape(6.dp))
                     .clickable { selectedCategory = category }
                     .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     BasicText(
                         text = category.label,
                         style = TextStyle(
-                            color = if (isSelected) Color(0xFF007AFF) else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155)),
+                            color = if (isSelected) Color(0xFF0381FE) else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155)),
                             fontSize = 11.5.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                         )
@@ -1537,7 +1537,7 @@ fun TransitionEffectGridCard(
     onClick: () -> Unit
 ) {
     val borderColor by animateColorAsState(
-        targetValue = if (isSelected) Color(0xFF007AFF) else if (isDark) Color(0xFF2E3346) else Color(0xFFE5E5EA),
+        targetValue = if (isSelected) Color(0xFF0381FE) else if (isDark) Color(0xFF2E3346) else Color(0xFFE5E5EA),
         animationSpec = tween(150),
         label = "CardBorderColor"
     )
@@ -1584,7 +1584,7 @@ fun TransitionEffectGridCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = TextStyle(
-                color = if (isSelected) Color(0xFF007AFF) else if (isDark) Color.White else Color(0xFF1D1D1F),
+                color = if (isSelected) Color(0xFF0381FE) else if (isDark) Color.White else Color(0xFF1D1D1F),
                 fontSize = 10.5.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 textAlign = TextAlign.Center

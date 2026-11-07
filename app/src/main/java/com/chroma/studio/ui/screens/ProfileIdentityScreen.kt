@@ -375,7 +375,7 @@ fun ProfileIdentityScreen(
                             Icon(
                                 imageVector = Lucide.ChevronLeft,
                                 contentDescription = "Cancel",
-                                tint = Color(0xFF0A84FF),
+                                tint = Color(0xFF0381FE),
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(Modifier.width(2.dp))
@@ -383,7 +383,7 @@ fun ProfileIdentityScreen(
                                 text = "Cancel",
                                 fontSize = 16.5.sp,
                                 fontWeight = FontWeight.Normal,
-                                color = Color(0xFF0A84FF)
+                                color = Color(0xFF0381FE)
                             )
                         }
 
@@ -419,14 +419,14 @@ fun ProfileIdentityScreen(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(16.dp),
                                     strokeWidth = 2.dp,
-                                    color = Color(0xFF0A84FF)
+                                    color = Color(0xFF0381FE)
                                 )
                             } else {
                                 Text(
                                     text = "Done",
                                     fontSize = 16.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isDisplayNameValid && isUsernameValid) Color(0xFF0A84FF) else Color(0xFF8E8E93).copy(alpha = 0.5f)
+                                    color = if (isDisplayNameValid && isUsernameValid) Color(0xFF0381FE) else Color(0xFF8E8E93).copy(alpha = 0.5f)
                                 )
                             }
                         }
@@ -656,7 +656,7 @@ fun ProfileIdentityScreen(
                             Box(
                                 modifier = Modifier
                                     .clip(CircleShape)
-                                    .background(Color(0xFF0A84FF).copy(alpha = 0.12f))
+                                    .background(Color(0xFF0381FE).copy(alpha = 0.12f))
                                     .clickable {
                                         activePickerSheet = PickerSheetConfig(
                                             title = "Select Professional Role",
@@ -671,12 +671,12 @@ fun ProfileIdentityScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Icon(Lucide.Briefcase, null, tint = Color(0xFF0A84FF), modifier = Modifier.size(12.dp))
+                                    Icon(Lucide.Briefcase, null, tint = Color(0xFF0381FE), modifier = Modifier.size(12.dp))
                                     Text(
                                         text = role.ifBlank { "Developer" },
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF0A84FF)
+                                        color = Color(0xFF0381FE)
                                     )
                                 }
                             }
@@ -733,7 +733,7 @@ fun ProfileIdentityScreen(
                             .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
-                                    listOf(Color(0xFF0A84FF), Color(0xFF0051D5)),
+                                    listOf(Color(0xFF0381FE), Color(0xFF0051D5)),
                                     start = Offset.Zero,
                                     end = Offset.Infinite
                                 )
@@ -801,7 +801,7 @@ fun ProfileIdentityScreen(
                                 Icon(
                                     imageVector = icon,
                                     contentDescription = null,
-                                    tint = if (isSelected) Color(0xFF0A84FF) else Color(0xFF8E8E93),
+                                    tint = if (isSelected) Color(0xFF0381FE) else Color(0xFF8E8E93),
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Text(
@@ -989,8 +989,8 @@ fun ProfileIdentityScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Icon(Lucide.Navigation, null, tint = Color(0xFF0A84FF), modifier = Modifier.size(18.dp))
-                                Text("Auto-detect Current Location", fontSize = 15.sp, color = Color(0xFF0A84FF), fontWeight = FontWeight.Medium)
+                                Icon(Lucide.Navigation, null, tint = Color(0xFF0381FE), modifier = Modifier.size(18.dp))
+                                Text("Auto-detect Current Location", fontSize = 15.sp, color = Color(0xFF0381FE), fontWeight = FontWeight.Medium)
                             }
                             Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(15.dp))
                         }
@@ -1097,7 +1097,7 @@ fun ProfileIdentityScreen(
                                             .clip(RoundedCornerShape(10.dp))
                                             .border(
                                                 width = if (isSelected) 2.dp else 0.5.dp,
-                                                color = if (isSelected) Color(0xFF0A84FF) else if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+                                                color = if (isSelected) Color(0xFF0381FE) else if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
                                                 shape = RoundedCornerShape(10.dp)
                                             )
                                             .clickable {
@@ -1118,7 +1118,7 @@ fun ProfileIdentityScreen(
                                                     .align(Alignment.TopEnd)
                                                     .padding(4.dp)
                                                     .size(18.dp)
-                                                    .background(Color(0xFF0A84FF), CircleShape),
+                                                    .background(Color(0xFF0381FE), CircleShape),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(Lucide.Check, null, tint = Color.White, modifier = Modifier.size(12.dp))
@@ -1197,7 +1197,7 @@ fun ProfileIdentityScreen(
                                             .clip(CircleShape)
                                             .border(
                                                 width = if (isSelected) 2.5.dp else 0.5.dp,
-                                                color = if (isSelected) Color(0xFF0A84FF) else if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+                                                color = if (isSelected) Color(0xFF0381FE) else if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
                                                 shape = CircleShape
                                             )
                                             .clickable {
@@ -1246,12 +1246,12 @@ fun ProfileIdentityScreen(
                                         modifier = Modifier
                                             .clip(CircleShape)
                                             .background(
-                                                if (isSelected) Color(0xFF0A84FF)
+                                                if (isSelected) Color(0xFF0381FE)
                                                 else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
                                             )
                                             .border(
                                                 width = 0.5.dp,
-                                                color = if (isSelected) Color(0xFF0A84FF) else if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+                                                color = if (isSelected) Color(0xFF0381FE) else if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
                                                 shape = CircleShape
                                             )
                                             .clickable {
@@ -1397,13 +1397,13 @@ fun ProfileIdentityScreen(
                                 text = option,
                                 fontSize = 15.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) Color(0xFF0A84FF) else colors.textMain
+                                color = if (isSelected) Color(0xFF0381FE) else colors.textMain
                             )
                             if (isSelected) {
                                 Icon(
                                     imageVector = Lucide.Check,
                                     contentDescription = null,
-                                    tint = Color(0xFF0A84FF),
+                                    tint = Color(0xFF0381FE),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -1545,7 +1545,7 @@ fun ProfileIdentityScreen(
                                 .clip(CircleShape)
                                 .border(
                                     width = if (isSelected) 2.5.dp else 0.5.dp,
-                                    color = if (isSelected) Color(0xFF0A84FF) else if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+                                    color = if (isSelected) Color(0xFF0381FE) else if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
                                     shape = CircleShape
                                 )
                                 .clickable {
@@ -1622,7 +1622,7 @@ fun AppleSettingsTextFieldRow(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = Color(0xFF0A84FF),
+                        tint = Color(0xFF0381FE),
                         modifier = Modifier.size(19.dp)
                     )
                 }
@@ -1680,7 +1680,7 @@ fun AppleSettingsTextFieldRow(
                             ),
                             singleLine = false,
                             maxLines = maxLines,
-                            cursorBrush = SolidColor(Color(0xFF0A84FF)),
+                            cursorBrush = SolidColor(Color(0xFF0381FE)),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .onFocusChanged { focusState ->
@@ -1731,7 +1731,7 @@ fun AppleSettingsTextFieldRow(
                             ),
                             singleLine = true,
                             maxLines = 1,
-                            cursorBrush = SolidColor(Color(0xFF0A84FF)),
+                            cursorBrush = SolidColor(Color(0xFF0381FE)),
                             modifier = Modifier
                                 .weight(1f)
                                 .onFocusChanged { focusState ->

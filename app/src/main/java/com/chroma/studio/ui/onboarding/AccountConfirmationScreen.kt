@@ -67,10 +67,10 @@ fun AccountConfirmationScreen(
 ) {
     val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
     val isDark = colors.isDark
-    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
-    val cardBg = if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
-    val textPrimary = if (isDark) Color.White else Color(0xFF0A0A0C)
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF71717A)
+    val screenBg = if (isDark) Color(0xFF080808) else Color(0xFFFAFAFA)
+    val cardBg = if (isDark) Color(0xFF17171A) else Color(0xFFFFFFFF)
+    val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000)
+    val textMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)
 
     Box(
         modifier = Modifier
@@ -141,7 +141,7 @@ fun AccountConfirmationScreen(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
-                        .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0))
+                        .background(if (isDark) Color(0xFF222226) else Color(0xFFF2F4F7))
                         .padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
                     Row(
@@ -151,12 +151,12 @@ fun AccountConfirmationScreen(
                         Icon(
                             imageVector = Icons.Rounded.CheckCircle,
                             contentDescription = null,
-                            tint = Color(0xFF38BDF8),
+                            tint = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE),
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
                             text = "Account Found",
-                            color = Color(0xFF38BDF8),
+                            color = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             letterSpacing = 0.3.sp
@@ -246,7 +246,7 @@ fun AccountConfirmationScreen(
                     // Display Name
                     Text(
                         text = profile.displayName.ifBlank { "Oscellion Creator" },
-                        color = Color.White,
+                        color = textPrimary,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.4).sp,
@@ -258,7 +258,7 @@ fun AccountConfirmationScreen(
                     // @username Handle
                     Text(
                         text = "@${profile.username.ifBlank { "creator" }}",
-                        color = Color(0xFF38BDF8),
+                        color = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         letterSpacing = (-0.2).sp,
@@ -270,7 +270,7 @@ fun AccountConfirmationScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(999.dp))
-                                .background(Color(0xFF1E2433))
+                                .background(if (isDark) Color(0xFF222226) else Color(0xFFF2F4F7))
                                 .padding(horizontal = 12.dp, vertical = 5.dp)
                         ) {
                             Row(
@@ -284,7 +284,7 @@ fun AccountConfirmationScreen(
                                 )
                                 Text(
                                     text = email,
-                                    color = Color(0xFFCBD5E1),
+                                    color = textMuted,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Normal
                                 )
@@ -321,7 +321,7 @@ fun AccountConfirmationScreen(
                         }
                         .shadow(8.dp, CircleShape, ambientColor = Color(0x40000000), spotColor = Color(0x60000000))
                         .clip(CircleShape)
-                        .background(Color(0xFF0066FF))
+                        .background(Color(0xFF0381FE))
                         .clickable(
                             interactionSource = continueInteraction,
                             indication = null,
@@ -360,7 +360,7 @@ fun AccountConfirmationScreen(
                 // Secondary Link: "This is not my account"
                 Text(
                     text = "This is not my account",
-                    color = Color(0xFF94A3B8),
+                    color = textMuted,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = (-0.2).sp,

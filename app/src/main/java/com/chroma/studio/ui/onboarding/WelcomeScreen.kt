@@ -83,11 +83,11 @@ fun WelcomeScreen(
 ) {
     val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
     val isDark = colors.isDark
-    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
-    val cardBg = if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
+    val screenBg = if (isDark) Color(0xFF080808) else Color(0xFFFAFAFA)
+    val cardBg = if (isDark) Color(0xFF17171A) else Color(0xFFFFFFFF)
     val cardDivider = if (isDark) Color(0x14FFFFFF) else Color(0x0A000000)
-    val textPrimary = if (isDark) Color.White else Color(0xFF0A0A0C)
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF71717A)
+    val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000)
+    val textMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)
 
     Box(
         modifier = Modifier
@@ -214,7 +214,7 @@ fun WelcomeScreen(
                         ) {
                             WelcomeFeatureRow(
                                 icon = Lucide.Palette,
-                                iconColor = Color(0xFF60A5FA),
+                                iconColor = Color(0xFF0381FE), textColor = textPrimary, descriptionColor = textMuted, isDark = isDark,
                                 title = "Creative Canvas",
                                 description = "Multi-layer studio with real-time shader rendering"
                             )
@@ -225,7 +225,7 @@ fun WelcomeScreen(
                             )
                             WelcomeFeatureRow(
                                 icon = Lucide.Globe,
-                                iconColor = Color(0xFF38BDF8),
+                                iconColor = Color(0xFF3E91FF), textColor = textPrimary, descriptionColor = textMuted, isDark = isDark,
                                 title = "Global Community",
                                 description = "Explore trending masterworks, video drops & remixes"
                             )
@@ -236,7 +236,7 @@ fun WelcomeScreen(
                             )
                             WelcomeFeatureRow(
                                 icon = Lucide.ShieldCheck,
-                                iconColor = Color(0xFF4ADE80),
+                                iconColor = Color(0xFF00C853), textColor = textPrimary, descriptionColor = textMuted, isDark = isDark,
                                 title = "Encrypted Messaging",
                                 description = "End-to-end encrypted direct chats, audio & media"
                             )
@@ -284,7 +284,7 @@ fun WelcomeScreen(
                                 Icon(
                                     imageVector = Icons.Rounded.PersonAdd,
                                     contentDescription = "Create account",
-                                    tint = if (isDark) Color(0xFF93C5FD) else Color(0xFF0A84FF),
+                                    tint = if (isDark) Color(0xFF3E91FF) else Color(0xFF0381FE),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -300,7 +300,7 @@ fun WelcomeScreen(
                                 Icon(
                                     imageVector = Lucide.Sparkles,
                                     contentDescription = "Guest explore",
-                                    tint = if (isDark) Color(0xFF93C5FD) else Color(0xFF0A84FF),
+                                    tint = if (isDark) Color(0xFF3E91FF) else Color(0xFF0381FE),
                                     modifier = Modifier.size(17.dp)
                                 )
                             }
@@ -316,7 +316,7 @@ fun WelcomeScreen(
                         ) {
                             Text(
                                 text = "Sign in with Email",
-                                color = Color(0xFF93C5FD),
+                                color = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 letterSpacing = (-0.2).sp,
@@ -327,7 +327,7 @@ fun WelcomeScreen(
                             )
                             Text(
                                 text = "•",
-                                color = Color(0x66FFFFFF),
+                                color = if (isDark) Color(0x40FFFFFF) else Color(0x30000000),
                                 fontSize = 12.sp,
                                 modifier = Modifier.padding(horizontal = 2.dp)
                             )
@@ -350,11 +350,11 @@ fun WelcomeScreen(
                         Text(
                             text = buildAnnotatedString {
                                 append("By continuing, you agree to our ")
-                                withStyle(SpanStyle(color = Color(0xFF93C5FD), fontWeight = FontWeight.SemiBold)) {
+                                withStyle(SpanStyle(color = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE), fontWeight = FontWeight.SemiBold)) {
                                     append("Terms and Privacy Policy")
                                 }
                             },
-                            color = Color(0x80BAC7E8),
+                            color = textMuted,
                             fontSize = 11.5.sp,
                             letterSpacing = (-0.2).sp,
                             textAlign = TextAlign.Center,
@@ -379,6 +379,9 @@ private fun WelcomeFeatureRow(
     iconColor: Color,
     title: String,
     description: String,
+    textColor: Color,
+    descriptionColor: Color,
+    isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -390,8 +393,7 @@ private fun WelcomeFeatureRow(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color(0x14FFFFFF))
-                .border(BorderStroke(1.dp, Color(0x1FFFFFFF)), CircleShape),
+                .background(if (isDark) Color(0x14FFFFFF) else Color(0x0A000000)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -407,7 +409,7 @@ private fun WelcomeFeatureRow(
                 text = title,
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = textColor,
                 letterSpacing = (-0.3).sp
             )
             Spacer(Modifier.height(2.dp))
@@ -415,7 +417,7 @@ private fun WelcomeFeatureRow(
                 text = description,
                 fontSize = 12.5.sp,
                 fontWeight = FontWeight.Normal,
-                color = Color(0xFF94A3B8),
+                color = descriptionColor,
                 letterSpacing = (-0.2).sp,
                 lineHeight = 17.sp
             )
@@ -520,7 +522,7 @@ private fun WelcomeSecondaryPillButton(
                 scaleY = scale
             }
             .clip(CircleShape)
-            .background(if (isDark) Color(0xFF141824) else Color(0xFFE2E8F0))
+            .background(if (isDark) Color(0xFF17171A) else Color(0xFFF2F4F7))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -545,7 +547,7 @@ private fun WelcomeSecondaryPillButton(
             }
             Text(
                 text = text,
-                color = Color.White,
+                color = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = (-0.3).sp
@@ -639,10 +641,10 @@ private fun WelcomeQuickResumePill(
             .clip(CircleShape)
             .background(
                 Brush.horizontalGradient(
-                    listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
+                    listOf(Color(0xFF0381FE), Color(0xFF0072DE))
                 )
             )
-            .border(BorderStroke(1.dp, Color(0x4DFFFFFF)), CircleShape)
+            
             .clickable(
                 interactionSource = interaction,
                 indication = null,

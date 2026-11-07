@@ -618,8 +618,8 @@ private fun OneUiPostCreationTopBar(
                         .clip(RoundedCornerShape(999.dp))
                         .background(
                             when {
-                                isActive -> Color(0xFF0A84FF)
-                                isDone -> Color(0xFF0A84FF).copy(alpha = 0.5f)
+                                isActive -> Color(0xFF0381FE)
+                                isDone -> Color(0xFF0381FE).copy(alpha = 0.5f)
                                 else -> if (isDark) Color(0xFF262C38) else Color(0xFFCBD5E1)
                             }
                         )
@@ -632,7 +632,7 @@ private fun OneUiPostCreationTopBar(
             modifier = Modifier
                 .clip(RoundedCornerShape(999.dp))
                 .background(
-                    if (isNextEnabled) Color(0xFF0A84FF)
+                    if (isNextEnabled) Color(0xFF0381FE)
                     else (if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0))
                 )
                 .clickable(enabled = isNextEnabled) {
@@ -756,7 +756,7 @@ private fun PostQuickFilterView(
                             .clip(RoundedCornerShape(14.dp))
                             .border(
                                 width = if (isCurrent) 2.5.dp else 1.dp,
-                                color = if (isCurrent) Color(0xFF0A84FF) else (if (isDark) Color(0xFF262C38) else Color(0xFFCBD5E1)),
+                                color = if (isCurrent) Color(0xFF0381FE) else (if (isDark) Color(0xFF262C38) else Color(0xFFCBD5E1)),
                                 shape = RoundedCornerShape(14.dp)
                             )
                             .clickable {
@@ -774,7 +774,7 @@ private fun PostQuickFilterView(
                                 .align(Alignment.BottomEnd)
                                 .padding(3.dp)
                                 .clip(CircleShape)
-                                .background(if (isCurrent) Color(0xFF0A84FF) else Color.Black.copy(alpha = 0.6f))
+                                .background(if (isCurrent) Color(0xFF0381FE) else Color.Black.copy(alpha = 0.6f))
                                 .size(16.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -804,7 +804,7 @@ private fun PostQuickFilterView(
                         .padding(horizontal = 4.dp)
                         .clip(RoundedCornerShape(999.dp))
                         .background(
-                            if (isSelected) Color(0xFF0A84FF)
+                            if (isSelected) Color(0xFF0381FE)
                             else (if (isDark) Color(0xFF161A22) else Color.White)
                         )
                         .clickable {
@@ -834,7 +834,7 @@ private fun PostQuickFilterView(
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
-                            Color(0xFF0A84FF).copy(alpha = if (isDark) 0.18f else 0.10f),
+                            Color(0xFF0381FE).copy(alpha = if (isDark) 0.18f else 0.10f),
                             Color(0xFF4F46E5).copy(alpha = if (isDark) 0.14f else 0.06f)
                         )
                     )
@@ -853,7 +853,7 @@ private fun PostQuickFilterView(
                 ) {
                     OneUiIconBadge(
                         icon = Lucide.Sparkles,
-                        iconColor = Color(0xFF0A84FF)
+                        iconColor = Color(0xFF0381FE)
                     )
                     Column {
                         Text(
@@ -877,7 +877,7 @@ private fun PostQuickFilterView(
                 Icon(
                     imageVector = Lucide.ChevronRight,
                     contentDescription = null,
-                    tint = Color(0xFF0A84FF),
+                    tint = Color(0xFF0381FE),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -909,7 +909,7 @@ private fun PostQuickFilterView(
                                 .clip(RoundedCornerShape(16.dp))
                                 .border(
                                     width = if (isSelected) 2.5.dp else 0.dp,
-                                    color = if (isSelected) Color(0xFF0A84FF) else Color.Transparent,
+                                    color = if (isSelected) Color(0xFF0381FE) else Color.Transparent,
                                     shape = RoundedCornerShape(16.dp)
                                 )
                                 .background(if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0)),
@@ -930,7 +930,7 @@ private fun PostQuickFilterView(
                             text = preset.name,
                             fontSize = 11.5.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color(0xFF0A84FF) else textMuted,
+                            color = if (isSelected) Color(0xFF0381FE) else textMuted,
                             textAlign = TextAlign.Center,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -968,8 +968,8 @@ private fun PostQuickFilterView(
                         onValueChange = onBrightnessChange,
                         valueRange = -50f..50f,
                         colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF0A84FF),
-                            activeTrackColor = Color(0xFF0A84FF)
+                            thumbColor = Color(0xFF0381FE),
+                            activeTrackColor = Color(0xFF0381FE)
                         )
                     )
                 }
@@ -991,8 +991,8 @@ private fun PostQuickFilterView(
                         onValueChange = onContrastChange,
                         valueRange = 0.7f..1.3f,
                         colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF0A84FF),
-                            activeTrackColor = Color(0xFF0A84FF)
+                            thumbColor = Color(0xFF0381FE),
+                            activeTrackColor = Color(0xFF0381FE)
                         )
                     )
                 }
@@ -1108,7 +1108,7 @@ private fun PostDetailsInputView(
                                     .align(Alignment.TopStart)
                                     .padding(4.dp)
                                     .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFF0A84FF))
+                                    .background(Color(0xFF0381FE))
                                     .padding(horizontal = 4.dp, vertical = 1.dp)
                             ) {
                                 Text(
@@ -1184,7 +1184,7 @@ private fun PostDetailsInputView(
                     text = "${selectedPhotoUris.size} Photos in Post",
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF0A84FF),
+                    color = Color(0xFF0381FE),
                     fontFamily = InterFontFamily
                 )
                 Spacer(Modifier.height(6.dp))
@@ -1258,7 +1258,7 @@ private fun PostDetailsInputView(
                                         text = "#$tag",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF0A84FF)
+                                        color = Color(0xFF0381FE)
                                     )
                                     Icon(
                                         Lucide.X,
@@ -1307,7 +1307,7 @@ private fun PostDetailsInputView(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF0A84FF))
+                            .background(Color(0xFF0381FE))
                             .clickable {
                                 if (tagInput.isNotBlank()) {
                                     onAddTag(tagInput)
@@ -1380,7 +1380,7 @@ private fun PostDetailsInputView(
                                         text = "@$mention",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF0A84FF)
+                                        color = Color(0xFF0381FE)
                                     )
                                     Icon(Lucide.X, contentDescription = null, tint = textMuted, modifier = Modifier.size(12.dp))
                                 }
@@ -1433,14 +1433,14 @@ private fun PostDetailsInputView(
                                     modifier = Modifier
                                         .size(28.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF0A84FF).copy(alpha = 0.2f)),
+                                        .background(Color(0xFF0381FE).copy(alpha = 0.2f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = (creator.displayName.firstOrNull() ?: creator.username.firstOrNull() ?: 'C').uppercase(),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF0A84FF)
+                                        color = Color(0xFF0381FE)
                                     )
                                 }
 
@@ -1458,7 +1458,7 @@ private fun PostDetailsInputView(
                                     )
                                 }
 
-                                Icon(Lucide.Plus, contentDescription = null, tint = Color(0xFF0A84FF), modifier = Modifier.size(16.dp))
+                                Icon(Lucide.Plus, contentDescription = null, tint = Color(0xFF0381FE), modifier = Modifier.size(16.dp))
                             }
                         }
                     }
@@ -1544,7 +1544,7 @@ private fun PostDetailsInputView(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(999.dp))
                                     .background(
-                                        if (isSelected) Color(0xFF0A84FF)
+                                        if (isSelected) Color(0xFF0381FE)
                                         else (if (isDark) Color(0xFF1E2430) else Color.White)
                                     )
                                     .clickable {
@@ -1583,7 +1583,7 @@ private fun PostDetailsInputView(
                     AppleSwitch(
                         checked = allowRemix,
                         onCheckedChange = onAllowRemixChange,
-                        activeTrackColor = Color(0xFF0A84FF)
+                        activeTrackColor = Color(0xFF0381FE)
                     )
                 }
 
@@ -1606,7 +1606,7 @@ private fun PostDetailsInputView(
                     AppleSwitch(
                         checked = highQuality,
                         onCheckedChange = onHighQualityChange,
-                        activeTrackColor = Color(0xFF0A84FF)
+                        activeTrackColor = Color(0xFF0381FE)
                     )
                 }
             }
@@ -1622,7 +1622,7 @@ private fun PostDetailsInputView(
                 .fillMaxWidth()
                 .height(52.dp),
             shape = RoundedCornerShape(999.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF))
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE))
         ) {
             if (isPublishing) {
                 CircularProgressIndicator(

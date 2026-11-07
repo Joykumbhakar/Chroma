@@ -115,7 +115,7 @@ fun DeleteLayerModal(
                 ) {
                     Text(
                         "Cancel",
-                        color = Color(0xFF007AFF), // iOS blue
+                        color = Color(0xFF0381FE), // iOS blue
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Normal
                     )

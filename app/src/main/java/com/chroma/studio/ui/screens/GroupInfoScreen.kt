@@ -148,7 +148,7 @@ fun GroupInfoScreen(
                                 Icon(
                                     Lucide.Camera,
                                     contentDescription = "Change Photo",
-                                    tint = Color(0xFF007AFF),
+                                    tint = Color(0xFF0381FE),
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
@@ -171,7 +171,7 @@ fun GroupInfoScreen(
                         if (isAdmin && !isLeft && !isClosed) {
                             Spacer(Modifier.width(6.dp))
                             IconButton(onClick = { showEditNameDialog = true }, modifier = Modifier.size(28.dp)) {
-                                Icon(Lucide.Pencil, "Edit", tint = Color(0xFF007AFF), modifier = Modifier.size(15.dp))
+                                Icon(Lucide.Pencil, "Edit", tint = Color(0xFF0381FE), modifier = Modifier.size(15.dp))
                             }
                         }
                     }
@@ -243,7 +243,7 @@ fun GroupInfoScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Lucide.UserPlus, null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+                                    Icon(Lucide.UserPlus, null, tint = Color(0xFF0381FE), modifier = Modifier.size(20.dp))
                                     Spacer(Modifier.height(4.dp))
                                     Text("Add", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                 }
@@ -266,7 +266,7 @@ fun GroupInfoScreen(
                                 Icon(
                                     if (isMuted) Lucide.BellOff else Lucide.Bell,
                                     null,
-                                    tint = if (isMuted) Color(0xFFFF9F0A) else Color(0xFF007AFF),
+                                    tint = if (isMuted) Color(0xFFFF9F0A) else Color(0xFF0381FE),
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(Modifier.height(4.dp))
@@ -367,12 +367,12 @@ fun GroupInfoScreen(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF0A84FF).copy(alpha = 0.12f))
+                                            .background(Color(0xFF0381FE).copy(alpha = 0.12f))
                                             .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
                                         Text(
                                             text = "Admin",
-                                            color = Color(0xFF0A84FF),
+                                            color = Color(0xFF0381FE),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -397,7 +397,7 @@ fun GroupInfoScreen(
                                             if (!isMemberAdmin) {
                                                 DropdownMenuItem(
                                                     text = { Text("Make Group Admin", color = Color(0xFF1C1C1E)) },
-                                                    leadingIcon = { Icon(Lucide.ShieldCheck, null, tint = Color(0xFF0A84FF)) },
+                                                    leadingIcon = { Icon(Lucide.ShieldCheck, null, tint = Color(0xFF0381FE)) },
                                                     onClick = {
                                                         chatViewModel.makeAdmin(room.id, userId)
                                                         expanded = false
@@ -643,7 +643,7 @@ fun GroupInfoScreen(
                     
                     if (isSearching) {
                         Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF0A84FF), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF0381FE), strokeWidth = 2.dp)
                         }
                     } else if (displayUsers.isEmpty()) {
                         Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
@@ -687,7 +687,7 @@ fun GroupInfoScreen(
                                             )
                                         }
                                     }
-                                    Icon(Lucide.UserPlus, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
+                                    Icon(Lucide.UserPlus, null, tint = Color(0xFF0381FE), modifier = Modifier.size(18.dp))
                                 }
                             }
                         }

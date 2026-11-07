@@ -340,9 +340,9 @@ fun UserProfileHighlightsSection(
 
     val highlightGradients = remember {
         listOf(
-            listOf(Color(0xFF0A84FF), Color(0xFF5856D6)),
+            listOf(Color(0xFF0381FE), Color(0xFF5856D6)),
             listOf(Color(0xFFFF2D55), Color(0xFFFF9500)),
-            listOf(Color(0xFF34C759), Color(0xFF0A84FF)),
+            listOf(Color(0xFF34C759), Color(0xFF0381FE)),
             listOf(Color(0xFFAF52DE), Color(0xFFFF2D55)),
             listOf(Color(0xFF5856D6), Color(0xFF00C7BE))
         )
@@ -429,10 +429,10 @@ fun UserProfileHighlightsSection(
                             .clip(CircleShape)
                             .background(
                                 when (titleLower) {
-                                    "projects" -> Brush.linearGradient(listOf(Color(0xFF007AFF), Color(0xFF0056C6)))
+                                    "projects" -> Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF0056C6)))
                                     "studio" -> Brush.linearGradient(listOf(Color(0xFF0B1930), Color(0xFF040E1E)))
-                                    "artworks" -> Brush.sweepGradient(listOf(Color(0xFFFF9500), Color(0xFFFF2D55), Color(0xFFAF52DE), Color(0xFF0A84FF), Color(0xFFFF9500)))
-                                    "travel" -> Brush.linearGradient(listOf(Color(0xFF34C759), Color(0xFF007AFF)))
+                                    "artworks" -> Brush.sweepGradient(listOf(Color(0xFFFF9500), Color(0xFFFF2D55), Color(0xFFAF52DE), Color(0xFF0381FE), Color(0xFFFF9500)))
+                                    "travel" -> Brush.linearGradient(listOf(Color(0xFF34C759), Color(0xFF0381FE)))
                                     else -> Brush.linearGradient(gradientColors)
                                 }
                             ),

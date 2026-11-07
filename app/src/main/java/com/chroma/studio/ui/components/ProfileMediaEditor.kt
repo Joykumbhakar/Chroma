@@ -372,7 +372,7 @@ fun ProfileMediaEditorModal(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(32.dp),
                                     strokeWidth = 3.dp,
-                                    color = Color(0xFF007AFF)
+                                    color = Color(0xFF0381FE)
                                 )
                                 Text(
                                     text = "Loading Photo...",
@@ -449,7 +449,7 @@ fun ProfileMediaEditorModal(
                             Box(
                                 modifier = Modifier
                                     .clip(CircleShape)
-                                    .background(Color(0xFF007AFF).copy(alpha = 0.22f))
+                                    .background(Color(0xFF0381FE).copy(alpha = 0.22f))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
@@ -467,8 +467,8 @@ fun ProfileMediaEditorModal(
                         modifier = Modifier
                             .clip(CircleShape)
                             .background(
-                                if (loadedBitmap != null && !isProcessingOutput) Color(0xFF007AFF)
-                                else Color(0xFF007AFF).copy(alpha = 0.35f)
+                                if (loadedBitmap != null && !isProcessingOutput) Color(0xFF0381FE)
+                                else Color(0xFF0381FE).copy(alpha = 0.35f)
                             )
                             .clickable(enabled = loadedBitmap != null && !isProcessingOutput) {
                                 val bmp = loadedBitmap ?: return@clickable
@@ -575,7 +575,7 @@ fun ProfileMediaEditorModal(
                             valueRange = 1.0f..4.0f,
                             colors = SliderDefaults.colors(
                                 thumbColor = Color.White,
-                                activeTrackColor = Color(0xFF007AFF),
+                                activeTrackColor = Color(0xFF0381FE),
                                 inactiveTrackColor = Color.White.copy(alpha = 0.18f)
                             ),
                             modifier = Modifier.weight(1f)
@@ -679,7 +679,7 @@ private fun EditorActionButton(
     isEnabled: Boolean = true,
     onClick: () -> Unit
 ) {
-    val activeBg = if (isActive) Color(0xFF007AFF) else Color.Transparent
+    val activeBg = if (isActive) Color(0xFF0381FE) else Color.Transparent
     val activeTint = if (isActive) Color.White else if (isEnabled) Color.White else Color.White.copy(alpha = 0.3f)
     val textTint = if (isActive) Color(0xFF64D2FF) else if (isEnabled) Color.White.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.3f)
 

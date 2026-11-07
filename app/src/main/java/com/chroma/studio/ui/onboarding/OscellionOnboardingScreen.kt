@@ -308,7 +308,7 @@ fun OscellionOnboardingScreen(
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(38.dp),
-                            color = Color(0xFF0066FF),
+                            color = Color(0xFF0381FE),
                             strokeWidth = 3.dp
                         )
                     }

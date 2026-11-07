@@ -3150,7 +3150,7 @@ fun LightboxModal(
                     text = "Reset Zoom",
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF007AFF),
+                    color = Color(0xFF0381FE),
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
@@ -4521,7 +4521,7 @@ fun AppearanceSettingsModal(
                                                     modifier = Modifier
                                                         .size(6.dp)
                                                         .clip(CircleShape)
-                                                        .background(currentGlobeStyle.previewGradient.firstOrNull() ?: Color(0xFF007AFF))
+                                                        .background(currentGlobeStyle.previewGradient.firstOrNull() ?: Color(0xFF0381FE))
                                                 )
                                                 Text(
                                                     text = "ACTIVE PREVIEW • ${currentGlobeStyle.title.uppercase()}",

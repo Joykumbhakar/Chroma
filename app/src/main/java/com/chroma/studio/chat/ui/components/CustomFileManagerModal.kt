@@ -374,7 +374,7 @@ fun CustomFileManagerModal(
 
                         val badgeColor = when (file.extension.uppercase()) {
                             "PDF" -> Color(0xFFFF3B30)
-                            "DOC", "DOCX" -> Color(0xFF007AFF)
+                            "DOC", "DOCX" -> Color(0xFF0381FE)
                             "XLS", "XLSX", "CSV" -> Color(0xFF34C759)
                             "ZIP", "RAR", "7Z" -> Color(0xFFAF52DE)
                             "APK" -> Color(0xFFFF9500)

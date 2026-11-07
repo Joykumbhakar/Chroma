@@ -319,7 +319,7 @@ private fun DefaultBackgroundCard(
                         .align(Alignment.TopEnd)
                         .padding(10.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF007AFF))
+                        .background(Color(0xFF0381FE))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Row(
@@ -420,7 +420,7 @@ private fun BackgroundCard(
                         .align(Alignment.TopEnd)
                         .padding(10.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF007AFF))
+                        .background(Color(0xFF0381FE))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Row(

@@ -208,11 +208,11 @@ fun HiddenChatsPinDialog(
                     Box(
                         modifier = Modifier
                             .size(56.dp)
-                            .shadow(12.dp, CircleShape, ambientColor = Color(0xFF007AFF).copy(alpha = 0.4f), spotColor = Color(0xFF007AFF))
+                            .shadow(12.dp, CircleShape, ambientColor = Color(0xFF0381FE).copy(alpha = 0.4f), spotColor = Color(0xFF0381FE))
                             .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
-                                    listOf(Color(0xFF007AFF), Color(0xFF0051B3))
+                                    listOf(Color(0xFF0381FE), Color(0xFF0051B3))
                                 )
                             ),
                         contentAlignment = Alignment.Center
@@ -260,7 +260,7 @@ fun HiddenChatsPinDialog(
                         for (i in 0 until 4) {
                             val isFilled = i < enteredPin.length
                             val dotColor by animateColorAsState(
-                                targetValue = if (isError) Color(0xFFFF3B30) else if (isFilled) Color(0xFF007AFF) else Color.Transparent,
+                                targetValue = if (isError) Color(0xFFFF3B30) else if (isFilled) Color(0xFF0381FE) else Color.Transparent,
                                 animationSpec = tween(150),
                                 label = "dotColor"
                             )
@@ -281,7 +281,7 @@ fun HiddenChatsPinDialog(
                                     .background(dotColor)
                                     .border(
                                         width = 1.5.dp,
-                                        color = if (isError) Color(0xFFFF3B30) else if (isFilled) Color(0xFF007AFF) else Color.White.copy(alpha = 0.35f),
+                                        color = if (isError) Color(0xFFFF3B30) else if (isFilled) Color(0xFF0381FE) else Color.White.copy(alpha = 0.35f),
                                         shape = CircleShape
                                     )
                             )
@@ -334,7 +334,7 @@ fun HiddenChatsPinDialog(
                                                     label = "⚡",
                                                     isAction = true,
                                                     icon = {
-                                                        LucideFingerprint(tint = Color(0xFF007AFF), size = 24.dp)
+                                                        LucideFingerprint(tint = Color(0xFF0381FE), size = 24.dp)
                                                     },
                                                     onClick = {
                                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -482,10 +482,10 @@ fun HiddenChatsVaultModal(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF007AFF).copy(alpha = 0.15f)),
+                            .background(Color(0xFF0381FE).copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        LucideLock(tint = Color(0xFF007AFF), size = 17.dp)
+                        LucideLock(tint = Color(0xFF0381FE), size = 17.dp)
                     }
 
                     Column {
@@ -534,7 +534,7 @@ fun HiddenChatsVaultModal(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF007AFF))
+                            .background(Color(0xFF0381FE))
                             .clickable { onDismiss() }
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
@@ -575,7 +575,7 @@ fun HiddenChatsVaultModal(
                                 fontSize = 14.sp,
                                 color = colors.textDark
                             ),
-                            cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF007AFF)),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF0381FE)),
                             decorationBox = { inner ->
                                 if (searchQuery.isEmpty()) {
                                     Text("Search hidden conversations...", fontSize = 13.sp, color = colors.textMuted)
@@ -606,10 +606,10 @@ fun HiddenChatsVaultModal(
                             modifier = Modifier
                                 .size(70.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF007AFF).copy(alpha = 0.1f)),
+                                .background(Color(0xFF0381FE).copy(alpha = 0.1f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            LucideLock(tint = Color(0xFF007AFF), size = 32.dp)
+                            LucideLock(tint = Color(0xFF0381FE), size = 32.dp)
                         }
                         Text(
                             text = if (searchQuery.isNotBlank()) "No Matching Hidden Chats" else "No Hidden Chats Yet",
@@ -683,7 +683,7 @@ fun HiddenChatsVaultModal(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(18.dp))
-                                    .background(Color(0xFF007AFF).copy(alpha = 0.12f))
+                                    .background(Color(0xFF0381FE).copy(alpha = 0.12f))
                                     .clickable {
                                         SoundManager.playReaction()
                                         onUnhideChat(chat)
@@ -694,12 +694,12 @@ fun HiddenChatsVaultModal(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    LucideEye(tint = Color(0xFF007AFF), size = 14.dp)
+                                    LucideEye(tint = Color(0xFF0381FE), size = 14.dp)
                                     Text(
                                         text = "Unhide",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF007AFF)
+                                        color = Color(0xFF0381FE)
                                     )
                                 }
                             }

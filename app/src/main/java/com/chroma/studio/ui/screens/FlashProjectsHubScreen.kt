@@ -388,12 +388,12 @@ fun FlashProjectsHubScreen(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(
-                                if (isSelected) Color(0xFF007AFF)
+                                if (isSelected) Color(0xFF0381FE)
                                 else if (colors.isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
                             )
                             .border(
                                 width = if (isSelected) 1.5.dp else 1.dp,
-                                color = if (isSelected) Color(0xFF007AFF) else if (colors.isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                                color = if (isSelected) Color(0xFF0381FE) else if (colors.isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
                                 shape = RoundedCornerShape(8.dp)
                             )
                             .clickable(

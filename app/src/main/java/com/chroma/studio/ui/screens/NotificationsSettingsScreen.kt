@@ -160,7 +160,7 @@ fun NotificationsSettingsScreen(
                         title = "Allow Push Notifications",
                         subtitle = "Deliver real-time banners, sounds, and active badges",
                         icon = LucideFilled.Bell,
-                        iconColor = Color(0xFF0A84FF),
+                        iconColor = Color(0xFF0381FE),
                         checked = pushEnabled,
                         onCheckedChange = {
                             SoundManager.playReaction()
@@ -213,7 +213,7 @@ fun NotificationsSettingsScreen(
                             title = "Project Collaboration & Invites",
                             subtitle = "Notify when invited to collaborate on or edit shared video timelines",
                             icon = LucideFilled.Users,
-                            iconColor = Color(0xFF0A84FF),
+                            iconColor = Color(0xFF0381FE),
                             checked = notifProjectCollab,
                             onCheckedChange = {
                                 SoundManager.playReaction()
@@ -295,7 +295,7 @@ fun NotificationsSettingsScreen(
                             title = "New Followers",
                             subtitle = "When a creator follows your creative profile",
                             icon = LucideFilled.UserPlus,
-                            iconColor = Color(0xFF0A84FF),
+                            iconColor = Color(0xFF0381FE),
                             checked = notifFollows,
                             onCheckedChange = {
                                 SoundManager.playReaction()
@@ -344,7 +344,7 @@ fun NotificationsSettingsScreen(
                         title = "Weekly Creator Digest",
                         subtitle = "Email roundup of trending projects and community masterclasses",
                         icon = LucideFilled.Mail,
-                        iconColor = Color(0xFF0A84FF),
+                        iconColor = Color(0xFF0381FE),
                         checked = emailEnabled,
                         onCheckedChange = {
                             SoundManager.playReaction()

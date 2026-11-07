@@ -210,7 +210,7 @@ fun DrawerItem(
 
             .clip(RoundedCornerShape(12.dp))
 
-            .background(if (selected) Color(0xFF0A84FF).copy(alpha = 0.08f) else Color.Transparent)
+            .background(if (selected) Color(0xFF0381FE).copy(alpha = 0.08f) else Color.Transparent)
 
             .clickable { onClick() }
 
@@ -228,7 +228,7 @@ fun DrawerItem(
 
             size = 24.dp,
 
-            iconTint = if (selected) Color(0xFF0A84FF) else colors.textMain.copy(alpha = 0.85f)
+            iconTint = if (selected) Color(0xFF0381FE) else colors.textMain.copy(alpha = 0.85f)
 
         )
 
@@ -236,7 +236,7 @@ fun DrawerItem(
 
             text = label,
 
-            color = if (selected) Color(0xFF0A84FF) else colors.textMain,
+            color = if (selected) Color(0xFF0381FE) else colors.textMain,
 
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
 
@@ -884,7 +884,7 @@ fun HomeScreen(
 
                                 size = 24.dp,
 
-                                iconTint = Color(0xFF0A84FF)
+                                iconTint = Color(0xFF0381FE)
 
                             )
 
@@ -1665,7 +1665,7 @@ fun HomeScreen(
 
                                         Brush.horizontalGradient(
 
-                                            listOf(Color(0xFF0A84FF), Color(0xFF0056D2))
+                                            listOf(Color(0xFF0381FE), Color(0xFF0056D2))
 
                                         )
 
@@ -5069,7 +5069,7 @@ private fun CreateOptionRow(
 
                             .clip(RoundedCornerShape(6.dp))
 
-                            .background(Color(0xFF0A84FF).copy(alpha = 0.15f))
+                            .background(Color(0xFF0381FE).copy(alpha = 0.15f))
 
                             .padding(horizontal = 6.dp, vertical = 2.dp)
 
@@ -5083,7 +5083,7 @@ private fun CreateOptionRow(
 
                             fontWeight = FontWeight.Bold,
 
-                            color = Color(0xFF0A84FF)
+                            color = Color(0xFF0381FE)
 
                         )
 

@@ -276,7 +276,7 @@ fun DynamicIslandSearchBar(
                         ) {
                             Text(
                                 text = "Cancel",
-                                color = Color(0xFF0A84FF),
+                                color = Color(0xFF0381FE),
                                 fontSize = 15.sp
                             )
                         }

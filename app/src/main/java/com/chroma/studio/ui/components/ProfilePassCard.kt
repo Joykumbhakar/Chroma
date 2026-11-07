@@ -116,7 +116,7 @@ val CHROMA_GRADIENT_PRESETS = listOf(
 val QR_COLOR_PRESETS = listOf(
     Color(0xFF1D1D1F), // Jet Black
     Color(0xFFFFFFFF), // Pure White
-    Color(0xFF0A84FF), // System Blue
+    Color(0xFF0381FE), // System Blue
     Color(0xFF34C759), // Mint Green
     Color(0xFFFF9500), // Sunset Amber
     Color(0xFFFF2D55), // Crimson
@@ -125,7 +125,7 @@ val QR_COLOR_PRESETS = listOf(
 )
 
 val ACCENT_COLOR_PRESETS = listOf(
-    Color(0xFF0A84FF), // System Blue
+    Color(0xFF0381FE), // System Blue
     Color(0xFF34C759), // Mint Green
     Color(0xFFFF9500), // Amber
     Color(0xFFFF2D55), // Crimson
@@ -138,7 +138,7 @@ val ACCENT_COLOR_PRESETS = listOf(
  */
 data class PassCustomization(
     val bgMode: PassBackgroundMode = PassBackgroundMode.DEFAULT,
-    val gradientColors: List<Color> = listOf(Color(0xFF0A84FF), Color(0xFF0051D5), Color(0xFF32ADE6)),
+    val gradientColors: List<Color> = listOf(Color(0xFF0381FE), Color(0xFF0051D5), Color(0xFF32ADE6)),
     val gradientAngle: Float = 45f,
     val customImageUri: Uri? = null,
     val customImageBitmap: Bitmap? = null,
@@ -147,7 +147,7 @@ data class PassCustomization(
     val qrColor: Color = Color(0xFF1D1D1F),
     val qrFrameStyle: QrFrameStyle = QrFrameStyle.SOLID_WHITE,
     val isDarkText: Boolean = true,
-    val accentColor: Color = Color(0xFF0A84FF)
+    val accentColor: Color = Color(0xFF0381FE)
 )
 
 /**
@@ -168,7 +168,7 @@ enum class PassTheme(
         borderGradient = listOf(Color.White.copy(alpha = 0.9f), Color(0xFFDBEAFE)),
         bgGradient = listOf(Color(0xFFEEF2FF), Color(0xFFDBEAFE)),
         isDarkCard = false,
-        accentColor = Color(0xFF0A84FF),
+        accentColor = Color(0xFF0381FE),
         buttonBg = Color(0xFFF2F2F7),
         textPrimary = Color(0xFF1D1D1F),
         textSecondary = Color(0xFF86868B)
@@ -1119,7 +1119,7 @@ fun AppleProfileCardSheet(
                     ) {
                         Text(
                             text = title,
-                            color = if (isSelected) Color(0xFF0A84FF) else colors.textMain,
+                            color = if (isSelected) Color(0xFF0381FE) else colors.textMain,
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                         )
@@ -1150,16 +1150,16 @@ fun AppleProfileCardSheet(
                             shape = RoundedCornerShape(8.dp),
                             border = androidx.compose.foundation.BorderStroke(
                                 if (customization.bgMode == PassBackgroundMode.DEFAULT) 1.5.dp else 0.5.dp,
-                                if (customization.bgMode == PassBackgroundMode.DEFAULT) Color(0xFF0A84FF) else colors.glassBorder
+                                if (customization.bgMode == PassBackgroundMode.DEFAULT) Color(0xFF0381FE) else colors.glassBorder
                             ),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (customization.bgMode == PassBackgroundMode.DEFAULT) Color(0xFF0A84FF).copy(alpha = 0.12f) else Color.Transparent
+                                containerColor = if (customization.bgMode == PassBackgroundMode.DEFAULT) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
                             ),
                             contentPadding = PaddingValues(0.dp)
                         ) {
                             Text(
                                 "Default",
-                                color = if (customization.bgMode == PassBackgroundMode.DEFAULT) Color(0xFF0A84FF) else colors.textMain,
+                                color = if (customization.bgMode == PassBackgroundMode.DEFAULT) Color(0xFF0381FE) else colors.textMain,
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -1177,16 +1177,16 @@ fun AppleProfileCardSheet(
                             shape = RoundedCornerShape(8.dp),
                             border = androidx.compose.foundation.BorderStroke(
                                 if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) 1.5.dp else 0.5.dp,
-                                if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) Color(0xFF0A84FF) else colors.glassBorder
+                                if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) Color(0xFF0381FE) else colors.glassBorder
                             ),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) Color(0xFF0A84FF).copy(alpha = 0.12f) else Color.Transparent
+                                containerColor = if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
                             ),
                             contentPadding = PaddingValues(0.dp)
                         ) {
                             Text(
                                 "Gradient",
-                                color = if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) Color(0xFF0A84FF) else colors.textMain,
+                                color = if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) Color(0xFF0381FE) else colors.textMain,
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -1201,10 +1201,10 @@ fun AppleProfileCardSheet(
                             shape = RoundedCornerShape(8.dp),
                             border = androidx.compose.foundation.BorderStroke(
                                 if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE) 1.5.dp else 0.5.dp,
-                                if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE) Color(0xFF0A84FF) else colors.glassBorder
+                                if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE) Color(0xFF0381FE) else colors.glassBorder
                             ),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE) Color(0xFF0A84FF).copy(alpha = 0.12f) else Color.Transparent
+                                containerColor = if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
                             ),
                             contentPadding = PaddingValues(0.dp)
                         ) {
@@ -1215,7 +1215,7 @@ fun AppleProfileCardSheet(
                                 Icon(Lucide.Image, contentDescription = null, modifier = Modifier.size(13.dp))
                                 Text(
                                     "Photo",
-                                    color = if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE) Color(0xFF0A84FF) else colors.textMain,
+                                    color = if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE) Color(0xFF0381FE) else colors.textMain,
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -1229,7 +1229,7 @@ fun AppleProfileCardSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .border(1.dp, Color(0xFF0A84FF).copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                                .border(1.dp, Color(0xFF0381FE).copy(alpha = 0.35f), RoundedCornerShape(12.dp))
                                 .clickable {
                                     val intent = Intent(context, com.chroma.studio.MainActivity::class.java).apply {
                                         putExtra(com.chroma.studio.MainActivity.EXTRA_IS_PASS_CARD_MODE, true)
@@ -1243,7 +1243,7 @@ fun AppleProfileCardSheet(
                                     }
                                     context.startActivity(intent)
                                 },
-                            color = Color(0xFF0A84FF).copy(alpha = 0.08f),
+                            color = Color(0xFF0381FE).copy(alpha = 0.08f),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Row(
@@ -1257,7 +1257,7 @@ fun AppleProfileCardSheet(
                                     modifier = Modifier
                                         .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(Brush.linearGradient(listOf(Color(0xFF0A84FF), Color(0xFF00C6FF)))),
+                                        .background(Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF00C6FF)))),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     AiWaveSphereIcon(
@@ -1280,7 +1280,7 @@ fun AppleProfileCardSheet(
                                 Icon(
                                     imageVector = Lucide.ChevronRight,
                                     contentDescription = null,
-                                    tint = Color(0xFF0A84FF),
+                                    tint = Color(0xFF0381FE),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -1370,7 +1370,7 @@ fun AppleProfileCardSheet(
                                     .background(color)
                                     .border(
                                         width = if (isSelected) 2.5.dp else 1.dp,
-                                        color = if (isSelected) Color(0xFF0A84FF) else colors.glassBorder,
+                                        color = if (isSelected) Color(0xFF0381FE) else colors.glassBorder,
                                         shape = CircleShape
                                     )
                                     .clickable { customization = customization.copy(qrColor = color) },
@@ -1407,16 +1407,16 @@ fun AppleProfileCardSheet(
                                 shape = RoundedCornerShape(8.dp),
                                 border = androidx.compose.foundation.BorderStroke(
                                     if (isSelected) 1.5.dp else 0.5.dp,
-                                    if (isSelected) Color(0xFF0A84FF) else colors.glassBorder
+                                    if (isSelected) Color(0xFF0381FE) else colors.glassBorder
                                 ),
                                 colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = if (isSelected) Color(0xFF0A84FF).copy(alpha = 0.12f) else Color.Transparent
+                                    containerColor = if (isSelected) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
                                 ),
                                 contentPadding = PaddingValues(0.dp)
                             ) {
                                 Text(
                                     label,
-                                    color = if (isSelected) Color(0xFF0A84FF) else colors.textMain,
+                                    color = if (isSelected) Color(0xFF0381FE) else colors.textMain,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -1443,10 +1443,10 @@ fun AppleProfileCardSheet(
                             shape = RoundedCornerShape(8.dp),
                             border = androidx.compose.foundation.BorderStroke(
                                 if (!customization.isDarkText) 1.5.dp else 0.5.dp,
-                                if (!customization.isDarkText) Color(0xFF0A84FF) else colors.glassBorder
+                                if (!customization.isDarkText) Color(0xFF0381FE) else colors.glassBorder
                             ),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (!customization.isDarkText) Color(0xFF0A84FF).copy(alpha = 0.12f) else Color.Transparent
+                                containerColor = if (!customization.isDarkText) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
                             )
                         ) {
                             Text("Light Text (Dark Bg)", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
@@ -1458,10 +1458,10 @@ fun AppleProfileCardSheet(
                             shape = RoundedCornerShape(8.dp),
                             border = androidx.compose.foundation.BorderStroke(
                                 if (customization.isDarkText) 1.5.dp else 0.5.dp,
-                                if (customization.isDarkText) Color(0xFF0A84FF) else colors.glassBorder
+                                if (customization.isDarkText) Color(0xFF0381FE) else colors.glassBorder
                             ),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (customization.isDarkText) Color(0xFF0A84FF).copy(alpha = 0.12f) else Color.Transparent
+                                containerColor = if (customization.isDarkText) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
                             )
                         ) {
                             Text("Dark Text (Light Bg)", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)

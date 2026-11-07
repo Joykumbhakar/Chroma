@@ -77,7 +77,7 @@ fun AppleSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    activeTrackColor: Color = Color(0xFF0A84FF),
+    activeTrackColor: Color = Color(0xFF0381FE),
     inactiveTrackColor: Color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE9E9EA),
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
@@ -125,7 +125,7 @@ fun AppleSlider(
 
     val isDark = isSystemInDarkTheme()
     val inactiveTrackColor = if (isDark) Color(0xFF39393D) else Color(0xFFE5E5EA)
-    val activeGrad = gradientColors ?: listOf(Color(0xFF0A84FF), Color(0xFF0A84FF))
+    val activeGrad = gradientColors ?: listOf(Color(0xFF0381FE), Color(0xFF0381FE))
 
     Slider(
         value = value.coerceIn(valueRange.start, valueRange.endInclusive),
@@ -187,7 +187,7 @@ fun AppleJellySlider(
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: (() -> Unit)? = null,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
-    activeColor: Color = Color(0xFF0A84FF),
+    activeColor: Color = Color(0xFF0381FE),
     inactiveColor: Color = Color(0xFFE5E5EA),
     modifier: Modifier = Modifier
 ) {
@@ -319,7 +319,7 @@ fun AppleDialog(
     val dialogBg = if (isSystemInDarkTheme) Color(0xEB2C2C2E) else Color(0xEBFFFFFF)
     val titleColor = if (isSystemInDarkTheme) Color.White else Color.Black
     val dividerColor = if (isSystemInDarkTheme) Color(0x40545458) else Color(0x203C3C43)
-    val blueColor = if (isSystemInDarkTheme) Color(0xFF0A84FF) else Color(0xFF0A84FF)
+    val blueColor = if (isSystemInDarkTheme) Color(0xFF0381FE) else Color(0xFF0381FE)
     val redColor = if (isSystemInDarkTheme) Color(0xFFFF453A) else Color(0xFFFF3B30)
 
     androidx.compose.ui.window.Dialog(

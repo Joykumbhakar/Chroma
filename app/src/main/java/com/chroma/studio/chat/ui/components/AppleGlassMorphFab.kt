@@ -87,9 +87,9 @@ private val StageMidColor = Color(0xFFEFF6FF)
 private val StageEdgeColor = Color(0xFFE2E8F0)
 
 // Vibrant Apple Liquid Glass Blue Gradient Stops
-private val GlassBlueTop = Color(0xFF2EA5FF)      // Brilliant vibrant azure crown
-private val GlassBlueUpperMid = Color(0xFF0A84FF) // Core rich vibrant blue
-private val GlassBlueLowerMid = Color(0xFF006DF0) // Saturated electric blue body
+private val GlassBlueTop = Color(0xFF3E91FF)      // Brilliant vibrant azure crown
+private val GlassBlueUpperMid = Color(0xFF0381FE) // Core rich vibrant blue
+private val GlassBlueLowerMid = Color(0xFF0072DE) // Saturated electric blue body
 private val GlassBlueBottom = Color(0xFF0056D6)   // Dense vibrant sapphire base
 private val GlassCyanCrown = Color(0x80B3E5FC)    // Top sky-blue radial light bloom
 private val GlassBottomCaustic = Color(0x6040C4FF)// Internal bottom lens caustic glow

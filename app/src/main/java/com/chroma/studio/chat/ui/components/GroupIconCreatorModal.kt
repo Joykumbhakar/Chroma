@@ -52,7 +52,7 @@ data class GroupIconGradient(
 )
 
 val defaultGroupGradients = listOf(
-    GroupIconGradient("ocean", "Ocean Blue", listOf(Color(0xFF007AFF), Color(0xFF00C6FF))),
+    GroupIconGradient("ocean", "Ocean Blue", listOf(Color(0xFF0381FE), Color(0xFF00C6FF))),
     GroupIconGradient("sunset", "Sunset Coral", listOf(Color(0xFFFF5E3A), Color(0xFFFF2A68))),
     GroupIconGradient("amethyst", "Amethyst Spark", listOf(Color(0xFF8B5CF6), Color(0xFFC084FC))),
     GroupIconGradient("emerald", "Emerald Mint", listOf(Color(0xFF10B981), Color(0xFF059669))),

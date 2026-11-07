@@ -99,7 +99,7 @@ private val InitialsColorPalette = listOf(
     Color(0xFFE65100), // Rich Warm Orange (like "A.B" in design reference)
     Color(0xFF6A1B9A), // Royal Purple (like Avatar 3)
     Color(0xFF00897B), // Deep Teal (like Avatar 4)
-    Color(0xFF007AFF), // Cupertino Blue
+    Color(0xFF0381FE), // Cupertino Blue
     Color(0xFFD81B60), // Crimson Rose
     Color(0xFF1E88E5), // Vivid Sky
     Color(0xFF43A047), // Fresh Green

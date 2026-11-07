@@ -277,7 +277,7 @@ fun AppleSettingsHeader(
                     Icon(
                         imageVector = icon ?: Lucide.ChevronLeft,
                         contentDescription = "Back",
-                        tint = Color(0xFF0A84FF),
+                        tint = Color(0xFF0381FE),
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -287,7 +287,7 @@ fun AppleSettingsHeader(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color(0xFF0A84FF),
+                    tint = Color(0xFF0381FE),
                     modifier = Modifier.size(26.dp)
                 )
             }
@@ -303,7 +303,7 @@ fun AppleSettingsHeader(
         if (onDoneClick != null && doneText != null) {
             Text(
                 text = doneText,
-                color = Color(0xFF0A84FF),
+                color = Color(0xFF0381FE),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
@@ -314,7 +314,7 @@ fun AppleSettingsHeader(
         } else if (onBackClick != null) {
             Text(
                 text = "Back",
-                color = Color(0xFF0A84FF),
+                color = Color(0xFF0381FE),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
@@ -372,7 +372,7 @@ fun AppleSettingsSearchBar(
                     color = colors.textMain,
                     fontSize = 14.5.sp
                 ),
-                cursorBrush = SolidColor(Color(0xFF0A84FF)),
+                cursorBrush = SolidColor(Color(0xFF0381FE)),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -794,7 +794,7 @@ fun AppleSettingToggleRow(
 fun AppleSettingSliderRow(
     title: String,
     valueText: String,
-    valueTextColor: Color = Color(0xFF0A84FF),
+    valueTextColor: Color = Color(0xFF0381FE),
     icon: ImageVector? = null,
     graphic3dId: Apple3DGraphicId? = null,
     iconColor: Color = Color(0xFF0055FF),

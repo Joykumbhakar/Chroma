@@ -698,7 +698,7 @@ fun CustomSharedGalleryModal(
                                     val isSelected = selectedItemIds.contains(item.id)
                                     val badgeColor = when (item.fileExtension) {
                                         "PDF" -> Color(0xFFFF3B30)
-                                        "DOCX" -> Color(0xFF007AFF)
+                                        "DOCX" -> Color(0xFF0381FE)
                                         "ZIP" -> Color(0xFFFF9500)
                                         "XLSX" -> Color(0xFF34C759)
                                         else -> colors.iosBlue

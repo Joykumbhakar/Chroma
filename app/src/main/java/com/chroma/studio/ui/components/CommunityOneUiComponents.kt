@@ -239,7 +239,7 @@ fun CommunityOneUiHeader(
                             Icon(
                                 imageVector = Lucide.RotateCw,
                                 contentDescription = "Refresh Feed",
-                                tint = if (isRefreshing) Color(0xFF0A84FF) else textDark,
+                                tint = if (isRefreshing) Color(0xFF0381FE) else textDark,
                                 modifier = Modifier
                                     .size(18.dp)
                                     .rotate(refreshRotation)
@@ -333,7 +333,7 @@ fun CommunityCategoryPills(
     selectedTab: CommunityFeedTab,
     onSelectTab: (CommunityFeedTab) -> Unit,
     modifier: Modifier = Modifier,
-    activeColor: Color = Color(0xFF0A84FF)
+    activeColor: Color = Color(0xFF0381FE)
 ) {
     val colors = LocalOscellionColors.current
     val isDark = colors.isDark
@@ -485,7 +485,7 @@ fun CommunityInteractiveEmptyState(
     val cardBorderColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
     val textMain = if (!isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
     val textMuted = if (!isDark) Color(0xFF71717A) else Color(0xFF8E8E93)
-    val activeBlue = Color(0xFF0A84FF)
+    val activeBlue = Color(0xFF0381FE)
 
     val (title, subtitle) = remember(selectedTab, searchQuery) {
         when {
@@ -553,7 +553,7 @@ fun CommunityInteractiveEmptyState(
                     .clip(RoundedCornerShape(50))
                     .background(
                         Brush.horizontalGradient(
-                            listOf(Color(0xFF0A84FF), Color(0xFF0A84FF))
+                            listOf(Color(0xFF0381FE), Color(0xFF0381FE))
                         )
                     )
                     .clickable {

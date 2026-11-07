@@ -182,7 +182,7 @@ fun AppleSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    activeTrackColor: Color = Color(0xFF0A84FF),
+    activeTrackColor: Color = Color(0xFF0381FE),
     inactiveTrackColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE9E9EA),
     hazeState: dev.chrisbanes.haze.HazeState? = null,
     trackWidth: Dp = 48.dp,
@@ -283,7 +283,7 @@ fun AppleSlider(
 
     val isDark = isAppInDark
     val inactiveTrackColor = if (isDark) Color(0xFF39393D) else Color(0xFFE5E5EA)
-    val activeGrad = gradientColors ?: listOf(Color(0xFF0A84FF), Color(0xFF0A84FF))
+    val activeGrad = gradientColors ?: listOf(Color(0xFF0381FE), Color(0xFF0381FE))
 
     Slider(
         value = value.coerceIn(valueRange.start, valueRange.endInclusive),
@@ -372,7 +372,7 @@ fun AppleJellySlider(
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: (() -> Unit)? = null,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
-    activeColor: Color = Color(0xFF0A84FF),
+    activeColor: Color = Color(0xFF0381FE),
     inactiveColor: Color = Color(0xFFE5E5EA),
     modifier: Modifier = Modifier
 ) {
@@ -418,7 +418,7 @@ fun AppleDialog(
     val dialogBg = if (isDark) Color(0xEB2C2C2E) else Color(0xEBFFFFFF)
     val titleColor = if (isDark) Color.White else Color.Black
     val dividerColor = if (isDark) Color(0x40545458) else Color(0x203C3C43)
-    val blueColor = if (isDark) Color(0xFF0A84FF) else Color(0xFF0A84FF)
+    val blueColor = if (isDark) Color(0xFF0381FE) else Color(0xFF0381FE)
     val redColor = if (isDark) Color(0xFFFF453A) else Color(0xFFFF3B30)
 
     Dialog(
@@ -623,7 +623,7 @@ fun IosAlertDialog(
     val titleColor = if (isDark) Color.White else Color.Black
     val messageColor = if (isDark) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.8f)
     val dividerColor = if (isDark) Color(0x36545458) else Color(0x363C3C43)
-    val blueColor = Color(0xFF0A84FF)
+    val blueColor = Color(0xFF0381FE)
     val redColor = Color(0xFFFF3B30)
 
     Dialog(
@@ -912,7 +912,7 @@ fun IosActionSheet(
                         ) {
                             Text(
                                 text = item.title,
-                                color = if (item.isDestructive) Color(0xFFFF3B30) else Color(0xFF0A84FF),
+                                color = if (item.isDestructive) Color(0xFFFF3B30) else Color(0xFF0381FE),
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Normal,
                                 fontFamily = InterFontFamily
@@ -939,7 +939,7 @@ fun IosActionSheet(
                 ) {
                     Text(
                         text = cancelText,
-                        color = Color(0xFF0A84FF),
+                        color = Color(0xFF0381FE),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = InterFontFamily
@@ -1458,7 +1458,7 @@ fun IosDynamicIslandHost(
                                         event.title.contains("copied", ignoreCase = true) || event.title.contains("saved", ignoreCase = true) || event.title.contains("success", ignoreCase = true) || event.title.contains("updated", ignoreCase = true) -> Color(0xFF34C759)
                                         event.title.contains("delete", ignoreCase = true) || event.title.contains("remove", ignoreCase = true) || event.title.contains("error", ignoreCase = true) || event.title.contains("failed", ignoreCase = true) -> Color(0xFFFF3B30)
                                         event.title.contains("like", ignoreCase = true) -> Color(0xFFFF2D55)
-                                        event.title.contains("follow", ignoreCase = true) -> Color(0xFF0A84FF)
+                                        event.title.contains("follow", ignoreCase = true) -> Color(0xFF0381FE)
                                         else -> Color(0xFF5856D6)
                                     }
                                     Icon(event.icon ?: Lucide.Check, null, tint = iconTint, modifier = Modifier.size(18.dp))
@@ -1541,7 +1541,7 @@ fun IosDynamicIslandHost(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.weight(1f, fill = false)
                                 ) {
-                                    Icon(Lucide.UserPlus, null, tint = Color(0xFF0A84FF), modifier = Modifier.size(18.dp))
+                                    Icon(Lucide.UserPlus, null, tint = Color(0xFF0381FE), modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Text(
                                         text = "${event.userName} followed you",
@@ -1554,7 +1554,7 @@ fun IosDynamicIslandHost(
                                     )
                                 }
                                 Spacer(Modifier.width(6.dp))
-                                Icon(Lucide.UserPlus, null, tint = Color(0xFF0A84FF), modifier = Modifier.size(13.dp))
+                                Icon(Lucide.UserPlus, null, tint = Color(0xFF0381FE), modifier = Modifier.size(13.dp))
                             }
                         }
 
@@ -1895,7 +1895,7 @@ fun IosDynamicIslandHost(
                                             modifier = Modifier.size(34.dp).clip(CircleShape)
                                         )
                                     } else {
-                                        Icon(Lucide.UserPlus, null, tint = Color(0xFF0A84FF), modifier = Modifier.size(26.dp))
+                                        Icon(Lucide.UserPlus, null, tint = Color(0xFF0381FE), modifier = Modifier.size(26.dp))
                                     }
 
                                     Spacer(Modifier.width(10.dp))
@@ -1930,7 +1930,7 @@ fun IosDynamicIslandHost(
                                             modifier = Modifier
                                                 .height(30.dp)
                                                 .clip(RoundedCornerShape(8.dp))
-                                                .background(Color(0xFF0A84FF))
+                                                .background(Color(0xFF0381FE))
                                                 .clickable {
                                                     event.onFollowBack.invoke()
                                                     dismissIsland()
@@ -2051,7 +2051,7 @@ fun IosDynamicIslandHost(
                                         event.title.contains("copied", ignoreCase = true) || event.title.contains("saved", ignoreCase = true) || event.title.contains("success", ignoreCase = true) || event.title.contains("updated", ignoreCase = true) -> Color(0xFF34C759)
                                         event.title.contains("delete", ignoreCase = true) || event.title.contains("remove", ignoreCase = true) || event.title.contains("error", ignoreCase = true) || event.title.contains("failed", ignoreCase = true) -> Color(0xFFFF3B30)
                                         event.title.contains("like", ignoreCase = true) -> Color(0xFFFF2D55)
-                                        event.title.contains("follow", ignoreCase = true) -> Color(0xFF0A84FF)
+                                        event.title.contains("follow", ignoreCase = true) -> Color(0xFF0381FE)
                                         else -> Color(0xFF5856D6)
                                     }
 
@@ -2091,7 +2091,7 @@ fun IosDynamicIslandHost(
                                             modifier = Modifier
                                                 .height(28.dp)
                                                 .clip(RoundedCornerShape(8.dp))
-                                                .background(Color(0xFF0A84FF))
+                                                .background(Color(0xFF0381FE))
                                                 .clickable {
                                                     event.onAction?.invoke()
                                                     dismissIsland()

@@ -97,7 +97,7 @@ fun StoryCreationBottomSheet(
                 StoryCreationOptionRow(
                     icon = Lucide.Image,
                     iconGradient = Brush.linearGradient(
-                        colors = listOf(Color(0xFF007AFF), Color(0xFF00C6FF))
+                        colors = listOf(Color(0xFF0381FE), Color(0xFF00C6FF))
                     ),
                     title = "Choose From Gallery",
                     subtitle = "Pick photos or videos from your device",

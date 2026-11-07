@@ -129,7 +129,7 @@ fun ShareStoryAudienceSheet(
                                 Icon(
                                     imageVector = Lucide.Globe,
                                     contentDescription = null,
-                                    tint = if (colors.isDark) Color.White else Color(0xFF007AFF),
+                                    tint = if (colors.isDark) Color.White else Color(0xFF0381FE),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -153,7 +153,7 @@ fun ShareStoryAudienceSheet(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .background(Color(0xFF007AFF))
+                            .background(Color(0xFF0381FE))
                             .padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Text(

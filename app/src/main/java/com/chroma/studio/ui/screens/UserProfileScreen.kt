@@ -956,7 +956,7 @@ fun UserProfileScreen(
                 .background(if (colors.isDark) Color(0xFF1E222A) else Color.White)
                 .padding(8.dp)
         ) {
-            OscellionWheelSpinner(size = 20.dp, strokeWidth = 2.2.dp, color = Color(0xFF0A84FF))
+            OscellionWheelSpinner(size = 20.dp, strokeWidth = 2.2.dp, color = Color(0xFF0381FE))
         }
     }
 
@@ -1890,7 +1890,7 @@ private fun UserProfileModalsAndSheets(
                                 selected = isSelected,
                                 onClick = { onSelectReportReason(reason) },
                                 colors = RadioButtonDefaults.colors(
-                                    selectedColor = Color(0xFF0A84FF),
+                                    selectedColor = Color(0xFF0381FE),
                                     unselectedColor = if (isDark) Color(0xFF475569) else Color(0xFF94A3B8)
                                 )
                             )
@@ -2039,7 +2039,7 @@ private fun UserProfileModalsAndSheets(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) Color(0xFF0A84FF) else Color.Transparent)
+                                .background(if (isSelected) Color(0xFF0381FE) else Color.Transparent)
                                 .clickable { libraryTab = index }
                                 .padding(vertical = 7.dp),
                             contentAlignment = Alignment.Center
@@ -2071,7 +2071,7 @@ private fun UserProfileModalsAndSheets(
                                         .clip(RoundedCornerShape(10.dp))
                                         .border(
                                             width = if (isSelected) 2.dp else 0.75.dp,
-                                            color = if (isSelected) Color(0xFF0A84FF) else colors.glassBorder,
+                                            color = if (isSelected) Color(0xFF0381FE) else colors.glassBorder,
                                             shape = RoundedCornerShape(10.dp)
                                         )
                                         .clickable {
@@ -2100,7 +2100,7 @@ private fun UserProfileModalsAndSheets(
                                             Icon(
                                                 Lucide.Check,
                                                 contentDescription = null,
-                                                tint = Color(0xFF0A84FF),
+                                                tint = Color(0xFF0381FE),
                                                 modifier = Modifier
                                                     .align(Alignment.TopEnd)
                                                     .padding(6.dp)
@@ -2155,7 +2155,7 @@ private fun UserProfileModalsAndSheets(
                                             .clip(RoundedCornerShape(10.dp))
                                             .border(
                                                 width = if (isSelected) 2.dp else 0.75.dp,
-                                                color = if (isSelected) Color(0xFF0A84FF) else colors.glassBorder,
+                                                color = if (isSelected) Color(0xFF0381FE) else colors.glassBorder,
                                                 shape = RoundedCornerShape(10.dp)
                                             )
                                             .clickable {
@@ -2174,7 +2174,7 @@ private fun UserProfileModalsAndSheets(
                                                 Icon(
                                                     Lucide.Check,
                                                     contentDescription = null,
-                                                    tint = Color(0xFF0A84FF),
+                                                    tint = Color(0xFF0381FE),
                                                     modifier = Modifier
                                                         .align(Alignment.TopEnd)
                                                         .padding(6.dp)
@@ -2664,7 +2664,7 @@ fun OscellionWheelSpinner(
     modifier: Modifier = Modifier,
     size: Dp = 26.dp,
     strokeWidth: Dp = 2.5.dp,
-    color: Color = Color(0xFF0A84FF),
+    color: Color = Color(0xFF0381FE),
     trackColor: Color = color.copy(alpha = 0.15f)
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "wheelSpinner")
@@ -2708,7 +2708,7 @@ fun ProfileTabLoadingState(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            OscellionWheelSpinner(size = 28.dp, strokeWidth = 2.5.dp, color = Color(0xFF0A84FF))
+            OscellionWheelSpinner(size = 28.dp, strokeWidth = 2.5.dp, color = Color(0xFF0381FE))
             Text(
                 text = message,
                 color = colors.textMuted,
@@ -2818,7 +2818,7 @@ fun UserProfileErrorState(
                     modifier = Modifier
                         .scale(retryScale)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF0A84FF))
+                        .background(Color(0xFF0381FE))
                         .clickable(
                             interactionSource = retryInteraction,
                             indication = null,

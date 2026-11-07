@@ -652,7 +652,7 @@ fun OscellionGalleryLayout(
                             Icon(
                                 Lucide.Search,
                                 contentDescription = "Search",
-                                tint = if (isSearchVisible) Color(0xFF0A84FF) else colors.textMain,
+                                tint = if (isSearchVisible) Color(0xFF0381FE) else colors.textMain,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -901,7 +901,7 @@ private fun GalleryTopBar(
                 Icon(
                     Lucide.Search,
                     contentDescription = "Search",
-                    tint = if (isSearchVisible) Color(0xFF0A84FF) else colors.textMain,
+                    tint = if (isSearchVisible) Color(0xFF0381FE) else colors.textMain,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -946,7 +946,7 @@ private fun GallerySegmentedTabs(
             GalleryViewMode.values().forEach { mode ->
                 val isSelected = mode == selectedMode
                 val bgAnim by animateColorAsState(
-                    targetValue = if (isSelected) Color(0xFF0A84FF) else Color.Transparent,
+                    targetValue = if (isSelected) Color(0xFF0381FE) else Color.Transparent,
                     animationSpec = tween(180),
                     label = "tabBg"
                 )
@@ -985,8 +985,8 @@ private fun GalleryActiveAlbumChip(
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = Color(0xFF0A84FF).copy(alpha = 0.12f),
-        border = BorderStroke(0.5.dp, Color(0xFF0A84FF).copy(alpha = 0.35f)),
+        color = Color(0xFF0381FE).copy(alpha = 0.12f),
+        border = BorderStroke(0.5.dp, Color(0xFF0381FE).copy(alpha = 0.35f)),
         modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
     ) {
         Row(
@@ -997,19 +997,19 @@ private fun GalleryActiveAlbumChip(
             Icon(
                 Lucide.Folder,
                 contentDescription = null,
-                tint = Color(0xFF0A84FF),
+                tint = Color(0xFF0381FE),
                 modifier = Modifier.size(13.dp)
             )
             Text(
                 text = albumName,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF0A84FF)
+                color = Color(0xFF0381FE)
             )
             Icon(
                 Lucide.X,
                 contentDescription = "Clear",
-                tint = Color(0xFF0A84FF),
+                tint = Color(0xFF0381FE),
                 modifier = Modifier
                     .size(14.dp)
                     .clip(CircleShape)
@@ -1061,13 +1061,13 @@ private fun GalleryDateGroupHeader(
                 .size(26.dp)
                 .clip(CircleShape)
                 .background(
-                    if (allSelected) Color(0xFF0A84FF)
-                    else if (someSelected) Color(0xFF0A84FF).copy(alpha = 0.25f)
+                    if (allSelected) Color(0xFF0381FE)
+                    else if (someSelected) Color(0xFF0381FE).copy(alpha = 0.25f)
                     else colors.glassBg
                 )
                 .border(
                     width = if (allSelected || someSelected) 1.5.dp else 1.dp,
-                    color = if (allSelected || someSelected) Color(0xFF0A84FF) else colors.textMuted.copy(alpha = 0.45f),
+                    color = if (allSelected || someSelected) Color(0xFF0381FE) else colors.textMuted.copy(alpha = 0.45f),
                     shape = CircleShape
                 )
                 .clickable {
@@ -1087,7 +1087,7 @@ private fun GalleryDateGroupHeader(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF0A84FF))
+                        .background(Color(0xFF0381FE))
                 )
             }
         }
@@ -1641,7 +1641,7 @@ private fun GalleryQuickCategoryChips(
                     .scale(scale)
                     .clip(RoundedCornerShape(8.dp))
                     .background(
-                        if (isSelected) Color(0xFF0A84FF)
+                        if (isSelected) Color(0xFF0381FE)
                         else if (colors.isDark) Color(0x1FFFFFFF)
                         else Color(0x0C000000)
                     )
@@ -1714,7 +1714,7 @@ private fun GalleryControlsBar(
                     Icon(
                         Lucide.Folder,
                         contentDescription = null,
-                        tint = Color(0xFF0A84FF),
+                        tint = Color(0xFF0381FE),
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
@@ -1758,14 +1758,14 @@ private fun GalleryControlsBar(
                                         Icon(
                                             if (isSelected) Lucide.FolderOpen else Lucide.Folder,
                                             contentDescription = null,
-                                            tint = if (isSelected) Color(0xFF0A84FF) else colors.textMuted,
+                                            tint = if (isSelected) Color(0xFF0381FE) else colors.textMuted,
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Text(
                                             text = album,
                                             fontSize = 13.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (isSelected) Color(0xFF0A84FF) else colors.textMain,
+                                            color = if (isSelected) Color(0xFF0381FE) else colors.textMain,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
@@ -1803,7 +1803,7 @@ private fun GalleryControlsBar(
                     Icon(
                         filterIcon,
                         contentDescription = null,
-                        tint = Color(0xFF0A84FF),
+                        tint = Color(0xFF0381FE),
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
@@ -1844,14 +1844,14 @@ private fun GalleryControlsBar(
                                     Icon(
                                         icon,
                                         contentDescription = null,
-                                        tint = if (isSelected) Color(0xFF0A84FF) else colors.textMuted,
+                                        tint = if (isSelected) Color(0xFF0381FE) else colors.textMuted,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
                                         text = filter.label,
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) Color(0xFF0A84FF) else colors.textMain
+                                        color = if (isSelected) Color(0xFF0381FE) else colors.textMain
                                     )
                                 }
                             },
@@ -1909,14 +1909,14 @@ private fun GalleryControlsBar(
                                     Icon(
                                         icon,
                                         contentDescription = null,
-                                        tint = if (isSelected) Color(0xFF0A84FF) else colors.textMuted,
+                                        tint = if (isSelected) Color(0xFF0381FE) else colors.textMuted,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
                                         text = sort.label,
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) Color(0xFF0A84FF) else colors.textMain
+                                        color = if (isSelected) Color(0xFF0381FE) else colors.textMain
                                     )
                                 }
                             },
@@ -1980,7 +1980,7 @@ private fun GallerySearchInputRow(
             value = query,
             onValueChange = onQueryChange,
             singleLine = true,
-            cursorBrush = SolidColor(Color(0xFF0A84FF)),
+            cursorBrush = SolidColor(Color(0xFF0381FE)),
             textStyle = TextStyle(
                 fontSize = 13.sp,
                 color = colors.textMain
@@ -2050,13 +2050,13 @@ private fun GalleryCameraTile(
                 modifier = Modifier
                     .size(34.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF0A84FF).copy(alpha = 0.15f)),
+                    .background(Color(0xFF0381FE).copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Lucide.Camera,
                     contentDescription = "Camera",
-                    tint = Color(0xFF0A84FF),
+                    tint = Color(0xFF0381FE),
                     modifier = Modifier.size(17.dp)
                 )
             }
@@ -2132,7 +2132,7 @@ private fun GalleryMediaCard(
             )
             .border(
                 width = if (isSelected) 2.dp else 0.5.dp,
-                color = if (isSelected) Color(0xFF0A84FF) else colors.glassBorder,
+                color = if (isSelected) Color(0xFF0381FE) else colors.glassBorder,
                 shape = RoundedCornerShape(12.dp)
             )
     ) {
@@ -2181,7 +2181,7 @@ private fun GalleryMediaCard(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF0A84FF).copy(alpha = 0.18f))
+                    .background(Color(0xFF0381FE).copy(alpha = 0.18f))
             )
 
             // Numbered badge
@@ -2191,7 +2191,7 @@ private fun GalleryMediaCard(
                     .padding(5.dp)
                     .size(22.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF0A84FF))
+                    .background(Color(0xFF0381FE))
                     .border(1.5.dp, Color.White, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
@@ -2271,7 +2271,7 @@ private fun GalleryFloatingSelectionDock(
                     Icon(
                         Lucide.Check,
                         contentDescription = null,
-                        tint = Color(0xFF0A84FF),
+                        tint = Color(0xFF0381FE),
                         modifier = Modifier.size(15.dp)
                     )
                     Text(
@@ -2291,7 +2291,7 @@ private fun GalleryFloatingSelectionDock(
                             text = "Select All",
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF0A84FF),
+                            color = Color(0xFF0381FE),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
                                 .clickable { onSelectAll() }
@@ -2323,7 +2323,7 @@ private fun GalleryFloatingSelectionDock(
                         modifier = Modifier
                             .size(46.dp)
                             .clip(RoundedCornerShape(10.dp))
-                            .border(1.dp, Color(0xFF0A84FF).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                            .border(1.dp, Color(0xFF0381FE).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
                     ) {
                         val context = LocalContext.current
                         val dockThumbRequest = remember(uri) {
@@ -2351,7 +2351,7 @@ private fun GalleryFloatingSelectionDock(
                                 .padding(2.dp)
                                 .size(14.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF0A84FF)),
+                                .background(Color(0xFF0381FE)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -2400,7 +2400,7 @@ private fun GalleryFloatingSelectionDock(
                         value = captionText,
                         onValueChange = onCaptionChange,
                         singleLine = true,
-                        cursorBrush = SolidColor(Color(0xFF0A84FF)),
+                        cursorBrush = SolidColor(Color(0xFF0381FE)),
                         textStyle = TextStyle(fontSize = 12.5.sp, color = colors.textMain),
                         modifier = Modifier.weight(1f),
                         decorationBox = { inner ->
@@ -2562,7 +2562,7 @@ private fun SamsungMediaDetailsSheet(
                     Text(
                         item.formattedSize,
                         fontSize = 13.sp,
-                        color = Color(0xFF0A84FF),
+                        color = Color(0xFF0381FE),
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -2691,7 +2691,7 @@ private fun GalleryLightboxDialog(
                             Icon(
                                 Lucide.Info,
                                 contentDescription = "Info",
-                                tint = if (showInfoSheet) Color(0xFF0A84FF) else Color.White,
+                                tint = if (showInfoSheet) Color(0xFF0381FE) else Color.White,
                                 modifier = Modifier.size(19.dp)
                             )
                         }
@@ -2843,7 +2843,7 @@ private fun GalleryLightboxDialog(
                                     .clip(RoundedCornerShape(6.dp))
                                     .border(
                                         width = if (isCurrent) 2.dp else if (isItemSel) 1.dp else 0.dp,
-                                        color = if (isCurrent) Color(0xFF0A84FF) else if (isItemSel) Color(0xFF34C759) else Color.Transparent,
+                                        color = if (isCurrent) Color(0xFF0381FE) else if (isItemSel) Color(0xFF34C759) else Color.Transparent,
                                         shape = RoundedCornerShape(6.dp)
                                     )
                                     .clickable {
@@ -2882,7 +2882,7 @@ private fun GalleryLightboxDialog(
                         Button(
                             onClick = { onToggleSelect(item) },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) Color(0xFF0A84FF) else Color.White.copy(alpha = 0.2f)
+                                containerColor = if (isSelected) Color(0xFF0381FE) else Color.White.copy(alpha = 0.2f)
                             ),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.height(40.dp)
@@ -2904,7 +2904,7 @@ private fun GalleryLightboxDialog(
 
                         Button(
                             onClick = { onDirectSelect(item) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF)),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE)),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.height(40.dp)
                         ) {
@@ -2951,7 +2951,7 @@ private fun GalleryPermissionCard(
             Icon(
                 Lucide.ShieldCheck,
                 contentDescription = null,
-                tint = Color(0xFF0A84FF),
+                tint = Color(0xFF0381FE),
                 modifier = Modifier.size(44.dp)
             )
 

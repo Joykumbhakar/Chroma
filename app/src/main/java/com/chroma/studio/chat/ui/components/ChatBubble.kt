@@ -402,9 +402,9 @@ private fun MessageReactionDock(
                             brush = if (isSelected) {
                                 Brush.linearGradient(
                                     listOf(
-                                        Color(0xFF007AFF),
+                                        Color(0xFF0381FE),
                                         Color(0xFF00C6FF),
-                                        Color(0xFF007AFF)
+                                        Color(0xFF0381FE)
                                     )
                                 )
                             } else SolidColor(Color.Transparent),
@@ -1360,7 +1360,7 @@ private fun MessageBubbleInnerContent(
                             modifier = Modifier
                                 .size(11.dp)
                                 .clip(CircleShape)
-                                .background(if (isOutgoing) Color(0xFF007AFF) else Color(0xFF262626))
+                                .background(if (isOutgoing) Color(0xFF0381FE) else Color(0xFF262626))
                         )
                     }
                     Text(
@@ -2962,7 +2962,7 @@ private fun resolveBaseBubbleVisual(
             if (isOutgoing) {
                 BubbleVisualConfig(
                     shape = shape,
-                    background = Brush.verticalGradient(listOf(Color(0xFF007AFF), Color(0xFF0066D6))),
+                    background = Brush.verticalGradient(listOf(Color(0xFF0381FE), Color(0xFF0066D6))),
                     borderWidth = 0.85.dp,
                     borderColor = Color.White.copy(alpha = 0.35f),
                     borderBrush = Brush.verticalGradient(
@@ -4521,7 +4521,7 @@ fun FileStackCluster(
             val ext = (file.extension.ifEmpty { file.name.substringAfterLast(".", "FILE") }).uppercase()
             val badgeColor = when (ext) {
                 "PDF" -> Color(0xFFFF3B30)
-                "DOC", "DOCX" -> Color(0xFF007AFF)
+                "DOC", "DOCX" -> Color(0xFF0381FE)
                 "XLS", "XLSX", "CSV" -> Color(0xFF34C759)
                 "ZIP", "RAR", "7Z" -> Color(0xFFAF52DE)
                 "APK" -> Color(0xFFFF9500)

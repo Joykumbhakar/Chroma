@@ -155,7 +155,7 @@ enum class ToneCurveChannel(val label: String, val color: Color) {
     MASTER("RGB", Color(0xFF1C1C1E)),
     RED("Red", Color(0xFFFF3B30)),
     GREEN("Green", Color(0xFF34C759)),
-    BLUE("Blue", Color(0xFF007AFF))
+    BLUE("Blue", Color(0xFF0381FE))
 }
 
 data class ToneCurvePoints(
@@ -190,7 +190,7 @@ enum class PhotoFrameStyle(val label: String) {
 data class BrushStroke(
     val id: String = UUID.randomUUID().toString(),
     val points: List<Offset> = emptyList(),
-    val color: Color = Color(0xFF007AFF),
+    val color: Color = Color(0xFF0381FE),
     val strokeWidth: Float = 12f,
     val isNeon: Boolean = false
 )
@@ -233,7 +233,7 @@ data class PhotoProjectState(
     val flipHorizontalMap: Map<String, Boolean> = emptyMap(),
     val flipVerticalMap: Map<String, Boolean> = emptyMap(),
     val brushStrokes: List<BrushStroke> = emptyList(),
-    val activeBrushColor: Color = Color(0xFF007AFF),
+    val activeBrushColor: Color = Color(0xFF0381FE),
     val activeBrushSize: Float = 12f,
     val activeBrushNeon: Boolean = false,
     val isDrawingMode: Boolean = false,
@@ -886,7 +886,7 @@ fun ChromaPhotoEditorScreen(
             ChromaScreenHeader(
                 title = "Oscellion",
                 badgeText = "Photo Studio",
-                badgeColor = Color(0xFF007AFF),
+                badgeColor = Color(0xFF0381FE),
                 showBackButton = true,
                 onBack = onBack,
                 actions = {
@@ -955,7 +955,7 @@ fun ChromaPhotoEditorScreen(
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(
                                     Brush.horizontalGradient(
-                                        listOf(Color(0xFF007AFF), Color(0xFF5856D6))
+                                        listOf(Color(0xFF0381FE), Color(0xFF5856D6))
                                     )
                                 )
                                 .clickable(enabled = !isExporting) {
@@ -1482,7 +1482,7 @@ private fun PhotoPreviewArea(
                     }
                     if (state.frameStyle == PhotoFrameStyle.NEON_GLOW) {
                         drawRect(
-                            brush = Brush.linearGradient(listOf(Color(0xFF007AFF), Color(0xFFAF52DE), Color(0xFFFF2D55))),
+                            brush = Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFFAF52DE), Color(0xFFFF2D55))),
                             style = Stroke(width = 5.dp.toPx())
                         )
                     }
@@ -1554,7 +1554,7 @@ private fun PhotoPreviewArea(
                     }
                     if (showSnapGuideX) {
                         drawLine(
-                            color = Color(0xFF0A84FF),
+                            color = Color(0xFF0381FE),
                             start = Offset(size.width / 2f, 0f),
                             end = Offset(size.width / 2f, size.height),
                             strokeWidth = 1.5.dp.toPx()
@@ -1562,7 +1562,7 @@ private fun PhotoPreviewArea(
                     }
                     if (showSnapGuideY) {
                         drawLine(
-                            color = Color(0xFF0A84FF),
+                            color = Color(0xFF0381FE),
                             start = Offset(0f, size.height / 2f),
                             end = Offset(size.width, size.height / 2f),
                             strokeWidth = 1.5.dp.toPx()
@@ -1571,7 +1571,7 @@ private fun PhotoPreviewArea(
                     if (state.isSplitCompareMode) {
                         val splitX = size.width * state.splitCompareFraction
                         drawLine(Color.White, Offset(splitX, 0f), Offset(splitX, size.height), strokeWidth = 2.dp.toPx())
-                        drawCircle(Color(0xFF007AFF), radius = 12.dp.toPx(), center = Offset(splitX, size.height / 2f))
+                        drawCircle(Color(0xFF0381FE), radius = 12.dp.toPx(), center = Offset(splitX, size.height / 2f))
                         drawCircle(Color.White, radius = 12.dp.toPx(), center = Offset(splitX, size.height / 2f), style = Stroke(width = 2.dp.toPx()))
                     }
                 }
@@ -1591,7 +1591,7 @@ private fun PhotoPreviewArea(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (state.showHistogramHud) Color(0xFF007AFF).copy(alpha = 0.75f) else Color.Black.copy(alpha = 0.4f))
+                    .background(if (state.showHistogramHud) Color(0xFF0381FE).copy(alpha = 0.75f) else Color.Black.copy(alpha = 0.4f))
                     .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                     .clickable { onToggleHistogram() }
                     .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -1628,7 +1628,7 @@ private fun PhotoPreviewArea(
                     modifier = Modifier
                         .size(28.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (state.isSplitCompareMode) Color(0xFF007AFF) else Color.Black.copy(alpha = 0.4f))
+                        .background(if (state.isSplitCompareMode) Color(0xFF0381FE) else Color.Black.copy(alpha = 0.4f))
                         .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                         .clickable { onToggleSplitCompare() },
                     contentAlignment = Alignment.Center
@@ -1641,7 +1641,7 @@ private fun PhotoPreviewArea(
                     modifier = Modifier
                         .size(28.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (state.showGridOverlay) Color(0xFF007AFF) else Color.Black.copy(alpha = 0.4f))
+                        .background(if (state.showGridOverlay) Color(0xFF0381FE) else Color.Black.copy(alpha = 0.4f))
                         .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                         .clickable { onToggleGrid() },
                     contentAlignment = Alignment.Center
@@ -1654,7 +1654,7 @@ private fun PhotoPreviewArea(
                     modifier = Modifier
                         .size(28.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (state.isComparingOriginal) Color(0xFF007AFF) else Color.Black.copy(alpha = 0.4f))
+                        .background(if (state.isComparingOriginal) Color(0xFF0381FE) else Color.Black.copy(alpha = 0.4f))
                         .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                         .clickable { onToggleOriginal() },
                     contentAlignment = Alignment.Center
@@ -1897,7 +1897,7 @@ private fun PhotoPreviewArea(
                             Icon(
                                 imageVector = Lucide.Maximize2,
                                 contentDescription = null,
-                                tint = Color(0xFF0A84FF),
+                                tint = Color(0xFF0381FE),
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
@@ -1916,7 +1916,7 @@ private fun PhotoPreviewArea(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFF0A84FF).copy(alpha = 0.2f))
+                                    .background(Color(0xFF0381FE).copy(alpha = 0.2f))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
@@ -2006,8 +2006,8 @@ private fun PhotoPreviewArea(
                             valueRange = 0.5f..4.0f,
                             modifier = Modifier.weight(1f),
                             colors = SliderDefaults.colors(
-                                thumbColor = Color(0xFF0A84FF),
-                                activeTrackColor = Color(0xFF0A84FF),
+                                thumbColor = Color(0xFF0381FE),
+                                activeTrackColor = Color(0xFF0381FE),
                                 inactiveTrackColor = Color.White.copy(alpha = 0.24f)
                             )
                         )
@@ -2522,7 +2522,7 @@ private fun PhotoHorizontalToolbar(
     )
 
     val tools = listOf(
-        ToolItem(Lucide.Crop, "Crop", Color(0xFF007AFF), { onOpenTool(PhotoEditorTool.CROP) }),
+        ToolItem(Lucide.Crop, "Crop", Color(0xFF0381FE), { onOpenTool(PhotoEditorTool.CROP) }),
         ToolItem(Lucide.SlidersHorizontal, "Filter", Color(0xFFFF9500), { onOpenTool(PhotoEditorTool.FILTER) }),
         ToolItem(Lucide.Settings2, "Adjust", Color(0xFF34C759), { onOpenTool(PhotoEditorTool.ADJUST) }),
         ToolItem(Lucide.Activity, "Curves", Color(0xFF5856D6), { onOpenTool(PhotoEditorTool.CURVES) }),
@@ -2534,7 +2534,7 @@ private fun PhotoHorizontalToolbar(
         ToolItem(Lucide.Blend, "Blend", Color(0xFFAF52DE), { onOpenTool(PhotoEditorTool.BLEND) }),
         ToolItem(Lucide.Brush, "Markup", Color(0xFF30B0C7), { onOpenTool(PhotoEditorTool.MARKUP) }, requiresClip = false),
         ToolItem(Lucide.Frame, "Frame", Color(0xFF5856D6), { onOpenTool(PhotoEditorTool.FRAME) }, requiresClip = false),
-        ToolItem(Lucide.RotateCw, "Rotate", Color(0xFF007AFF), { onRotate() }),
+        ToolItem(Lucide.RotateCw, "Rotate", Color(0xFF0381FE), { onRotate() }),
         ToolItem(Lucide.Copy, "Duplicate", Color(0xFF5856D6), { onDuplicate() }),
         ToolItem(Lucide.Trash2, "Delete", Color(0xFFFF3B30), { onDelete() })
     )
@@ -3062,8 +3062,8 @@ private fun PhotoEffectsPanel(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (selected) Color(0xFF007AFF) else Color(0xFFF3F4F6))
-                        .border(1.dp, if (selected) Color(0xFF007AFF) else Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
+                        .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
+                        .border(1.dp, if (selected) Color(0xFF0381FE) else Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
                         .clickable { viewModel.setLightLeak(leak) }
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
@@ -3155,7 +3155,7 @@ private fun PhotoTextEditorPanel(clip: Clip, viewModel: ChromaPhotoEditorViewMod
         Color.White, Color.Black,
         Color(0xFFFF3B30), Color(0xFFFF9500),
         Color(0xFFFFCC00), Color(0xFF34C759),
-        Color(0xFF007AFF), Color(0xFFAF52DE),
+        Color(0xFF0381FE), Color(0xFFAF52DE),
         Color(0xFFFF2D55), Color(0xFF5AC8FA),
         Color(0xFFFF6B35), Color(0xFF10B981)
     )
@@ -3402,7 +3402,7 @@ private fun PhotoMarkupPanel(
 ) {
     val colors = LocalOscellionColors.current
     val swatches = listOf(
-        Color(0xFF007AFF), Color(0xFFFF2D55), Color(0xFF34C759),
+        Color(0xFF0381FE), Color(0xFFFF2D55), Color(0xFF34C759),
         Color(0xFFFFCC00), Color(0xFFAF52DE), Color.White
     )
 
@@ -3793,7 +3793,7 @@ private fun PhotoLayerManagerPanel(
                     AppleSettingsSquircleVectorIcon(
                         icon = trackIcons[trackId] ?: Lucide.Layers,
                         size = 28.dp,
-                        iconTint = Color(0xFF0A84FF)
+                        iconTint = Color(0xFF0381FE)
                     )
                     Column {
                         Text(
@@ -3885,7 +3885,7 @@ private fun PhotoExportSettingsDialog(
                                 .weight(1f)
                                 .height(34.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (sel) Color(0xFF007AFF) else Color(0xFFF2F2F7))
+                                .background(if (sel) Color(0xFF0381FE) else Color(0xFFF2F2F7))
                                 .clickable { resolution = res },
                             contentAlignment = Alignment.Center
                         ) {
@@ -3911,7 +3911,7 @@ private fun PhotoExportSettingsDialog(
                                 .weight(1f)
                                 .height(34.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (sel) Color(0xFF007AFF) else Color(0xFFF2F2F7))
+                                .background(if (sel) Color(0xFF0381FE) else Color(0xFFF2F2F7))
                                 .clickable { format = fmt },
                             contentAlignment = Alignment.Center
                         ) {

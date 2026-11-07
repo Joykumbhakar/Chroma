@@ -70,7 +70,7 @@ fun OscellionBrandLockup(
                 fontSize = fontSize.value.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = InterFontFamily,
-                color = Color(0xFF007AFF)
+                color = Color(0xFF0381FE)
             )
         }
     }
@@ -108,7 +108,7 @@ fun OscellionStackedLockup(
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = InterFontFamily,
-                color = Color(0xFF007AFF)
+                color = Color(0xFF0381FE)
             )
         }
     }

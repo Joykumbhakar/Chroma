@@ -248,7 +248,7 @@ private fun StorySlideContent(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(textColor.copy(alpha = 0.08f))
-                                    .border(2.dp, Brush.verticalGradient(listOf(Color(0xFF007AFF), Color(0xFFFF2D55))), RoundedCornerShape(14.dp))
+                                    .border(2.dp, Brush.verticalGradient(listOf(Color(0xFF0381FE), Color(0xFFFF2D55))), RoundedCornerShape(14.dp))
                                     .padding(14.dp),
                                 verticalAlignment = Alignment.Top
                             ) {
@@ -917,7 +917,7 @@ fun StoryViewerScreen(
                                                 },
                                                 modifier = Modifier.size(28.dp)
                                             ) {
-                                                Icon(Lucide.Send, contentDescription = "Send", tint = Color(0xFF007AFF), modifier = Modifier.size(16.dp))
+                                                Icon(Lucide.Send, contentDescription = "Send", tint = Color(0xFF0381FE), modifier = Modifier.size(16.dp))
                                             }
                                         } else {
                                             IconButton(
@@ -1106,7 +1106,7 @@ private fun AdminStoryViewersSheet(
 
             if (isLoadingProfiles) {
                 Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color(0xFF007AFF), modifier = Modifier.size(24.dp))
+                    CircularProgressIndicator(color = Color(0xFF0381FE), modifier = Modifier.size(24.dp))
                 }
             } else if (viewerProfiles.isEmpty()) {
                 Box(

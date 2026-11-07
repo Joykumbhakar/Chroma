@@ -200,7 +200,7 @@ fun CreateGroupScreen(
                                     onValueChange = { searchQuery = it },
                                     modifier = Modifier.weight(1f),
                                     textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                                    cursorBrush = SolidColor(Color(0xFF0A84FF)),
+                                    cursorBrush = SolidColor(Color(0xFF0381FE)),
                                     decorationBox = { inner ->
                                         if (searchQuery.isEmpty()) Text("Search people...", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
                                         inner()
@@ -277,7 +277,7 @@ fun CreateGroupScreen(
                                     .clip(RoundedCornerShape(24.dp))
                                     .background(
                                         Brush.linearGradient(
-                                            listOf(Color(0xFF0A84FF).copy(alpha = 0.4f), Color(0xFF30D158).copy(alpha = 0.4f))
+                                            listOf(Color(0xFF0381FE).copy(alpha = 0.4f), Color(0xFF30D158).copy(alpha = 0.4f))
                                         )
                                     )
                                     .border(1.5.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
@@ -317,14 +317,14 @@ fun CreateGroupScreen(
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Lucide.Users, null, tint = Color(0xFF0A84FF), modifier = Modifier.size(20.dp))
+                                Icon(Lucide.Users, null, tint = Color(0xFF0381FE), modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(12.dp))
                                 BasicTextField(
                                     value = groupName,
                                     onValueChange = { if (it.length <= 50) groupName = it },
                                     modifier = Modifier.weight(1f),
                                     textStyle = TextStyle(color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium),
-                                    cursorBrush = SolidColor(Color(0xFF0A84FF)),
+                                    cursorBrush = SolidColor(Color(0xFF0381FE)),
                                     decorationBox = { inner ->
                                         if (groupName.isEmpty()) Text("Group name", color = Color.White.copy(alpha = 0.4f), fontSize = 17.sp)
                                         inner()
@@ -348,14 +348,14 @@ fun CreateGroupScreen(
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
                                 verticalAlignment = Alignment.Top
                             ) {
-                                Icon(Lucide.FileText, null, tint = Color(0xFF0A84FF), modifier = Modifier.size(20.dp))
+                                Icon(Lucide.FileText, null, tint = Color(0xFF0381FE), modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(12.dp))
                                 BasicTextField(
                                     value = groupDescription,
                                     onValueChange = { if (it.length <= 250) groupDescription = it },
                                     modifier = Modifier.weight(1f).heightIn(min = 60.dp),
                                     textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-                                    cursorBrush = SolidColor(Color(0xFF0A84FF)),
+                                    cursorBrush = SolidColor(Color(0xFF0381FE)),
                                     decorationBox = { inner ->
                                         if (groupDescription.isEmpty()) Text("Group description (optional)", color = Color.White.copy(alpha = 0.4f), fontSize = 15.sp)
                                         inner()
@@ -433,12 +433,12 @@ private fun UserSelectRow(user: UserProfile, isSelected: Boolean, onClick: () ->
             .scale(scale)
             .clip(RoundedCornerShape(16.dp))
             .background(
-                if (isSelected) Color(0xFF0A84FF).copy(alpha = 0.18f)
+                if (isSelected) Color(0xFF0381FE).copy(alpha = 0.18f)
                 else Color.White.copy(alpha = 0.06f)
             )
             .border(
                 width = if (isSelected) 1.dp else 0.dp,
-                color = if (isSelected) Color(0xFF0A84FF).copy(alpha = 0.5f) else Color.Transparent,
+                color = if (isSelected) Color(0xFF0381FE).copy(alpha = 0.5f) else Color.Transparent,
                 shape = RoundedCornerShape(16.dp)
             )
             .clickable(onClick = onClick)
@@ -477,8 +477,8 @@ private fun SelectedUserChip(user: UserProfile, onRemove: () -> Unit) {
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF0A84FF).copy(alpha = 0.25f))
-            .border(1.dp, Color(0xFF0A84FF).copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+            .background(Color(0xFF0381FE).copy(alpha = 0.25f))
+            .border(1.dp, Color(0xFF0381FE).copy(alpha = 0.4f), RoundedCornerShape(20.dp))
             .padding(start = 6.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
