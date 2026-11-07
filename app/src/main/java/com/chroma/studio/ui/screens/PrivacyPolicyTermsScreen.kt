@@ -259,7 +259,7 @@ fun PrivacyPolicyTermsScreen(
                     Spacer(Modifier.height(6.dp))
 
                     Text(
-                        text = "Please review how Oscillom protects your creative rights, encrypted data, and privacy.",
+                        text = "Please review how Chroma Studio protects your creative rights, encrypted data, and privacy.",
                         fontSize = 13.5.sp,
                         color = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A),
                         textAlign = TextAlign.Center,
@@ -353,7 +353,7 @@ fun PrivacyPolicyTermsScreen(
                         )
                         OneUiLegalItem(
                             title = "End-to-End Encryption",
-                            description = "Direct chat communications and private audio notes are encrypted client-side using cryptographic standards (AES-GCM & RSA-2048). Oscillom servers cannot inspect your private direct conversations."
+                            description = "Direct chat communications and private audio notes are encrypted client-side using cryptographic standards (AES-GCM & RSA-2048). Chroma Studio servers cannot inspect your private direct conversations."
                         )
                         HorizontalDivider(
                             color = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000),
@@ -377,7 +377,7 @@ fun PrivacyPolicyTermsScreen(
                         // Terms of Service Content
                         OneUiLegalItem(
                             title = "Acceptance of Terms",
-                            description = "By entering Oscillom or Chroma Studio, you agree to these Terms. If you disagree with any portion of the service terms, you may decline and exit the application."
+                            description = "By entering Chroma Studio, you agree to these Terms. If you disagree with any portion of the service terms, you may decline and exit the application."
                         )
                         HorizontalDivider(
                             color = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000),
@@ -395,7 +395,7 @@ fun PrivacyPolicyTermsScreen(
                         )
                         OneUiLegalItem(
                             title = "Community Safety & Mutual Respect",
-                            description = "Oscillom is dedicated to creative excellence. Harassment, unauthorized automated scraping, hate speech, or malicious content will result in immediate profile suspension."
+                            description = "Chroma Studio is dedicated to creative excellence. Harassment, unauthorized automated scraping, hate speech, or malicious content will result in immediate profile suspension."
                         )
                         HorizontalDivider(
                             color = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000),

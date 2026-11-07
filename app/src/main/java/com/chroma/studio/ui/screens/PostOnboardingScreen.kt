@@ -72,7 +72,7 @@ fun PostOnboardingScreen(
     // Studio Accent Palettes (One UI & Galaxy Colors)
     val accentColors = remember {
         listOf(
-            StudioAccentOption(Color(0xFF2563EB), "Galaxy Blue", "Galaxy Signature", "Vivid, focused, and futuristic"),
+            StudioAccentOption(Color(0xFF0381FE), "Galaxy Blue", "Galaxy Signature", "Vivid, focused, and futuristic"),
             StudioAccentOption(Color(0xFF6366F1), "One UI Indigo", "Fluid Flow", "Modern, ambient, and deep"),
             StudioAccentOption(Color(0xFF10B981), "Phantom Mint", "Natural Balance", "Crisp, organic, and energetic"),
             StudioAccentOption(Color(0xFFF59E0B), "Amber Glow", "Cinematic Warmth", "Luminous, golden, and bold"),

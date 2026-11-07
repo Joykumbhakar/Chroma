@@ -311,7 +311,7 @@ fun OnboardingWizard(
                             modifier = Modifier.size(13.dp)
                         )
                         Text(
-                            text = "New to Oscillom, let's create a new account",
+                            text = "New to Chroma Studio, let's create a new account",
                             color = Color(0xFF93C5FD),
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -690,7 +690,7 @@ fun OnboardingWizard(
                                 Spacer(Modifier.height(6.dp))
 
                                 Text(
-                                    text = "Select 2 or more topics to curate your Oscillom community feed.",
+                                    text = "Select 2 or more topics to curate your Chroma Studio community feed.",
                                     color = Color(0xFF94A3B8),
                                     fontSize = 13.5.sp,
                                     textAlign = TextAlign.Center

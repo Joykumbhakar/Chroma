@@ -2,6 +2,7 @@ package com.chroma.studio.ui.onboarding
 
 import android.app.Activity
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -43,6 +44,7 @@ import kotlinx.coroutines.withContext
  */
 enum class AuthScreenState {
     WELCOME,
+    SIGN_IN_EMAIL,
     CHECKING_DATABASE,
     ACCOUNT_CONFIRMATION,
     ONBOARDING_WIZARD
@@ -263,6 +265,16 @@ fun OscellionOnboardingScreen(
         onLoginSuccess()
     }
 
+    BackHandler(enabled = currentScreenState != AuthScreenState.WELCOME) {
+        if (currentScreenState == AuthScreenState.ACCOUNT_CONFIRMATION) {
+            purgeClientSession {
+                currentScreenState = AuthScreenState.WELCOME
+            }
+        } else {
+            currentScreenState = AuthScreenState.WELCOME
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = currentScreenState,
@@ -292,10 +304,26 @@ fun OscellionOnboardingScreen(
                         },
                         onApple = { launchAppleSignIn() },
                         onSignInExisting = {
-                            launchGoogleSignIn(AuthIntentMode.LOGIN)
+                            currentScreenState = AuthScreenState.SIGN_IN_EMAIL
                         },
                         onExploreGuest = { enterAsGuest() },
                         onTerms = { showTermsModal = true }
+                    )
+                }
+
+                AuthScreenState.SIGN_IN_EMAIL -> {
+                    SignInScreen(
+                        onBack = { currentScreenState = AuthScreenState.WELCOME },
+                        onLoginSuccess = onLoginSuccess,
+                        onCreateAccount = { launchGoogleSignIn(AuthIntentMode.SIGN_UP) },
+                        onGoogleSignIn = { launchGoogleSignIn(AuthIntentMode.LOGIN) },
+                        onAppleSignIn = { launchAppleSignIn() },
+                        appleLoading = isAppleLoading,
+                        onExploreGuest = { enterAsGuest() },
+                        onOpenTerms = { showTermsModal = true },
+                        savedAccounts = savedAccounts,
+                        googleLoading = isGoogleLoading,
+                        discoverRepo = discoverRepo
                     )
                 }
 
@@ -403,7 +431,7 @@ fun OscellionOnboardingScreen(
                                         SavedAccountManager.saveFromProfile(context, newProfile, output.email)
                                     }
                                     com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
-                                    Toast.makeText(context, "Welcome to Oscillom, ${output.displayName}!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Welcome to Chroma Studio, ${output.displayName}!", Toast.LENGTH_SHORT).show()
                                     onLoginSuccess()
                                 } else {
                                     Toast.makeText(context, "Failed to complete registration. Please try again.", Toast.LENGTH_LONG).show()
