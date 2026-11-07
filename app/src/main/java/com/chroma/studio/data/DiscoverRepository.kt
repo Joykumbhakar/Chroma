@@ -869,6 +869,24 @@ class DiscoverRepository {
         return registerDetailedUser(uid, displayName, username, null, "")
     }
 
+    suspend fun getUserByEmail(email: String): UserProfile? {
+        if (email.isBlank()) return null
+        val cleanEmail = email.trim().lowercase()
+        return try {
+            val query = usersCollection.whereEqualTo("email", cleanEmail).limit(1).get().await()
+            val doc = query.documents.firstOrNull()
+            val prof = doc?.toObject(UserProfile::class.java)
+            if (prof != null) {
+                profileCache[prof.uid] = prof
+            }
+            prof
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "Error getting user by email", e)
+            null
+        }
+    }
+
     suspend fun registerDetailedUser(
         uid: String, 
         displayName: String, 
@@ -877,26 +895,34 @@ class DiscoverRepository {
         avatarUrl: String,
         interests: List<String> = emptyList(),
         gender: String = "",
-        agreedToTermsAt: Long? = System.currentTimeMillis()
+        agreedToTermsAt: Long? = System.currentTimeMillis(),
+        email: String = "",
+        googleId: String = "",
+        bio: String = "",
+        isOnboarded: Boolean = true
     ): Boolean {
         return try {
             val now = System.currentTimeMillis()
-            // Check availability again in transaction
+            val cleanUsername = username.trim().lowercase()
+            var createdProfile: UserProfile? = null
+
+            // Check availability and register atomically in transaction
             db.runTransaction { transaction ->
-                val usernameRef = usernamesCollection.document(username)
+                val usernameRef = usernamesCollection.document(cleanUsername)
                 val userRef = usersCollection.document(uid)
                 
                 val usernameDoc = transaction.get(usernameRef)
                 if (usernameDoc.exists() && usernameDoc.getString("uid") != uid) {
-                    throw Exception("Username is already taken")
+                    throw Exception("Username @$cleanUsername is already taken")
                 }
                 
                 val profile = UserProfile(
                     uid = uid,
-                    username = username,
-                    displayName = displayName,
+                    username = cleanUsername,
+                    displayName = displayName.trim(),
+                    bio = bio.trim(),
                     dob = dob,
-                    avatarUrl = avatarUrl,
+                    avatarUrl = avatarUrl.trim(),
                     interests = interests,
                     gender = gender,
                     agreedToTermsAt = agreedToTermsAt ?: now,
@@ -905,12 +931,18 @@ class DiscoverRepository {
                     lastSeen = now,
                     followersCount = 0,
                     followingCount = 0,
+                    email = email.trim().lowercase(),
+                    googleId = googleId.trim(),
+                    isOnboarded = isOnboarded,
                     publicKey = com.chroma.studio.utils.CryptoHelper.getPublicKeyBase64()
                 )
                 
                 transaction.set(usernameRef, mapOf("uid" to uid, "createdAt" to now))
                 transaction.set(userRef, profile)
+                createdProfile = profile
             }.await()
+            
+            createdProfile?.let { profileCache[uid] = it }
             true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

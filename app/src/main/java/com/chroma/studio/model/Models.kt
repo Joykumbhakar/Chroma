@@ -38,6 +38,9 @@ data class UserProfile(
     val statusEmoji: String? = null,
     val statusText: String? = null,
     val agreedToTermsAt: Long? = null,
+    val email: String = "",
+    val googleId: String = "",
+    val isOnboarded: Boolean = true,
     
     // Account Center Preferences
     @get:com.google.firebase.firestore.PropertyName("privateAccount")

@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -235,7 +236,7 @@ fun WelcomeScreen(
                             )
                         }
 
-                        // Primary OAuth: Continue with Google
+                        // Primary Action: Continue with Google
                         WelcomePrimaryPillButton(
                             text = "Continue with Google",
                             onClick = onGoogle,
@@ -250,17 +251,16 @@ fun WelcomeScreen(
                             }
                         )
 
-                        // Secondary OAuth: Continue with Apple
+                        // Secondary Action: Create a new account
                         WelcomeSecondaryPillButton(
-                            text = "Continue with Apple",
-                            onClick = onApple,
-                            loading = appleLoading,
+                            text = "Create a new account",
+                            onClick = onCreateAccount,
                             leading = {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_apple_logo),
-                                    contentDescription = "Apple logo",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(19.dp)
+                                    imageVector = Icons.Rounded.PersonAdd,
+                                    contentDescription = "Create account",
+                                    tint = Color(0xFF93C5FD),
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         )
@@ -492,7 +492,6 @@ private fun WelcomeSecondaryPillButton(
             }
             .clip(CircleShape)
             .background(Color(0xFF141824))
-            .border(BorderStroke(1.dp, Color(0x2EFFFFFF)), CircleShape)
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -555,7 +554,6 @@ private fun WelcomeTertiaryPillButton(
             }
             .clip(CircleShape)
             .background(Color(0x12FFFFFF))
-            .border(BorderStroke(1.dp, Color(0x1EFFFFFF)), CircleShape)
             .clickable(
                 interactionSource = interaction,
                 indication = null,
