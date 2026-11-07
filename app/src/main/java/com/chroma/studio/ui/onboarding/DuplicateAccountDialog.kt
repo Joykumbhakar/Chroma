@@ -63,11 +63,18 @@ fun DuplicateAccountDialog(
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             contentAlignment = Alignment.BottomCenter
         ) {
+            val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
+            val isDark = colors.isDark
+            val dialogBg = if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
+            val fieldBg = if (isDark) Color(0xFF0A0D18) else Color(0xFFF4F6F9)
+            val textPrimary = if (isDark) Color.White else Color(0xFF0A0A0C)
+            val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF71717A)
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(28.dp))
-                    .background(Color(0xFF10141E))
+                    .background(dialogBg)
                     .doubleEdgeGlassBorder(cornerRadius = 28.dp)
                     .padding(24.dp)
             ) {
@@ -96,7 +103,7 @@ fun DuplicateAccountDialog(
 
                 Text(
                     text = "Account already exists",
-                    color = Color.White,
+                    color = textPrimary,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = InterFontFamily,
@@ -108,7 +115,7 @@ fun DuplicateAccountDialog(
 
                 Text(
                     text = "An account with this Google email already exists. Please log in instead or choose another account.",
-                    color = Color(0xFF94A3B8),
+                    color = textMuted,
                     fontSize = 14.sp,
                     fontFamily = InterFontFamily,
                     lineHeight = 20.sp,

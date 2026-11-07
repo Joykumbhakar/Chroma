@@ -62,6 +62,21 @@ fun OscellionTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
         )
     }
 
+    val view = androidx.compose.ui.platform.LocalView.current
+    if (!view.isInEditMode) {
+        androidx.compose.runtime.SideEffect {
+            val window = (view.context as? android.app.Activity)?.window
+            if (window != null) {
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+                androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
+    }
+
     CompositionLocalProvider(LocalOscellionColors provides animated) {
         androidx.compose.material3.MaterialTheme(
             colorScheme = materialColorScheme,

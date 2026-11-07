@@ -81,10 +81,18 @@ fun WelcomeScreen(
     onExploreGuest: () -> Unit = {},
     onTerms: () -> Unit
 ) {
+    val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
+    val isDark = colors.isDark
+    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
+    val cardBg = if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
+    val cardDivider = if (isDark) Color(0x14FFFFFF) else Color(0x0A000000)
+    val textPrimary = if (isDark) Color.White else Color(0xFF0A0A0C)
+    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF71717A)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF030510))
+            .background(screenBg)
     ) {
         // Hardware-accelerated GPU ambient glows (cached zero-allocation shader)
         Spacer(
@@ -92,19 +100,34 @@ fun WelcomeScreen(
                 .fillMaxSize()
                 .drawWithCache {
                     val topGlow = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF1D4ED8).copy(alpha = 0.28f),
-                            Color(0xFF0F172A).copy(alpha = 0.08f),
-                            Color.Transparent
-                        ),
+                        colors = if (isDark) {
+                            listOf(
+                                Color(0xFF1D4ED8).copy(alpha = 0.28f),
+                                Color(0xFF0F172A).copy(alpha = 0.08f),
+                                Color.Transparent
+                            )
+                        } else {
+                            listOf(
+                                Color(0xFF0A84FF).copy(alpha = 0.12f),
+                                Color(0xFFE0EDFF).copy(alpha = 0.05f),
+                                Color.Transparent
+                            )
+                        },
                         center = Offset(size.width * 0.5f, size.height * 0.16f),
                         radius = size.width * 0.85f
                     )
                     val bottomGlow = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF1E293B).copy(alpha = 0.22f),
-                            Color.Transparent
-                        ),
+                        colors = if (isDark) {
+                            listOf(
+                                Color(0xFF1E293B).copy(alpha = 0.22f),
+                                Color.Transparent
+                            )
+                        } else {
+                            listOf(
+                                Color(0xFF93C5FD).copy(alpha = 0.10f),
+                                Color.Transparent
+                            )
+                        },
                         center = Offset(size.width * 0.5f, size.height * 0.94f),
                         radius = size.width * 0.75f
                     )
@@ -150,7 +173,7 @@ fun WelcomeScreen(
                             modifier = Modifier
                                 .size(88.dp)
                                 .clip(RoundedCornerShape(26.dp))
-                                .background(Color(0xFF10141E))
+                                .background(cardBg)
                                 .doubleEdgeGlassBorder(cornerRadius = 26.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -163,7 +186,7 @@ fun WelcomeScreen(
                             text = "Chroma Studio",
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = textPrimary,
                             letterSpacing = (-0.8).sp,
                             textAlign = TextAlign.Center
                         )
@@ -174,7 +197,7 @@ fun WelcomeScreen(
                             text = "Where creativity meets community.",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Normal,
-                            color = Color(0xFF94A3B8),
+                            color = textMuted,
                             letterSpacing = (-0.2).sp,
                             textAlign = TextAlign.Center,
                             lineHeight = 22.sp
@@ -186,7 +209,7 @@ fun WelcomeScreen(
                         OneUiGlassCard(
                             cornerRadius = 26.dp,
                             useDoubleEdgeGlassBorder = true,
-                            backgroundColor = Color(0xFF10141E),
+                            backgroundColor = cardBg,
                             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 20.dp)
                         ) {
                             WelcomeFeatureRow(
@@ -196,7 +219,7 @@ fun WelcomeScreen(
                                 description = "Multi-layer studio with real-time shader rendering"
                             )
                             HorizontalDivider(
-                                color = Color(0x14FFFFFF),
+                                color = cardDivider,
                                 thickness = 0.5.dp,
                                 modifier = Modifier.padding(vertical = 12.dp)
                             )
@@ -207,7 +230,7 @@ fun WelcomeScreen(
                                 description = "Explore trending masterworks, video drops & remixes"
                             )
                             HorizontalDivider(
-                                color = Color(0x14FFFFFF),
+                                color = cardDivider,
                                 thickness = 0.5.dp,
                                 modifier = Modifier.padding(vertical = 12.dp)
                             )
@@ -255,11 +278,13 @@ fun WelcomeScreen(
                         WelcomeSecondaryPillButton(
                             text = "Create a new account",
                             onClick = onCreateAccount,
+                            isDark = isDark,
+                            textPrimary = textPrimary,
                             leading = {
                                 Icon(
                                     imageVector = Icons.Rounded.PersonAdd,
                                     contentDescription = "Create account",
-                                    tint = Color(0xFF93C5FD),
+                                    tint = if (isDark) Color(0xFF93C5FD) else Color(0xFF0A84FF),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -269,11 +294,13 @@ fun WelcomeScreen(
                         WelcomeTertiaryPillButton(
                             text = "Explore Studio as Guest",
                             onClick = onExploreGuest,
+                            isDark = isDark,
+                            textPrimary = textPrimary,
                             leading = {
                                 Icon(
                                     imageVector = Lucide.Sparkles,
                                     contentDescription = "Guest explore",
-                                    tint = Color(0xFF93C5FD),
+                                    tint = if (isDark) Color(0xFF93C5FD) else Color(0xFF0A84FF),
                                     modifier = Modifier.size(17.dp)
                                 )
                             }
@@ -306,7 +333,7 @@ fun WelcomeScreen(
                             )
                             Text(
                                 text = "Create Account",
-                                color = Color.White,
+                                color = textPrimary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 letterSpacing = (-0.2).sp,
@@ -471,6 +498,8 @@ private fun WelcomeSecondaryPillButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     loading: Boolean = false,
+    isDark: Boolean = true,
+    textPrimary: Color = Color.White,
     leading: (@Composable () -> Unit)? = null,
     height: Dp = 50.dp
 ) {
@@ -491,7 +520,7 @@ private fun WelcomeSecondaryPillButton(
                 scaleY = scale
             }
             .clip(CircleShape)
-            .background(Color(0xFF141824))
+            .background(if (isDark) Color(0xFF141824) else Color(0xFFE2E8F0))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -533,6 +562,8 @@ private fun WelcomeTertiaryPillButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isDark: Boolean = true,
+    textPrimary: Color = Color.White,
     leading: (@Composable () -> Unit)? = null,
     height: Dp = 46.dp
 ) {
@@ -553,7 +584,7 @@ private fun WelcomeTertiaryPillButton(
                 scaleY = scale
             }
             .clip(CircleShape)
-            .background(Color(0x12FFFFFF))
+            .background(if (isDark) Color(0x12FFFFFF) else Color(0x0A000000))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -570,7 +601,7 @@ private fun WelcomeTertiaryPillButton(
         }
         Text(
             text = text,
-            color = Color(0xFFE2E8F0),
+            color = textPrimary,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             letterSpacing = (-0.2).sp

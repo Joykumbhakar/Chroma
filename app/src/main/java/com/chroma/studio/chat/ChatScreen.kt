@@ -162,7 +162,13 @@ fun ChatScreen(
 
     var currentAccent by remember { mutableStateOf(settingsManager.accentColor) }
 
-
+    val appIsDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
+    LaunchedEffect(appIsDark) {
+        if (isDarkMode != appIsDark) {
+            isDarkMode = appIsDark
+            settingsManager.isDarkMode = appIsDark
+        }
+    }
 
     com.chroma.studio.chat.ui.theme.ChatAppTheme(
 

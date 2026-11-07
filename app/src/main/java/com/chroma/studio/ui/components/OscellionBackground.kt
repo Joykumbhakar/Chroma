@@ -23,20 +23,23 @@ fun OscellionBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val colors = LocalOscellionColors.current
     // Theme-aware Background
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(LocalOscellionColors.current.bg)
+            .background(colors.bg)
     ) {
-        // Grain overlay
+        // Grain overlay (cached shader brush)
         val imageBitmap = ImageBitmap.imageResource(R.drawable.noise_grain)
-        val brush = ShaderBrush(ImageShader(imageBitmap, TileMode.Repeated, TileMode.Repeated))
+        val brush = androidx.compose.runtime.remember(imageBitmap) {
+            ShaderBrush(ImageShader(imageBitmap, TileMode.Repeated, TileMode.Repeated))
+        }
         
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(brush, alpha = 1f) // The PNG itself is generated with low opacity
+                .background(brush, alpha = if (colors.isDark) 0.65f else 0.40f)
         )
         
         // Content

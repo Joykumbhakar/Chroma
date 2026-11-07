@@ -197,6 +197,11 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        val prefs = getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+        val isSystemDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val isDarkModePref = if (prefs.contains("is_dark_mode")) prefs.getBoolean("is_dark_mode", false) else isSystemDark
+        vm.updateDarkMode(isDarkModePref)
+
         val workNameFromIntent = intent.getStringExtra(EXTRA_WORK_NAME) ?: "Untitled"
 
         setContent {
@@ -380,7 +385,12 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
 
             ChromaAppBar(
                 isDarkMode = vm.isDarkMode,
-                onToggleDarkMode = vm::toggleDarkMode,
+                onToggleDarkMode = {
+                    vm.toggleDarkMode()
+                    val p = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                    p.edit().putBoolean("is_dark_mode", vm.isDarkMode).apply()
+                    com.chroma.studio.chat.data.SettingsManager.getInstance(context).isDarkMode = vm.isDarkMode
+                },
                 onAddLayer = vm::addLayer,
                 onRandomize = vm::randomize,
                 canUndo = vm.canUndo,
@@ -528,7 +538,12 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
 
             ChromaAppBar(
                 isDarkMode = vm.isDarkMode,
-                onToggleDarkMode = vm::toggleDarkMode,
+                onToggleDarkMode = {
+                    vm.toggleDarkMode()
+                    val p = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                    p.edit().putBoolean("is_dark_mode", vm.isDarkMode).apply()
+                    com.chroma.studio.chat.data.SettingsManager.getInstance(context).isDarkMode = vm.isDarkMode
+                },
                 onAddLayer = vm::addLayer,
                 onRandomize = vm::randomize,
                 canUndo = vm.canUndo,

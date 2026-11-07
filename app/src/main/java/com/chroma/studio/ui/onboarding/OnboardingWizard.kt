@@ -182,10 +182,19 @@ fun OnboardingWizard(
         WizardStep.COMPLETING -> 4
     }
 
+    val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
+    val isDark = colors.isDark
+    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
+    val cardBg = if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
+    val fieldBg = if (isDark) Color(0xFF0A0D18) else Color(0xFFF4F6F9)
+    val fieldBorder = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000)
+    val textPrimary = if (isDark) Color.White else Color(0xFF0A0A0C)
+    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF71717A)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF030510))
+            .background(screenBg)
     ) {
         // Ambient background glow (cached zero-allocation shader)
         Spacer(
@@ -231,7 +240,7 @@ fun OnboardingWizard(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0x1FFFFFFF))
+                            .background(if (isDark) Color(0x1FFFFFFF) else Color(0x14000000))
                             .clickable(role = Role.Button, onClick = {
                                 when (currentStep) {
                                     WizardStep.IDENTITY -> onBackToWelcome()
@@ -245,7 +254,7 @@ fun OnboardingWizard(
                         Icon(
                             imageVector = Lucide.ArrowLeft,
                             contentDescription = "Back",
-                            tint = Color.White,
+                            tint = textPrimary,
                             modifier = Modifier.size(18.dp)
                         )
                     }

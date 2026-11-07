@@ -181,13 +181,22 @@ private fun AuthenticatedRoute(
         val isFirstLaunch = prefs.getBoolean("is_first_launch", true)
         val hasAcceptedTerms = prefs.getBoolean("has_accepted_terms", false)
 
-        val isDarkModePref = prefs.getBoolean("is_dark_mode", false)
+        val isSystemDark = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val isDarkModePref = if (prefs.contains("is_dark_mode")) prefs.getBoolean("is_dark_mode", false) else isSystemDark
         val viewModePref = prefs.getString("view_mode", "GRID") ?: "GRID"
         val initialViewMode = try { com.chroma.studio.ui.screens.ViewMode.valueOf(viewModePref) } catch(e: Exception) { com.chroma.studio.ui.screens.ViewMode.GRID }
         vm.updateDarkMode(isDarkModePref)
         com.chroma.studio.chat.data.SettingsManager.getInstance(this).isDarkMode = isDarkModePref
 
         setContent {
+            val systemInDark = androidx.compose.foundation.isSystemInDarkTheme()
+            LaunchedEffect(systemInDark) {
+                if (!prefs.contains("is_dark_mode")) {
+                    vm.updateDarkMode(systemInDark)
+                    com.chroma.studio.chat.data.SettingsManager.getInstance(this@HomeActivity).isDarkMode = systemInDark
+                }
+            }
+
             OscellionTheme(darkTheme = vm.isDarkMode) {
             com.chroma.studio.ui.components.OscellionBackground {
 
@@ -1269,6 +1278,12 @@ private fun AuthenticatedRoute(
                                         com.chroma.studio.chat.ChatScreen(
                                             chatViewModel = chatVm,
                                             storyViewModel = storyVm,
+                                            onAppearanceToggle = {
+                                                val newDark = !vm.isDarkMode
+                                                vm.updateDarkMode(newDark)
+                                                prefs.edit().putBoolean("is_dark_mode", newDark).apply()
+                                                com.chroma.studio.chat.data.SettingsManager.getInstance(this@HomeActivity).isDarkMode = newDark
+                                            },
                                             onNavigateToUserProfile = { uid ->
                                                 navController.navigate("userProfile/$uid")
                                             },

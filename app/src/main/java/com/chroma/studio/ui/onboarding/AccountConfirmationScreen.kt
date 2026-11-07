@@ -65,10 +65,17 @@ fun AccountConfirmationScreen(
     onContinue: () -> Unit,
     onNotMine: () -> Unit
 ) {
+    val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
+    val isDark = colors.isDark
+    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
+    val cardBg = if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
+    val textPrimary = if (isDark) Color.White else Color(0xFF0A0A0C)
+    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF71717A)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF030510))
+            .background(screenBg)
     ) {
         // Hardware-accelerated GPU ambient glows (cached zero-allocation shader)
         Spacer(
@@ -76,19 +83,34 @@ fun AccountConfirmationScreen(
                 .fillMaxSize()
                 .drawWithCache {
                     val topGlow = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF1D4ED8).copy(alpha = 0.28f),
-                            Color(0xFF0F172A).copy(alpha = 0.08f),
-                            Color.Transparent
-                        ),
+                        colors = if (isDark) {
+                            listOf(
+                                Color(0xFF1D4ED8).copy(alpha = 0.28f),
+                                Color(0xFF0F172A).copy(alpha = 0.08f),
+                                Color.Transparent
+                            )
+                        } else {
+                            listOf(
+                                Color(0xFF0A84FF).copy(alpha = 0.12f),
+                                Color(0xFFE0EDFF).copy(alpha = 0.05f),
+                                Color.Transparent
+                            )
+                        },
                         center = Offset(size.width * 0.5f, size.height * 0.22f),
                         radius = size.width * 0.85f
                     )
                     val bottomGlow = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF2563EB).copy(alpha = 0.20f),
-                            Color.Transparent
-                        ),
+                        colors = if (isDark) {
+                            listOf(
+                                Color(0xFF2563EB).copy(alpha = 0.20f),
+                                Color.Transparent
+                            )
+                        } else {
+                            listOf(
+                                Color(0xFF93C5FD).copy(alpha = 0.10f),
+                                Color.Transparent
+                            )
+                        },
                         center = Offset(size.width * 0.5f, size.height * 0.85f),
                         radius = size.width * 0.70f
                     )
@@ -119,7 +141,7 @@ fun AccountConfirmationScreen(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
-                        .background(Color(0xFF1E293B))
+                        .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0))
                         .padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
                     Row(
@@ -146,7 +168,7 @@ fun AccountConfirmationScreen(
 
                 Text(
                     text = "Is this your account?",
-                    color = Color.White,
+                    color = textPrimary,
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = InterFontFamily,
@@ -158,7 +180,7 @@ fun AccountConfirmationScreen(
 
                 Text(
                     text = "Continue with this account",
-                    color = Color(0xFF94A3B8),
+                    color = textMuted,
                     fontSize = 14.sp,
                     fontFamily = InterFontFamily,
                     fontWeight = FontWeight.Normal,
@@ -172,7 +194,7 @@ fun AccountConfirmationScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(26.dp))
-                    .background(Color(0xFF10141E))
+                    .background(cardBg)
                     .doubleEdgeGlassBorder(cornerRadius = 26.dp)
                     .padding(horizontal = 24.dp, vertical = 28.dp)
             ) {

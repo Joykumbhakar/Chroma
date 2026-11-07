@@ -255,6 +255,8 @@ class ChromaViewModel : ViewModel() {
 
     fun toggleDarkMode() { isDarkMode = !isDarkMode }
 
+    fun updateDarkMode(dark: Boolean) { isDarkMode = dark }
+
     fun setShape(shape: String) { canvasShape = shape }
 
     fun switchMobileTab(tab: MobileTab) { mobileTab = tab }

@@ -222,12 +222,16 @@ fun OneUiCollapsingConversationsScreen(
     var accumulatedScrollDelta by remember { mutableFloatStateOf(0f) }
     var autoHideJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
-    // Auto-collapse inactivity timer (collapses expanded action bar back to compact circular FAB)
-    fun resetAutoHideTimer(customDelayMs: Long = 3500L) {
+    // Auto-hide inactivity timer: collapses and hides the floating + button after 3 seconds of inactivity
+    fun resetAutoHideTimer(customDelayMs: Long = 3000L) {
         autoHideJob?.cancel()
         autoHideJob = coroutineScope.launch {
             delay(customDelayMs)
-            isFabExpanded = false
+            if (isFabExpanded) {
+                isFabExpanded = false
+                delay(180L)
+            }
+            isFabVisible = false
             scrollSessionCount = 0
             accumulatedScrollDelta = 0f
         }
@@ -243,7 +247,7 @@ fun OneUiCollapsingConversationsScreen(
             isFabExpanded = false
             scrollSessionCount = 1
             accumulatedScrollDelta = 0f
-            resetAutoHideTimer(2800L)
+            resetAutoHideTimer(3000L)
         } else {
             if (isNewGesture) {
                 scrollSessionCount++
@@ -252,8 +256,13 @@ fun OneUiCollapsingConversationsScreen(
             if (!isFabExpanded && (scrollSessionCount >= 2 || accumulatedScrollDelta > 70f)) {
                 isFabExpanded = true
             }
-            resetAutoHideTimer(2800L)
+            resetAutoHideTimer(3000L)
         }
+    }
+
+    // Auto-hide on initial screen entry if inactive for 3 seconds
+    LaunchedEffect(Unit) {
+        resetAutoHideTimer(3000L)
     }
 
     LaunchedEffect(listState) {
@@ -1006,16 +1015,18 @@ fun OneUiCollapsingConversationsScreen(
                 isExpanded = isFabExpanded,
                 onExpandChange = { expanded ->
                     isFabExpanded = expanded
-                    resetAutoHideTimer(if (expanded) 4500L else 2800L)
+                    resetAutoHideTimer(if (expanded) 4500L else 3000L)
                 },
                 onGroupClick = {
                     SoundManager.playReaction()
                     isFabExpanded = false
+                    isFabVisible = false
                     onCreateGroupClick?.invoke() ?: onNewMessageClick()
                 },
                 onChatClick = {
                     SoundManager.playReaction()
                     isFabExpanded = false
+                    isFabVisible = false
                     onNewMessageClick()
                 },
                 modifier = Modifier
