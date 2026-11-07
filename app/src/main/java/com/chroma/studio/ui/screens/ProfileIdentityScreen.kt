@@ -571,17 +571,11 @@ fun ProfileIdentityScreen(
                                     .background(Color.Black.copy(alpha = 0.45f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp,
-                                        color = Color.White
-                                    )
-                                    Text("Updating Banner...", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                }
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.5.dp,
+                                    color = Color.White
+                                )
                             }
                         }
 

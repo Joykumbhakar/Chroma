@@ -89,7 +89,7 @@ fun PrivacyPolicyTermsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .padding(horizontal = 24.dp, vertical = 12.dp)
             ) {
                 if (isFirstLaunch) {
                     // Checkbox Agreement Card with Iconic Double Edge Glass Border

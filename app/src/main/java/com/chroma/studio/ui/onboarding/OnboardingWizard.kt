@@ -213,7 +213,7 @@ fun OnboardingWizard(
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
             // ── UNIFIED HEADING BANNER: "New to Oscillom, let's create a new account" ──
             Column(
@@ -743,27 +743,11 @@ fun OnboardingWizard(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(44.dp),
-                                        strokeWidth = 3.5.dp,
-                                        color = Color(0xFF0066FF)
-                                    )
-                                    Text(
-                                        text = "Setting up your studio account…",
-                                        color = Color.White,
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        text = "Committing database profile and issuing session",
-                                        color = Color(0xFF94A3B8),
-                                        fontSize = 13.sp
-                                    )
-                                }
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(38.dp),
+                                    strokeWidth = 3.dp,
+                                    color = Color(0xFF0066FF)
+                                )
                             }
                         }
                     }
@@ -775,7 +759,7 @@ fun OnboardingWizard(
                 val canProceed = when (currentStep) {
                     WizardStep.IDENTITY -> displayName.isNotBlank() && usernameStatus == UsernameStatus.Free
                     WizardStep.PERSONAL_DETAILS -> dobMillis != null
-                    WizardStep.INTERESTS -> selectedInterests.size >= 2
+                    WizardStep.INTERESTS -> selectedInterests.isNotEmpty()
                     WizardStep.COMPLETING -> false
                 }
 

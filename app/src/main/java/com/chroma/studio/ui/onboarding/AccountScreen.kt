@@ -202,7 +202,7 @@ fun AccountScreen(
                     val errorMsg = when (state.usernameStatus) {
                         UsernameStatus.TooShort -> "Username must be at least 3 characters"
                         UsernameStatus.Taken -> "This username is already taken"
-                        UsernameStatus.Checking -> "Checking availability..."
+                        UsernameStatus.Checking -> ""
                         UsernameStatus.Free -> ""
                     }
                     if (errorMsg.isNotEmpty()) {

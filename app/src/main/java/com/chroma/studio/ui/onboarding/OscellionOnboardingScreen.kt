@@ -306,27 +306,11 @@ fun OscellionOnboardingScreen(
                             .background(Color(0xFF030510)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(42.dp),
-                                color = Color(0xFF0066FF),
-                                strokeWidth = 3.5.dp
-                            )
-                            Text(
-                                text = "Checking Oscillom database…",
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "Verifying Google account authorization",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 13.sp
-                            )
-                        }
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(38.dp),
+                            color = Color(0xFF0066FF),
+                            strokeWidth = 3.dp
+                        )
                     }
                 }
 

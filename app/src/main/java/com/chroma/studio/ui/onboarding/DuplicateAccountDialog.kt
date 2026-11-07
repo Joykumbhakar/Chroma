@@ -55,15 +55,22 @@ fun DuplicateAccountDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        // Samsung One UI Dialog with Iconic Double Edge Glass Border
+        // Samsung One UI Bottom-Anchored Dialog (One UI Design Guidelines p.37 & 71)
         Box(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFF10141E))
-                .doubleEdgeGlassBorder(cornerRadius = 28.dp)
-                .padding(24.dp)
+                .fillMaxSize()
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            contentAlignment = Alignment.BottomCenter
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(Color(0xFF10141E))
+                    .doubleEdgeGlassBorder(cornerRadius = 28.dp)
+                    .padding(24.dp)
+            ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -207,6 +214,7 @@ fun DuplicateAccountDialog(
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
+        }
         }
     }
 }
