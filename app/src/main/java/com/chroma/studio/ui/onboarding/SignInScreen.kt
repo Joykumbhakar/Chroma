@@ -51,7 +51,6 @@ import com.chroma.studio.data.SavedAccount
 import com.chroma.studio.data.SavedAccountManager
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.components.OneUiGlassCard
-import com.chroma.studio.ui.components.OscellionAppIcon
 import com.chroma.studio.ui.components.doubleEdgeGlassBorder
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
@@ -325,49 +324,35 @@ fun SignInScreen(
                 ) {
                     Spacer(Modifier.height(8.dp))
 
-                    // ── 1. VIEWING AREA (Top ~39.67% Samsung One UI zone) ────────
+                    // ── 1. VIEWING AREA (Samsung One UI Typography zone) ────────
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 10.dp, bottom = 22.dp),
+                            .padding(top = 28.dp, bottom = 26.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // 72dp Squircle Hero Icon in 22dp squircle Focus Card with Double Edge Glass Border
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(22.dp))
-                                .background(cardBg)
-                                .doubleEdgeGlassBorder(cornerRadius = 22.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            OscellionAppIcon(size = 50.dp)
-                        }
-
-                        Spacer(Modifier.height(18.dp))
-
                         Text(
                             text = "Sign In",
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Bold,
                             color = textPrimary,
                             letterSpacing = (-0.6).sp,
                             textAlign = TextAlign.Center,
                             fontFamily = InterFontFamily
                         )
 
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(8.dp))
 
                         Text(
                             text = "Access your creative canvas, encrypted conversations, and personal studio profile.",
-                            fontSize = 13.5.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Normal,
                             color = textMuted,
                             textAlign = TextAlign.Center,
-                            lineHeight = 18.sp,
+                            lineHeight = 19.sp,
                             letterSpacing = (-0.2).sp,
                             fontFamily = InterFontFamily,
-                            modifier = Modifier.padding(horizontal = 16.dp)
+                            modifier = Modifier.padding(horizontal = 20.dp)
                         )
                     }
 

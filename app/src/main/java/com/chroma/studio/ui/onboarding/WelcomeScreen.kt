@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.R
-import com.chroma.studio.ui.components.OscellionAppIcon
+import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.components.OneUiGlassCard
 import com.chroma.studio.ui.components.doubleEdgeGlassBorder
 import com.composables.icons.lucide.Globe
@@ -161,37 +161,24 @@ fun WelcomeScreen(
                     verticalArrangement = Arrangement.SpaceBetween,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // ── TOP & HERO SECTION ──────────────────────────────────
+                    // ── TOP & HERO SECTION (Samsung One UI Typography zone) ─────────
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 16.dp),
+                            .padding(top = 28.dp, bottom = 26.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Samsung One UI Hero App Icon with Double Edge Glass Border
-                        Box(
-                            modifier = Modifier
-                                .size(88.dp)
-                                .clip(RoundedCornerShape(26.dp))
-                                .background(cardBg)
-                                .doubleEdgeGlassBorder(cornerRadius = 26.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            OscellionAppIcon(size = 64.dp)
-                        }
-
-                        Spacer(Modifier.height(18.dp))
-
                         Text(
                             text = "Chroma Studio",
-                            fontSize = 32.sp,
+                            fontSize = 34.sp,
                             fontWeight = FontWeight.Bold,
                             color = textPrimary,
-                            letterSpacing = (-0.8).sp,
-                            textAlign = TextAlign.Center
+                            letterSpacing = (-0.6).sp,
+                            textAlign = TextAlign.Center,
+                            fontFamily = InterFontFamily
                         )
 
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(8.dp))
 
                         Text(
                             text = "Where creativity meets community.",
@@ -200,10 +187,11 @@ fun WelcomeScreen(
                             color = textMuted,
                             letterSpacing = (-0.2).sp,
                             textAlign = TextAlign.Center,
-                            lineHeight = 22.sp
+                            lineHeight = 22.sp,
+                            fontFamily = InterFontFamily
                         )
 
-                        Spacer(Modifier.height(28.dp))
+                        Spacer(Modifier.height(24.dp))
 
                         // ── SAMSUNG ONE UI VALUE PROPOSITION CARD (DOUBLE EDGE GLASS BORDER) ──
                         OneUiGlassCard(
