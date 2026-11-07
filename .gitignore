@@ -53,3 +53,7 @@ Notification sound pack/
 /fonts/
 !app/src/main/assets/fonts/
 
+ 
+debug.keystore
+*.jks
+*.keystore
