@@ -300,10 +300,12 @@ fun OscellionOnboardingScreen(
                 }
 
                 AuthScreenState.CHECKING_DATABASE -> {
+                    val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
+                    val screenBg = if (colors.isDark) Color(0xFF080808) else Color(0xFFFAFAFA)
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color(0xFF030510)),
+                            .background(screenBg),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(

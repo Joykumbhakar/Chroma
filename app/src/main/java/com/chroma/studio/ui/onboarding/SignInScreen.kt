@@ -3,48 +3,59 @@ package com.chroma.studio.ui.onboarding
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.chroma.studio.R
 import com.chroma.studio.data.DiscoverRepository
 import com.chroma.studio.data.SavedAccount
 import com.chroma.studio.data.SavedAccountManager
 import com.chroma.studio.ui.components.IosAvatarView
+import com.chroma.studio.ui.components.OneUiGlassCard
+import com.chroma.studio.ui.components.OscellionAppIcon
+import com.chroma.studio.ui.components.doubleEdgeGlassBorder
+import com.chroma.studio.ui.theme.InterFontFamily
+import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.composables.icons.lucide.*
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
@@ -53,17 +64,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 /**
- * Dedicated, full-screen Sign In experience for Chroma Studio / Oscellion.
+ * Samsung One UI 7.0 Sign In Screen for Chroma Studio.
  *
- * Implements:
- * - Matching deep navy flow gradient background ([ObColors.FlowBackground])
- * - Clean, professional layout with glass containers and high-contrast typography
- * - Unified username and email authentication
- * - Password field with visibility toggle and hardware/IME done actions
- * - Quick-fill selector for locally saved accounts
- * - In-place password reset link dispatch
- * - Apple and Google quick sign-in actions
- * - Seamless navigation back to Welcome or into Account creation
+ * Adheres strictly to the Samsung One UI Design Guidelines:
+ * - Viewing Area (top ~39.67%): Header zone with 72dp squircle app icon & clear typography.
+ * - Interaction Area (bottom ~60.33%): Focus Block (26dp squircle card with iconic double edge glass border).
+ * - Official Samsung One UI Palette:
+ *     Primary: #0381FE, Primary Dark: #0072DE (Light) / #3E91FF (Dark)
+ *     Canvas: #FAFAFA (Light) / #080808 (Dark)
+ *     Focus Cards: #FFFFFF (Light) / #17171A (Dark)
+ *     Text: #000000 (Light) / #FAFAFA (Dark); Muted: #71717A (Light) / #8E8E93 (Dark)
+ * - Standing User Rule: "Do NOT use borders for pills/capsules".
+ * - Clean circular loaders, no intrusive text overlays.
  */
 @Composable
 fun SignInScreen(
@@ -85,6 +97,15 @@ fun SignInScreen(
     val focus = LocalFocusManager.current
     val auth = remember { FirebaseAuth.getInstance() }
     val repo = remember(discoverRepo) { discoverRepo ?: DiscoverRepository() }
+
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+
+    val screenBg = if (isDark) Color(0xFF080808) else Color(0xFFFAFAFA)
+    val cardBg = if (isDark) Color(0xFF17171A) else Color(0xFFFFFFFF)
+    val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000)
+    val textMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)
+    val inputBg = if (isDark) Color(0x15FFFFFF) else Color(0x0A000000)
 
     BackHandler(onBack = onBack)
 
@@ -171,7 +192,6 @@ fun SignInScreen(
                         loginError = "Network connection failed. Please check your internet connection."
                     }
                     else -> {
-                        // Check if local account exists
                         val localMatch = savedAccounts.find {
                             it.username.equals(cleanIdentifier, ignoreCase = true) ||
                             it.email.equals(cleanIdentifier, ignoreCase = true)
@@ -191,276 +211,451 @@ fun SignInScreen(
         }
     }
 
-    ObScreen {
-        // Navigation bar
-        Row(
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(screenBg)
+    ) {
+        // Hardware-accelerated GPU ambient glows (Samsung One UI signature glow)
+        Spacer(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ObIconButton(
-                icon = Icons.AutoMirrored.Rounded.ArrowBack,
-                description = "Back to Welcome",
-                onClick = onBack
-            )
-            ObBadge(text = "Sign In", color = ObColors.Lime)
-            ObIconButton(
-                icon = Icons.Rounded.Close,
-                description = "Close",
-                onClick = onBack
-            )
-        }
+                .fillMaxSize()
+                .drawWithCache {
+                    val topGlow = Brush.radialGradient(
+                        colors = if (isDark) {
+                            listOf(
+                                Color(0xFF1D4ED8).copy(alpha = 0.26f),
+                                Color(0xFF0F172A).copy(alpha = 0.08f),
+                                Color.Transparent
+                            )
+                        } else {
+                            listOf(
+                                Color(0xFF0381FE).copy(alpha = 0.12f),
+                                Color(0xFFE0EDFF).copy(alpha = 0.05f),
+                                Color.Transparent
+                            )
+                        },
+                        center = Offset(size.width * 0.5f, size.height * 0.14f),
+                        radius = size.width * 0.85f
+                    )
+                    val bottomGlow = Brush.radialGradient(
+                        colors = if (isDark) {
+                            listOf(
+                                Color(0xFF1E293B).copy(alpha = 0.20f),
+                                Color.Transparent
+                            )
+                        } else {
+                            listOf(
+                                Color(0xFF93C5FD).copy(alpha = 0.10f),
+                                Color.Transparent
+                            )
+                        },
+                        center = Offset(size.width * 0.5f, size.height * 0.95f),
+                        radius = size.width * 0.75f
+                    )
+                    onDrawBehind {
+                        drawCircle(brush = topGlow)
+                        drawCircle(brush = bottomGlow)
+                    }
+                }
+        )
 
-        BoxWithConstraints(
+        Column(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .imePadding()
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
         ) {
-            val contentHeight = maxHeight
-            val scrollState = rememberScrollState()
-
-            Column(
+            // ── TOP NAVIGATION BAR ──────────────────────────────────────────
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scrollState)
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.ChevronLeft,
+                        contentDescription = "Back",
+                        tint = textPrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Text(
+                    text = "Sign In",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = textPrimary,
+                    fontFamily = InterFontFamily
+                )
+
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.X,
+                        contentDescription = "Close",
+                        tint = textPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            BoxWithConstraints(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .imePadding()
+            ) {
+                val scrollState = rememberScrollState()
+
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = contentHeight),
-                    verticalArrangement = Arrangement.SpaceBetween
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // TOP SECTION: Header, Saved Accounts, Inputs
-                    Column(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(8.dp))
 
-                        ObHeader(
-                            firstLine = "Sign in to",
-                            highlightLine = "Chroma Studio",
-                            subtitle = "Access your creative canvas, encrypted conversations, and personal studio profile."
-                        )
+                    // ── 1. VIEWING AREA (Top ~39.67% Samsung One UI zone) ────────
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp, bottom = 22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // 72dp Squircle Hero Icon in 22dp squircle Focus Card with Double Edge Glass Border
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(cardBg)
+                                .doubleEdgeGlassBorder(cornerRadius = 22.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            OscellionAppIcon(size = 50.dp)
+                        }
 
                         Spacer(Modifier.height(18.dp))
 
-                        // Quick select for saved accounts if available
+                        Text(
+                            text = "Sign In",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = textPrimary,
+                            letterSpacing = (-0.6).sp,
+                            textAlign = TextAlign.Center,
+                            fontFamily = InterFontFamily
+                        )
+
+                        Spacer(Modifier.height(6.dp))
+
+                        Text(
+                            text = "Access your creative canvas, encrypted conversations, and personal studio profile.",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = textMuted,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 18.sp,
+                            letterSpacing = (-0.2).sp,
+                            fontFamily = InterFontFamily,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+
+                    // ── 2. INTERACTION AREA: 26dp Squircle Focus Block Card ────────
+                    OneUiGlassCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        cornerRadius = 26.dp,
+                        backgroundColor = cardBg,
+                        contentPadding = PaddingValues(20.dp)
+                    ) {
+                        // Quick Saved Accounts Selector (if available)
                         if (savedAccounts.isNotEmpty()) {
-                            Column(Modifier.padding(horizontal = 22.dp)) {
-                                Text(
-                                    text = "SAVED ACCOUNTS",
-                                    style = ObType.SectionHeader,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    savedAccounts.forEach { acc ->
-                                        val isSelected = identifier.equals(acc.username, ignoreCase = true) ||
+                            Text(
+                                text = "SAVED ACCOUNTS",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textMuted,
+                                letterSpacing = 0.8.sp,
+                                fontFamily = InterFontFamily,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                savedAccounts.forEach { acc ->
+                                    val isSelected = identifier.equals(acc.username, ignoreCase = true) ||
                                             identifier.equals(acc.email, ignoreCase = true)
-                                        ObGlassCard(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(14.dp))
-                                                .clickable(role = Role.Button) {
-                                                    identifier = acc.username.ifBlank { acc.email }
-                                                    loginError = null
-                                                },
-                                            shape = RoundedCornerShape(14.dp)
+                                    val chipBg = if (isSelected) {
+                                        Color(0xFF0381FE).copy(alpha = if (isDark) 0.22f else 0.12f)
+                                    } else {
+                                        if (isDark) Color(0x14FFFFFF) else Color(0x0A000000)
+                                    }
+
+                                    Surface(
+                                        onClick = {
+                                            identifier = acc.username.ifBlank { acc.email }
+                                            loginError = null
+                                        },
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = chipBg
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .background(if (isSelected) Color(0x35C8F535) else Color(0x75111636))
-                                                    .border(
-                                                        width = 1.dp,
-                                                        color = if (isSelected) ObColors.Lime else Color(0x22FFFFFF),
-                                                        shape = RoundedCornerShape(14.dp)
-                                                    )
-                                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(28.dp)
-                                                        .clip(CircleShape)
-                                                        .background(Color(0xFF0C1238))
-                                                ) {
-                                                    IosAvatarView(
-                                                        name = acc.displayName.ifBlank { acc.username },
-                                                        avatarUrl = acc.avatarUrl,
-                                                        size = 28.dp,
-                                                        gender = acc.gender,
-                                                        modifier = Modifier.fillMaxSize()
-                                                    )
-                                                }
-                                                Column {
-                                                    Text(
-                                                        text = acc.displayName.ifBlank { acc.username },
-                                                        color = Color.White,
-                                                        fontSize = 12.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        letterSpacing = (-0.4).sp,
-                                                        lineHeight = 15.sp,
-                                                        maxLines = 1
-                                                    )
-                                                    Text(
-                                                        text = "@${acc.username}",
-                                                        color = ObColors.TextMuted,
-                                                        fontSize = 10.5.sp,
-                                                        letterSpacing = (-0.2).sp,
-                                                        lineHeight = 13.sp,
-                                                        maxLines = 1
-                                                    )
-                                                }
+                                            IosAvatarView(
+                                                name = acc.displayName.ifBlank { acc.username },
+                                                avatarUrl = acc.avatarUrl,
+                                                size = 28.dp,
+                                                gender = acc.gender
+                                            )
+                                            Column {
+                                                Text(
+                                                    text = acc.displayName.ifBlank { acc.username },
+                                                    color = textPrimary,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = (-0.3).sp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = "@${acc.username}",
+                                                    color = textMuted,
+                                                    fontSize = 10.5.sp,
+                                                    letterSpacing = (-0.2).sp,
+                                                    maxLines = 1
+                                                )
                                             }
                                         }
                                     }
                                 }
-                                Spacer(Modifier.height(14.dp))
                             }
+
+                            Spacer(Modifier.height(16.dp))
                         }
 
-                        // Direct input section without secondary background card
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            // Field 1: Identifier with Uiverse floating label
-                            ObTextField(
-                                value = identifier,
-                                onValueChange = {
-                                    identifier = it
-                                    loginError = null
-                                },
-                                placeholder = "Username or email",
-                                leading = Icons.Rounded.AlternateEmail,
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Email,
-                                    imeAction = ImeAction.Next,
-                                    autoCorrect = false
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onNext = { focus.moveFocus(FocusDirection.Down) }
-                                ),
-                                trailing = {
-                                    if (identifier.isNotEmpty()) {
+                        // Username or Email Field
+                        OutlinedTextField(
+                            value = identifier,
+                            onValueChange = {
+                                identifier = it
+                                loginError = null
+                            },
+                            placeholder = {
+                                Text(
+                                    "Username or email",
+                                    color = textMuted.copy(alpha = 0.65f),
+                                    fontSize = 15.sp,
+                                    fontFamily = InterFontFamily
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Lucide.AtSign,
+                                    contentDescription = null,
+                                    tint = if (identifier.isNotEmpty()) Color(0xFF0381FE) else textMuted,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            },
+                            trailingIcon = {
+                                if (identifier.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = { identifier = "" },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
                                         Icon(
-                                            imageVector = Icons.Rounded.Close,
+                                            imageVector = Lucide.X,
                                             contentDescription = "Clear",
-                                            tint = Color.White.copy(alpha = 0.5f),
-                                            modifier = Modifier
-                                                .size(18.dp)
-                                                .clickable(role = Role.Button) { identifier = "" }
+                                            tint = textMuted,
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
                                 }
-                            )
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF0381FE),
+                                unfocusedBorderColor = if (isDark) Color(0x22FFFFFF) else Color(0x18000000),
+                                errorBorderColor = Color(0xFFEF4444),
+                                focusedTextColor = textPrimary,
+                                unfocusedTextColor = textPrimary,
+                                cursorColor = Color(0xFF0381FE),
+                                focusedContainerColor = inputBg,
+                                unfocusedContainerColor = inputBg
+                            ),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                imeAction = ImeAction.Next,
+                                autoCorrect = false
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { focus.moveFocus(FocusDirection.Down) }
+                            ),
+                            textStyle = TextStyle(
+                                fontSize = 15.sp,
+                                color = textPrimary,
+                                fontFamily = InterFontFamily
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
 
-                            // Field 2: Password with Uiverse floating label
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                ObTextField(
-                                    value = password,
-                                    onValueChange = {
-                                        password = it
-                                        loginError = null
-                                    },
-                                    placeholder = "Password",
-                                    leading = Icons.Rounded.Lock,
-                                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                                    keyboardOptions = KeyboardOptions(
-                                        keyboardType = KeyboardType.Password,
-                                        imeAction = ImeAction.Done,
-                                        autoCorrect = false
-                                    ),
-                                    keyboardActions = KeyboardActions(
-                                        onDone = {
-                                            focus.clearFocus()
-                                            performSignIn()
-                                        }
-                                    ),
-                                    trailing = {
-                                        Icon(
-                                            imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                            contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                                            tint = Color.White.copy(alpha = 0.7f),
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .clickable(role = Role.Button) { passwordVisible = !passwordVisible }
-                                        )
-                                    }
-                                )
+                        Spacer(Modifier.height(12.dp))
+
+                        // Password Field
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = {
+                                password = it
+                                loginError = null
+                            },
+                            placeholder = {
                                 Text(
-                                    text = "Forgot password?",
-                                    color = Color(0xFF2196F3),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    letterSpacing = (-0.3).sp,
-                                    modifier = Modifier
-                                        .align(Alignment.End)
-                                        .padding(end = 4.dp, top = 2.dp)
-                                        .clickable(role = Role.Button) {
-                                            resetEmail = if (identifier.contains("@")) identifier.trim() else ""
-                                            resetError = null
-                                            resetSent = false
-                                            showForgotDialog = true
-                                        }
+                                    "Password",
+                                    color = textMuted.copy(alpha = 0.65f),
+                                    fontSize = 15.sp,
+                                    fontFamily = InterFontFamily
                                 )
-                            }
-
-                            // Error message display
-                            AnimatedVisibility(
-                                visible = loginError != null,
-                                enter = fadeIn(tween(150)) + expandVertically(),
-                                exit = fadeOut(tween(150)) + shrinkVertically()
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(ObColors.Danger.copy(alpha = 0.15f))
-                                        .border(1.dp, ObColors.Danger.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Lucide.Lock,
+                                    contentDescription = null,
+                                    tint = if (password.isNotEmpty()) Color(0xFF0381FE) else textMuted,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = { passwordVisible = !passwordVisible },
+                                    modifier = Modifier.size(24.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Rounded.ErrorOutline,
-                                        contentDescription = null,
-                                        tint = ObColors.Danger,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Text(
-                                        text = loginError ?: "",
-                                        color = Color.White,
-                                        fontSize = 12.5.sp,
-                                        lineHeight = 16.sp,
-                                        letterSpacing = (-0.2).sp,
-                                        modifier = Modifier.weight(1f)
+                                        imageVector = if (passwordVisible) Lucide.EyeOff else Lucide.Eye,
+                                        contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                        tint = textMuted,
+                                        modifier = Modifier.size(19.dp)
                                     )
                                 }
+                            },
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF0381FE),
+                                unfocusedBorderColor = if (isDark) Color(0x22FFFFFF) else Color(0x18000000),
+                                errorBorderColor = Color(0xFFEF4444),
+                                focusedTextColor = textPrimary,
+                                unfocusedTextColor = textPrimary,
+                                cursorColor = Color(0xFF0381FE),
+                                focusedContainerColor = inputBg,
+                                unfocusedContainerColor = inputBg
+                            ),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                                autoCorrect = false
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    focus.clearFocus()
+                                    performSignIn()
+                                }
+                            ),
+                            textStyle = TextStyle(
+                                fontSize = 15.sp,
+                                color = textPrimary,
+                                fontFamily = InterFontFamily
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Forgot Password Link
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp, end = 2.dp),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            Text(
+                                text = "Forgot password?",
+                                color = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE),
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = (-0.2).sp,
+                                fontFamily = InterFontFamily,
+                                modifier = Modifier.clickable(role = Role.Button) {
+                                    resetEmail = if (identifier.contains("@")) identifier.trim() else ""
+                                    resetError = null
+                                    resetSent = false
+                                    showForgotDialog = true
+                                }
+                            )
+                        }
+
+                        // Error Banner
+                        AnimatedVisibility(
+                            visible = loginError != null,
+                            enter = fadeIn(tween(150)) + expandVertically(),
+                            exit = fadeOut(tween(150)) + shrinkVertically()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 10.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFFEF4444).copy(alpha = 0.12f))
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.ShieldAlert,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = loginError ?: "",
+                                    color = if (isDark) Color(0xFFFFB4AB) else Color(0xFFBA1A1A),
+                                    fontSize = 12.5.sp,
+                                    lineHeight = 16.sp,
+                                    letterSpacing = (-0.2).sp,
+                                    fontFamily = InterFontFamily,
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
                         }
                     }
 
-                    // BOTTOM ACTIONS SECTION (Shifted all buttons to bottom)
+                    Spacer(Modifier.height(20.dp))
+
+                    // ── 3. BOTTOM ACTIONS AREA (Borderless Pills) ────────────────
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
-                            .padding(top = 24.dp, bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                            .padding(bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Sign In Button
-                        ObPrimaryButton(
+                        // Primary Sign In Button: Borderless Pill
+                        OneUiPrimaryPillButton(
                             text = "Sign In to Studio",
                             onClick = {
                                 focus.clearFocus()
@@ -470,25 +665,39 @@ fun SignInScreen(
                             enabled = !isSigningIn && identifier.isNotBlank() && password.isNotBlank()
                         )
 
-                        // Divider: or continue with
+                        // Clean One UI Divider
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Box(Modifier.weight(1f).height(1.dp).background(Color(0x22FFFFFF)))
-                            Text("or continue with", color = ObColors.TextFaint, fontSize = 12.sp, letterSpacing = (-0.3).sp)
-                            Box(Modifier.weight(1f).height(1.dp).background(Color(0x22FFFFFF)))
+                            HorizontalDivider(
+                                modifier = Modifier.weight(1f),
+                                thickness = 0.5.dp,
+                                color = if (isDark) Color(0x18FFFFFF) else Color(0x12000000)
+                            )
+                            Text(
+                                text = "or continue with",
+                                color = textMuted,
+                                fontSize = 12.sp,
+                                letterSpacing = (-0.2).sp,
+                                fontFamily = InterFontFamily
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.weight(1f),
+                                thickness = 0.5.dp,
+                                color = if (isDark) Color(0x18FFFFFF) else Color(0x12000000)
+                            )
                         }
 
-                        // Quick Social Sign-In buttons
-                        ObPrimaryButton(
-                            text = "Sign in with Google",
+                        // Continue with Google: Borderless Pill
+                        OneUiSocialPillButton(
+                            text = "Continue with Google",
                             onClick = onGoogleSignIn,
                             loading = googleLoading,
-                            trailingIcon = null,
+                            isDark = isDark,
                             leading = {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_google_logo),
@@ -498,37 +707,66 @@ fun SignInScreen(
                                 )
                             }
                         )
-                        ObAppleButton(
-                            text = "Sign in with Apple",
+
+                        // Continue with Apple: Borderless Pill
+                        OneUiSocialPillButton(
+                            text = "Continue with Apple",
                             onClick = onAppleSignIn,
-                            loading = appleLoading
+                            loading = appleLoading,
+                            isDark = isDark,
+                            leading = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_apple_logo),
+                                    contentDescription = "Apple logo",
+                                    tint = if (isDark) Color.White else Color.Black,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
                         )
-                        ObSecondaryButton(
-                            text = "Explore Studio without login",
+
+                        // Explore as Guest: Borderless Tertiary Pill
+                        OneUiTertiaryPillButton(
+                            text = "Explore Studio as Guest",
                             onClick = onExploreGuest,
-                            icon = Icons.Rounded.Explore
+                            isDark = isDark,
+                            textPrimary = textPrimary,
+                            leading = {
+                                Icon(
+                                    imageVector = Lucide.Sparkles,
+                                    contentDescription = null,
+                                    tint = if (isDark) Color(0xFF3E91FF) else Color(0xFF0381FE),
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
                         )
 
                         Spacer(Modifier.height(4.dp))
 
-                        // Bottom prompt to create new account
+                        // Create Account Link
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Don't have a studio account? ", color = Color(0xCCFFFFFF), fontSize = 13.sp, letterSpacing = (-0.3).sp)
+                            Text(
+                                text = "Don't have an account? ",
+                                color = textMuted,
+                                fontSize = 13.sp,
+                                letterSpacing = (-0.2).sp,
+                                fontFamily = InterFontFamily
+                            )
                             Text(
                                 text = "Create account",
-                                color = ObColors.Lime,
+                                color = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.3).sp,
+                                letterSpacing = (-0.2).sp,
+                                fontFamily = InterFontFamily,
                                 modifier = Modifier.clickable(role = Role.Button, onClick = onCreateAccount)
                             )
                         }
 
-                        // Terms and privacy link
+                        // Terms and Privacy Link
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -536,13 +774,20 @@ fun SignInScreen(
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("By signing in, you agree to our ", color = Color(0x99FFFFFF), fontSize = 11.sp, letterSpacing = (-0.2).sp)
+                            Text(
+                                text = "By signing in, you agree to our ",
+                                color = textMuted.copy(alpha = 0.8f),
+                                fontSize = 11.sp,
+                                letterSpacing = (-0.2).sp,
+                                fontFamily = InterFontFamily
+                            )
                             Text(
                                 text = "Terms & Privacy Policy",
-                                color = ObColors.Lime,
+                                color = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 letterSpacing = (-0.2).sp,
+                                fontFamily = InterFontFamily,
                                 modifier = Modifier.clickable(role = Role.Button, onClick = onOpenTerms)
                             )
                         }
@@ -552,85 +797,141 @@ fun SignInScreen(
         }
     }
 
-    // Password reset dialog
+    // ── 4. FORGOT PASSWORD DIALOG (Samsung One UI Focus Block) ──────────────
     if (showForgotDialog) {
-        Dialog(onDismissRequest = { if (!resetLoading) showForgotDialog = false }) {
-            ObGlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp)
+        Dialog(
+            onDismissRequest = { if (!resetLoading) showForgotDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Column(
-                    modifier = Modifier
-                        .background(ObColors.Night.copy(alpha = 0.96f))
-                        .padding(22.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                OneUiGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 28.dp,
+                    backgroundColor = cardBg,
+                    contentPadding = PaddingValues(22.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Reset Password", style = ObType.Title.copy(fontSize = 20.sp))
-                        Icon(
-                            imageVector = Icons.Rounded.Close,
-                            contentDescription = "Close",
-                            tint = Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clickable { if (!resetLoading) showForgotDialog = false }
+                        Text(
+                            text = "Reset Password",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textPrimary,
+                            fontFamily = InterFontFamily
                         )
+
+                        IconButton(
+                            onClick = { if (!resetLoading) showForgotDialog = false },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.X,
+                                contentDescription = "Close",
+                                tint = textMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
+
+                    Spacer(Modifier.height(8.dp))
 
                     Text(
                         text = "Enter the email associated with your account. We'll send you a secure link to reset your studio password.",
-                        style = ObType.Body,
-                        color = ObColors.TextMuted
+                        fontSize = 13.5.sp,
+                        color = textMuted,
+                        lineHeight = 18.sp,
+                        fontFamily = InterFontFamily
                     )
 
-                    ObTextField(
+                    Spacer(Modifier.height(16.dp))
+
+                    OutlinedTextField(
                         value = resetEmail,
                         onValueChange = {
                             resetEmail = it.trim()
                             resetError = null
                         },
-                        placeholder = "Your email address",
-                        labelBackground = Color(0xFF0F1638),
-                        leading = Icons.Rounded.Email,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
+                        placeholder = {
+                            Text(
+                                "Your email address",
+                                color = textMuted.copy(alpha = 0.65f),
+                                fontSize = 14.5.sp,
+                                fontFamily = InterFontFamily
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Lucide.Mail,
+                                contentDescription = null,
+                                tint = Color(0xFF0381FE),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF0381FE),
+                            unfocusedBorderColor = if (isDark) Color(0x22FFFFFF) else Color(0x18000000),
+                            focusedTextColor = textPrimary,
+                            unfocusedTextColor = textPrimary,
+                            cursorColor = Color(0xFF0381FE),
+                            focusedContainerColor = inputBg,
+                            unfocusedContainerColor = inputBg
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { focus.clearFocus() }),
+                        textStyle = TextStyle(fontSize = 14.5.sp, color = textPrimary, fontFamily = InterFontFamily),
+                        modifier = Modifier.fillMaxWidth()
                     )
 
                     if (resetError != null) {
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             text = resetError!!,
-                            color = ObColors.Danger,
+                            color = Color(0xFFEF4444),
                             fontSize = 12.sp,
+                            fontFamily = InterFontFamily,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
 
                     if (resetSent) {
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             text = "A reset link has been dispatched to your email! Please check your inbox and spam folder.",
-                            color = ObColors.Lime,
+                            color = Color(0xFF10B981),
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Medium,
+                            fontFamily = InterFontFamily,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
 
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(18.dp))
 
-                    ObPrimaryButton(
+                    // Borderless Pill Button in Dialog
+                    OneUiPrimaryPillButton(
                         text = if (resetSent) "Done" else "Send Reset Link",
                         onClick = {
                             if (resetSent) {
                                 showForgotDialog = false
-                                return@ObPrimaryButton
+                                return@OneUiPrimaryPillButton
                             }
                             if (resetEmail.isBlank() || !resetEmail.contains("@")) {
                                 resetError = "Please enter a valid email address"
-                                return@ObPrimaryButton
+                                return@OneUiPrimaryPillButton
                             }
                             scope.launch {
                                 resetLoading = true
@@ -645,10 +946,219 @@ fun SignInScreen(
                                 }
                             }
                         },
-                        loading = resetLoading
+                        loading = resetLoading,
+                        height = 48.dp
                     )
                 }
             }
         }
+    }
+}
+
+// ─── REUSABLE ONE UI BORDERLESS PILL BUTTONS ─────────────────────────────────
+
+/**
+ * Samsung One UI Signature Primary Pill Button:
+ * Uses Samsung One UI primary gradient #0381FE -> #0072DE.
+ * Strictly BORDERLESS per standing user rule: "Do NOT use borders for pills/capsules".
+ */
+@Composable
+fun OneUiPrimaryPillButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    leading: (@Composable () -> Unit)? = null,
+    height: Dp = 52.dp
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.975f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+        label = "primary_pill_scale"
+    )
+
+    val gradient = if (enabled && !loading) {
+        Brush.horizontalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE)))
+    } else {
+        Brush.horizontalGradient(listOf(Color(0xFF0381FE).copy(alpha = 0.45f), Color(0xFF0072DE).copy(alpha = 0.45f)))
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .shadow(
+                elevation = if (enabled && !loading) 8.dp else 0.dp,
+                shape = CircleShape,
+                ambientColor = Color(0x300381FE),
+                spotColor = Color(0x500381FE)
+            )
+            .clip(CircleShape)
+            .background(gradient)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled && !loading,
+                role = Role.Button,
+                onClick = onClick
+            )
+            .padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(19.dp),
+                color = Color.White,
+                strokeWidth = 2.2.dp
+            )
+        } else {
+            leading?.let {
+                it()
+                Spacer(Modifier.width(10.dp))
+            }
+            Text(
+                text = text,
+                color = Color.White,
+                fontSize = 15.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.3).sp,
+                fontFamily = InterFontFamily
+            )
+        }
+    }
+}
+
+/**
+ * Samsung One UI Social Pill Button (Google / Apple):
+ * Strictly BORDERLESS per standing user rule: "Do NOT use borders for pills/capsules".
+ */
+@Composable
+fun OneUiSocialPillButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    isDark: Boolean = true,
+    leading: (@Composable () -> Unit)? = null,
+    height: Dp = 50.dp
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.975f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+        label = "social_pill_scale"
+    )
+
+    val buttonBg = if (isDark) Color(0xFF17171A) else Color(0xFFF2F4F7)
+    val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF0F172A)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(CircleShape)
+            .background(buttonBg)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                enabled = enabled && !loading,
+                role = Role.Button,
+                onClick = onClick
+            )
+            .padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                color = textPrimary,
+                strokeWidth = 2.dp
+            )
+        } else {
+            leading?.let {
+                it()
+                Spacer(Modifier.width(10.dp))
+            }
+            Text(
+                text = text,
+                color = textPrimary,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.3).sp,
+                fontFamily = InterFontFamily
+            )
+        }
+    }
+}
+
+/**
+ * Samsung One UI Tertiary Pill Button (Guest / Explore):
+ * Strictly BORDERLESS per standing user rule: "Do NOT use borders for pills/capsules".
+ */
+@Composable
+fun OneUiTertiaryPillButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isDark: Boolean = true,
+    textPrimary: Color = Color.White,
+    leading: (@Composable () -> Unit)? = null,
+    height: Dp = 46.dp
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.975f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+        label = "tertiary_pill_scale"
+    )
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(CircleShape)
+            .background(if (isDark) Color(0x12FFFFFF) else Color(0x0A000000))
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick
+            )
+            .padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        leading?.let {
+            it()
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text = text,
+            color = textPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = (-0.2).sp,
+            fontFamily = InterFontFamily
+        )
     }
 }
