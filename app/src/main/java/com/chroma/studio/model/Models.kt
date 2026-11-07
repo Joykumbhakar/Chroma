@@ -40,7 +40,9 @@ data class UserProfile(
     val agreedToTermsAt: Long? = null,
     val email: String = "",
     val googleId: String = "",
-    val isOnboarded: Boolean = true,
+    @get:com.google.firebase.firestore.PropertyName("isOnboarded")
+    @set:com.google.firebase.firestore.PropertyName("isOnboarded")
+    var isOnboarded: Boolean = true,
     
     // Account Center Preferences
     @get:com.google.firebase.firestore.PropertyName("privateAccount")
@@ -68,13 +70,20 @@ data class UserProfile(
 
     @get:com.google.firebase.firestore.Exclude
     val dateOfBirthAsLong: Long?
-        get() = when (dateOfBirth) {
-            is Long -> dateOfBirth
-            is Double -> dateOfBirth.toLong()
-            is com.google.firebase.Timestamp -> dateOfBirth.seconds * 1000 + dateOfBirth.nanoseconds / 1000000
-            is java.util.Date -> dateOfBirth.time
-            else -> null
+        get() {
+            val d = dateOfBirth ?: dob
+            return when (d) {
+                is Long -> d
+                is Double -> d.toLong()
+                is com.google.firebase.Timestamp -> d.seconds * 1000 + d.nanoseconds / 1000000
+                is java.util.Date -> d.time
+                else -> null
+            }
         }
+
+    @get:com.google.firebase.firestore.Exclude
+    val effectiveDob: Long?
+        get() = dateOfBirthAsLong
 
 }
 

@@ -139,7 +139,9 @@ fun OscellionOnboardingScreen(
                         activeGoogleUserData = gData
 
                         // Query Firestore database: does this account exist?
-                        val existing = discoverRepo.getUserProfile(user.uid) ?: discoverRepo.getUserByEmail(verifiedEmail)
+                        val existing = discoverRepo.getUserProfile(user.uid)
+                            ?: discoverRepo.getUserByEmail(verifiedEmail)
+                            ?: discoverRepo.getUserByGoogleId(googleId)
 
                         if (authIntentMode == AuthIntentMode.LOGIN) {
                             // Flow A: "Continue with Google"
@@ -377,7 +379,12 @@ fun OscellionOnboardingScreen(
                         },
                         onComplete = { output ->
                             scope.launch {
-                                val uid = activeFirebaseUser?.uid ?: "user_${System.currentTimeMillis()}"
+                                val uid = activeFirebaseUser?.uid ?: auth.currentUser?.uid
+                                if (uid.isNullOrBlank()) {
+                                    Toast.makeText(context, "Authentication session expired. Please sign in again.", Toast.LENGTH_LONG).show()
+                                    currentScreenState = AuthScreenState.WELCOME
+                                    return@launch
+                                }
 
                                 // Upload custom avatar to Supabase Storage if user selected an image from gallery
                                 var finalAvatar = output.avatarUrl

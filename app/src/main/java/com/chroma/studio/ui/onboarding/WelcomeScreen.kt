@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.onboarding
 
+import androidx.compose.ui.draw.drawWithCache
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -84,32 +86,34 @@ fun WelcomeScreen(
             .fillMaxSize()
             .background(Color(0xFF030510))
     ) {
-        // Hardware-accelerated GPU ambient glows (zero CPU overhead)
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            // Top ambient sapphire bloom behind app icon
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF1D4ED8).copy(alpha = 0.28f),
-                        Color(0xFF0F172A).copy(alpha = 0.08f),
-                        Color.Transparent
-                    ),
-                    center = Offset(size.width * 0.5f, size.height * 0.16f),
-                    radius = size.width * 0.85f
-                )
-            )
-            // Bottom soft ambient glow behind action buttons
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF1E293B).copy(alpha = 0.22f),
-                        Color.Transparent
-                    ),
-                    center = Offset(size.width * 0.5f, size.height * 0.94f),
-                    radius = size.width * 0.75f
-                )
-            )
-        }
+        // Hardware-accelerated GPU ambient glows (cached zero-allocation shader)
+        Spacer(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithCache {
+                    val topGlow = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF1D4ED8).copy(alpha = 0.28f),
+                            Color(0xFF0F172A).copy(alpha = 0.08f),
+                            Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.5f, size.height * 0.16f),
+                        radius = size.width * 0.85f
+                    )
+                    val bottomGlow = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF1E293B).copy(alpha = 0.22f),
+                            Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.5f, size.height * 0.94f),
+                        radius = size.width * 0.75f
+                    )
+                    onDrawBehind {
+                        drawCircle(brush = topGlow)
+                        drawCircle(brush = bottomGlow)
+                    }
+                }
+        )
 
         BoxWithConstraints(
             modifier = Modifier

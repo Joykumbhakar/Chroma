@@ -875,7 +875,11 @@ class DiscoverRepository {
         return try {
             val query = usersCollection.whereEqualTo("email", cleanEmail).limit(1).get().await()
             val doc = query.documents.firstOrNull()
-            val prof = doc?.toObject(UserProfile::class.java)
+            var prof = doc?.toObject(UserProfile::class.java)
+            if (prof == null && cleanEmail != email.trim()) {
+                val fallback = usersCollection.whereEqualTo("email", email.trim()).limit(1).get().await()
+                prof = fallback.documents.firstOrNull()?.toObject(UserProfile::class.java)
+            }
             if (prof != null) {
                 profileCache[prof.uid] = prof
             }
@@ -883,6 +887,23 @@ class DiscoverRepository {
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error getting user by email", e)
+            null
+        }
+    }
+
+    suspend fun getUserByGoogleId(googleId: String): UserProfile? {
+        if (googleId.isBlank()) return null
+        return try {
+            val query = usersCollection.whereEqualTo("googleId", googleId.trim()).limit(1).get().await()
+            val doc = query.documents.firstOrNull()
+            val prof = doc?.toObject(UserProfile::class.java)
+            if (prof != null) {
+                profileCache[prof.uid] = prof
+            }
+            prof
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "Error getting user by googleId", e)
             null
         }
     }
@@ -922,6 +943,7 @@ class DiscoverRepository {
                     displayName = displayName.trim(),
                     bio = bio.trim(),
                     dob = dob,
+                    dateOfBirth = dob,
                     avatarUrl = avatarUrl.trim(),
                     interests = interests,
                     gender = gender,

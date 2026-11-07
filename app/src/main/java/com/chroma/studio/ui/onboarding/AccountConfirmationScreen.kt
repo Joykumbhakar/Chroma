@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.onboarding
 
+import androidx.compose.ui.draw.drawWithCache
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
@@ -68,30 +70,34 @@ fun AccountConfirmationScreen(
             .fillMaxSize()
             .background(Color(0xFF030510))
     ) {
-        // Hardware-accelerated GPU ambient glows
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF1D4ED8).copy(alpha = 0.28f),
-                        Color(0xFF0F172A).copy(alpha = 0.08f),
-                        Color.Transparent
-                    ),
-                    center = Offset(size.width * 0.5f, size.height * 0.22f),
-                    radius = size.width * 0.85f
-                )
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF2563EB).copy(alpha = 0.20f),
-                        Color.Transparent
-                    ),
-                    center = Offset(size.width * 0.5f, size.height * 0.85f),
-                    radius = size.width * 0.70f
-                )
-            )
-        }
+        // Hardware-accelerated GPU ambient glows (cached zero-allocation shader)
+        Spacer(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithCache {
+                    val topGlow = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF1D4ED8).copy(alpha = 0.28f),
+                            Color(0xFF0F172A).copy(alpha = 0.08f),
+                            Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.5f, size.height * 0.22f),
+                        radius = size.width * 0.85f
+                    )
+                    val bottomGlow = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF2563EB).copy(alpha = 0.20f),
+                            Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.5f, size.height * 0.85f),
+                        radius = size.width * 0.70f
+                    )
+                    onDrawBehind {
+                        drawCircle(brush = topGlow)
+                        drawCircle(brush = bottomGlow)
+                    }
+                }
+        )
 
         Column(
             modifier = Modifier

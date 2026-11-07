@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.onboarding
 
+import androidx.compose.ui.draw.drawWithCache
+
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -185,20 +187,25 @@ fun OnboardingWizard(
             .fillMaxSize()
             .background(Color(0xFF030510))
     ) {
-        // Ambient background glow
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF1D4ED8).copy(alpha = 0.22f),
-                        Color(0xFF0F172A).copy(alpha = 0.05f),
-                        Color.Transparent
-                    ),
-                    center = Offset(size.width * 0.5f, size.height * 0.15f),
-                    radius = size.width * 0.85f
-                )
-            )
-        }
+        // Ambient background glow (cached zero-allocation shader)
+        Spacer(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithCache {
+                    val glowBrush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF1D4ED8).copy(alpha = 0.22f),
+                            Color(0xFF0F172A).copy(alpha = 0.05f),
+                            Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.5f, size.height * 0.15f),
+                        radius = size.width * 0.85f
+                    )
+                    onDrawBehind {
+                        drawCircle(brush = glowBrush)
+                    }
+                }
+        )
 
         Column(
             modifier = Modifier

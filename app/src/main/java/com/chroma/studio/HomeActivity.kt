@@ -953,6 +953,10 @@ private fun AuthenticatedRoute(
                                         navController.navigate("login") {
                                             popUpTo("terms_agreement") { inclusive = true }
                                         }
+                                    } else if (!prefs.getBoolean("has_completed_post_onboarding", false)) {
+                                        navController.navigate("post_onboarding") {
+                                            popUpTo("terms_agreement") { inclusive = true }
+                                        }
                                     } else {
                                         navController.navigate("main") {
                                             popUpTo("terms_agreement") { inclusive = true }
