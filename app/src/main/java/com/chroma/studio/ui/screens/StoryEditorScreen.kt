@@ -355,6 +355,7 @@ fun StoryEditorScreen(
                 isBold = isBold,
                 isItalic = isItalic,
                 isUnderline = isUnderline,
+                isStrikethrough = isStrikethrough,
                 isStroke = isStroke,
                 isHighlight = isHighlight,
                 headingLevel = headingLevel,

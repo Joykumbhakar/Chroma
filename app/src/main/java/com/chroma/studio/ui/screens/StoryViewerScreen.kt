@@ -11,6 +11,8 @@ import androidx.compose.ui.platform.LocalDensity
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -87,27 +89,101 @@ private fun StorySlideContent(
     story: Story,
     modifier: Modifier = Modifier
 ) {
+    val media = story.mediaUrl
+    val hasImage = media.isNotBlank() && !media.startsWith("text:") && !media.startsWith("markdown://")
+    val isExplicitText = media.startsWith("text:") || media.startsWith("markdown://")
+    val hasText = story.textContent.isNotBlank() || isExplicitText
+
+    val textBody = when {
+        story.textContent.isNotBlank() -> story.textContent
+        media.startsWith("text:") && media != "text:story" -> media.removePrefix("text:")
+        media.startsWith("markdown://") -> media.removePrefix("markdown://")
+        else -> ""
+    }
+
+    val formatState = remember(story.decompressedTextFormat) {
+        try {
+            val resolvedFormat = story.decompressedTextFormat
+            if (resolvedFormat.isNotBlank() && resolvedFormat != "{}") {
+                StoryViewerJson.decodeFromString<StatusFormatState>(resolvedFormat)
+            } else {
+                StatusFormatState()
+            }
+        } catch (e: Exception) {
+            StatusFormatState()
+        }
+    }
+
+    val gradientTheme = StoryGradientThemes.find { it.id.equals(formatState.gradientPreset, ignoreCase = true) }
+    val backgroundBrush = remember(gradientTheme, formatState.gradientPreset, story.backgroundColor, formatState.backgroundColorHex) {
+        when {
+            gradientTheme != null && formatState.gradientPreset != "None" -> {
+                Brush.verticalGradient(gradientTheme.colors)
+            }
+            story.backgroundColor.isNotBlank() -> {
+                val solidColor = try { Color(android.graphics.Color.parseColor(story.backgroundColor)) } catch (e: Exception) { Color(0xFF0F0C20) }
+                Brush.verticalGradient(listOf(solidColor, solidColor))
+            }
+            formatState.backgroundColorHex.isNotBlank() && formatState.backgroundColorHex != "#FF1F1C2C" -> {
+                val solidColor = try { Color(android.graphics.Color.parseColor(formatState.backgroundColorHex)) } catch (e: Exception) { Color(0xFF0F0C20) }
+                Brush.verticalGradient(listOf(solidColor, solidColor))
+            }
+            else -> {
+                Brush.verticalGradient(StoryGradientThemes.first().colors)
+            }
+        }
+    }
+
+    val textColor = remember(hasImage, gradientTheme, formatState.textColorHex) {
+        if (hasImage) {
+            Color.White
+        } else {
+            try {
+                Color(android.graphics.Color.parseColor(formatState.textColorHex))
+            } catch (e: Exception) {
+                gradientTheme?.defaultTextColor ?: Color.White
+            }
+        }
+    }
+
+    val highlightColor = remember(formatState.isHighlight, formatState.highlightColorHex) {
+        if (formatState.isHighlight) {
+            try {
+                Color(android.graphics.Color.parseColor(formatState.highlightColorHex)).copy(alpha = 0.35f)
+            } catch (e: Exception) {
+                Color(0xFFFFD60A).copy(alpha = 0.35f)
+            }
+        } else {
+            Color.Transparent
+        }
+    }
+
+    val context = LocalContext.current
+    val font = remember(context, formatState.fontFamily) {
+        StoryFonts.getFontFamily(context, formatState.fontFamily)
+    }
+
+    val align = when (formatState.textAlign) {
+        "center" -> TextAlign.Center
+        "right" -> TextAlign.Right
+        else -> TextAlign.Left
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .then(
+                if (hasImage) {
+                    Modifier.background(Color.Black)
+                } else {
+                    Modifier.background(backgroundBrush)
+                }
+            )
     ) {
-        val media = story.mediaUrl
-        val hasImage = media.isNotBlank() && !media.startsWith("text:") && !media.startsWith("markdown://")
-        val isExplicitText = media.startsWith("text:") || media.startsWith("markdown://")
-        val hasText = story.textContent.isNotBlank() || isExplicitText
-
-        val textBody = when {
-            story.textContent.isNotBlank() -> story.textContent
-            media.startsWith("text:") && media != "text:story" -> media.removePrefix("text:")
-            media.startsWith("markdown://") -> media.removePrefix("markdown://")
-            else -> ""
-        }
-
-        // 1. Render Background Image if present (full-bleed 9:16 layout)
+        // 1. Render Background Image if present
         if (hasImage) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
+                model = ImageRequest.Builder(context)
                     .data(media)
                     .crossfade(true)
                     .build(),
@@ -116,7 +192,7 @@ private fun StorySlideContent(
                 contentScale = ContentScale.Crop
             )
 
-            // Scrim overlay to guarantee text legibility when an image is present
+            // Protective scrim overlay matching Story Editor preview
             if (hasText) {
                 Box(
                     modifier = Modifier
@@ -124,9 +200,8 @@ private fun StorySlideContent(
                         .background(
                             Brush.verticalGradient(
                                 listOf(
-                                    Color.Black.copy(alpha = 0.35f),
-                                    Color.Black.copy(alpha = 0.15f),
-                                    Color.Black.copy(alpha = 0.55f)
+                                    Color.Black.copy(alpha = 0.38f),
+                                    Color.Black.copy(alpha = 0.65f)
                                 )
                             )
                         )
@@ -134,189 +209,182 @@ private fun StorySlideContent(
             }
         }
 
-        // 2. Render Formatted Story Card (over image or standalone with gradient/solid brush)
+        // 2. Render Formatted Story Content matching the preview in Story Editor
         if (hasText) {
-            val formatState = try {
-                val resolvedFormat = story.decompressedTextFormat
-                if (resolvedFormat.isNotBlank() && resolvedFormat != "{}") {
-                    StoryViewerJson.decodeFromString<StatusFormatState>(resolvedFormat)
+            val rawTitle = remember(formatState.title, textBody) {
+                if (formatState.title.isNotBlank()) {
+                    formatState.title
+                } else if (textBody.startsWith("# ")) {
+                    textBody.substringBefore("\n\n").removePrefix("# ").trim()
                 } else {
-                    StatusFormatState()
+                    ""
                 }
-            } catch (e: Exception) {
-                StatusFormatState()
             }
 
-            val gradientTheme = StoryGradientThemes.find { it.id == formatState.gradientPreset }
-            val backgroundBrush = if (gradientTheme != null && formatState.gradientPreset != "None") {
-                Brush.verticalGradient(gradientTheme.colors)
-            } else {
-                val solidBg = try { Color(android.graphics.Color.parseColor(if (story.backgroundColor.isNotBlank()) story.backgroundColor else formatState.backgroundColorHex)) } catch (e: Exception) { Color(0xFF1F1C2C) }
-                Brush.verticalGradient(listOf(solidBg, solidBg))
+            val bodyOnly = remember(rawTitle, textBody) {
+                if (rawTitle.isNotBlank() && textBody.startsWith("# ")) {
+                    textBody.substringAfter("\n\n").trim()
+                } else {
+                    textBody.trim()
+                }
             }
 
-            val textColor = try { Color(android.graphics.Color.parseColor(formatState.textColorHex)) } catch (e: Exception) { Color.White }
-            val highlightColor = if (formatState.isHighlight) {
-                try { Color(android.graphics.Color.parseColor(formatState.highlightColorHex)).copy(alpha = 0.35f) } catch (e: Exception) { textColor.copy(alpha = 0.25f) }
-            } else Color.Transparent
+            val headlineStyle = TextStyle(
+                fontFamily = font,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = textColor,
+                textAlign = align
+            )
 
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val font = remember(context, formatState.fontFamily) {
-                StoryFonts.getFontFamily(context, formatState.fontFamily)
-            }
+            val bodyTextStyle = TextStyle(
+                fontFamily = font,
+                fontSize = when (formatState.headingLevel) {
+                    2 -> 20.sp
+                    3 -> 17.sp
+                    else -> 15.sp
+                },
+                fontWeight = if (formatState.isBold) FontWeight.Bold else FontWeight.Normal,
+                fontStyle = if (formatState.isItalic) FontStyle.Italic else FontStyle.Normal,
+                textDecoration = when {
+                    formatState.isUnderline && formatState.isStrikethrough -> TextDecoration.combine(listOf(TextDecoration.Underline, TextDecoration.LineThrough))
+                    formatState.isUnderline -> TextDecoration.Underline
+                    formatState.isStrikethrough -> TextDecoration.LineThrough
+                    else -> TextDecoration.None
+                },
+                color = textColor,
+                textAlign = align,
+                background = highlightColor,
+                lineHeight = when (formatState.headingLevel) {
+                    2 -> 28.sp
+                    3 -> 24.sp
+                    else -> 22.sp
+                },
+                drawStyle = if (formatState.isStroke) Stroke(
+                    miter = 8f,
+                    width = 2.5f,
+                    join = StrokeJoin.Round
+                ) else androidx.compose.ui.graphics.drawscope.Fill
+            )
 
-            val align = when (formatState.textAlign) {
-                "left" -> androidx.compose.ui.text.style.TextAlign.Left
-                "right" -> androidx.compose.ui.text.style.TextAlign.Right
-                else -> androidx.compose.ui.text.style.TextAlign.Center
-            }
-
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (!hasImage) Modifier.background(backgroundBrush) else Modifier)
-                    .padding(horizontal = 24.dp, vertical = 64.dp),
-                contentAlignment = Alignment.Center
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(top = 76.dp, bottom = 84.dp, start = 20.dp, end = 20.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = if (formatState.textAlign == "center") Alignment.CenterHorizontally else if (formatState.textAlign == "right") Alignment.End else Alignment.Start
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color.Black.copy(alpha = if (hasImage) 0.40f else 0.25f))
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
-                        .padding(24.dp),
-                    horizontalAlignment = if (formatState.textAlign == "left") Alignment.Start else if (formatState.textAlign == "right") Alignment.End else Alignment.CenterHorizontally
-                ) {
-                    // Category Tag Badge
-                    if (formatState.tag.isNotBlank()) {
-                        val catItem = StoryCategories.find { it.name.equals(formatState.tag, ignoreCase = true) }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.White.copy(alpha = 0.2f))
-                                .padding(horizontal = 9.dp, vertical = 4.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.5.dp)) {
-                                if (catItem != null) {
-                                    Icon(
-                                        imageVector = catItem.icon,
-                                        contentDescription = null,
-                                        tint = textColor,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                }
-                                Text(
-                                    text = formatState.tag,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = textColor
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                    }
-
-                    // Title if present
-                    if (formatState.title.isNotBlank()) {
-                        Text(
-                            text = formatState.title,
-                            style = TextStyle(
-                                fontFamily = font,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = textColor,
-                                textAlign = align
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(textColor.copy(alpha = 0.15f)))
-                        Spacer(Modifier.height(12.dp))
-                    }
-
-                    // Body Content / Quote
-                    if (textBody.isNotBlank()) {
-                        val bodyOnly = if (formatState.title.isNotBlank() && textBody.startsWith("# ")) {
-                            textBody.substringAfter("\n\n").ifBlank { textBody }
-                        } else {
-                            textBody
-                        }
-
-                        if (formatState.isQuote) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(textColor.copy(alpha = 0.08f))
-                                    .border(2.dp, Brush.verticalGradient(listOf(Color(0xFF0381FE), Color(0xFFFF2D55))), RoundedCornerShape(14.dp))
-                                    .padding(14.dp),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                Text("“", fontSize = 28.sp, fontWeight = FontWeight.Black, color = textColor)
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = bodyOnly,
-                                    style = TextStyle(
-                                        fontFamily = font,
-                                        fontSize = if (formatState.headingLevel == 2) 22.sp else 16.sp,
-                                        fontWeight = if (formatState.isBold) FontWeight.Bold else FontWeight.Normal,
-                                        fontStyle = FontStyle.Italic,
-                                        color = textColor,
-                                        textAlign = align
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        } else {
-                            Text(
-                                text = bodyOnly,
-                                style = TextStyle(
-                                    fontFamily = font,
-                                    fontSize = if (formatState.headingLevel == 2) 24.sp else if (formatState.headingLevel == 3) 19.sp else 16.sp,
-                                    fontWeight = if (formatState.isBold) FontWeight.Bold else FontWeight.Normal,
-                                    fontStyle = if (formatState.isItalic) FontStyle.Italic else FontStyle.Normal,
-                                    textDecoration = if (formatState.isUnderline) TextDecoration.Underline else TextDecoration.None,
-                                    color = textColor,
-                                    textAlign = align,
-                                    background = highlightColor,
-                                    lineHeight = if (formatState.headingLevel == 2) 32.sp else 23.sp,
-                                    drawStyle = if (formatState.isStroke) Stroke(
-                                        miter = 8f,
-                                        width = 2.5f,
-                                        join = StrokeJoin.Round
-                                    ) else androidx.compose.ui.graphics.drawscope.Fill
-                                ),
-                                modifier = Modifier.fillMaxWidth()
+                // Category Tag Badge
+                val selectedCatItem = StoryCategories.find { it.name.equals(formatState.tag, ignoreCase = true) }
+                if (selectedCatItem != null || formatState.tag.isNotBlank()) {
+                    Row(
+                        modifier = Modifier
+                            .align(if (align == TextAlign.Center) Alignment.CenterHorizontally else if (align == TextAlign.Right) Alignment.End else Alignment.Start)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(textColor.copy(alpha = 0.15f))
+                            .padding(horizontal = 8.dp, vertical = 3.5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (selectedCatItem != null) {
+                            Icon(
+                                imageVector = selectedCatItem.icon,
+                                contentDescription = null,
+                                tint = textColor,
+                                modifier = Modifier.size(11.dp)
                             )
                         }
+                        Text(
+                            text = selectedCatItem?.name ?: formatState.tag,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textColor
+                        )
                     }
+                    Spacer(Modifier.height(10.dp))
+                }
 
-                    // Mood pill at bottom
-                    if (formatState.mood.isNotBlank()) {
-                        val moodItem = StoryMoods.find { it.name.equals(formatState.mood, ignoreCase = true) }
-                        Spacer(Modifier.height(12.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.Black.copy(alpha = 0.3f))
-                                .padding(horizontal = 9.dp, vertical = 4.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.5.dp)) {
-                                if (moodItem != null) {
-                                    Icon(
-                                        imageVector = moodItem.icon,
-                                        contentDescription = null,
-                                        tint = textColor.copy(alpha = 0.9f),
-                                        modifier = Modifier.size(11.5.dp)
-                                    )
-                                }
-                                Text(
-                                    text = formatState.mood,
-                                    fontSize = 11.sp,
-                                    color = textColor.copy(alpha = 0.9f)
-                                )
-                            }
+                // Headline / Title
+                if (rawTitle.isNotBlank()) {
+                    Text(
+                        text = rawTitle,
+                        style = headlineStyle,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(textColor.copy(alpha = 0.15f))
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+
+                // Body Content / Quote
+                if (formatState.isQuote) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(textColor.copy(alpha = 0.08f))
+                            .border(
+                                1.dp,
+                                Brush.verticalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE))),
+                                RoundedCornerShape(8.dp)
+                            )
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = "\"",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Black,
+                            color = textColor
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = bodyOnly,
+                            style = bodyTextStyle.copy(fontStyle = FontStyle.Italic),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                } else if (bodyOnly.isNotBlank()) {
+                    Text(
+                        text = bodyOnly,
+                        style = bodyTextStyle,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Mood Badge
+                val selectedMoodItem = StoryMoods.find { it.name.equals(formatState.mood, ignoreCase = true) }
+                if (selectedMoodItem != null || formatState.mood.isNotBlank()) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .align(if (align == TextAlign.Center) Alignment.CenterHorizontally else if (align == TextAlign.Right) Alignment.End else Alignment.Start)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(textColor.copy(alpha = 0.15f))
+                            .padding(horizontal = 8.dp, vertical = 3.5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (selectedMoodItem != null) {
+                            Icon(
+                                imageVector = selectedMoodItem.icon,
+                                contentDescription = null,
+                                tint = textColor.copy(alpha = 0.85f),
+                                modifier = Modifier.size(11.dp)
+                            )
                         }
+                        Text(
+                            text = selectedMoodItem?.name ?: formatState.mood,
+                            fontSize = 10.5.sp,
+                            color = textColor.copy(alpha = 0.85f)
+                        )
                     }
                 }
             }
@@ -611,12 +679,48 @@ fun StoryViewerScreen(
                 }
             }
 
+            val currentStoryFormatState = remember(currentStory) {
+                try {
+                    val resolvedFormat = currentStory?.decompressedTextFormat ?: ""
+                    if (resolvedFormat.isNotBlank() && resolvedFormat != "{}") {
+                        StoryViewerJson.decodeFromString<StatusFormatState>(resolvedFormat)
+                    } else {
+                        StatusFormatState()
+                    }
+                } catch (e: Exception) {
+                    StatusFormatState()
+                }
+            }
+
+            val currentHasImage = remember(currentStory) {
+                val media = currentStory?.mediaUrl ?: ""
+                media.isNotBlank() && !media.startsWith("text:") && !media.startsWith("markdown://")
+            }
+
+            val topBarTextColor = remember(currentHasImage, currentStoryFormatState) {
+                if (currentHasImage) {
+                    Color.White
+                } else {
+                    val gradientTheme = StoryGradientThemes.find { it.id.equals(currentStoryFormatState.gradientPreset, ignoreCase = true) }
+                    if (gradientTheme != null) {
+                        gradientTheme.defaultTextColor
+                    } else {
+                        try {
+                            Color(android.graphics.Color.parseColor(currentStoryFormatState.textColorHex))
+                        } catch (e: Exception) {
+                            Color.White
+                        }
+                    }
+                }
+            }
+
             // ── Top Bar ───────────────────────────────────────────────────────────────
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .padding(top = 44.dp, start = 12.dp, end = 12.dp)
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, start = 12.dp, end = 12.dp)
             ) {
                 // Segmented Progress Bars
                 Row(
@@ -636,13 +740,13 @@ fun StoryViewerScreen(
                                 .weight(1f)
                                 .height(2.5.dp)
                                 .clip(RoundedCornerShape(2.dp))
-                                .background(Color.White.copy(alpha = 0.35f))
+                                .background(topBarTextColor.copy(alpha = 0.35f))
                         ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxHeight()
                                     .fillMaxWidth(segmentProgress)
-                                    .background(Color.White)
+                                    .background(topBarTextColor)
                             )
                         }
                     }
@@ -682,7 +786,7 @@ fun StoryViewerScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = if (isOwner) "Your Story" else group.userProfile.displayName.ifBlank { "User" },
-                                    color = Color.White,
+                                    color = topBarTextColor,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
                                 )
@@ -695,7 +799,7 @@ fun StoryViewerScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         text = storyFormatTimeAgo(story.timestamp),
-                                        color = Color.White.copy(alpha = 0.75f),
+                                        color = topBarTextColor.copy(alpha = 0.75f),
                                         fontSize = 11.5.sp
                                     )
                                     if (story.audienceType == "only_friends") {
@@ -753,7 +857,7 @@ fun StoryViewerScreen(
                         Icon(
                             Lucide.X,
                             contentDescription = "Close",
-                            tint = Color.White,
+                            tint = topBarTextColor,
                             modifier = Modifier
                                 .size(24.dp)
                                 .clickable { onClose() }
@@ -779,8 +883,7 @@ fun StoryViewerScreen(
                                 .align(Alignment.BottomCenter)
                                 .clip(RoundedCornerShape(24.dp))
                                 .background(Color.Black.copy(alpha = 0.6f))
-                                .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
-                                .clickable { showViewers = true }
+                                                                .clickable { showViewers = true }
                                 .padding(horizontal = 18.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -817,8 +920,7 @@ fun StoryViewerScreen(
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(20.dp))
                                         .background(Color.Black.copy(alpha = 0.65f))
-                                        .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                                                                .padding(horizontal = 12.dp, vertical = 8.dp),
                                     horizontalArrangement = Arrangement.SpaceAround,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -865,8 +967,7 @@ fun StoryViewerScreen(
                                         .height(44.dp)
                                         .clip(RoundedCornerShape(22.dp))
                                         .background(Color.White.copy(alpha = 0.18f))
-                                        .border(0.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(22.dp))
-                                        .padding(horizontal = 14.dp),
+                                                                                .padding(horizontal = 14.dp),
                                     contentAlignment = Alignment.CenterStart
                                 ) {
                                     Row(

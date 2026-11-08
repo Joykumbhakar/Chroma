@@ -10,6 +10,7 @@ data class StatusFormatState(
     val isBold: Boolean = false,
     val isItalic: Boolean = false,
     val isUnderline: Boolean = false,
+    val isStrikethrough: Boolean = false,
     val isStroke: Boolean = false,
     val isHighlight: Boolean = false,
     val headingLevel: Int = 1, // 1 = Normal, 2 = Large/H1, 3 = H2
