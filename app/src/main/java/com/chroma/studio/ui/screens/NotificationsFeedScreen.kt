@@ -1934,6 +1934,11 @@ fun NotificationsFeedScreen(
                     }
 
                     notificationsList = fetched
+                    if (fetched.isEmpty() && currentUid != null) {
+                        scope.launch {
+                            com.chroma.studio.data.NotificationDispatcher.sendWelcomeNotification(currentUid)
+                        }
+                    }
 
                 }
 

@@ -135,23 +135,33 @@ fun SignInScreen(
             isSigningIn = true
             loginError = null
             try {
-                val resolvedEmail = if (cleanIdentifier.contains("@")) {
-                    cleanIdentifier
+                val isEmailFormat = cleanIdentifier.contains("@")
+                val customEmail = "${cleanIdentifier.lowercase()}@oscellion.com"
+                val resolvedEmail = if (isEmailFormat) {
+                    cleanIdentifier.lowercase()
                 } else {
                     val localMatch = savedAccounts.find { it.username.equals(cleanIdentifier, ignoreCase = true) }?.email
-                    if (!localMatch.isNullOrBlank()) {
+                    if (!localMatch.isNullOrBlank() && localMatch.contains("@")) {
                         localMatch
                     } else {
-                        val profile = repo.getUserByUsername(cleanIdentifier)
-                        if (profile != null && profile.username.isNotBlank()) {
-                            "${cleanIdentifier.lowercase().trim()}@chromastudio.app"
-                        } else {
-                            "${cleanIdentifier.lowercase().trim()}@chromastudio.app"
-                        }
+                        customEmail
                     }
                 }
 
-                val authResult = auth.signInWithEmailAndPassword(resolvedEmail, password).await()
+                val authResult = try {
+                    auth.signInWithEmailAndPassword(resolvedEmail, password).await()
+                } catch (e: Exception) {
+                    if (!isEmailFormat) {
+                        val profile = repo.getUserByUsername(cleanIdentifier)
+                        if (profile != null && profile.email.isNotBlank() && !profile.email.equals(resolvedEmail, ignoreCase = true)) {
+                            auth.signInWithEmailAndPassword(profile.email, password).await()
+                        } else {
+                            throw e
+                        }
+                    } else {
+                        throw e
+                    }
+                }
                 val user = authResult.user ?: throw IllegalStateException("Authentication failed: No user returned")
 
                 val profile = repo.getUserProfile(user.uid)
@@ -215,50 +225,6 @@ fun SignInScreen(
             .fillMaxSize()
             .background(screenBg)
     ) {
-        // Hardware-accelerated GPU ambient glows (Samsung One UI signature glow)
-        Spacer(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawWithCache {
-                    val topGlow = Brush.radialGradient(
-                        colors = if (isDark) {
-                            listOf(
-                                Color(0xFF1D4ED8).copy(alpha = 0.26f),
-                                Color(0xFF0F172A).copy(alpha = 0.08f),
-                                Color.Transparent
-                            )
-                        } else {
-                            listOf(
-                                Color(0xFF0381FE).copy(alpha = 0.12f),
-                                Color(0xFFE0EDFF).copy(alpha = 0.05f),
-                                Color.Transparent
-                            )
-                        },
-                        center = Offset(size.width * 0.5f, size.height * 0.14f),
-                        radius = size.width * 0.85f
-                    )
-                    val bottomGlow = Brush.radialGradient(
-                        colors = if (isDark) {
-                            listOf(
-                                Color(0xFF1E293B).copy(alpha = 0.20f),
-                                Color.Transparent
-                            )
-                        } else {
-                            listOf(
-                                Color(0xFF93C5FD).copy(alpha = 0.10f),
-                                Color.Transparent
-                            )
-                        },
-                        center = Offset(size.width * 0.5f, size.height * 0.95f),
-                        radius = size.width * 0.75f
-                    )
-                    onDrawBehind {
-                        drawCircle(brush = topGlow)
-                        drawCircle(brush = bottomGlow)
-                    }
-                }
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -356,12 +322,11 @@ fun SignInScreen(
                         )
                     }
 
-                    // ── 2. INTERACTION AREA: 26dp Squircle Focus Block Card ────────
-                    OneUiGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        cornerRadius = 26.dp,
-                        backgroundColor = cardBg,
-                        contentPadding = PaddingValues(20.dp)
+                    // ── 2. INTERACTION AREA (Direct on main background) ────────
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp)
                     ) {
                         // Quick Saved Accounts Selector (if available)
                         if (savedAccounts.isNotEmpty()) {

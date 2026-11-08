@@ -240,37 +240,29 @@ fun OneUiStickyTopBar(
  * Signature Oscillom / Samsung One UI multi-layer specular rim
  */
 val IconicGlassBorderOuterBrush = Brush.linearGradient(
-    0.00f to Color.White.copy(alpha = 0.58f),
-    0.28f to Color(0xFF38BDF8).copy(alpha = 0.42f),
-    0.65f to Color(0xFF0381FE).copy(alpha = 0.28f),
-    1.00f to Color.White.copy(alpha = 0.38f),
+    0.00f to Color(0x1F808080),
+    1.00f to Color(0x14808080),
     start = Offset.Zero,
     end = Offset.Infinite
 )
 
 val IconicGlassBorderInnerBrush = Brush.linearGradient(
-    0.00f to Color.White.copy(alpha = 0.32f),
-    0.50f to Color.Transparent,
-    1.00f to Color(0xFF38BDF8).copy(alpha = 0.22f),
+    0.00f to Color.Transparent,
+    1.00f to Color.Transparent,
     start = Offset.Zero,
     end = Offset.Infinite
 )
 
 /**
- * Iconic Double Edge Glass Border:
- * Multi-layer specular glass rim combining:
- * 1. Outer hairline stroke: Multi-stop linear gradient from crisp white specular catch (0.58f)
- *    to cyan lens bloom (0.42f) and Galaxy AI deep blue (0.28f).
- * 2. Inner refracted stroke: Inset specular meniscus highlight creating the signature double-edge refraction.
- *
- * Designed for Samsung One UI cards, squircle containers, dialogs, and panels.
+ * Clean, subtle, professional thin border for Samsung One UI containers.
+ * Uses a single hairline 0.5.dp stroke with subtle neutral tones.
  * (Note: Never applied to pill/capsule shapes per standing user rules).
  */
 fun Modifier.doubleEdgeGlassBorder(
     cornerRadius: Dp = 26.dp,
-    outerWidth: Dp = 1.dp,
-    innerWidth: Dp = 1.dp,
-    inset: Dp = 1.2.dp,
+    outerWidth: Dp = 0.5.dp,
+    innerWidth: Dp = 0.dp,
+    inset: Dp = 0.dp,
     outerBorderBrush: Brush = IconicGlassBorderOuterBrush,
     innerBorderBrush: Brush = IconicGlassBorderInnerBrush
 ): Modifier = this.drawWithCache {
@@ -283,7 +275,7 @@ fun Modifier.doubleEdgeGlassBorder(
     onDrawWithContent {
         drawContent()
 
-        // 1. Outer crisp specular rim
+        // Single clean hairline outer border
         drawRoundRect(
             brush = outerBorderBrush,
             topLeft = Offset(halfOuter, halfOuter),
@@ -292,8 +284,8 @@ fun Modifier.doubleEdgeGlassBorder(
             style = Stroke(width = outerStrokePx)
         )
 
-        // 2. Inner refracted glass edge (the iconic second edge)
-        if (size.width > insetPx * 2 && size.height > insetPx * 2) {
+        // Optional inner border (only if width > 0)
+        if (innerStrokePx > 0f && size.width > insetPx * 2 && size.height > insetPx * 2) {
             val innerCornerRadiusPx = (cornerRadiusPx - insetPx).coerceAtLeast(0f)
             drawRoundRect(
                 brush = innerBorderBrush,

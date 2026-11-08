@@ -94,50 +94,6 @@ fun WelcomeScreen(
             .fillMaxSize()
             .background(screenBg)
     ) {
-        // Hardware-accelerated GPU ambient glows (cached zero-allocation shader)
-        Spacer(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawWithCache {
-                    val topGlow = Brush.radialGradient(
-                        colors = if (isDark) {
-                            listOf(
-                                Color(0xFF1D4ED8).copy(alpha = 0.28f),
-                                Color(0xFF0F172A).copy(alpha = 0.08f),
-                                Color.Transparent
-                            )
-                        } else {
-                            listOf(
-                                Color(0xFF0A84FF).copy(alpha = 0.12f),
-                                Color(0xFFE0EDFF).copy(alpha = 0.05f),
-                                Color.Transparent
-                            )
-                        },
-                        center = Offset(size.width * 0.5f, size.height * 0.16f),
-                        radius = size.width * 0.85f
-                    )
-                    val bottomGlow = Brush.radialGradient(
-                        colors = if (isDark) {
-                            listOf(
-                                Color(0xFF1E293B).copy(alpha = 0.22f),
-                                Color.Transparent
-                            )
-                        } else {
-                            listOf(
-                                Color(0xFF93C5FD).copy(alpha = 0.10f),
-                                Color.Transparent
-                            )
-                        },
-                        center = Offset(size.width * 0.5f, size.height * 0.94f),
-                        radius = size.width * 0.75f
-                    )
-                    onDrawBehind {
-                        drawCircle(brush = topGlow)
-                        drawCircle(brush = bottomGlow)
-                    }
-                }
-        )
-
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -193,12 +149,12 @@ fun WelcomeScreen(
 
                         Spacer(Modifier.height(24.dp))
 
-                        // ── SAMSUNG ONE UI VALUE PROPOSITION CARD (DOUBLE EDGE GLASS BORDER) ──
-                        OneUiGlassCard(
-                            cornerRadius = 26.dp,
-                            useDoubleEdgeGlassBorder = true,
-                            backgroundColor = cardBg,
-                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 20.dp)
+                                                // ── FEATURE VALUE PROPOSITIONS (DIRECT ON MAIN BACKGROUND) ──
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             WelcomeFeatureRow(
                                 icon = Lucide.Palette,
@@ -206,21 +162,11 @@ fun WelcomeScreen(
                                 title = "Creative Canvas",
                                 description = "Multi-layer studio with real-time shader rendering"
                             )
-                            HorizontalDivider(
-                                color = cardDivider,
-                                thickness = 0.5.dp,
-                                modifier = Modifier.padding(vertical = 12.dp)
-                            )
                             WelcomeFeatureRow(
                                 icon = Lucide.Globe,
                                 iconColor = Color(0xFF3E91FF), textColor = textPrimary, descriptionColor = textMuted, isDark = isDark,
                                 title = "Global Community",
                                 description = "Explore trending masterworks, video drops & remixes"
-                            )
-                            HorizontalDivider(
-                                color = cardDivider,
-                                thickness = 0.5.dp,
-                                modifier = Modifier.padding(vertical = 12.dp)
                             )
                             WelcomeFeatureRow(
                                 icon = Lucide.ShieldCheck,
@@ -445,7 +391,7 @@ private fun WelcomePrimaryPillButton(
             .shadow(if (enabled) 6.dp else 0.dp, CircleShape, ambientColor = Color(0x40000000), spotColor = Color(0x60000000))
             .clip(CircleShape)
             .background(Color.White)
-            .clickable(
+                        .clickable(
                 interactionSource = interaction,
                 indication = null,
                 enabled = enabled && !loading,
@@ -511,7 +457,7 @@ private fun WelcomeSecondaryPillButton(
             }
             .clip(CircleShape)
             .background(if (isDark) Color(0xFF17171A) else Color(0xFFF2F4F7))
-            .clickable(
+                        .clickable(
                 interactionSource = interaction,
                 indication = null,
                 enabled = enabled && !loading,

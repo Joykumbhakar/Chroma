@@ -920,11 +920,13 @@ class DiscoverRepository {
         email: String = "",
         googleId: String = "",
         bio: String = "",
-        isOnboarded: Boolean = true
+        isOnboarded: Boolean = true,
+        customEmail: String = ""
     ): Boolean {
         return try {
             val now = System.currentTimeMillis()
             val cleanUsername = username.trim().lowercase()
+            val finalCustomEmail = if (customEmail.isNotBlank()) customEmail.trim().lowercase() else "${cleanUsername}@oscellion.com"
             var createdProfile: UserProfile? = null
 
             // Check availability and register atomically in transaction
@@ -954,12 +956,18 @@ class DiscoverRepository {
                     followersCount = 0,
                     followingCount = 0,
                     email = email.trim().lowercase(),
+                    customEmail = finalCustomEmail,
                     googleId = googleId.trim(),
                     isOnboarded = isOnboarded,
                     publicKey = com.chroma.studio.utils.CryptoHelper.getPublicKeyBase64()
                 )
                 
-                transaction.set(usernameRef, mapOf("uid" to uid, "createdAt" to now))
+                transaction.set(usernameRef, mapOf(
+                    "uid" to uid,
+                    "createdAt" to now,
+                    "customEmail" to finalCustomEmail,
+                    "email" to email.trim().lowercase()
+                ))
                 transaction.set(userRef, profile)
                 createdProfile = profile
             }.await()

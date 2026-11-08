@@ -32,6 +32,7 @@ import com.chroma.studio.model.UserProfile
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.OAuthProvider
 import kotlinx.coroutines.Dispatchers
@@ -400,6 +401,24 @@ fun OscellionOnboardingScreen(
                                     return@launch
                                 }
 
+                                val customEmail = if (output.customEmail.isNotBlank()) output.customEmail.trim().lowercase() else "${output.username.trim().lowercase()}@oscellion.com"
+
+                                // Link Custom Email (username@oscellion.com) and Password to the Google account
+                                val currentUser = auth.currentUser
+                                if (currentUser != null && output.password.isNotBlank()) {
+                                    try {
+                                        val emailCred = EmailAuthProvider.getCredential(customEmail, output.password)
+                                        currentUser.linkWithCredential(emailCred).await()
+                                    } catch (e: Exception) {
+                                        android.util.Log.w("OscellionAuth", "linkWithCredential failed: ${e.message}", e)
+                                        try {
+                                            currentUser.updatePassword(output.password).await()
+                                        } catch (pe: Exception) {
+                                            android.util.Log.w("OscellionAuth", "updatePassword fallback failed: ${pe.message}", pe)
+                                        }
+                                    }
+                                }
+
                                 // Upload custom avatar to Supabase Storage if user selected an image from gallery
                                 var finalAvatar = output.avatarUrl
                                 output.avatarUri?.let { uri ->
@@ -420,6 +439,7 @@ fun OscellionOnboardingScreen(
                                     avatarUrl = finalAvatar,
                                     interests = output.interests,
                                     email = output.email,
+                                    customEmail = customEmail,
                                     googleId = output.googleId,
                                     bio = output.bio,
                                     isOnboarded = true
@@ -428,7 +448,7 @@ fun OscellionOnboardingScreen(
                                 if (success) {
                                     val newProfile = discoverRepo.getUserProfile(uid)
                                     if (newProfile != null) {
-                                        SavedAccountManager.saveFromProfile(context, newProfile, output.email)
+                                        SavedAccountManager.saveFromProfile(context, newProfile, customEmail)
                                     }
                                     com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
                                     Toast.makeText(context, "Welcome to Chroma Studio, ${output.displayName}!", Toast.LENGTH_SHORT).show()

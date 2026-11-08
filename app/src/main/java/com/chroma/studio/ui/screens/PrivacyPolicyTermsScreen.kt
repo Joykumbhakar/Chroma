@@ -92,34 +92,28 @@ fun PrivacyPolicyTermsScreen(
                     .padding(horizontal = 24.dp, vertical = 12.dp)
             ) {
                 if (isFirstLaunch) {
-                    // Checkbox Agreement Card with Iconic Double Edge Glass Border
-                    Box(
+                    // Checkbox Agreement (Direct on main background)
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(if (isDark) Color(0xFF17171A) else Color(0xFFFFFFFF))
-                            .doubleEdgeGlassBorder(cornerRadius = 18.dp)
                             .clickable { hasAgreed = !hasAgreed }
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .padding(horizontal = 6.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            LiquidGlassCheckbox(
-                                checked = hasAgreed,
-                                onCheckedChange = { hasAgreed = it }
-                            )
-                            Text(
-                                text = "I agree to the Privacy Policy and Terms of Service",
-                                fontSize = 13.5.sp,
-                                color = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000),
-                                lineHeight = 18.sp,
-                                fontFamily = InterFontFamily,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                        LiquidGlassCheckbox(
+                            checked = hasAgreed,
+                            onCheckedChange = { hasAgreed = it }
+                        )
+                        Text(
+                            text = "I agree to the Privacy Policy and Terms of Service",
+                            fontSize = 13.5.sp,
+                            color = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000),
+                            lineHeight = 18.sp,
+                            fontFamily = InterFontFamily,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
 
                     Spacer(Modifier.height(14.dp))
@@ -220,31 +214,7 @@ fun PrivacyPolicyTermsScreen(
                         .padding(top = if (isFirstLaunch) 20.dp else 4.dp, bottom = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Shield specular icon badge with double edge glass border
-                    Box(
-                        modifier = Modifier
-                            .size(62.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(
-                                        Color(0xFF0381FE).copy(alpha = 0.22f),
-                                        Color(0xFF3E91FF).copy(alpha = 0.12f)
-                                    )
-                                )
-                            )
-                            .doubleEdgeGlassBorder(cornerRadius = 20.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Lucide.ShieldCheck,
-                            contentDescription = null,
-                            tint = Color(0xFF3E91FF),
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
 
-                    Spacer(Modifier.height(14.dp))
 
                     Text(
                         text = "Legal & Privacy",
@@ -276,8 +246,7 @@ fun PrivacyPolicyTermsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(18.dp))
-                        .background(if (isDark) Color(0xFF17171A) else Color(0xFFF2F4F7))
-                        .doubleEdgeGlassBorder(cornerRadius = 18.dp)
+                        .background(if (isDark) Color(0x1FFFFFFF) else Color(0x0C000000))
                         .padding(4.dp)
                 ) {
                     Row(
@@ -333,12 +302,12 @@ fun PrivacyPolicyTermsScreen(
                 }
             }
 
-            // Legal Content Body inside a 26dp Squircle Card with Iconic Double Edge Glass Border
+            // Legal Content Body (Direct on main background)
             item {
-                OneUiGlassCard(
-                    cornerRadius = 26.dp,
-                    useDoubleEdgeGlassBorder = true,
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp)
                 ) {
                     if (selectedTab == 0) {
                         // Privacy Policy Content

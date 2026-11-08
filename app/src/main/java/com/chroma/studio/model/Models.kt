@@ -39,6 +39,7 @@ data class UserProfile(
     val statusText: String? = null,
     val agreedToTermsAt: Long? = null,
     val email: String = "",
+    val customEmail: String = "",
     val googleId: String = "",
     @get:com.google.firebase.firestore.PropertyName("isOnboarded")
     @set:com.google.firebase.firestore.PropertyName("isOnboarded")

@@ -104,6 +104,39 @@ object NotificationDispatcher {
     }
 
     /**
+     * Dispatch an official welcome notification to initialize the activity feed for a new or active user.
+     */
+    suspend fun sendWelcomeNotification(userId: String): Boolean = withContext(Dispatchers.IO) {
+        val currentUid = auth.currentUser?.uid ?: return@withContext false
+        if (userId.isBlank()) return@withContext false
+        try {
+            val notifId = "welcome_$userId"
+            val notifRef = db.collection("users").document(userId).collection("notifications").document(notifId)
+            val doc = notifRef.get().await()
+            if (!doc.exists()) {
+                val welcomeNotif = ChromaNotification(
+                    id = notifId,
+                    type = NotificationActionType.SYSTEM_DROP,
+                    actorUid = currentUid,
+                    actorName = "Oscellion",
+                    actorHandle = "@oscellion",
+                    actorAvatarUrl = null,
+                    isVerified = true,
+                    actionText = "Welcome to Oscellion Studio! Start creating, messaging, and sharing with the global community.",
+                    detailText = "Your creative canvas and encrypted messaging studio are ready to explore.",
+                    timestamp = System.currentTimeMillis(),
+                    isRead = false
+                )
+                notifRef.set(welcomeNotif.toMap()).await()
+            }
+            true
+        } catch (e: Exception) {
+            Log.w("NotificationDispatcher", "Could not create welcome notification: ${e.message}")
+            false
+        }
+    }
+
+    /**
      * Mark all unread notifications as read for a given user.
      */
     suspend fun markAllAsRead(userId: String): Boolean = withContext(Dispatchers.IO) {

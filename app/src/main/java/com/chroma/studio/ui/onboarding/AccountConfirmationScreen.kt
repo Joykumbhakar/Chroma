@@ -77,50 +77,6 @@ fun AccountConfirmationScreen(
             .fillMaxSize()
             .background(screenBg)
     ) {
-        // Hardware-accelerated GPU ambient glows (cached zero-allocation shader)
-        Spacer(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawWithCache {
-                    val topGlow = Brush.radialGradient(
-                        colors = if (isDark) {
-                            listOf(
-                                Color(0xFF1D4ED8).copy(alpha = 0.28f),
-                                Color(0xFF0F172A).copy(alpha = 0.08f),
-                                Color.Transparent
-                            )
-                        } else {
-                            listOf(
-                                Color(0xFF0A84FF).copy(alpha = 0.12f),
-                                Color(0xFFE0EDFF).copy(alpha = 0.05f),
-                                Color.Transparent
-                            )
-                        },
-                        center = Offset(size.width * 0.5f, size.height * 0.22f),
-                        radius = size.width * 0.85f
-                    )
-                    val bottomGlow = Brush.radialGradient(
-                        colors = if (isDark) {
-                            listOf(
-                                Color(0xFF2563EB).copy(alpha = 0.20f),
-                                Color.Transparent
-                            )
-                        } else {
-                            listOf(
-                                Color(0xFF93C5FD).copy(alpha = 0.10f),
-                                Color.Transparent
-                            )
-                        },
-                        center = Offset(size.width * 0.5f, size.height * 0.85f),
-                        radius = size.width * 0.70f
-                    )
-                    onDrawBehind {
-                        drawCircle(brush = topGlow)
-                        drawCircle(brush = bottomGlow)
-                    }
-                }
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -189,19 +145,13 @@ fun AccountConfirmationScreen(
                 )
             }
 
-            // ── SAMSUNG ONE UI USER PROFILE PREVIEW CARD (DOUBLE EDGE GLASS BORDER) ──
-            Box(
+            // ── USER PROFILE PREVIEW (DIRECT ON MAIN BACKGROUND) ──
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(26.dp))
-                    .background(cardBg)
-                    .doubleEdgeGlassBorder(cornerRadius = 26.dp)
-                    .padding(horizontal = 24.dp, vertical = 28.dp)
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
                     // Avatar with glowing gradient ring
                     Box(
                         modifier = Modifier
@@ -292,7 +242,6 @@ fun AccountConfirmationScreen(
                         }
                     }
                 }
-            }
 
             // ── BOTTOM ACTIONS SECTION ──────────────────────────────────────
             Column(

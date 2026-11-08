@@ -771,50 +771,6 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
             .fillMaxSize()
             .background(screenBg)
     ) {
-        // Hardware-accelerated GPU ambient glows (Samsung One UI signature glow)
-        Spacer(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawWithCache {
-                    val topGlow = Brush.radialGradient(
-                        colors = if (isDark) {
-                            listOf(
-                                Color(0xFF1D4ED8).copy(alpha = 0.26f),
-                                Color(0xFF0F172A).copy(alpha = 0.08f),
-                                Color.Transparent
-                            )
-                        } else {
-                            listOf(
-                                Color(0xFF0381FE).copy(alpha = 0.12f),
-                                Color(0xFFE0EDFF).copy(alpha = 0.05f),
-                                Color.Transparent
-                            )
-                        },
-                        center = Offset(size.width * 0.5f, size.height * 0.14f),
-                        radius = size.width * 0.85f
-                    )
-                    val bottomGlow = Brush.radialGradient(
-                        colors = if (isDark) {
-                            listOf(
-                                Color(0xFF1E293B).copy(alpha = 0.20f),
-                                Color.Transparent
-                            )
-                        } else {
-                            listOf(
-                                Color(0xFF93C5FD).copy(alpha = 0.10f),
-                                Color.Transparent
-                            )
-                        },
-                        center = Offset(size.width * 0.5f, size.height * 0.95f),
-                        radius = size.width * 0.75f
-                    )
-                    onDrawBehind {
-                        drawCircle(brush = topGlow)
-                        drawCircle(brush = bottomGlow)
-                    }
-                }
-        )
-
         Scaffold(
             topBar = {
                 Row(
@@ -969,12 +925,12 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                                 }
                                             }
                                         } else {
-                                            // Feature Highlights grouped inside a single 26dp Squircle Focus Card
-                                            OneUiGlassCard(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                cornerRadius = 26.dp,
-                                                backgroundColor = cardBg,
-                                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp)
+                                            // Feature Highlights (Direct on main background)
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 6.dp),
+                                                verticalArrangement = Arrangement.spacedBy(16.dp)
                                             ) {
                                                 LoginFeatureRow(
                                                     icon = Lucide.Palette,
@@ -982,21 +938,11 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                                     title = "Creative Studio",
                                                     subtitle = "Multi-layer gradient studio with real-time rendering"
                                                 )
-                                                HorizontalDivider(
-                                                    color = cardDivider,
-                                                    thickness = 0.5.dp,
-                                                    modifier = Modifier.padding(vertical = 10.dp)
-                                                )
                                                 LoginFeatureRow(
                                                     icon = Lucide.Lock,
                                                     iconGradient = listOf(Color(0xFF10B981), Color(0xFF06B6D4)),
                                                     title = "Private Messaging",
                                                     subtitle = "Encrypted direct chats, audio, and media sharing"
-                                                )
-                                                HorizontalDivider(
-                                                    color = cardDivider,
-                                                    thickness = 0.5.dp,
-                                                    modifier = Modifier.padding(vertical = 10.dp)
                                                 )
                                                 LoginFeatureRow(
                                                     icon = Lucide.Zap,

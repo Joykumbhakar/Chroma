@@ -42,6 +42,8 @@ import com.chroma.studio.ui.components.OneUiGlassCard
 import com.chroma.studio.ui.components.doubleEdgeGlassBorder
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.*
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -71,7 +73,9 @@ data class WizardOutputData(
     val avatarUri: Uri?,
     val dobMillis: Long?,
     val bio: String,
-    val interests: List<String>
+    val interests: List<String>,
+    val password: String = "",
+    val customEmail: String = ""
 )
 
 /**
@@ -105,6 +109,12 @@ fun OnboardingWizard(
     }
     var avatarUri by remember { mutableStateOf<Uri?>(null) }
     var avatarUrl by remember { mutableStateOf(googleData.photoUrl) }
+
+    // Password states
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+    var showConfirmPassword by remember { mutableStateOf(false) }
 
     // Username status
     var usernameStatus by remember { mutableStateOf(UsernameStatus.Checking) }
@@ -196,26 +206,6 @@ fun OnboardingWizard(
             .fillMaxSize()
             .background(screenBg)
     ) {
-        // Ambient background glow (cached zero-allocation shader)
-        Spacer(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawWithCache {
-                    val glowBrush = Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF1D4ED8).copy(alpha = 0.22f),
-                            Color(0xFF0F172A).copy(alpha = 0.05f),
-                            Color.Transparent
-                        ),
-                        center = Offset(size.width * 0.5f, size.height * 0.15f),
-                        radius = size.width * 0.85f
-                    )
-                    onDrawBehind {
-                        drawCircle(brush = glowBrush)
-                    }
-                }
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -271,7 +261,7 @@ fun OnboardingWizard(
                                     .width(36.dp)
                                     .height(4.dp)
                                     .clip(CircleShape)
-                                    .background(if (active) Color(0xFF0381FE) else Color(0x33FFFFFF))
+                                    .background(if (active) Color(0xFF0381FE) else if (isDark) Color(0x22FFFFFF) else Color(0x14000000))
                             )
                         }
                     }
@@ -279,12 +269,12 @@ fun OnboardingWizard(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
-                            .background(Color(0xFF1E2433))
+                            .background(if (isDark) Color(0x1FFFFFFF) else Color(0x0A000000))
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = "Step $stepIndex/3",
-                            color = Color(0xFF38BDF8),
+                            color = if (isDark) Color(0xFF38BDF8) else Color(0xFF0381FE),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -297,7 +287,7 @@ fun OnboardingWizard(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
-                        .background(Color(0x220066FF))
+                        .background(if (isDark) Color(0x220066FF) else Color(0x100381FE))
                         .padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
                     Row(
@@ -307,12 +297,12 @@ fun OnboardingWizard(
                         Icon(
                             imageVector = Lucide.Sparkles,
                             contentDescription = null,
-                            tint = Color(0xFF60A5FA),
+                            tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF0381FE),
                             modifier = Modifier.size(13.dp)
                         )
                         Text(
                             text = "New to Chroma Studio, let's create a new account",
-                            color = Color(0xFF93C5FD),
+                            color = if (isDark) Color(0xFF93C5FD) else Color(0xFF0381FE),
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             letterSpacing = (-0.1).sp
@@ -345,8 +335,8 @@ fun OnboardingWizard(
                             ) {
                                 Text(
                                     text = "Choose your identity",
-                                    color = Color.White,
-                                    fontSize = 22.sp,
+                                    color = textPrimary,
+                                    fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center
                                 )
@@ -356,8 +346,8 @@ fun OnboardingWizard(
                                     modifier = Modifier
                                         .size(100.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF1E2536))
-                                        .border(BorderStroke(2.dp, Color(0xFF0381FE)), CircleShape)
+                                        .background(fieldBg)
+                                        .border(BorderStroke(1.5.dp, Color(0xFF0381FE)), CircleShape)
                                         .clickable { avatarGalleryLauncher.launch("image/*") },
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -391,7 +381,7 @@ fun OnboardingWizard(
                                             .size(30.dp)
                                             .clip(CircleShape)
                                             .background(Color(0xFF0381FE))
-                                            .border(BorderStroke(2.dp, Color(0xFF030510)), CircleShape),
+                                            .border(BorderStroke(1.5.dp, screenBg), CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
@@ -405,7 +395,7 @@ fun OnboardingWizard(
 
                                 Text(
                                     text = "Tap to change avatar (Pre-filled from Google)",
-                                    color = Color(0xFF94A3B8),
+                                    color = textMuted,
                                     fontSize = 12.sp
                                 )
 
@@ -413,7 +403,7 @@ fun OnboardingWizard(
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Text(
                                         text = "DISPLAY NAME",
-                                        color = Color(0xFF94A3B8),
+                                        color = textMuted,
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         letterSpacing = 0.5.sp
@@ -423,15 +413,15 @@ fun OnboardingWizard(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(14.dp))
-                                            .background(Color(0xFF0F1422))
-                                            .doubleEdgeGlassBorder(cornerRadius = 16.dp)
+                                            .background(fieldBg)
+                                            .border(0.5.dp, fieldBorder, RoundedCornerShape(14.dp))
                                             .padding(horizontal = 16.dp, vertical = 14.dp)
                                     ) {
                                         BasicTextField(
                                             value = displayName,
                                             onValueChange = { displayName = it },
-                                            textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-                                            cursorBrush = SolidColor(Color(0xFF38BDF8)),
+                                            textStyle = TextStyle(color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                                            cursorBrush = SolidColor(Color(0xFF0381FE)),
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
@@ -446,7 +436,7 @@ fun OnboardingWizard(
                                     ) {
                                         Text(
                                             text = "UNIQUE HANDLE",
-                                            color = Color(0xFF94A3B8),
+                                            color = textMuted,
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             letterSpacing = 0.5.sp
@@ -456,13 +446,13 @@ fun OnboardingWizard(
                                                 CircularProgressIndicator(
                                                     modifier = Modifier.size(12.dp),
                                                     strokeWidth = 1.8.dp,
-                                                    color = Color(0xFF38BDF8)
+                                                    color = Color(0xFF0381FE)
                                                 )
                                             }
                                             UsernameStatus.Free -> {
                                                 Text(
                                                     text = "Available",
-                                                    color = Color(0xFF34D399),
+                                                    color = Color(0xFF00C853),
                                                     fontSize = 11.5.sp,
                                                     fontWeight = FontWeight.Bold
                                                 )
@@ -470,7 +460,7 @@ fun OnboardingWizard(
                                             UsernameStatus.Taken -> {
                                                 Text(
                                                     text = "Taken",
-                                                    color = Color(0xFFF87171),
+                                                    color = Color(0xFFFF453A),
                                                     fontSize = 11.5.sp,
                                                     fontWeight = FontWeight.Bold
                                                 )
@@ -478,7 +468,7 @@ fun OnboardingWizard(
                                             UsernameStatus.TooShort -> {
                                                 Text(
                                                     text = "Min 3 chars",
-                                                    color = Color(0xFF94A3B8),
+                                                    color = textMuted,
                                                     fontSize = 11.5.sp
                                                 )
                                             }
@@ -489,14 +479,14 @@ fun OnboardingWizard(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(14.dp))
-                                            .background(Color(0xFF101420))
+                                            .background(fieldBg)
                                             .border(
                                                 BorderStroke(
-                                                    1.dp,
+                                                    if (usernameStatus == UsernameStatus.Free || usernameStatus == UsernameStatus.Taken) 1.dp else 0.5.dp,
                                                     when (usernameStatus) {
-                                                        UsernameStatus.Free -> Color(0xFF34D399)
-                                                        UsernameStatus.Taken -> Color(0xFFEF4444)
-                                                        else -> Color(0x33FFFFFF)
+                                                        UsernameStatus.Free -> Color(0xFF00C853)
+                                                        UsernameStatus.Taken -> Color(0xFFFF453A)
+                                                        else -> fieldBorder
                                                     }
                                                 ),
                                                 RoundedCornerShape(14.dp)
@@ -506,7 +496,7 @@ fun OnboardingWizard(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
                                                 text = "@",
-                                                color = Color(0xFF38BDF8),
+                                                color = Color(0xFF0381FE),
                                                 fontSize = 15.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -514,8 +504,8 @@ fun OnboardingWizard(
                                             BasicTextField(
                                                 value = username,
                                                 onValueChange = { verifyUsername(it) },
-                                                textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-                                                cursorBrush = SolidColor(Color(0xFF38BDF8)),
+                                                textStyle = TextStyle(color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                                                cursorBrush = SolidColor(Color(0xFF0381FE)),
                                                 modifier = Modifier.weight(1f)
                                             )
                                         }
@@ -530,22 +520,201 @@ fun OnboardingWizard(
                                         ) {
                                             Text(
                                                 text = "Suggestions:",
-                                                color = Color(0xFF94A3B8),
+                                                color = textMuted,
                                                 fontSize = 11.5.sp
                                             )
                                             usernameSuggestions.forEach { sug ->
                                                 Box(
                                                     modifier = Modifier
                                                         .clip(RoundedCornerShape(999.dp))
-                                                        .background(Color(0xFF1E2433))
+                                                        .background(if (isDark) Color(0x1FFFFFFF) else Color(0x0A000000))
                                                         .clickable { verifyUsername(sug) }
                                                         .padding(horizontal = 8.dp, vertical = 4.dp)
                                                 ) {
                                                     Text(
                                                         text = "@$sug",
-                                                        color = Color(0xFF38BDF8),
+                                                        color = Color(0xFF0381FE),
                                                         fontSize = 11.5.sp,
                                                         fontWeight = FontWeight.SemiBold
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ── CUSTOM EMAIL BANNER (@oscellion.com) ──
+                                val customEmailPreview = if (username.length >= 3) "${username.lowercase()}@oscellion.com" else "username@oscellion.com"
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(if (isDark) Color(0x120381FE) else Color(0x080381FE))
+                                        .border(0.5.dp, Color(0xFF0381FE).copy(alpha = 0.22f), RoundedCornerShape(14.dp))
+                                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.Mail,
+                                            contentDescription = null,
+                                            tint = Color(0xFF0381FE),
+                                            modifier = Modifier.size(17.dp)
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "LINKED CUSTOM EMAIL",
+                                                color = if (isDark) Color(0xFF38BDF8) else Color(0xFF0381FE),
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                            Text(
+                                                text = customEmailPreview,
+                                                color = textPrimary,
+                                                fontSize = 13.5.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // ── PASSWORD FIELD ──
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = "SET PASSWORD",
+                                        color = textMuted,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(fieldBg)
+                                            .border(0.5.dp, fieldBorder, RoundedCornerShape(14.dp))
+                                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Lucide.Lock,
+                                                contentDescription = null,
+                                                tint = if (password.isNotEmpty()) Color(0xFF0381FE) else textMuted,
+                                                modifier = Modifier.size(17.dp)
+                                            )
+                                            Spacer(Modifier.width(10.dp))
+                                            BasicTextField(
+                                                value = password,
+                                                onValueChange = { password = it },
+                                                textStyle = TextStyle(color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                                                cursorBrush = SolidColor(Color(0xFF0381FE)),
+                                                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            if (password.isNotEmpty()) {
+                                                IconButton(
+                                                    onClick = { showPassword = !showPassword },
+                                                    modifier = Modifier.size(22.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (showPassword) Lucide.EyeOff else Lucide.Eye,
+                                                        contentDescription = if (showPassword) "Hide password" else "Show password",
+                                                        tint = textMuted,
+                                                        modifier = Modifier.size(17.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (password.isNotEmpty() && password.length < 6) {
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = "Minimum 6 characters required",
+                                            color = Color(0xFFFF453A),
+                                            fontSize = 11.5.sp
+                                        )
+                                    }
+                                }
+
+                                // ── CONFIRM PASSWORD FIELD ──
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "CONFIRM PASSWORD",
+                                            color = textMuted,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                        if (confirmPassword.isNotEmpty()) {
+                                            if (confirmPassword == password && password.length >= 6) {
+                                                Text(
+                                                    text = "Passwords match",
+                                                    color = Color(0xFF00C853),
+                                                    fontSize = 11.5.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            } else if (confirmPassword != password) {
+                                                Text(
+                                                    text = "Passwords do not match",
+                                                    color = Color(0xFFFF453A),
+                                                    fontSize = 11.5.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(Modifier.height(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(fieldBg)
+                                            .border(
+                                                BorderStroke(
+                                                    0.5.dp,
+                                                    if (confirmPassword.isEmpty()) fieldBorder
+                                                    else if (confirmPassword == password && password.length >= 6) Color(0xFF00C853)
+                                                    else Color(0xFFFF453A)
+                                                ),
+                                                RoundedCornerShape(14.dp)
+                                            )
+                                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Lucide.Lock,
+                                                contentDescription = null,
+                                                tint = if (confirmPassword.isNotEmpty()) Color(0xFF0381FE) else textMuted,
+                                                modifier = Modifier.size(17.dp)
+                                            )
+                                            Spacer(Modifier.width(10.dp))
+                                            BasicTextField(
+                                                value = confirmPassword,
+                                                onValueChange = { confirmPassword = it },
+                                                textStyle = TextStyle(color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                                                cursorBrush = SolidColor(Color(0xFF0381FE)),
+                                                visualTransformation = if (showConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            if (confirmPassword.isNotEmpty()) {
+                                                IconButton(
+                                                    onClick = { showConfirmPassword = !showConfirmPassword },
+                                                    modifier = Modifier.size(22.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (showConfirmPassword) Lucide.EyeOff else Lucide.Eye,
+                                                        contentDescription = if (showConfirmPassword) "Hide password" else "Show password",
+                                                        tint = textMuted,
+                                                        modifier = Modifier.size(17.dp)
                                                     )
                                                 }
                                             }
@@ -565,15 +734,15 @@ fun OnboardingWizard(
                             ) {
                                 Text(
                                     text = "Personal Details",
-                                    color = Color.White,
-                                    fontSize = 22.sp,
+                                    color = textPrimary,
+                                    fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center
                                 )
 
                                 Text(
                                     text = "Add your birthday for age verification (13+) and tell creators about your creative journey.",
-                                    color = Color(0xFF94A3B8),
+                                    color = textMuted,
                                     fontSize = 13.5.sp,
                                     textAlign = TextAlign.Center,
                                     lineHeight = 19.sp
@@ -591,7 +760,7 @@ fun OnboardingWizard(
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Text(
                                         text = "DATE OF BIRTH",
-                                        color = Color(0xFF94A3B8),
+                                        color = textMuted,
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         letterSpacing = 0.5.sp
@@ -601,8 +770,8 @@ fun OnboardingWizard(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(14.dp))
-                                            .background(Color(0xFF0F1422))
-                                            .doubleEdgeGlassBorder(cornerRadius = 16.dp)
+                                            .background(fieldBg)
+                                            .border(0.5.dp, fieldBorder, RoundedCornerShape(14.dp))
                                             .clickable { showDatePicker = true }
                                             .padding(horizontal = 16.dp, vertical = 14.dp)
                                     ) {
@@ -613,13 +782,13 @@ fun OnboardingWizard(
                                         ) {
                                             Text(
                                                 text = dobFormatted,
-                                                color = if (dobMillis != null) Color.White else Color(0xFF64748B),
+                                                color = if (dobMillis != null) textPrimary else textMuted,
                                                 fontSize = 15.sp
                                             )
                                             Icon(
                                                 imageVector = Lucide.Calendar,
                                                 contentDescription = null,
-                                                tint = Color(0xFF38BDF8),
+                                                tint = Color(0xFF0381FE),
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
@@ -634,14 +803,14 @@ fun OnboardingWizard(
                                     ) {
                                         Text(
                                             text = "SHORT BIO",
-                                            color = Color(0xFF94A3B8),
+                                            color = textMuted,
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             letterSpacing = 0.5.sp
                                         )
                                         Text(
                                             text = "${bio.length}/150",
-                                            color = Color(0xFF64748B),
+                                            color = textMuted,
                                             fontSize = 11.5.sp
                                         )
                                     }
@@ -651,22 +820,22 @@ fun OnboardingWizard(
                                             .fillMaxWidth()
                                             .height(100.dp)
                                             .clip(RoundedCornerShape(14.dp))
-                                            .background(Color(0xFF0F1422))
-                                            .doubleEdgeGlassBorder(cornerRadius = 16.dp)
+                                            .background(fieldBg)
+                                            .border(0.5.dp, fieldBorder, RoundedCornerShape(14.dp))
                                             .padding(horizontal = 16.dp, vertical = 12.dp)
                                     ) {
                                         if (bio.isEmpty()) {
                                             Text(
                                                 text = "Share what inspires you, what you build, or how you create…",
-                                                color = Color(0xFF64748B),
+                                                color = textMuted.copy(alpha = 0.65f),
                                                 fontSize = 14.sp
                                             )
                                         }
                                         BasicTextField(
                                             value = bio,
                                             onValueChange = { if (it.length <= 150) bio = it },
-                                            textStyle = TextStyle(color = Color.White, fontSize = 14.sp, lineHeight = 20.sp),
-                                            cursorBrush = SolidColor(Color(0xFF38BDF8)),
+                                            textStyle = TextStyle(color = textPrimary, fontSize = 14.sp, lineHeight = 20.sp),
+                                            cursorBrush = SolidColor(Color(0xFF0381FE)),
                                             modifier = Modifier.fillMaxSize()
                                         )
                                     }
@@ -681,8 +850,8 @@ fun OnboardingWizard(
                             ) {
                                 Text(
                                     text = "Creative Interests",
-                                    color = Color.White,
-                                    fontSize = 22.sp,
+                                    color = textPrimary,
+                                    fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center
                                 )
@@ -691,7 +860,7 @@ fun OnboardingWizard(
 
                                 Text(
                                     text = "Select 2 or more topics to curate your Chroma Studio community feed.",
-                                    color = Color(0xFF94A3B8),
+                                    color = textMuted,
                                     fontSize = 13.5.sp,
                                     textAlign = TextAlign.Center
                                 )
@@ -709,8 +878,8 @@ fun OnboardingWizard(
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(18.dp))
-                                                .background(if (isSelected) Color(0xFF0381FE) else Color(0xFF10141E))
-                                                .doubleEdgeGlassBorder(cornerRadius = 18.dp)
+                                                .background(if (isSelected) Color(0xFF0381FE) else fieldBg)
+                                                .border(0.5.dp, if (isSelected) Color.Transparent else fieldBorder, RoundedCornerShape(18.dp))
                                                 .clickable {
                                                     if (isSelected) {
                                                         if (selectedInterests.size > 1) selectedInterests.remove(tag)
@@ -735,7 +904,7 @@ fun OnboardingWizard(
                                                 }
                                                 Text(
                                                     text = tag,
-                                                    color = if (isSelected) Color.White else Color(0xFFCBD5E1),
+                                                    color = if (isSelected) Color.White else textPrimary,
                                                     fontSize = 13.sp,
                                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                                     textAlign = TextAlign.Center
@@ -766,7 +935,7 @@ fun OnboardingWizard(
             // ── BOTTOM ACTION BAR ───────────────────────────────────────────
             if (currentStep != WizardStep.COMPLETING) {
                 val canProceed = when (currentStep) {
-                    WizardStep.IDENTITY -> displayName.isNotBlank() && usernameStatus == UsernameStatus.Free
+                    WizardStep.IDENTITY -> displayName.isNotBlank() && usernameStatus == UsernameStatus.Free && password.length >= 6 && password == confirmPassword
                     WizardStep.PERSONAL_DETAILS -> dobMillis != null
                     WizardStep.INTERESTS -> selectedInterests.isNotEmpty()
                     WizardStep.COMPLETING -> false
@@ -796,7 +965,9 @@ fun OnboardingWizard(
                                             avatarUri = avatarUri,
                                             dobMillis = dobMillis,
                                             bio = bio.trim(),
-                                            interests = selectedInterests.toList()
+                                            interests = selectedInterests.toList(),
+                                            password = password,
+                                            customEmail = "${username.trim().lowercase()}@oscellion.com"
                                         )
                                     )
                                 }
