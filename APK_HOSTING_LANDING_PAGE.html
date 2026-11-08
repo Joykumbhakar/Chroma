@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oscellion — Creative Studio & Encrypted Social Network</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090D16;
+      --card-bg: #121826;
+      --accent: #0381FE;
+      --accent-hover: #006EDB;
+      --text-primary: #F8FAFC;
+      --text-muted: #94A3B8;
+      --border: rgba(255, 255, 255, 0.08);
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.6;
+      padding: 0;
+    }
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+    header {
+      text-align: center;
+      padding: 60px 0 30px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: rgba(3, 129, 254, 0.12);
+      color: #38BDF8;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-size: clamp(36px, 6vw, 56px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.15;
+      margin-bottom: 16px;
+      background: linear-gradient(180deg, #FFFFFF 0%, #CBD5E1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 620px;
+      margin: 0 auto 36px;
+    }
+    .cta-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 36px 28px;
+      text-align: center;
+      max-width: 600px;
+      margin: 0 auto 60px;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+    }
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 17px;
+      font-weight: 700;
+      padding: 16px 40px;
+      border-radius: 999px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 20px rgba(3, 129, 254, 0.35);
+    }
+    .download-btn:hover {
+      background: var(--accent-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(3, 129, 254, 0.5);
+    }
+    .apk-meta {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .apk-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 60px;
+    }
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px 24px;
+    }
+    .feature-card h3 {
+      font-size: 19px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    .feature-card p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+    .steps-section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 36px 30px;
+      margin-bottom: 60px;
+    }
+    .steps-section h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      letter-spacing: -0.5px;
+    }
+    .step-item {
+      display: flex;
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(3, 129, 254, 0.15);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .step-text h4 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .step-text p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+    .checksum-box {
+      background: #0B0F19;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      font-family: monospace;
+      font-size: 12px;
+      color: #38BDF8;
+      word-break: break-all;
+      margin-top: 14px;
+    }
+    footer {
+      text-align: center;
+      padding-top: 40px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      color: #64748B;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge">✨ Stable Production Release • v1.0.0</div>
+      <h1>Oscellion</h1>
+      <p class="subtitle">Where creativity meets community. Multi-layer GPU shader gradients, generative art, and end-to-end encrypted messaging.</p>
+    </header>
+
+    <div class="cta-card">
+      <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 10px;">Download Oscellion APK</h2>
+      <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 24px;">Direct Android package download with APK Signature Scheme v2 verification.</p>
+      <a href="app-release.apk" class="download-btn" download>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download APK (171 MB)
+      </a>
+      <div class="apk-meta">
+        <span>📦 Version: 1.0.0</span>
+        <span>•</span>
+        <span>🤖 Android 8.0+ (Oreo to Android 15)</span>
+        <span>•</span>
+        <span>🛡️ v2 Signed</span>
+      </div>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <h3>🎨 Multi-Layer Shader Studio</h3>
+        <p>4 real-time GPU rendering engines: Linear, Radial, Sweep Conic, and procedural Noise Shaders. Infinite stackable layers with developer handoff to CSS, SVG, and GLSL.</p>
+      </div>
+      <div class="feature-card">
+        <h3>🔐 End-to-End Encrypted Chat</h3>
+        <p>Client-side cryptographic encryption with AES-GCM and RSA-2048 key exchange. Real-time audio voice notes with live frequency waveforms.</p>
+      </div>
+      <div class="feature-card">
+        <h3>🔑 Dual Login & Oscellion ID</h3>
+        <p>Connect with Google One-Tap or create a custom Oscellion email ID (<code>username@oscellion.com</code>) with a password for flexible cross-device sign-in.</p>
+      </div>
+      <div class="feature-card">
+        <h3>⚡ 24h Instant Drops & Stories</h3>
+        <p>Share daily creative highlights, audio notes, and gradient experiments with synchronized progress bars and interactive reactions.</p>
+      </div>
+      <div class="feature-card">
+        <h3>🌐 Community & Remix Engine</h3>
+        <p>Fork any creator's artwork into your studio canvas with one tap, customize engine parameters, and publish remixes with original attribution.</p>
+      </div>
+      <div class="feature-card">
+        <h3>✨ Samsung One UI Aesthetics</h3>
+        <p>Precision 26dp squircles, hairline 0.5dp professional borders, borderless pill buttons, and true OLED dark and daylight themes.</p>
+      </div>
+    </div>
+
+    <div class="steps-section">
+      <h2>How to Sideload & Install the APK</h2>
+      <div class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-text">
+          <h4>Download the APK file</h4>
+          <p>Tap the download button above. If Chrome or Samsung Internet shows "File might be harmful", tap <strong>Download anyway</strong>.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-text">
+          <h4>Enable "Install Unknown Apps"</h4>
+          <p>Open the downloaded APK from your notification bar or Files app. If prompted by Android, tap <strong>Settings</strong> and toggle on <strong>Allow from this source</strong>.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-text">
+          <h4>Install & Open</h4>
+          <p>Tap <strong>Install</strong> on the package installer dialog, then launch Oscellion to start creating immediately.</p>
+        </div>
+      </div>
+
+      <div style="margin-top: 24px;">
+        <h4 style="font-size: 14px; color: var(--text-muted); margin-bottom: 6px;">SHA-256 Hash Verification:</h4>
+        <div class="checksum-box">
+          016D9083406D2AC30BB424FE3C42DE1FCAD9A223FD15545B3D7A83CFA512174C
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>© 2026 Oscellion Studio • Created by Joy Kumbhakar. All rights reserved.</p>
+    </footer>
+  </div>
+</body>
+</html>
