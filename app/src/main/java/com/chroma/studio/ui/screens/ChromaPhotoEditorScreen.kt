@@ -882,197 +882,246 @@ fun ChromaPhotoEditorScreen(
                 .fillMaxSize()
                 .background(editorColors.bg)
         ) {
-            // ── Top Bar (Exact ChromaScreenHeader as ChromaVideoEditorScreen) ──
-            ChromaScreenHeader(
-                title = "Oscellion",
-                badgeText = "Photo Studio",
-                badgeColor = Color(0xFF0381FE),
-                showBackButton = true,
-                onBack = onBack,
-                actions = {
+            // ── Top Action Bar (Compact, Responsive, NEVER pushes Export off screen) ──
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .background(Color.White)
+                    .border(0.5.dp, Color(0xFFE5E7EB))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Left: Back button + Title
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFF3F4F6))
+                            .clickable(onClick = onBack),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.ChevronLeft,
+                            contentDescription = "Back",
+                            tint = Color(0xFF1F2937),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        // Undo / Redo Pill
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(colors.glassBgHover)
-                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp, 28.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .clickable(enabled = viewModel.canUndo(), onClick = { viewModel.undo() }),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Undo2,
-                                    contentDescription = "Undo",
-                                    tint = if (viewModel.canUndo()) colors.textMain else colors.textMuted.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .width(1.dp)
-                                    .height(14.dp)
-                                    .background(colors.glassBorder)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp, 28.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .clickable(enabled = viewModel.canRedo(), onClick = { viewModel.redo() }),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Redo2,
-                                    contentDescription = "Redo",
-                                    tint = if (viewModel.canRedo()) colors.textMain else colors.textMuted.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
+                        Text(
+                            text = "Photo Studio",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF111827),
+                            letterSpacing = (-0.3).sp
+                        )
+                    }
+                }
 
-                        // Layer Button
+                // Right: Undo/Redo + Layers + Next/Export
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Undo / Redo Pill
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Color(0xFFF3F4F6))
+                            .padding(horizontal = 2.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp, 28.dp)
+                                .clip(RoundedCornerShape(999.dp))
+                                .clickable(enabled = viewModel.canUndo(), onClick = { viewModel.undo() }),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Undo2,
+                                contentDescription = "Undo",
+                                tint = if (viewModel.canUndo()) Color(0xFF1F2937) else Color(0xFF9CA3AF).copy(alpha = 0.5f),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(14.dp)
+                                .background(Color(0xFFE5E7EB))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp, 28.dp)
+                                .clip(RoundedCornerShape(999.dp))
+                                .clickable(enabled = viewModel.canRedo(), onClick = { viewModel.redo() }),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Redo2,
+                                contentDescription = "Redo",
+                                tint = if (viewModel.canRedo()) Color(0xFF1F2937) else Color(0xFF9CA3AF).copy(alpha = 0.5f),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+
+                    // Layers Button
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFF3F4F6))
+                            .clickable { showLayersSheet = true },
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = Lucide.Layers,
                             contentDescription = "Layers",
-                            tint = colors.textMain,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clickable { showLayersSheet = true }
-                                .padding(2.dp)
+                            tint = Color(0xFF374151),
+                            modifier = Modifier.size(18.dp)
                         )
+                    }
 
-                        // Export Button
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(Color(0xFF0381FE), Color(0xFF5856D6))
-                                    )
+                    // Primary Action: "Next" or "Export" (Prominent, High Visibility, NEVER cut off)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color(0xFF0381FE), Color(0xFF2563EB))
                                 )
-                                .clickable(enabled = !isExporting) {
-                                    if (exportButtonLabel == "Next") {
-                                        isExporting = true
-                                        scope.launch {
-                                            val savedUri = exportEditedPhotoToGallery(
-                                                context = context,
-                                                state = state
-                                            )
-                                            isExporting = false
-                                            if (savedUri != null) {
-                                                onExport(state)
-                                                onExportUri?.invoke(savedUri)
-                                                onExportSuccess?.invoke(savedUri)
-                                            } else {
-                                                onExportSuccess?.invoke(photoUri)
-                                            }
+                            )
+                            .clickable(enabled = !isExporting) {
+                                if (exportButtonLabel == "Next") {
+                                    isExporting = true
+                                    scope.launch {
+                                        val savedUri = exportEditedPhotoToGallery(
+                                            context = context,
+                                            state = state
+                                        )
+                                        isExporting = false
+                                        if (savedUri != null) {
+                                            onExport(state)
+                                            onExportUri?.invoke(savedUri)
+                                            onExportSuccess?.invoke(savedUri)
+                                        } else {
+                                            onExportSuccess?.invoke(photoUri)
                                         }
-                                    } else {
-                                        showExportDialog = true
                                     }
+                                } else {
+                                    showExportDialog = true
                                 }
-                                .padding(horizontal = 14.dp, vertical = 7.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isExporting) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
+                            }
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isExporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = exportButtonLabel,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = Color.White
                                 )
-                            } else {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (exportButtonLabel == "Next") Lucide.ArrowRight else Lucide.Share,
-                                        contentDescription = exportButtonLabel,
-                                        modifier = Modifier.size(14.dp),
-                                        tint = Color.White
-                                    )
-                                    Text(
-                                        text = exportButtonLabel,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 13.sp,
-                                        color = Color.White
-                                    )
-                                }
+                                Icon(
+                                    imageVector = if (exportButtonLabel == "Next") Lucide.ArrowRight else Lucide.Share,
+                                    contentDescription = exportButtonLabel,
+                                    modifier = Modifier.size(13.dp),
+                                    tint = Color.White
+                                )
                             }
                         }
                     }
                 }
-            )
+            }
 
-            // ── Photo Preview Area — 16:9 Aspect Ratio Box with Overlays (Same as VideoPreviewArea) ──
-            PhotoPreviewArea(
+            // ── Quick Aspect Ratio Selection Chips (One-tap switch) ──
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .shadow(4.dp, RoundedCornerShape(16.dp)),
-                state = state,
-                selectedClip = selectedClip,
-                onTransformChange = { clipId, transform ->
-                    viewModel.updateClipTransform(clipId, transform)
-                },
-                onDragStart = { viewModel.startDrag() },
-                onDragEnd = { viewModel.endDrag() },
-                onAddBrushStroke = { viewModel.addBrushStroke(it) },
-                onAutoEnhance = { viewModel.autoEnhance() },
-                onToggleSplitCompare = { viewModel.toggleSplitCompareMode() },
-                onSplitFractionChange = { viewModel.setSplitCompareFraction(it) },
-                onToggleGrid = { viewModel.toggleGridOverlay() },
-                onToggleHistogram = { viewModel.toggleHistogramHud() },
-                onToggleOriginal = { viewModel.setComparingOriginal(!state.isComparingOriginal) }
-            )
+                    .background(Color.White)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ProjectRatio.values().forEach { ratio ->
+                    val selected = state.projectRatio == ratio
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
+                            .clickable { viewModel.setProjectRatio(ratio) }
+                            .padding(horizontal = 12.dp, vertical = 5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = ratio.label,
+                            color = if (selected) Color.White else Color(0xFF4B5563),
+                            fontSize = 12.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                }
+            }
 
-            // ── Quick Actions Panel (Exact same 3-button glass panel as ChromaVideoEditorScreen) ──
-            PhotoQuickActionsPanel(
-                onAddMedia = { showAddSheet = true },
-                onLayers = { showLayersSheet = true },
-                onSettings = { showSettingsSheet = true }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // ── Layer Track Stack + Bottom Horizontal Toolbar (Same layout as ChromaVideoEditorScreen) ──
-            Column(
+            // ── Photo Preview Canvas Stage (Maximized, centered, respects aspect ratios) ──
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
             ) {
-                ChromaPhotoTrackWorkspace(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RectangleShape),
+                PhotoPreviewArea(
+                    modifier = Modifier.fillMaxSize(),
                     state = state,
-                    onSelectClip = { viewModel.selectClip(it) },
-                    onDeselectClip = { viewModel.selectClip(null) },
-                    onZoom = { viewModel.setZoom(it) },
-                    onToggleVisibility = { viewModel.toggleTrackVisibility(it) },
-                    onToggleLock = { viewModel.toggleTrackLock(it) },
-                    onOpenTool = { activeToolSheet = it }
-                )
-
-                PhotoHorizontalToolbar(
-                    clip = rememberedClip,
-                    onOpenTool = { activeToolSheet = it },
-                    onRotate = { viewModel.rotate90Degrees() },
-                    onDelete = { viewModel.deleteSelected() },
-                    onDuplicate = { viewModel.duplicateSelected() }
+                    selectedClip = selectedClip,
+                    onTransformChange = { clipId, transform ->
+                        viewModel.updateClipTransform(clipId, transform)
+                    },
+                    onDragStart = { viewModel.startDrag() },
+                    onDragEnd = { viewModel.endDrag() },
+                    onAddBrushStroke = { viewModel.addBrushStroke(it) },
+                    onAutoEnhance = { viewModel.autoEnhance() },
+                    onToggleSplitCompare = { viewModel.toggleSplitCompareMode() },
+                    onSplitFractionChange = { viewModel.setSplitCompareFraction(it) },
+                    onToggleGrid = { viewModel.toggleGridOverlay() },
+                    onToggleHistogram = { viewModel.toggleHistogramHud() },
+                    onToggleOriginal = { viewModel.setComparingOriginal(!state.isComparingOriginal) }
                 )
             }
+
+            // ── Bottom Photo Editing Toolbar ──
+            PhotoHorizontalToolbar(
+                clip = rememberedClip,
+                onOpenTool = { activeToolSheet = it },
+                onAddMedia = { showAddSheet = true },
+                onRotate = { viewModel.rotate90Degrees() },
+                onDelete = { viewModel.deleteSelected() },
+                onDuplicate = { viewModel.duplicateSelected() }
+            )
         }
     }
 
@@ -1147,7 +1196,7 @@ fun ChromaPhotoEditorScreen(
                     PhotoEditorTool.CHROMA_KEY -> PhotoChromaKeyPanel(selectedClip, viewModel)
                     PhotoEditorTool.MARKUP -> PhotoMarkupPanel(state, viewModel)
                     PhotoEditorTool.FRAME -> PhotoFramePanel(state, viewModel)
-                    null -> {}
+                    else -> {}
                 }
             }
         }
@@ -1202,17 +1251,36 @@ private fun PhotoPreviewArea(
     var currentStrokePoints by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var lastTapTimestamp by remember { mutableLongStateOf(0L) }
 
+    val projectAspect = remember(state.projectRatio) {
+        val w = state.projectRatio.w.toFloat()
+        val h = state.projectRatio.h.toFloat()
+        if (h > 0f) w / h else (9f / 16f)
+    }
+
     BoxWithConstraints(
-        modifier = modifier.background(Color.Black),
+        modifier = modifier.clip(RoundedCornerShape(16.dp)),
         contentAlignment = Alignment.Center
     ) {
         val stageWidthPx = with(density) { maxWidth.toPx() }
+        val parentWidth = maxWidth.value
+        val parentHeight = maxHeight.value
+        val parentAspect = if (parentHeight > 0f) parentWidth / parentHeight else 1f
+
+        val frameModifier = if (projectAspect > parentAspect) {
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(projectAspect)
+        } else {
+            Modifier
+                .fillMaxHeight()
+                .aspectRatio(projectAspect)
+        }
 
         // Frame Matte Container
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(state.frameCornerRadius.dp))
+            modifier = frameModifier
+                .clip(RoundedCornerShape(state.frameCornerRadius.coerceAtLeast(8f).dp))
+                .shadow(6.dp, RoundedCornerShape(state.frameCornerRadius.coerceAtLeast(8f).dp))
                 .background(if (state.frameStyle == PhotoFrameStyle.NONE) Color.Black else state.frameColor)
                 .padding(
                     top = state.framePadding.dp,
@@ -2509,6 +2577,7 @@ private fun PhotoHistogramBarOverlay(clip: Clip, modifier: Modifier) {
 private fun PhotoHorizontalToolbar(
     clip: Clip?,
     onOpenTool: (PhotoEditorTool) -> Unit,
+    onAddMedia: () -> Unit = {},
     onRotate: () -> Unit,
     onDelete: () -> Unit,
     onDuplicate: () -> Unit
@@ -2522,16 +2591,14 @@ private fun PhotoHorizontalToolbar(
     )
 
     val tools = listOf(
+        ToolItem(Lucide.Plus, "Add", Color(0xFF0381FE), onAddMedia, requiresClip = false),
         ToolItem(Lucide.Crop, "Crop", Color(0xFF0381FE), { onOpenTool(PhotoEditorTool.CROP) }),
         ToolItem(Lucide.SlidersHorizontal, "Filter", Color(0xFFFF9500), { onOpenTool(PhotoEditorTool.FILTER) }),
         ToolItem(Lucide.Settings2, "Adjust", Color(0xFF34C759), { onOpenTool(PhotoEditorTool.ADJUST) }),
         ToolItem(Lucide.Activity, "Curves", Color(0xFF5856D6), { onOpenTool(PhotoEditorTool.CURVES) }),
         ToolItem(Lucide.Palette, "Color Mix", Color(0xFFAF52DE), { onOpenTool(PhotoEditorTool.COLOR_MIX) }),
         ToolItem(Lucide.Sparkles, "Effects", Color(0xFFFF2D55), { onOpenTool(PhotoEditorTool.EFFECTS) }, requiresClip = false),
-        ToolItem(Lucide.Move, "Transform", Color(0xFF8E8E93), { onOpenTool(PhotoEditorTool.TRANSFORM) }),
         ToolItem(Lucide.Type, "Text", Color(0xFFFF3B30), { onOpenTool(PhotoEditorTool.TEXT) }),
-        ToolItem(Lucide.Pipette, "Chroma", Color(0xFF34C759), { onOpenTool(PhotoEditorTool.CHROMA_KEY) }),
-        ToolItem(Lucide.Blend, "Blend", Color(0xFFAF52DE), { onOpenTool(PhotoEditorTool.BLEND) }),
         ToolItem(Lucide.Brush, "Markup", Color(0xFF30B0C7), { onOpenTool(PhotoEditorTool.MARKUP) }, requiresClip = false),
         ToolItem(Lucide.Frame, "Frame", Color(0xFF5856D6), { onOpenTool(PhotoEditorTool.FRAME) }, requiresClip = false),
         ToolItem(Lucide.RotateCw, "Rotate", Color(0xFF0381FE), { onRotate() }),

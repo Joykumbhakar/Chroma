@@ -62,8 +62,9 @@ fun ChromaScreenHeader(
             ) {
                 // Left: Back button + Brand Title & Badge
                 Row(
+                    modifier = Modifier.weight(1f, fill = false),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (showBackButton && onBack != null) {
                         Box(

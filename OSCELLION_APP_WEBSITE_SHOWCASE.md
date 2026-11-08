@@ -13,8 +13,8 @@
 | **Release Type** | Official Production Signed APK |
 | **Signature Scheme** | **APK Signature Scheme v2 (Verified)** |
 | **File Name** | `app-release.apk` |
-| **File Size** | `~171.16 MB` |
-| **SHA-256 Checksum** | `016D9083406D2AC30BB424FE3C42DE1FCAD9A223FD15545B3D7A83CFA512174C` |
+| **File Size** | `~171.14 MB` |
+| **SHA-256 Checksum** | `A9A7CE2473361AE134DA42992D9430C231CEDA88E76F592B2D23FCCB5FCD474B` |
 | **Target Android OS** | Android 8.0 (Oreo / API 26) through Android 15 (Vanilla Ice Cream / API 35) |
 | **Recommended Devices** | Samsung Galaxy (One UI 5 / 6 / 7), Google Pixel, OnePlus, Xiaomi |
 | **Architectures** | `arm64-v8a`, `armeabi-v7a`, `x86_64` |
