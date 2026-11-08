@@ -31,7 +31,7 @@ class ChromaApp : Application(), ImageLoaderFactory {
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("gallery_thumbnails_cache"))
-                    .maxSizeBytes(250L * 1024 * 1024)
+                    .maxSizeBytes(500L * 1024 * 1024)
                     .build()
             }
             .respectCacheHeaders(false)
@@ -101,6 +101,13 @@ class ChromaApp : Application(), ImageLoaderFactory {
             com.chroma.studio.data.OnlineStatusManager.initialize()
         } catch (e: Exception) {
             Log.w("ChromaApp", "OnlineStatusManager error: ${e.message}")
+        }
+        
+        try {
+            com.chroma.studio.data.mutation.FollowingLocalStorageManager.preload(this)
+            com.chroma.studio.data.mutation.OptimisticFollowManager.initialize(this)
+        } catch (e: Exception) {
+            Log.w("ChromaApp", "OptimisticFollowManager error: ${e.message}")
         }
         
         try {

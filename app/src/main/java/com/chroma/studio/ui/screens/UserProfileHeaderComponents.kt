@@ -484,30 +484,6 @@ fun UserProfileBioDetailsSection(
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
-        val roleTransition = rememberInfiniteTransition(label = "profile_role_gradient")
-        val roleGradientShift by roleTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 600f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 4000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "role_gradient_shift"
-        )
-
-        val roleAnimatedBrush = remember(roleGradientShift) {
-            Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFF0381FE),
-                    Color(0xFF00C6FF),
-                    Color(0xFF34C759),
-                    Color(0xFF0381FE)
-                ),
-                start = Offset(roleGradientShift, 0f),
-                end = Offset(roleGradientShift + 250f, 0f)
-            )
-        }
-
         Spacer(Modifier.height(4.dp))
 
         // 1. Identity Block: Display Name & @username tightly paired, with Sleek QR Pass Icon Button on the right
@@ -1101,7 +1077,8 @@ fun UserProfileActionsStoriesSection(
     onMyStoryClick: (() -> Unit)? = null,
     onAddStoryClick: () -> Unit = {},
     onStoryClick: ((groupIndex: Int) -> Unit)? = null,
-    storyVm: StoryViewModel
+    storyVm: StoryViewModel,
+    isFollowRequested: Boolean = false
 ) {
     val colors = LocalOscellionColors.current
 
@@ -1187,6 +1164,28 @@ fun UserProfileActionsStoriesSection(
                         Text(
                             text = "Following",
                             color = colors.textMain,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.5.sp,
+                            letterSpacing = (-0.01).em,
+                            lineHeight = 15.5.sp,
+                            style = ProfileTightTextStyle
+                        )
+                    }
+                } else if (isFollowRequested) {
+                    ProfileActionButton(
+                        onClick = onToggleFollow,
+                        isPrimary = false,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Clock,
+                            contentDescription = null,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(14.5.dp)
+                        )
+                        Text(
+                            text = "Requested",
+                            color = colors.textMuted,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.5.sp,
                             letterSpacing = (-0.01).em,

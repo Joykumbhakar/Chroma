@@ -134,7 +134,15 @@
 
         <service
             android:name=".services.ChromaMessagingService"
-            android:exported="true">
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".ChromaMessagingService"
+            android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
@@ -144,7 +152,7 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="chat_notifications_heads_up" />
 
-        <receiver android:name=".ChatNotificationReceiver" android:exported="true">
+        <receiver android:name=".ChatNotificationReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="com.chroma.studio.TEST_HEADS_UP" />
             </intent-filter>

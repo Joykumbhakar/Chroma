@@ -43,6 +43,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CircularProgressIndicator
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Users
@@ -389,7 +392,8 @@ fun getAppleStatusRingBrush(
 
 /**
  * Standard reusable Apple Status / Story Avatar with Segmented Arcs,
- * Vibrant Apple Aurora Multi-Gradient (Unseen), Only Friend Neon Green, Gray (Seen), and tactile press effects.
+ * Vibrant Apple Aurora Multi-Gradient (Unseen), Only Friend Neon Green, Gray (Seen),
+ * real-time upload ring animations, upload skeleton/progress states, and error retry states.
  */
 @Composable
 fun AppleStatusAvatar(
@@ -404,6 +408,7 @@ fun AppleStatusAvatar(
     isOnlyFriend: Boolean = false,
     isOnline: Boolean = false,
     isUploading: Boolean = false,
+    isUploadFailed: Boolean = false,
     showAddBadge: Boolean = false,
     gender: String? = null,
     isGroup: Boolean = false,
@@ -411,30 +416,47 @@ fun AppleStatusAvatar(
     gapColor: Color = if (isDark) Color(0xFF121212) else Color.White,
     onAddBadgeClick: (() -> Unit)? = null
 ) {
-    val ringBrush = remember(hasStatus, isSeen, isDark, isOnlyFriend) {
-        if (hasStatus) {
-            getAppleStatusRingBrush(hasStatus = true, isSeen = isSeen, isDark = isDark, isOnlyFriend = isOnlyFriend)
-        } else {
-            null
+    val ringBrush = remember(hasStatus, isSeen, isDark, isOnlyFriend, isUploading, isUploadFailed) {
+        when {
+            isUploadFailed -> Brush.linearGradient(
+                listOf(Color(0xFFFF3B30), Color(0xFFFF453A), Color(0xFFFF3B30))
+            )
+            isUploading -> Brush.sweepGradient(
+                listOf(
+                    Color(0xFF0381FE),
+                    Color(0xFFAF52DE),
+                    Color(0xFFFF2D55),
+                    Color(0xFFFF9500),
+                    Color(0xFF0381FE)
+                )
+            )
+            hasStatus -> getAppleStatusRingBrush(hasStatus = true, isSeen = isSeen, isDark = isDark, isOnlyFriend = isOnlyFriend)
+            else -> null
         }
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "story_ring_anim")
-    val rotationAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation_angle"
-    )
+    val rotationAngle by if (isUploading) {
+        val infiniteTransition = rememberInfiniteTransition(label = "story_ring_anim")
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "rotation_angle"
+        )
+    } else {
+        remember { mutableFloatStateOf(0f) }
+    }
+
+    val shouldShowRing = (hasStatus && ringBrush != null) || isUploading || isUploadFailed
 
     Box(
         modifier = modifier.size(size),
         contentAlignment = Alignment.Center
     ) {
-        if (hasStatus && ringBrush != null) {
+        if (shouldShowRing && ringBrush != null) {
             // Segmented / continuous glowing ring Canvas
             Canvas(
                 modifier = Modifier
@@ -448,7 +470,7 @@ fun AppleStatusAvatar(
                 val arcSize = Size(this.size.width - strokeWidthPx, this.size.height - strokeWidthPx)
                 val topLeft = Offset(paddingPx, paddingPx)
 
-                if (storyCount <= 1 || isUploading) {
+                if (storyCount <= 1 || isUploading || isUploadFailed) {
                     drawArc(
                         brush = ringBrush,
                         startAngle = -90f,
@@ -493,6 +515,31 @@ fun AppleStatusAvatar(
                     gender = gender,
                     isGroup = isGroup
                 )
+
+                // When uploading: animated skeleton shimmer overlay with spinner
+                if (isUploading) {
+                    Box(
+                        modifier = Modifier
+                            .size(avatarSize)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.45f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.2.dp,
+                            color = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                } else if (isUploadFailed) {
+                    // When failed: subtle warning tint overlay
+                    Box(
+                        modifier = Modifier
+                            .size(avatarSize)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFF3B30).copy(alpha = 0.25f))
+                    )
+                }
             }
         } else {
             // No status active
@@ -522,8 +569,58 @@ fun AppleStatusAvatar(
             }
         }
 
-        // Add (+) badge at bottom-end with clean gap border - full unclipped
-        if (showAddBadge) {
+        // Bottom-end badge indicators
+        if (isUploadFailed) {
+            // Error Retry Badge
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 0.dp, y = 0.dp)
+                    .shadow(elevation = 3.dp, shape = CircleShape, spotColor = Color(0xFFFF3B30).copy(alpha = 0.5f))
+                    .background(gapColor, CircleShape)
+                    .padding(2.dp)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(Color(0xFFFF3B30), Color(0xFFD70015))))
+                    .then(
+                        if (onAddBadgeClick != null) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onAddBadgeClick() }
+                        } else Modifier
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Retry Upload",
+                    tint = Color.White,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+        } else if (isUploading) {
+            // Uploading indicator badge
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 0.dp, y = 0.dp)
+                    .shadow(elevation = 2.dp, shape = CircleShape, spotColor = Color(0xFF0381FE).copy(alpha = 0.4f))
+                    .background(gapColor, CircleShape)
+                    .padding(2.dp)
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF0051D5)))),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    strokeWidth = 1.8.dp,
+                    color = Color.White,
+                    modifier = Modifier.size(11.dp)
+                )
+            }
+        } else if (showAddBadge) {
+            // Add (+) badge at bottom-end with clean gap border - full unclipped
             Box(
                 modifier = Modifier
                     .size(22.dp)
@@ -795,9 +892,31 @@ fun IosIconSegmentedControl(
 
 @Composable
 fun VoiceWaveform(isRecording: Boolean) {
+    if (!isRecording) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.height(24.dp)
+        ) {
+            repeat(5) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xFF30D158), Color(0xFF0381FE))
+                            )
+                        )
+                )
+            }
+        }
+        return
+    }
     val infiniteTransition = rememberInfiniteTransition(label = "waveform")
-    val targetHeights = remember(isRecording) {
-        List(5) { if (isRecording) (10..24).random().toFloat() else 4f }
+    val targetHeights = remember {
+        List(5) { (10..24).random().toFloat() }
     }
     val heights = List(5) { index ->
         val delay = index * 100

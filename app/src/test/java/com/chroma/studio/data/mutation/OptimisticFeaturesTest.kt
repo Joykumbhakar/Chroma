@@ -14,11 +14,15 @@ class OptimisticFeaturesTest {
     @Before
     fun setup() {
         OptimisticFollowManager.followSyncHandler = { _, _, _ -> true }
+        OptimisticFollowManager.reset()
+        FollowingLocalStorageManager.clear(null, "user_me")
     }
 
     @After
     fun tearDown() {
         OptimisticFollowManager.followSyncHandler = null
+        OptimisticFollowManager.reset()
+        FollowingLocalStorageManager.clear(null, "user_me")
     }
 
     @Test
@@ -96,5 +100,29 @@ class OptimisticFeaturesTest {
         // Screen A observes immediately
         assertFalse("Follow state must be false immediately on all observing screens", OptimisticFollowManager.isFollowing(targetUserId))
         assertEquals("Follower delta must be 0 immediately", 0, OptimisticFollowManager.getFollowerDelta(targetUserId))
+    }
+
+    @Test
+    fun testLocalStorageFollowPersistenceAndZeroLatencyRetrieval() = runTest {
+        val currentUserId = "user_me"
+        val targetUserId = "creator_local_fast"
+
+        // Initially not following
+        assertFalse(FollowingLocalStorageManager.isFollowingForUser(targetUserId, currentUserId))
+        assertFalse(OptimisticFollowManager.isFollowing(targetUserId))
+
+        // Add to local storage
+        FollowingLocalStorageManager.addFollowing(null, currentUserId, targetUserId)
+        OptimisticFollowManager.seedFollowing(setOf(targetUserId), currentUserId)
+
+        // Instant 0ms retrieval from local storage / memory
+        assertTrue("Must be followed immediately in local storage", FollowingLocalStorageManager.isFollowingForUser(targetUserId, currentUserId))
+        assertTrue("OptimisticFollowManager must reflect local storage state immediately", OptimisticFollowManager.isFollowing(targetUserId))
+
+        // Remove from local storage
+        FollowingLocalStorageManager.removeFollowing(null, currentUserId, targetUserId)
+        OptimisticFollowManager.removeFollowing(targetUserId, currentUserId)
+        assertFalse("Must be removed immediately from local storage", FollowingLocalStorageManager.isFollowingForUser(targetUserId, currentUserId))
+        assertFalse("OptimisticFollowManager must reflect removal immediately", OptimisticFollowManager.isFollowing(targetUserId))
     }
 }

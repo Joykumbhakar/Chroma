@@ -20,6 +20,7 @@ rules_version = '2';
 //    Subcollections:
 //      - /users/{userId}/followers/{followerId} (followerId is the follower's UID)
 //      - /users/{userId}/following/{followingId} (followingId is the followed user's UID)
+//      - /users/{userId}/follow_requests/{requesterId} (requesterId is the requesting user's UID)
 //      - /users/{userId}/liked_posts/{workId} (bookmarked/liked post record)
 //      - /users/{userId}/saved_posts/{workId} (saved post record)
 //      - /users/{userId}/shared_posts/{workId} (shared post record)
@@ -53,7 +54,7 @@ rules_version = '2';
 //      - postType: string ("work" | "image")
 //      - jsonUrl: string (compressed vector layers)
 //      - imageUrl: string (Cloudinary CDN URL)
-//      - likesCount: int (interaction counter)
+//      - likes / likesCount: int (interaction counter)
 //      - likedBy: list of string
 //      - remixCount: int (interaction counter)
 //      - remixedBy: list of string
@@ -110,9 +111,11 @@ rules_version = '2';
 //      - videoUrl: string
 //      - thumbnailUrl: string
 //      - caption: string
-//      - likesCount, viewsCount, commentCount, commentsCount, remixCount, shareCount, saveCount: int
-//      - likedBy, viewedBy, remixedBy, sharedBy, savedBy: list of string
+//      - likes, likesCount, viewsCount, commentCount, commentsCount, remixCount, shareCount, saveCount: int
+//      - dislikedBy, likedBy, viewedBy, remixedBy, sharedBy, savedBy: list of string
 //      - isArchived: bool
+//    Subcollections:
+//      - /flash_videos/{flashId}/likes/{userId} (userId is the liker's UID)
 //
 // 6. Collection: flash_comments
 //    Document ID: {commentId}
@@ -202,6 +205,12 @@ service cloud.firestore {
         allow write: if isOwner(userId);
       }
 
+      match /follow_requests/{requesterId} {
+        allow read: if isAuthenticated() && (isOwner(userId) || request.auth.uid == requesterId);
+        allow create: if isAuthenticated() && request.auth.uid == requesterId;
+        allow delete: if isAuthenticated() && (isOwner(userId) || request.auth.uid == requesterId);
+      }
+
       match /liked_posts/{workId} {
         allow read, write: if isOwner(userId);
       }
@@ -215,7 +224,8 @@ service cloud.firestore {
       }
 
       match /notifications/{notifId} {
-        allow read, update, delete: if isAuthenticated() && request.auth.uid == userId;
+        allow read, update: if isAuthenticated() && request.auth.uid == userId;
+        allow delete: if isAuthenticated() && (request.auth.uid == userId || resource.data.actorUid == request.auth.uid);
         allow create: if isAuthenticated() && request.resource.data.actorUid == request.auth.uid;
       }
     }
@@ -234,11 +244,15 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.creatorId ||
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likesCount', 'likedBy', 'remixCount', 'remixedBy', 'downloadCount', 'downloadedBy', 'downloadsCount', 'saveCount', 'savedBy', 'shareCount', 'sharedBy', 'commentsCount'])
+          .hasOnly(['likes', 'likesCount', 'likedBy', 'remixCount', 'remixedBy', 'downloadCount', 'downloadedBy', 'downloadsCount', 'saveCount', 'savedBy', 'shareCount', 'sharedBy', 'commentsCount'])
       );
 
       // Only creator can delete their work
-      allow delete: if isAuthenticated() && request.auth.uid == resource.data.creatorId;
+      allow delete: if isAuthenticated() && (
+        resource == null ||
+        request.auth.uid == resource.data.creatorId ||
+        (resource.data.userId != null && request.auth.uid == resource.data.userId)
+      );
 
       // Subcollection for likes tracking
       match /likes/{userId} {
@@ -309,9 +323,19 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.creatorId ||
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likesCount', 'viewsCount', 'likedBy', 'viewedBy', 'commentCount', 'commentsCount', 'remixCount', 'remixedBy', 'shareCount', 'sharedBy', 'saveCount', 'savedBy'])
+          .hasOnly(['dislikedBy', 'likes', 'likesCount', 'viewsCount', 'likedBy', 'viewedBy', 'commentCount', 'commentsCount', 'remixCount', 'remixedBy', 'shareCount', 'sharedBy', 'saveCount', 'savedBy'])
       );
-      allow delete: if isAuthenticated() && request.auth.uid == resource.data.creatorId;
+      allow delete: if isAuthenticated() && (
+        resource == null ||
+        request.auth.uid == resource.data.creatorId ||
+        (resource.data.userId != null && request.auth.uid == resource.data.userId)
+      );
+
+      // Subcollection for likes tracking
+      match /likes/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
     }
 
     // ===============================================================
@@ -324,7 +348,10 @@ service cloud.firestore {
         request.auth.uid == resource.data.userId ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'likesCount'])
       );
-      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow delete: if isAuthenticated() && (
+        resource == null ||
+        request.auth.uid == resource.data.userId
+      );
     }
 
     // ===============================================================

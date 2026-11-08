@@ -143,6 +143,10 @@ fun OneUiCollapsingConversationsScreen(
     storyGroups: List<UserStoryGroup> = emptyList(),
     myStories: List<com.chroma.studio.model.Story> = emptyList(),
     hasMyStory: Boolean = false,
+    isUploadingStory: Boolean = false,
+    isUploadFailed: Boolean = false,
+    isLoadingStories: Boolean = false,
+    onRetryUpload: (() -> Unit)? = null,
     chats: List<ChatConversation>,
     activeTab: String,
     onTabSelected: (String) -> Unit,
@@ -795,13 +799,15 @@ fun OneUiCollapsingConversationsScreen(
                 item(key = "oneui_stories_card") {
                     StoriesSection(
                         stories = storyGroups,
-                        isLoading = false,
+                        isLoading = isLoadingStories,
                         onAddStoryClick = onAddStoryClick,
                         hasMyStory = hasMyStory,
                         myStoryAvatarUrl = currentUser.avatar ?: "",
                         myStoryGender = null,
                         myStoriesList = myStories,
-                        isUploading = false,
+                        isUploading = isUploadingStory,
+                        isUploadFailed = isUploadFailed,
+                        onRetryUpload = onRetryUpload,
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
                         gapColor = screenBgColor,
                         onMyStoryClick = onMyStoryClick,
@@ -939,11 +945,14 @@ fun OneUiCollapsingConversationsScreen(
                                     else -> "Tap to start chatting"
                                 }
                                 val timeLabel = lastMsg?.time ?: ""
+                                val isOutgoing = lastMsg != null && (lastMsg.senderId == currentUser.id || lastMsg.senderName == "You")
 
                                 OneUiSwipeableConversationItem(
                                     chat = chat,
                                     snippet = snippet,
                                     timeLabel = timeLabel,
+                                    isOutgoing = isOutgoing,
+                                    lastMsgStatus = lastMsg?.status ?: "sent",
                                     gradientStyle = gradientStyle,
                                     cardBgColor = cardBgColor,
                                     dividerColor = dividerColor,
@@ -1401,6 +1410,8 @@ private fun OneUiSwipeableConversationItem(
     chat: ChatConversation,
     snippet: String,
     timeLabel: String,
+    isOutgoing: Boolean = false,
+    lastMsgStatus: String = "sent",
     gradientStyle: OneUiGradientStyle,
     cardBgColor: Color,
     dividerColor: Color,
@@ -1678,18 +1689,37 @@ private fun OneUiSwipeableConversationItem(
 
                     Spacer(modifier = Modifier.height(3.dp))
 
-                    Text(
-                        text = snippet,
-                        fontSize = 13.sp,
-                        fontWeight = if (chat.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
-                        color = when {
-                            chat.statusText.contains("recording", ignoreCase = true) -> Color(0xFF34C759)
-                            chat.statusText.contains("typing", ignoreCase = true) -> colors.iosBlue
-                            else -> colors.textMuted
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (isOutgoing && !isLocked && !chat.statusText.contains("typing", true) && !chat.statusText.contains("recording", true)) {
+                            MessageStatusTick(
+                                status = lastMsgStatus,
+                                isOutgoing = true,
+                                normalTint = Color(0xFF8696A0),
+                                readTint = Color(0xFF53BDEB),
+                                pendingTint = Color(0xFF8696A0),
+                                errorTint = Color(0xFFEF4444),
+                                size = 13.dp
+                            )
+                        }
+
+                        Text(
+                            text = snippet,
+                            fontSize = 13.sp,
+                            fontWeight = if (chat.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
+                            color = when {
+                                chat.statusText.contains("recording", ignoreCase = true) -> Color(0xFF34C759)
+                                chat.statusText.contains("typing", ignoreCase = true) -> colors.iosBlue
+                                else -> colors.textMuted
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(10.dp))

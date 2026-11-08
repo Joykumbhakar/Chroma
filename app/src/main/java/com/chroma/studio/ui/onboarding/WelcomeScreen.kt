@@ -129,13 +129,41 @@ fun WelcomeScreen(
                     verticalArrangement = Arrangement.SpaceBetween,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // ── 1. CLEAN TITLE HEADER (No Logo, No Underline) ─────────────
+                    // ── 1. BESPOKE BRAND EMBLEM & CLEAN TITLE HEADER ─────────────
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 22.dp, bottom = 14.dp),
+                            .padding(top = 16.dp, bottom = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        // Luminous Brand Squircle Emblem
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .shadow(
+                                    elevation = 12.dp,
+                                    shape = RoundedCornerShape(18.dp),
+                                    ambientColor = Color(0x332563EB),
+                                    spotColor = Color(0x4D2563EB)
+                                )
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(Color(0xFF38BDF8), Color(0xFF2563EB), Color(0xFF4F46E5))
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Sparkles,
+                                contentDescription = "Chroma Studio",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.height(14.dp))
+
                         Text(
                             text = buildAnnotatedString {
                                 append("Chroma ")
@@ -149,19 +177,19 @@ fun WelcomeScreen(
                                     append("Studio")
                                 }
                             },
-                            fontSize = 38.sp,
+                            fontSize = 32.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = textPrimary,
-                            letterSpacing = (-0.8).sp,
+                            letterSpacing = (-0.6).sp,
                             textAlign = TextAlign.Center,
                             fontFamily = InterFontFamily
                         )
 
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(6.dp))
 
                         Text(
                             text = "Where creativity meets community.",
-                            fontSize = 15.5.sp,
+                            fontSize = 14.5.sp,
                             fontWeight = FontWeight.Medium,
                             color = textMuted,
                             letterSpacing = (-0.2).sp,
@@ -169,29 +197,29 @@ fun WelcomeScreen(
                             fontFamily = InterFontFamily
                         )
 
-                        Spacer(Modifier.height(18.dp))
+                        Spacer(Modifier.height(16.dp))
 
-                        // ── 2. FROSTED WHITE 32dp FEATURE CARD ────────────────────
+                        // ── 2. FROSTED WHITE COMPACT FEATURE CARD ────────────────────
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .shadow(
-                                    elevation = 14.dp,
-                                    shape = RoundedCornerShape(32.dp),
+                                    elevation = 10.dp,
+                                    shape = RoundedCornerShape(26.dp),
                                     ambientColor = Color(0x1F173E94),
                                     spotColor = Color(0x28173E94)
                                 )
-                                .clip(RoundedCornerShape(32.dp))
+                                .clip(RoundedCornerShape(26.dp))
                                 .background(
                                     if (isDark) Color(0xFF111726).copy(alpha = 0.88f)
                                     else Color.White.copy(alpha = 0.85f)
                                 )
                                 .border(
-                                    1.5.dp,
+                                    1.2.dp,
                                     if (isDark) Color.White.copy(alpha = 0.12f) else Color.White,
-                                    RoundedCornerShape(32.dp)
+                                    RoundedCornerShape(26.dp)
                                 )
-                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
                         ) {
                             Column {
                                 // Row 1: Creative Canvas
@@ -273,12 +301,12 @@ fun WelcomeScreen(
                         }
                     }
 
-                    // ── 3. SYMMETRICALLY ALIGNED GLOSSY PILL ACTION BUTTONS ───────
+                    // ── 3. CLEAN & PROFESSIONAL ACTION BUTTONS ───────
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 10.dp, bottom = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(11.dp),
+                            .padding(top = 12.dp, bottom = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // Optional: Saved Account Quick Login
@@ -289,14 +317,50 @@ fun WelcomeScreen(
                             )
                         }
 
-                        // Button 1: Continue with Google (Glossy Google Blue Gradient)
+                        // Button 1: Continue with Google (Primary - Clean & Centered)
                         GlossyGooglePillButton(
                             text = "Continue with Google",
                             loading = googleLoading,
                             onClick = onGoogle
                         )
 
-                        // Button 2: Create a new account (Secondary Frosted White Glass Pill)
+                        // Button 2: Sign in with Email (Secondary - Frosted Glass Pill)
+                        GlossySecondaryPillButton(
+                            text = "Sign in with Email",
+                            iconVector = Lucide.Mail,
+                            isDark = isDark,
+                            onClick = onSignInExisting
+                        )
+
+                        // Subtle Divider with "or"
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(0.8.dp)
+                                    .background(if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0))
+                            )
+                            Text(
+                                text = "or",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = textMuted
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(0.8.dp)
+                                    .background(if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0))
+                            )
+                        }
+
+                        // Button 3: Create a new account
                         GlossySecondaryPillButton(
                             text = "Create a new account",
                             iconVector = Lucide.UserPlus,
@@ -304,51 +368,31 @@ fun WelcomeScreen(
                             onClick = onCreateAccount
                         )
 
-                        // Button 3: Explore Studio as Guest (Secondary Frosted White Glass Pill)
-                        GlossySecondaryPillButton(
-                            text = "Explore Studio as Guest",
-                            iconVector = Lucide.Sparkles,
-                            isDark = isDark,
-                            onClick = onExploreGuest
-                        )
-
-                        Spacer(Modifier.height(4.dp))
-
-                        // Bottom Text Links: Sign in with Email • Create Account
+                        // Subtle "Explore Studio as Guest"
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .clickable(role = Role.Button, onClick = onExploreGuest)
+                                .padding(horizontal = 16.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text(
-                                text = "Sign in with Email",
-                                color = Color(0xFF0B63F6),
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = (-0.2).sp,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable(role = Role.Button, onClick = onSignInExisting)
-                                    .padding(horizontal = 8.dp, vertical = 6.dp)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(5.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFB0BDCE))
+                            Icon(
+                                imageVector = Lucide.Sparkles,
+                                contentDescription = null,
+                                tint = textMuted,
+                                modifier = Modifier.size(15.dp)
                             )
                             Text(
-                                text = "Create Account",
-                                color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF0D1526),
-                                fontSize = 14.5.sp,
+                                text = "Explore Studio as Guest",
+                                fontSize = 13.5.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                letterSpacing = (-0.2).sp,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable(role = Role.Button, onClick = onCreateAccount)
-                                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                                color = textMuted,
+                                letterSpacing = (-0.2).sp
                             )
                         }
+
+                        Spacer(Modifier.height(2.dp))
 
                         // Terms and Privacy Policy Footer
                         Text(
@@ -592,32 +636,32 @@ private fun ChromaFeatureRow(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(18.dp))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 8.dp, vertical = 11.dp),
+            .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Pastel 3D Squircle Icon
         Box(
             modifier = Modifier
-                .size(56.dp)
+                .size(44.dp)
                 .shadow(
-                    elevation = 6.dp,
-                    shape = RoundedCornerShape(18.dp),
-                    ambientColor = iconTint.copy(alpha = 0.25f),
-                    spotColor = iconTint.copy(alpha = 0.35f)
+                    elevation = 4.dp,
+                    shape = RoundedCornerShape(14.dp),
+                    ambientColor = iconTint.copy(alpha = 0.2f),
+                    spotColor = iconTint.copy(alpha = 0.3f)
                 )
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(14.dp))
                 .background(iconBgBrush)
                 .border(
-                    1.2.dp,
-                    if (isDark) Color.White.copy(alpha = 0.18f) else Color.White,
-                    RoundedCornerShape(18.dp)
+                    1.dp,
+                    if (isDark) Color.White.copy(alpha = 0.16f) else Color.White,
+                    RoundedCornerShape(14.dp)
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -625,7 +669,7 @@ private fun ChromaFeatureRow(
                 imageVector = iconVector,
                 contentDescription = title,
                 tint = iconTint,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
 
@@ -635,19 +679,19 @@ private fun ChromaFeatureRow(
         ) {
             Text(
                 text = title,
-                fontSize = 16.5.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isDark) Color(0xFFF1F5F9) else Color(0xFF0C1425),
                 letterSpacing = (-0.3).sp,
                 fontFamily = InterFontFamily
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(1.dp))
             Text(
                 text = subtitle,
-                fontSize = 13.5.sp,
+                fontSize = 12.5.sp,
                 fontWeight = FontWeight.Normal,
                 color = if (isDark) Color(0xFF94A3B8) else Color(0xFF566479),
-                lineHeight = 18.sp,
+                lineHeight = 16.sp,
                 fontFamily = InterFontFamily
             )
         }
@@ -655,7 +699,7 @@ private fun ChromaFeatureRow(
         // Right Circular Chevron Button
         Box(
             modifier = Modifier
-                .size(32.dp)
+                .size(28.dp)
                 .clip(CircleShape)
                 .background(if (isDark) Color(0x1FFFFFFF) else Color(0xFFE5EEF9)),
             contentAlignment = Alignment.Center
@@ -664,7 +708,7 @@ private fun ChromaFeatureRow(
                 imageVector = Lucide.ChevronRight,
                 contentDescription = "Details",
                 tint = if (isDark) Color(0xFFCBD5E1) else Color(0xFF1E293B),
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(15.dp)
             )
         }
     }
@@ -672,9 +716,7 @@ private fun ChromaFeatureRow(
 
 /**
  * Primary Google Blue Glossy Pill Button.
- * Matches .btn-google-gradient from HTML:
- * - linear-gradient(180deg, #329EFF 0%, #1667F2 54%, #0D51D4 100%)
- * - Symmetrical 3-zone layout: 28dp left spacer, center icon + divider + label, 28dp right translucent chevron.
+ * Clean, centered, and modern executive action button.
  */
 @Composable
 private fun GlossyGooglePillButton(
@@ -693,24 +735,23 @@ private fun GlossyGooglePillButton(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(58.dp)
+            .height(52.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
             .shadow(
-                elevation = 14.dp,
+                elevation = 10.dp,
                 shape = RoundedCornerShape(999.dp),
-                ambientColor = Color(0x551158EB),
-                spotColor = Color(0x751158EB)
+                ambientColor = Color(0x441158EB),
+                spotColor = Color(0x601158EB)
             )
             .clip(RoundedCornerShape(999.dp))
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF329EFF), Color(0xFF1667F2), Color(0xFF0D51D4))
+                    listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
                 )
             )
-            .border(1.dp, Color(0x9972BEFF), RoundedCornerShape(999.dp))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -729,69 +770,32 @@ private fun GlossyGooglePillButton(
             )
         } else {
             Row(
-                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Left optical spacer
-                Spacer(Modifier.width(28.dp))
-
-                // Center Icon + Divider + Label
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Crisp White Pill Badge around Google logo
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .shadow(2.dp, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            painter = painterResource(R.drawable.ic_google_logo),
-                            contentDescription = "Google",
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
-                    // Vertical Divider
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(18.dp)
-                            .background(Color.White.copy(alpha = 0.35f))
-                    )
-
-                    // Text Label
-                    Text(
-                        text = text,
-                        color = Color.White,
-                        fontSize = 16.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = (-0.2).sp,
-                        fontFamily = InterFontFamily
-                    )
-                }
-
-                // Right Translucent Circle Chevron
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(26.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.18f))
-                        .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape),
+                        .background(Color.White)
+                        .shadow(2.dp, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Lucide.ChevronRight,
-                        contentDescription = null,
-                        tint = Color.White,
+                    Image(
+                        painter = painterResource(R.drawable.ic_google_logo),
+                        contentDescription = "Google",
                         modifier = Modifier.size(16.dp)
                     )
                 }
+
+                Text(
+                    text = text,
+                    color = Color.White,
+                    fontSize = 15.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = (-0.2).sp,
+                    fontFamily = InterFontFamily
+                )
             }
         }
     }
@@ -799,9 +803,7 @@ private fun GlossyGooglePillButton(
 
 /**
  * Secondary Frosted Glass Pill Button.
- * Matches .btn-secondary-glass from HTML:
- * - Frosted white/ice-blue glass gradient with 1.5dp border
- * - Symmetrical 3-zone layout: 28dp left spacer, center icon + divider + label, 28dp right chevron.
+ * Clean, centered, and modern executive action button.
  */
 @Composable
 private fun GlossySecondaryPillButton(
@@ -821,16 +823,16 @@ private fun GlossySecondaryPillButton(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(50.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
             .shadow(
-                elevation = 8.dp,
+                elevation = 6.dp,
                 shape = RoundedCornerShape(999.dp),
-                ambientColor = Color(0x141E40AF),
-                spotColor = Color(0x201E40AF)
+                ambientColor = Color(0x101E40AF),
+                spotColor = Color(0x181E40AF)
             )
             .clip(RoundedCornerShape(999.dp))
             .background(
@@ -843,8 +845,8 @@ private fun GlossySecondaryPillButton(
                 )
             )
             .border(
-                1.5.dp,
-                if (isDark) Color.White.copy(alpha = 0.14f) else Color.White,
+                1.2.dp,
+                if (isDark) Color.White.copy(alpha = 0.12f) else Color.White,
                 RoundedCornerShape(999.dp)
             )
             .clickable(
@@ -857,59 +859,24 @@ private fun GlossySecondaryPillButton(
         contentAlignment = Alignment.Center
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Left optical spacer
-            Spacer(Modifier.width(28.dp))
+            Icon(
+                imageVector = iconVector,
+                contentDescription = null,
+                tint = Color(0xFF2563EB),
+                modifier = Modifier.size(19.dp)
+            )
 
-            // Center Icon + Divider + Label
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    imageVector = iconVector,
-                    contentDescription = null,
-                    tint = Color(0xFF1068EB),
-                    modifier = Modifier.size(21.dp)
-                )
-
-                // Vertical Divider
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(18.dp)
-                        .background(if (isDark) Color(0x33FFFFFF) else Color(0xFFCBD5E1))
-                )
-
-                // Text Label
-                Text(
-                    text = text,
-                    color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0D1526),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = (-0.2).sp,
-                    fontFamily = InterFontFamily
-                )
-            }
-
-            // Right Circular Chevron
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(if (isDark) Color(0x1FFFFFFF) else Color(0xFFE2E8F0).copy(alpha = 0.65f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Lucide.ChevronRight,
-                    contentDescription = null,
-                    tint = if (isDark) Color(0xFFCBD5E1) else Color(0xFF1E293B),
-                    modifier = Modifier.size(16.dp)
-                )
-            }
+            Text(
+                text = text,
+                color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0D1526),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.2).sp,
+                fontFamily = InterFontFamily
+            )
         }
     }
 }

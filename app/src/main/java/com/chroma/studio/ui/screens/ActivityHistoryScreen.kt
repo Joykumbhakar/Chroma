@@ -70,7 +70,7 @@ fun ActivityHistoryScreen(
 ) {
     val colors = LocalOscellionColors.current
     val context = LocalContext.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = colors.isDark
     val scope = rememberCoroutineScope()
 
     var selectedTab by remember { mutableStateOf(ActivityTab.LIKED) }
@@ -379,6 +379,11 @@ fun ActivityHistoryScreen(
                                     onLikeClick = {
                                         if (currentUserId != null) {
                                             discoverVm.toggleLike(work.id, currentUserId)
+                                        } else onRequireLogin()
+                                    },
+                                    onForceLike = {
+                                        if (currentUserId != null) {
+                                            discoverVm.toggleLike(work.id, currentUserId, forceLike = true)
                                         } else onRequireLogin()
                                     },
                                     onSaveClick = {

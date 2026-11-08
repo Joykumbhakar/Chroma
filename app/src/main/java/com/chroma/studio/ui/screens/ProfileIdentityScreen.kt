@@ -84,7 +84,7 @@ fun ProfileIdentityScreen(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = colors.isDark
 
 
     // Form states
@@ -1598,7 +1598,7 @@ fun AppleSettingsTextFieldRow(
     showDivider: Boolean = true
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = colors.isDark
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val coroutineScope = rememberCoroutineScope()
 

@@ -46,6 +46,8 @@ fun StoriesSection(
     myStoryGender: String? = null,
     myStoriesList: List<Story> = emptyList(),
     isUploading: Boolean = false,
+    isUploadFailed: Boolean = false,
+    onRetryUpload: (() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
     gapColor: Color? = null,
     onMyStoryClick: (() -> Unit)? = null,
@@ -55,25 +57,29 @@ fun StoriesSection(
     val isDark = colors.isDark
     val effectiveGapColor = gapColor ?: (if (isDark) Color(0xFF161A22) else Color.White)
 
-    val shimmerTransition = rememberInfiniteTransition(label = "story_shimmer")
-    val shimmerTranslate by shimmerTransition.animateFloat(
-        initialValue = -250f,
-        targetValue = 850f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "story_shimmer_translate"
-    )
-    val storyShimmerBrush = Brush.linearGradient(
-        colors = if (isDark) {
-            listOf(Color(0xFF1E2028), Color(0xFF2F323D), Color(0xFF1E2028))
-        } else {
-            listOf(Color(0xFFE5E9F0), Color(0xFFF4F7FB), Color(0xFFE5E9F0))
-        },
-        start = Offset(shimmerTranslate, 0f),
-        end = Offset(shimmerTranslate + 250f, 100f)
-    )
+    val storyShimmerBrush = if (isLoading) {
+        val shimmerTransition = rememberInfiniteTransition(label = "story_shimmer")
+        val shimmerTranslate by shimmerTransition.animateFloat(
+            initialValue = -250f,
+            targetValue = 850f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "story_shimmer_translate"
+        )
+        Brush.linearGradient(
+            colors = if (isDark) {
+                listOf(Color(0xFF1E2028), Color(0xFF2F323D), Color(0xFF1E2028))
+            } else {
+                listOf(Color(0xFFE5E9F0), Color(0xFFF4F7FB), Color(0xFFE5E9F0))
+            },
+            start = Offset(shimmerTranslate, 0f),
+            end = Offset(shimmerTranslate + 250f, 100f)
+        )
+    } else {
+        androidx.compose.ui.graphics.SolidColor(Color.Transparent)
+    }
 
     LazyRow(
         contentPadding = contentPadding,
@@ -127,7 +133,9 @@ fun StoriesSection(
                                 interactionSource = myStoryInteractionSource,
                                 indication = null
                             ) {
-                                if (hasMyStory && onMyStoryClick != null) {
+                                if (isUploadFailed && onRetryUpload != null) {
+                                    onRetryUpload()
+                                } else if (hasMyStory && onMyStoryClick != null) {
                                     onMyStoryClick()
                                 } else {
                                     onAddStoryClick()
@@ -145,19 +153,35 @@ fun StoriesSection(
                             isSeen = false,
                             isOnlyFriend = hasOnlyFriendStory,
                             isUploading = isUploading,
+                            isUploadFailed = isUploadFailed,
                             showAddBadge = true,
                             gender = myStoryGender,
                             isDark = isDark,
                             gapColor = effectiveGapColor,
-                            onAddBadgeClick = { onAddStoryClick() }
+                            onAddBadgeClick = {
+                                if (isUploadFailed && onRetryUpload != null) {
+                                    onRetryUpload()
+                                } else {
+                                    onAddStoryClick()
+                                }
+                            }
                         )
 
                         Spacer(modifier = Modifier.height(5.dp))
                         Text(
-                            text = if (isUploading) "Uploading..." else "Your story",
-                            color = if (isUploading) Color(0xFF0381FE) else if (hasMyStory) colors.textMain else colors.textMain.copy(alpha = 0.82f),
+                            text = when {
+                                isUploading -> "Uploading..."
+                                isUploadFailed -> "Failed • Retry"
+                                else -> "Your story"
+                            },
+                            color = when {
+                                isUploading -> Color(0xFF0381FE)
+                                isUploadFailed -> Color(0xFFFF3B30)
+                                hasMyStory -> colors.textMain
+                                else -> colors.textMain.copy(alpha = 0.82f)
+                            },
                             fontSize = 11.5.sp,
-                            fontWeight = if (isUploading || hasMyStory) FontWeight.SemiBold else FontWeight.Medium,
+                            fontWeight = if (isUploading || isUploadFailed || hasMyStory) FontWeight.SemiBold else FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Center

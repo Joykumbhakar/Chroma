@@ -1,5 +1,9 @@
 package com.chroma.studio.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.chroma.studio.ui.components.VerifiedBadge
 
 import androidx.compose.animation.* 
@@ -62,6 +66,7 @@ import com.chroma.studio.model.NotificationActionType
 import com.chroma.studio.model.Story
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.model.UserStoryGroup
+import com.chroma.studio.chat.ui.components.StoryAnalyticsModal
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.components.MarkdownText
 import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
@@ -392,7 +397,10 @@ private fun StorySlideContent(
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class
+)
 @Composable
 fun StoryViewerScreen(
     storyGroups: List<UserStoryGroup>,
@@ -404,22 +412,29 @@ fun StoryViewerScreen(
     currentUserProfile: UserProfile? = null,
     onClose: () -> Unit,
     onAuthorClick: (String) -> Unit,
-    onReplySend: ((authorId: String, text: String, storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null
+    onReplySend: ((authorId: String, text: String, storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null,
+    initialStoryId: String? = null
 ) {
-    val allGroups = remember(storyGroups, myStories, currentUserId, currentUserProfile, initialGroupIndex) {
-        if (initialGroupIndex < 0 && myStories.isNotEmpty()) {
+    val liveStoryGroups by storyViewModel.storyGroups.collectAsState()
+    val liveMyStories by storyViewModel.myStories.collectAsState()
+    val effectiveStoryGroups = if (liveStoryGroups.isNotEmpty()) liveStoryGroups else storyGroups
+    val effectiveMyStories = if (liveMyStories.isNotEmpty()) liveMyStories else myStories
+
+    val allGroups = remember(effectiveStoryGroups, effectiveMyStories, currentUserId, currentUserProfile, initialGroupIndex, initialStoryId) {
+        val shouldPrependMyStory = (initialGroupIndex < 0 || (initialStoryId != null && effectiveMyStories.any { it.id == initialStoryId })) && effectiveMyStories.isNotEmpty()
+        if (shouldPrependMyStory) {
             listOf(
                 UserStoryGroup(
                     userId = currentUserId,
                     userProfile = currentUserProfile?.copy(
                         displayName = currentUserProfile.displayName.ifBlank { "Your Story" }
                     ) ?: UserProfile(uid = currentUserId, displayName = "Your Story"),
-                    stories = myStories,
+                    stories = effectiveMyStories,
                     allSeen = true
                 )
-            ) + storyGroups.filter { it.userId != currentUserId }
+            ) + effectiveStoryGroups.filter { it.userId != currentUserId }
         } else {
-            storyGroups
+            effectiveStoryGroups
         }
     }
 
@@ -444,7 +459,11 @@ fun StoryViewerScreen(
         return
     }
 
-    val initialPageIndex = remember(allFlatStories) {
+    val initialPageIndex = remember(allFlatStories, initialStoryId, initialGroupIndex) {
+        if (!initialStoryId.isNullOrBlank()) {
+            val exactIdx = allFlatStories.indexOfFirst { it.story.id == initialStoryId }
+            if (exactIdx >= 0) return@remember exactIdx
+        }
         val targetGroup = if (initialGroupIndex < 0) 0 else initialGroupIndex.coerceIn(0, maxOf(0, allGroups.size - 1))
         val idx = allFlatStories.indexOfFirst { it.groupIndex == targetGroup }
         if (idx >= 0) idx else 0
@@ -455,6 +474,15 @@ fun StoryViewerScreen(
         pageCount = { allFlatStories.size }
     )
 
+    LaunchedEffect(initialStoryId) {
+        if (!initialStoryId.isNullOrBlank()) {
+            val exactIdx = allFlatStories.indexOfFirst { it.story.id == initialStoryId }
+            if (exactIdx >= 0 && exactIdx != pagerState.currentPage) {
+                pagerState.scrollToPage(exactIdx)
+            }
+        }
+    }
+
     var isPaused by remember { mutableStateOf(false) }
     var showViewers by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -462,6 +490,20 @@ fun StoryViewerScreen(
     var showOnlyFriendsInfoDialog by remember { mutableStateOf(false) }
     var quickReplyText by remember { mutableStateOf("") }
     var showQuickReactions by remember { mutableStateOf(false) }
+    var isReplyInputFocused by remember { mutableStateOf(false) }
+
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val isImeVisible = WindowInsets.isImeVisible
+    val isReplying = quickReplyText.isNotEmpty() || isReplyInputFocused || showQuickReactions || isImeVisible
+
+    BackHandler(enabled = isReplying) {
+        quickReplyText = ""
+        isReplyInputFocused = false
+        showQuickReactions = false
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
 
     val scope = rememberCoroutineScope()
     val storyDurationMs = 5000L
@@ -473,33 +515,44 @@ fun StoryViewerScreen(
     val storiesForCurrentGroup = currentGroup?.stories ?: emptyList()
     val isOwner = currentStory != null && (currentStory.userId == currentUserId || currentGroup?.userId == currentUserId)
     val vmLikedStoryIds by storyViewModel.likedStoryIds.collectAsState()
-    val isLiked = currentStory != null && (vmLikedStoryIds.contains(currentStory.id) || likedStoryIds.contains(currentStory.id))
+    val isLiked = currentStory != null && (vmLikedStoryIds.contains(currentStory.id) || currentStory.likedBy.contains(currentUserId))
 
     var doubleTapHeartVisible by remember { mutableStateOf(false) }
     val doubleTapHeartScale = remember { Animatable(0.2f) }
     val doubleTapHeartAlpha = remember { Animatable(0f) }
 
     val isScrollInProgress = pagerState.isScrollInProgress
-    val effectivePaused = isPaused || isScrollInProgress || showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog
+    val effectivePaused = isPaused || isScrollInProgress || showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog || isReplying
 
     val progress = remember(pagerState.currentPage) { Animatable(0f) }
 
+    LaunchedEffect(pagerState.currentPage) {
+        progress.snapTo(0f)
+    }
+
     LaunchedEffect(pagerState.currentPage, effectivePaused) {
         if (!effectivePaused && allFlatStories.isNotEmpty()) {
-            progress.snapTo(0f)
-            progress.animateTo(
+            val currentFraction = progress.value.coerceIn(0f, 1f)
+            val remainingFraction = 1f - currentFraction
+            val remainingDuration = kotlin.math.round(storyDurationMs * remainingFraction).toInt().coerceAtLeast(50)
+
+            val result = progress.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(durationMillis = storyDurationMs.toInt(), easing = LinearEasing)
+                animationSpec = tween(durationMillis = remainingDuration, easing = LinearEasing)
             )
-            // Auto advance with smooth 3D animation
-            if (pagerState.currentPage < allFlatStories.size - 1) {
-                pagerState.animateScrollToPage(
-                    page = pagerState.currentPage + 1,
-                    animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)
-                )
-            } else {
-                onClose()
+            if (result.endReason == AnimationEndReason.Finished && progress.value >= 0.999f) {
+                // Auto advance with smooth 3D animation
+                if (pagerState.currentPage < allFlatStories.size - 1) {
+                    pagerState.animateScrollToPage(
+                        page = pagerState.currentPage + 1,
+                        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)
+                    )
+                } else {
+                    onClose()
+                }
             }
+        } else {
+            progress.stop()
         }
     }
 
@@ -617,6 +670,14 @@ fun StoryViewerScreen(
                                     }
                                 },
                                 onTap = { offset ->
+                                    if (isReplying) {
+                                        quickReplyText = ""
+                                        isReplyInputFocused = false
+                                        showQuickReactions = false
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                        return@detectTapGestures
+                                    }
                                     if (showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog) return@detectTapGestures
                                     val totalWidth = size.width
                                     if (offset.x < totalWidth * 0.33f) {
@@ -891,7 +952,7 @@ fun StoryViewerScreen(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Icon(Lucide.Eye, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                                 Text(
-                                    text = "${currentStory.viewedBy.size} views",
+                                    text = "${maxOf(currentStory.views, currentStory.viewedBy.size)} views",
                                     color = Color.White,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -900,7 +961,7 @@ fun StoryViewerScreen(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                                 Icon(ChromaIcons.HeartFilled, contentDescription = null, tint = Color(0xFFFF2D55), modifier = Modifier.size(16.dp))
                                 Text(
-                                    text = "${currentStory.likedBy.size}",
+                                    text = "${maxOf(currentStory.likes, currentStory.likedBy.size)}",
                                     color = Color.White,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -934,21 +995,25 @@ fun StoryViewerScreen(
                                                     val authorId = currentStory?.userId ?: currentGroup?.userId ?: ""
                                                     val storyId = currentStory?.id ?: ""
                                                     val mediaUrl = currentStory?.mediaUrl
+                                                    val thumbUrl = if (!mediaUrl.isNullOrBlank() && mediaUrl != "text:story") mediaUrl else if (!currentStory?.textContent.isNullOrBlank()) "text:${currentStory?.textContent}" else mediaUrl
                                                     if (authorId.isNotBlank()) {
-                                                        onReplySend?.invoke(authorId, emoji, storyId, mediaUrl)
+                                                        onReplySend?.invoke(authorId, emoji, storyId, thumbUrl)
                                                         scope.launch {
                                                             NotificationDispatcher.sendNotification(
                                                                 targetUserId = authorId,
                                                                 type = NotificationActionType.STORY_REACTION,
                                                                 actionText = "reacted $emoji to your story",
                                                                 detailText = emoji,
-                                                                targetPreviewUrl = mediaUrl,
+                                                                targetPreviewUrl = thumbUrl,
                                                                 targetId = storyId
                                                             )
                                                         }
                                                     }
                                                     ToastManager.showToast("Sent $emoji reaction")
                                                     showQuickReactions = false
+                                                    isReplyInputFocused = false
+                                                    focusManager.clearFocus()
+                                                    keyboardController?.hide()
                                                 }
                                                 .padding(4.dp)
                                         )
@@ -990,7 +1055,9 @@ fun StoryViewerScreen(
                                                 }
                                                 innerTextField()
                                             },
-                                            modifier = Modifier.weight(1f)
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .onFocusChanged { isReplyInputFocused = it.isFocused }
                                         )
 
                                         if (quickReplyText.isNotBlank()) {
@@ -1000,21 +1067,26 @@ fun StoryViewerScreen(
                                                     val authorId = currentStory?.userId ?: currentGroup?.userId ?: ""
                                                     val storyId = currentStory?.id ?: ""
                                                     val mediaUrl = currentStory?.mediaUrl
+                                                    val thumbUrl = if (!mediaUrl.isNullOrBlank() && mediaUrl != "text:story") mediaUrl else if (!currentStory?.textContent.isNullOrBlank()) "text:${currentStory?.textContent}" else mediaUrl
                                                     if (authorId.isNotBlank() && reply.isNotBlank()) {
-                                                        onReplySend?.invoke(authorId, reply, storyId, mediaUrl)
+                                                        onReplySend?.invoke(authorId, reply, storyId, thumbUrl)
                                                         scope.launch {
                                                             NotificationDispatcher.sendNotification(
                                                                 targetUserId = authorId,
                                                                 type = NotificationActionType.STORY_REPLY,
                                                                 actionText = "replied to your story",
                                                                 detailText = reply,
-                                                                targetPreviewUrl = mediaUrl,
+                                                                targetPreviewUrl = thumbUrl,
                                                                 targetId = storyId
                                                             )
                                                         }
                                                     }
                                                     ToastManager.showToast("Reply sent!")
                                                     quickReplyText = ""
+                                                    isReplyInputFocused = false
+                                                    showQuickReactions = false
+                                                    focusManager.clearFocus()
+                                                    keyboardController?.hide()
                                                 },
                                                 modifier = Modifier.size(28.dp)
                                             ) {
@@ -1061,13 +1133,13 @@ fun StoryViewerScreen(
                 }
             }
 
-            // ── Admin Viewers Bottom Sheet ────────────────────────────────────────────
+            // ── Admin Story Insights & Analytics Modal (Apple HIG Style) ───────────────
             if (showViewers && currentStory != null) {
-                AdminStoryViewersSheet(
+                StoryAnalyticsModal(
                     story = currentStory,
-                    onDismiss = { showViewers = false },
-                    onDelete = {
-                        storyViewModel.deleteStory(currentStory.id)
+                    onClose = { showViewers = false },
+                    onDeleteStory = { storyId ->
+                        storyViewModel.deleteStory(storyId)
                         showViewers = false
                         ToastManager.showToast("Story deleted")
                         onClose()

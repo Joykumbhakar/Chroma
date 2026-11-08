@@ -35,20 +35,27 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private var commentsJob: kotlinx.coroutines.Job? = null
+
     fun setSortOrder(order: CommentSortOrder) {
         _sortOrder.value = order
     }
 
     fun loadComments(videoId: String) {
-        viewModelScope.launch {
+        commentsJob?.cancel()
+        commentsJob = viewModelScope.launch {
             _isLoading.value = true
             try {
-                val items = repository.getComments(videoId)
-                _comments.value = items
+                repository.observeComments(videoId).collect { serverComments ->
+                    val pending = _comments.value.filter { it.isPending || it.isError }
+                    val serverIds = serverComments.map { it.id }.toSet()
+                    val activePending = pending.filter { it.id !in serverIds }
+                    _comments.value = serverComments + activePending
+                    _isLoading.value = false
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 _comments.value = emptyList()
-            } finally {
                 _isLoading.value = false
             }
         }
@@ -59,13 +66,14 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
         val user = auth.currentUser ?: return
 
         val tempId = UUID.randomUUID().toString()
+        val rawHandle = user.displayName?.replace(" ", "")?.lowercase() ?: "user_${user.uid.take(5)}"
         val optimisticComment = FlashComment(
             id = tempId,
             videoId = videoId,
             userId = user.uid,
-            username = user.displayName ?: "User",
-            displayName = user.displayName ?: "User",
-            avatarUrl = user.photoUrl?.toString() ?: "",
+            username = rawHandle,
+            displayName = user.displayName ?: rawHandle,
+            avatarUrl = user.photoUrl?.toString().orEmpty(),
             verified = false,
             text = text,
             timestamp = System.currentTimeMillis(),

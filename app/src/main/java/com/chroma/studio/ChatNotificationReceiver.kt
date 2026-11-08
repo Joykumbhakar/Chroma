@@ -13,8 +13,9 @@ import kotlinx.coroutines.launch
 
 /**
  * BroadcastReceiver handling background notification actions:
- * - ACTION_REPLY: Sends direct reply text via SupabaseChatRepository
- * - ACTION_MARK_READ: Marks chat room as read
+ * - ACTION_REPLY: Sends direct reply text via SupabaseChatRepository without opening app
+ * - ACTION_QUICK_REPLY: Sends pre-configured quick response without opening app
+ * - ACTION_MARK_READ: Marks chat room as read without opening app
  */
 class ChatNotificationReceiver : BroadcastReceiver() {
 
@@ -26,7 +27,7 @@ class ChatNotificationReceiver : BroadcastReceiver() {
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        if (action == "ACTION_MARK_READ") {
+        if (action == ChatNotificationBuilder.ACTION_MARK_READ) {
             val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
                 try {
@@ -46,8 +47,12 @@ class ChatNotificationReceiver : BroadcastReceiver() {
                     pendingResult.finish()
                 }
             }
-        } else if (action == "ACTION_REPLY") {
-            val replyText = RemoteInput.getResultsFromIntent(intent)?.getCharSequence("KEY_TEXT_REPLY")?.toString()
+        } else if (action == ChatNotificationBuilder.ACTION_REPLY || action == ChatNotificationBuilder.ACTION_QUICK_REPLY) {
+            val remoteInputText = RemoteInput.getResultsFromIntent(intent)
+                ?.getCharSequence(ChatNotificationBuilder.KEY_TEXT_REPLY)?.toString()
+            val quickReplyText = intent.getStringExtra(ChatNotificationBuilder.EXTRA_QUICK_REPLY_TEXT)
+            val replyText = (remoteInputText ?: quickReplyText)?.trim()
+
             if (!replyText.isNullOrBlank()) {
                 val pendingResult = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
@@ -60,6 +65,7 @@ class ChatNotificationReceiver : BroadcastReceiver() {
 
                         if (!targetRoomId.isNullOrBlank()) {
                             SupabaseChatRepository().sendMessage(targetRoomId, replyText)
+                            SupabaseChatRepository().markAsRead(targetRoomId)
                         }
                         notificationManager.cancel(notificationId)
                     } catch (e: Exception) {

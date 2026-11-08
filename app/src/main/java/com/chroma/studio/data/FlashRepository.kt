@@ -165,6 +165,40 @@ class FlashRepository {
                 true
             }.await()
 
+            // Synchronize with community_works and user liked_posts records
+            val now = System.currentTimeMillis()
+            val userLikeRef = usersCollection.document(userId).collection("liked_posts").document(videoId)
+            val flashLikeSubRef = collection.document(videoId).collection("likes").document(userId)
+
+            try {
+                val commRef = db.collection("community_works").document(videoId)
+                if (targetLiked) {
+                    commRef.update(
+                        mapOf(
+                            "likedBy" to FieldValue.arrayUnion(userId),
+                            "likesCount" to FieldValue.increment(1)
+                        )
+                    ).await()
+                } else {
+                    commRef.update(
+                        mapOf(
+                            "likedBy" to FieldValue.arrayRemove(userId),
+                            "likesCount" to FieldValue.increment(-1)
+                        )
+                    ).await()
+                }
+            } catch (_: Exception) {}
+
+            try {
+                if (targetLiked) {
+                    userLikeRef.set(mapOf("likedAt" to now)).await()
+                    flashLikeSubRef.set(mapOf("timestamp" to now)).await()
+                } else {
+                    userLikeRef.delete().await()
+                    flashLikeSubRef.delete().await()
+                }
+            } catch (_: Exception) {}
+
             if (targetLiked) {
                 try {
                     val videoDoc = collection.document(videoId).get().await()
@@ -306,6 +340,29 @@ class FlashRepository {
     }
 
     // ── Comments ─────────────────────────────────────────────────────────────
+
+    /** Real-time Flow of comments for a video or community post. */
+    fun observeComments(videoId: String): Flow<List<com.chroma.studio.model.FlashComment>> = callbackFlow {
+        if (videoId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+        val registration = db.collection("flash_comments")
+            .whereEqualTo("videoId", videoId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("FlashRepository", "Comments snapshot listener error for $videoId", error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val list = snapshot.toObjects(com.chroma.studio.model.FlashComment::class.java)
+                        .sortedBy { it.timestamp }
+                    trySend(list)
+                }
+            }
+        awaitClose { registration.remove() }
+    }
 
     suspend fun getComments(videoId: String): List<com.chroma.studio.model.FlashComment> {
         return try {
@@ -608,28 +665,90 @@ class FlashRepository {
     // ── Delete ───────────────────────────────────────────────────────────────
 
     suspend fun deleteFlash(videoId: String): Boolean {
-        return try {
-            collection.document(videoId).delete().await()
+        if (videoId.isBlank()) return false
+        val currentUid = auth.currentUser?.uid ?: return false
+        var deletedAny = false
+
+        // 1. Delete from flash_videos
+        try {
+            val flashDoc = collection.document(videoId).get().await()
+            if (flashDoc.exists()) {
+                val creatorId = flashDoc.getString("creatorId") ?: flashDoc.getString("userId")
+                if (creatorId == currentUid || creatorId.isNullOrBlank()) {
+                    collection.document(videoId).delete().await()
+                    deletedAny = true
+                    Log.d("FlashRepository", "Deleted $videoId from flash_videos")
+                }
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w("FlashRepository", "Error deleting from flash_videos: $videoId", e)
+        }
+
+        // 2. Also delete from community_works
+        try {
+            val commDoc = db.collection("community_works").document(videoId).get().await()
+            if (commDoc.exists()) {
+                val creatorId = commDoc.getString("creatorId") ?: commDoc.getString("userId")
+                if (creatorId == currentUid || creatorId.isNullOrBlank()) {
+                    db.collection("community_works").document(videoId).delete().await()
+                    deletedAny = true
+                    Log.d("FlashRepository", "Deleted $videoId from community_works")
+                }
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w("FlashRepository", "Error deleting from community_works: $videoId", e)
+        }
+
+        // 3. Fallback direct delete
+        if (!deletedAny) {
+            try {
+                collection.document(videoId).delete().await()
+                deletedAny = true
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
             try {
                 db.collection("community_works").document(videoId).delete().await()
+                deletedAny = true
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+        }
+
+        // 4. Cleanup likes, saves, interactions and comments
+        if (deletedAny) {
+            try {
+                collection.document(videoId).collection("likes").document(currentUid).delete().await()
             } catch (_: Exception) {}
-            // Also clean up associated comments
+            try {
+                db.collection("community_works").document(videoId).collection("likes").document(currentUid).delete().await()
+            } catch (_: Exception) {}
+            try {
+                db.collection("users").document(currentUid).collection("liked_posts").document(videoId).delete().await()
+            } catch (_: Exception) {}
+            try {
+                db.collection("users").document(currentUid).collection("saved_posts").document(videoId).delete().await()
+            } catch (_: Exception) {}
+            try {
+                db.collection("users").document(currentUid).collection("shared_posts").document(videoId).delete().await()
+            } catch (_: Exception) {}
             try {
                 val commentsSnapshot = db.collection("flash_comments")
                     .whereEqualTo("videoId", videoId)
                     .get().await()
-                val batch = db.batch()
                 for (doc in commentsSnapshot.documents) {
-                    batch.delete(doc.reference)
+                    try {
+                        if (doc.getString("userId") == currentUid) {
+                            doc.reference.delete().await()
+                        }
+                    } catch (_: Exception) {}
                 }
-                batch.commit().await()
             } catch (_: Exception) {}
-            true
-        } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            Log.e("FlashRepository", "deleteFlash error", e)
-            false
         }
+
+        return deletedAny
     }
 
     // ── User feed ────────────────────────────────────────────────────────────

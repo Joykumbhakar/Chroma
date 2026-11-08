@@ -38,7 +38,7 @@ fun LiquidGlassKnob(
     isToggleKnob: Boolean = false
 ) {
     val knobShape = RoundedCornerShape(100.dp)
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
     Box(
         modifier = modifier
             .size(width, height)
@@ -78,7 +78,7 @@ fun AppleSwitch(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     activeTrackColor: Color = Color(0xFF0381FE),
-    inactiveTrackColor: Color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE9E9EA),
+    inactiveTrackColor: Color = if (com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark) Color(0xFF39393D) else Color(0xFFE9E9EA),
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     com.chroma.studio.ui.components.AppleSwitch(
@@ -123,7 +123,7 @@ fun AppleSlider(
         label = "ts"
     )
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
     val inactiveTrackColor = if (isDark) Color(0xFF39393D) else Color(0xFFE5E5EA)
     val activeGrad = gradientColors ?: listOf(Color(0xFF0381FE), Color(0xFF0381FE))
 
@@ -239,7 +239,7 @@ fun AppleJellySlider(
         thumb = {
             val thumbWidth = 24.dp
             val thumbHeight = 24.dp
-            val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
             val knobShape = androidx.compose.foundation.shape.RoundedCornerShape(100.dp)
             
             Box(
@@ -300,7 +300,7 @@ fun AppleDialog(
     onDismiss: () -> Unit,
     customContent: @Composable (() -> Unit)? = null
 ) {
-    val isSystemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
     
     var show by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { show = true }
@@ -316,11 +316,11 @@ fun AppleDialog(
         label = "dialogAlpha"
     )
 
-    val dialogBg = if (isSystemInDarkTheme) Color(0xEB2C2C2E) else Color(0xEBFFFFFF)
-    val titleColor = if (isSystemInDarkTheme) Color.White else Color.Black
-    val dividerColor = if (isSystemInDarkTheme) Color(0x40545458) else Color(0x203C3C43)
-    val blueColor = if (isSystemInDarkTheme) Color(0xFF0381FE) else Color(0xFF0381FE)
-    val redColor = if (isSystemInDarkTheme) Color(0xFFFF453A) else Color(0xFFFF3B30)
+    val dialogBg = if (isDark) Color(0xEB2C2C2E) else Color(0xEBFFFFFF)
+    val titleColor = if (isDark) Color.White else Color.Black
+    val dividerColor = if (isDark) Color(0x40545458) else Color(0x203C3C43)
+    val blueColor = if (isDark) Color(0xFF0381FE) else Color(0xFF0381FE)
+    val redColor = if (isDark) Color(0xFFFF453A) else Color(0xFFFF3B30)
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,

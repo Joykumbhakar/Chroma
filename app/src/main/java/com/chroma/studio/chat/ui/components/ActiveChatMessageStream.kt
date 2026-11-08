@@ -36,6 +36,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import coil.compose.AsyncImage
 import com.chroma.studio.chat.data.ChatAdapters
 import com.chroma.studio.chat.data.ChatConversation
@@ -144,7 +148,8 @@ fun ActiveChatMessageStream(
     onImageStackClick: (List<String>, Int) -> Unit,
     onViewPollVotes: (PollData) -> Unit,
     onNavigateToProfile: ((String) -> Unit)?,
-    onExpandVisibleCount: (Int) -> Unit
+    onExpandVisibleCount: (Int) -> Unit,
+    onStoryClick: ((storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null
 ) {
     val colors = LocalChatColors.current
     var quoteHighlightedMessageId by remember(activeChat.id) { mutableStateOf<String?>(null) }
@@ -428,7 +433,8 @@ fun ActiveChatMessageStream(
                             if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
                                 chatViewModel.retryMessage(msg.id)
                             }
-                        }
+                        },
+                        onStoryClick = onStoryClick
                     )
                 }
 
@@ -557,14 +563,22 @@ fun ActiveChatMessageStream(
                 )
             }
 
-            // Realtime Typing & Recording Activity Indicators (Remote users and local voice recording)
+            // Realtime Typing & Recording Activity Indicators (Remote users only)
+            // NOTE: isVoiceRecording is intentionally excluded here. The sender must NOT see
+            // their own "Recording audio..." bubble. ChatActivityPresenceController broadcasts
+            // the signal to the remote peer where it correctly shows as an incoming indicator.
+            val currentUids = setOfNotNull(
+                currentUid.takeIf { it.isNotBlank() },
+                currentUser.id.takeIf { it.isNotBlank() },
+                com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.takeIf { it.isNotBlank() }
+            )
             val normalizedRoomId = com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(activeChat.id, currentUid)
             val activeRoomTyping = typingStatuses[activeChat.id] ?: typingStatuses[normalizedRoomId] ?: emptyMap()
-            val otherTypingUsers = activeRoomTyping.filterKeys { it != currentUid }
-            val isRemoteRecording = otherTypingUsers.values.any { it == "recording" }
+            val otherTypingUsers = activeRoomTyping.filterKeys { it !in currentUids }
+            val isRemoteRecording = otherTypingUsers.values.any { it == "recording" } && !isVoiceRecording
             val isRemoteTyping = otherTypingUsers.values.any { it == "typing" }
-            val isRecordingActive = isRemoteRecording || isVoiceRecording
-            val shouldShowActivityBubble = isRemoteTyping || isRecordingActive
+            val isRecordingActive = isRemoteRecording  // local recording strictly excluded: sender must NOT see own bubble
+            val shouldShowActivityBubble = isRemoteTyping || isRemoteRecording
 
             item {
                 AnimatedVisibility(
@@ -577,68 +591,138 @@ fun ActiveChatMessageStream(
                     ) + fadeIn(tween(180)),
                     exit = shrinkVertically(tween(150)) + fadeOut(tween(120))
                 ) {
-                    val indicatorAvatar = if (isVoiceRecording && !isRemoteRecording) currentUser.avatar else activeChat.avatar
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val isReducedMotion = remember(context) {
+                        try {
+                            android.provider.Settings.Global.getFloat(
+                                context.contentResolver,
+                                android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+                                1f
+                            ) == 0f
+                        } catch (_: Exception) {
+                            false
+                        }
+                    }
+
+                    val otherActiveUids = otherTypingUsers.keys.toList()
+                    val isMultipleGroupTyping = activeChat.type == "group" && otherActiveUids.size > 1
+
                     Row(
                         verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp)
                     ) {
-                        AsyncImage(
-                            model = indicatorAvatar,
-                            contentDescription = "Avatar",
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
+                        if (isMultipleGroupTyping) {
+                            // Stacked overlapping avatars for multi-participant group activity (WhatsApp spec)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy((-8).dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                otherActiveUids.take(3).forEach { uid ->
+                                    val userProf = chatViewModel?.getUserProfile(uid)
+                                    val av = userProf?.avatarUrl?.ifBlank { activeChat.avatar } ?: activeChat.avatar
+                                    AsyncImage(
+                                        model = av,
+                                        contentDescription = "Avatar",
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .border(1.5.dp, colors.chatBg, CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                            }
+                        } else {
+                            // Bubble only shows for remote activity, so always use the remote user avatar
+                            val singleAvatar = run {
+                                val singleUid = otherActiveUids.firstOrNull()
+                                if (singleUid != null) {
+                                    val userProf = chatViewModel?.getUserProfile(singleUid)
+                                    userProf?.avatarUrl?.ifBlank { activeChat.avatar } ?: activeChat.avatar
+                                } else {
+                                    activeChat.avatar
+                                }
+                            }
+                            AsyncImage(
+                                model = singleAvatar,
+                                contentDescription = "Avatar",
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp))
                                 .background(colors.bubbleGray)
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
+                                .semantics {
+                                    liveRegion = LiveRegionMode.Polite
+                                    contentDescription = if (isRecordingActive) "Recording audio" else "Typing"
+                                }
                         ) {
                             if (isRecordingActive) {
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    val infMic = rememberInfiniteTransition(label = "bubbleMicPulse")
-                                    val micAlpha by infMic.animateFloat(
-                                        initialValue = 0.45f,
-                                        targetValue = 1f,
-                                        animationSpec = infiniteRepeatable(
-                                            animation = tween(550, easing = LinearEasing),
-                                            repeatMode = RepeatMode.Reverse
-                                        ),
-                                        label = "micAlpha"
-                                    )
-                                    LucideMic(tint = colors.success.copy(alpha = micAlpha), size = 14.dp)
+                                    if (isReducedMotion) {
+                                        LucideMic(tint = colors.success, size = 14.dp)
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.height(13.dp)
+                                        ) {
+                                            repeat(4) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(2.5.dp)
+                                                        .height(7.dp)
+                                                        .background(colors.success, RoundedCornerShape(1.dp))
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        val infMic = rememberInfiniteTransition(label = "bubbleMicPulse")
+                                        val micAlpha by infMic.animateFloat(
+                                            initialValue = 0.45f,
+                                            targetValue = 1f,
+                                            animationSpec = infiniteRepeatable(
+                                                animation = tween(550, easing = LinearEasing),
+                                                repeatMode = RepeatMode.Reverse
+                                            ),
+                                            label = "micAlpha"
+                                        )
+                                        LucideMic(tint = colors.success.copy(alpha = micAlpha), size = 14.dp)
 
-                                    // Live animated 4-bar audio equalizer
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(2.5.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.height(13.dp)
-                                    ) {
-                                        val speeds = listOf(360, 480, 420, 540)
-                                        val delays = listOf(0, 110, 220, 140)
-                                        repeat(4) { bIdx ->
-                                            val infBar = rememberInfiniteTransition(label = "recBar$bIdx")
-                                            val barH by infBar.animateFloat(
-                                                initialValue = 3f,
-                                                targetValue = 12f,
-                                                animationSpec = infiniteRepeatable(
-                                                    animation = tween(speeds[bIdx], delayMillis = delays[bIdx], easing = FastOutSlowInEasing),
-                                                    repeatMode = RepeatMode.Reverse
-                                                ),
-                                                label = "recBarH$bIdx"
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .width(2.5.dp)
-                                                    .height(barH.dp)
-                                                    .background(colors.success, RoundedCornerShape(1.dp))
-                                            )
+                                        // Live animated 4-bar audio equalizer
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.height(13.dp)
+                                        ) {
+                                            val speeds = listOf(360, 480, 420, 540)
+                                            val delays = listOf(0, 110, 220, 140)
+                                            repeat(4) { bIdx ->
+                                                val infBar = rememberInfiniteTransition(label = "recBar$bIdx")
+                                                val barH by infBar.animateFloat(
+                                                    initialValue = 3f,
+                                                    targetValue = 12f,
+                                                    animationSpec = infiniteRepeatable(
+                                                        animation = tween(speeds[bIdx], delayMillis = delays[bIdx], easing = FastOutSlowInEasing),
+                                                        repeatMode = RepeatMode.Reverse
+                                                    ),
+                                                    label = "recBarH$bIdx"
+                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(2.5.dp)
+                                                        .height(barH.dp)
+                                                        .background(colors.success, RoundedCornerShape(1.dp))
+                                                )
+                                            }
                                         }
                                     }
 
@@ -650,54 +734,56 @@ fun ActiveChatMessageStream(
                                     )
                                 }
                             } else {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(4.5.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp)
-                                ) {
-                                    repeat(3) { index ->
-                                        val infiniteTransition = rememberInfiniteTransition(label = "dot$index")
-                                        val dy by infiniteTransition.animateFloat(
-                                            initialValue = 0f,
-                                            targetValue = -4.5f,
-                                            animationSpec = infiniteRepeatable(
-                                                animation = tween(450, delayMillis = index * 140, easing = FastOutSlowInEasing),
-                                                repeatMode = RepeatMode.Reverse
-                                            ),
-                                            label = "typingBounce"
-                                        )
-                                        val dotAlpha by infiniteTransition.animateFloat(
-                                            initialValue = 0.45f,
-                                            targetValue = 1.0f,
-                                            animationSpec = infiniteRepeatable(
-                                                animation = tween(450, delayMillis = index * 140, easing = FastOutSlowInEasing),
-                                                repeatMode = RepeatMode.Reverse
-                                            ),
-                                            label = "typingAlpha"
-                                        )
-                                        val dotScale by infiniteTransition.animateFloat(
-                                            initialValue = 0.85f,
-                                            targetValue = 1.15f,
-                                            animationSpec = infiniteRepeatable(
-                                                animation = tween(450, delayMillis = index * 140, easing = FastOutSlowInEasing),
-                                                repeatMode = RepeatMode.Reverse
-                                            ),
-                                            label = "typingScale"
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .size(6.dp)
-                                                .offset(y = dy.dp)
-                                                .graphicsLayer {
-                                                    scaleX = dotScale
-                                                    scaleY = dotScale
-                                                    alpha = dotAlpha
-                                                }
-                                                .background(
-                                                    colors.textMuted.copy(alpha = 0.75f),
-                                                    CircleShape
-                                                )
-                                        )
+                                if (isReducedMotion) {
+                                    // Static dots for reduced motion accessibility
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.5.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp)
+                                    ) {
+                                        repeat(3) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .clip(CircleShape)
+                                                    .background(colors.textMuted.copy(alpha = 0.8f))
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    val infiniteTransition = rememberInfiniteTransition(label = "typingDots")
+                                    val dy0 by infiniteTransition.animateFloat(0f, -4.5f, infiniteRepeatable(tween(450, delayMillis = 0, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "dy0")
+                                    val dy1 by infiniteTransition.animateFloat(0f, -4.5f, infiniteRepeatable(tween(450, delayMillis = 140, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "dy1")
+                                    val dy2 by infiniteTransition.animateFloat(0f, -4.5f, infiniteRepeatable(tween(450, delayMillis = 280, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "dy2")
+
+                                    val alpha0 by infiniteTransition.animateFloat(0.45f, 1.0f, infiniteRepeatable(tween(450, delayMillis = 0, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "alpha0")
+                                    val alpha1 by infiniteTransition.animateFloat(0.45f, 1.0f, infiniteRepeatable(tween(450, delayMillis = 140, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "alpha1")
+                                    val alpha2 by infiniteTransition.animateFloat(0.45f, 1.0f, infiniteRepeatable(tween(450, delayMillis = 280, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "alpha2")
+
+                                    val scale0 by infiniteTransition.animateFloat(0.85f, 1.15f, infiniteRepeatable(tween(450, delayMillis = 0, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale0")
+                                    val scale1 by infiniteTransition.animateFloat(0.85f, 1.15f, infiniteRepeatable(tween(450, delayMillis = 140, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale1")
+                                    val scale2 by infiniteTransition.animateFloat(0.85f, 1.15f, infiniteRepeatable(tween(450, delayMillis = 280, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale2")
+
+                                    val dots = listOf(Triple(dy0, alpha0, scale0), Triple(dy1, alpha1, scale1), Triple(dy2, alpha2, scale2))
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.5.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp)
+                                    ) {
+                                        dots.forEach { (dy, alpha, scale) ->
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .offset(y = dy.dp)
+                                                    .graphicsLayer {
+                                                        scaleX = scale
+                                                        scaleY = scale
+                                                        this.alpha = alpha
+                                                    }
+                                                    .clip(CircleShape)
+                                                    .background(colors.textMuted.copy(alpha = alpha))
+                                            )
+                                        }
                                     }
                                 }
                             }

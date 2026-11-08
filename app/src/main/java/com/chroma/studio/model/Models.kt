@@ -194,6 +194,9 @@ data class ChatRoom(
     val lastMessage: String = "",
     val lastSender: String? = null,
     val lastMessageTime: Long = 0L,
+    val lastMessageId: String? = null,
+    val lastMessageIsRead: Boolean = false,
+    val lastMessageIsDelivered: Boolean = false,
     val unreadCount: Map<String, Int> = emptyMap(),
     val favoritedBy: List<String> = emptyList(),
     val deletedBy: List<String> = emptyList(),
@@ -211,7 +214,12 @@ data class ChatMessage(
     val senderId: String = "",
     val text: String = "",
     val timestamp: Long = System.currentTimeMillis(),
-    val isRead: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isRead")
+    @set:com.google.firebase.firestore.PropertyName("isRead")
+    var isRead: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isDelivered")
+    @set:com.google.firebase.firestore.PropertyName("isDelivered")
+    var isDelivered: Boolean = false,
     val imageUrl: String? = null,
     val mediaUrl: String? = null,
     val mediaType: String? = null, // e.g., "video/mp4", "audio/mpeg", "image/jpeg"
@@ -227,10 +235,16 @@ data class ChatMessage(
     val durationSeconds: Int? = null, // For audio voice notes
     val replyToMessageId: String? = null,
     val pollVotes: Map<String, String> = emptyMap(), // userId -> comma-separated option indexes e.g. "0" or "0,2"
-    val isEdited: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isEdited")
+    @set:com.google.firebase.firestore.PropertyName("isEdited")
+    var isEdited: Boolean = false,
     val deletedFor: List<String> = emptyList(), // User IDs who have deleted this message for themselves
-    val isPollClosed: Boolean = false,
-    val isForwarded: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isPollClosed")
+    @set:com.google.firebase.firestore.PropertyName("isPollClosed")
+    var isPollClosed: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isForwarded")
+    @set:com.google.firebase.firestore.PropertyName("isForwarded")
+    var isForwarded: Boolean = false,
     val storyId: String? = null,
     val storyThumbnailUrl: String? = null
 )

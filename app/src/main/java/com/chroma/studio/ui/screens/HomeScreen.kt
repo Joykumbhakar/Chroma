@@ -2025,7 +2025,7 @@ fun HomeScreen(
 
                     ) {
 
-                        items(filteredWorks, key = { it.id }) { work ->
+                        items(filteredWorks, key = { it.id }, contentType = { "work_card" }) { work ->
 
                             val isSelected = selectedWorkIds.contains(work.id)
 
@@ -3079,10 +3079,11 @@ fun SkeletonWorkCard(
 
 
 
+private val cachedCardDateFormat by lazy { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
+private val cachedCardDateTimeFormat by lazy { SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()) }
+
 @OptIn(ExperimentalFoundationApi::class)
-
 @Composable
-
 fun WorkCard(
 
     work: ChromaWork,
@@ -3145,13 +3146,9 @@ fun WorkCard(
 
 
 
-    val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
+    val dateString = remember(work.lastModifiedAt) { cachedCardDateFormat.format(java.util.Date(work.lastModifiedAt)) }
 
-    val dateTimeFormat = remember { SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()) }
-
-    val dateString = remember(work.lastModifiedAt) { dateFormat.format(java.util.Date(work.lastModifiedAt)) }
-
-    val dateTimeString = remember(work.lastModifiedAt) { dateTimeFormat.format(java.util.Date(work.lastModifiedAt)) }
+    val dateTimeString = remember(work.lastModifiedAt) { cachedCardDateTimeFormat.format(java.util.Date(work.lastModifiedAt)) }
 
     val layers = remember(work.layersJson) { repository.deserializeLayers(work.layersJson) }
 
@@ -4644,8 +4641,7 @@ fun ViewModeBottomSheet(
 ) {
 
     val colors = LocalOscellionColors.current
-
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = colors.isDark
 
     val haptic = LocalHapticFeedback.current
 
@@ -4967,7 +4963,7 @@ private fun CreateOptionRow(
 
 ) {
 
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
 
     
 

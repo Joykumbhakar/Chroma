@@ -49,6 +49,13 @@ class DiscoverViewModel : ViewModel() {
     private var hasMoreWorks = true
 
     init {
+        val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (!currentUid.isNullOrBlank()) {
+            val cached = getCachedLikedWorkIds(currentUid)
+            if (cached.isNotEmpty()) {
+                _likedWorkIds.value = cached
+            }
+        }
         loadWorks()
         loadTrending()
         com.google.firebase.auth.FirebaseAuth.getInstance().addAuthStateListener { auth ->
@@ -61,31 +68,70 @@ class DiscoverViewModel : ViewModel() {
         }
     }
 
+    private fun getCachedLikedWorkIds(userId: String): Set<String> {
+        return try {
+            val ctx = com.chroma.studio.ChromaApp.instance
+            val prefs = ctx.getSharedPreferences("chroma_community_likes_cache", android.content.Context.MODE_PRIVATE)
+            prefs.getStringSet("cached_liked_works_$userId", emptySet()) ?: emptySet()
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun saveCachedLikedWorkIds(userId: String, likedIds: Set<String>) {
+        try {
+            val ctx = com.chroma.studio.ChromaApp.instance
+            val prefs = ctx.getSharedPreferences("chroma_community_likes_cache", android.content.Context.MODE_PRIVATE)
+            prefs.edit().putStringSet("cached_liked_works_$userId", likedIds).apply()
+        } catch (_: Exception) {}
+    }
+
     fun resetUserInteractions() {
         _likedWorkIds.value = emptySet()
         _savedWorkIds.value = emptySet()
+        com.chroma.studio.data.mutation.OptimisticFollowManager.reset()
+        com.chroma.studio.data.mutation.FollowingLocalStorageManager.clear()
     }
 
     fun refreshUserInteractions(userId: String) {
         viewModelScope.launch {
             try {
+                val cached = getCachedLikedWorkIds(userId)
+                if (cached.isNotEmpty()) {
+                    _likedWorkIds.value = _likedWorkIds.value + cached
+                }
+
                 val currentWorks = _works.value
                 val instantLiked = currentWorks.filter { it.likedBy.contains(userId) }.map { it.id }.toSet()
-                _likedWorkIds.value = instantLiked
+                _likedWorkIds.value = _likedWorkIds.value + instantLiked
 
                 coroutineScope {
-                    val likedAsync = async {
-                        val unconfirmedWorks = currentWorks.filter { !it.likedBy.contains(userId) }
-                        val extraLikes = unconfirmedWorks.map { work ->
-                            async { if (repository.hasLiked(work.id, userId)) work.id else null }
-                        }.awaitAll().filterNotNull()
-                        instantLiked + extraLikes
+                    val serverLikedAsync = async {
+                        repository.getLikedWorkIds(userId)
                     }
                     val savedAsync = async {
                         repository.getSavedWorkIds(userId)
                     }
-                    _likedWorkIds.value = likedAsync.await()
+                    val followingAsync = async {
+                        try {
+                            val list = repository.getFollowing(userId)
+                            if (list.isNotEmpty()) {
+                                com.chroma.studio.data.mutation.FollowingLocalStorageManager.saveFollowingUsers(null, userId, list)
+                            }
+                            list.map { it.uid }.toSet()
+                        } catch (_: Exception) {
+                            emptySet()
+                        }
+                    }
+                    val remoteLiked = serverLikedAsync.await()
+                    val totalLiked = _likedWorkIds.value + instantLiked + remoteLiked
+                    _likedWorkIds.value = totalLiked
+                    saveCachedLikedWorkIds(userId, totalLiked)
                     _savedWorkIds.value = savedAsync.await()
+                    val followingSet = followingAsync.await()
+                    if (followingSet.isNotEmpty()) {
+                        com.chroma.studio.data.mutation.OptimisticFollowManager.seedFollowing(followingSet, userId)
+                    }
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -121,20 +167,21 @@ class DiscoverViewModel : ViewModel() {
                 val currentUid = currentUser?.uid
                 if (!currentUid.isNullOrBlank()) {
                     val instantLiked = recentWorks.filter { it.likedBy.contains(currentUid) }.map { it.id }.toSet()
-                    _likedWorkIds.value = _likedWorkIds.value + instantLiked
+                    val mergedLikes = _likedWorkIds.value + instantLiked
+                    _likedWorkIds.value = mergedLikes
+                    saveCachedLikedWorkIds(currentUid, mergedLikes)
 
                     coroutineScope {
-                        val likedAsync = async {
-                            val unconfirmedWorks = recentWorks.filter { !it.likedBy.contains(currentUid) }
-                            val extraLikes = unconfirmedWorks.map { work ->
-                                async { if (repository.hasLiked(work.id, currentUid)) work.id else null }
-                            }.awaitAll().filterNotNull()
-                            instantLiked + extraLikes
+                        val serverLikedAsync = async {
+                            repository.getLikedWorkIds(currentUid)
                         }
                         val savedAsync = async {
                             repository.getSavedWorkIds(currentUid)
                         }
-                        _likedWorkIds.value = _likedWorkIds.value + likedAsync.await()
+                        val remoteLiked = serverLikedAsync.await()
+                        val totalLiked = _likedWorkIds.value + remoteLiked
+                        _likedWorkIds.value = totalLiked
+                        saveCachedLikedWorkIds(currentUid, totalLiked)
                         _savedWorkIds.value = savedAsync.await()
                     }
                 }
@@ -181,15 +228,9 @@ class DiscoverViewModel : ViewModel() {
                     val currentUid = currentUser?.uid
                     if (!currentUid.isNullOrBlank()) {
                         val instantLiked = newWorks.filter { it.likedBy.contains(currentUid) }.map { it.id }.toSet()
-                        _likedWorkIds.value = _likedWorkIds.value + instantLiked
-
-                        val unconfirmedWorks = newWorks.filter { !it.likedBy.contains(currentUid) }
-                        if (unconfirmedWorks.isNotEmpty()) {
-                            val results = unconfirmedWorks.map { work ->
-                                async { if (repository.hasLiked(work.id, currentUid)) work.id else null }
-                            }.awaitAll()
-                            _likedWorkIds.value = _likedWorkIds.value + results.filterNotNull()
-                        }
+                        val updated = _likedWorkIds.value + instantLiked
+                        _likedWorkIds.value = updated
+                        saveCachedLikedWorkIds(currentUid, updated)
                     }
                 }
             } catch (e: Exception) {
@@ -216,16 +257,15 @@ class DiscoverViewModel : ViewModel() {
         }
 
         val targetLiked = if (forceLike) true else !isLikedNow
-        val prevLikedSet = _likedWorkIds.value
-        val prevWorks = _works.value
-        val prevTrending = _trendingWorks.value
-        val prevLikedWorks = _likedWorks.value
 
         mutationCoordinator.mutate(
             key = "like:$workId",
             desiredState = targetLiked,
             onOptimisticApply = { nextLiked ->
-                _likedWorkIds.value = if (nextLiked) _likedWorkIds.value + workId else _likedWorkIds.value - workId
+                val newLikedIds = if (nextLiked) _likedWorkIds.value + workId else _likedWorkIds.value - workId
+                _likedWorkIds.value = newLikedIds
+                saveCachedLikedWorkIds(uid, newLikedIds)
+
                 _works.value = _works.value.map {
                     if (it.id == workId) {
                         val newLikedBy = if (nextLiked) (it.likedBy + uid).distinct() else (it.likedBy - uid)
@@ -247,10 +287,24 @@ class DiscoverViewModel : ViewModel() {
                 repository.setLike(workId, uid, nextLiked)
             },
             onRollback = {
-                _likedWorkIds.value = prevLikedSet
-                _works.value = prevWorks
-                _trendingWorks.value = prevTrending
-                _likedWorks.value = prevLikedWorks
+                // Isolated, safe per-workId rollback! Never wipes out other concurrent likes!
+                val restoredLikedIds = if (targetLiked) _likedWorkIds.value - workId else _likedWorkIds.value + workId
+                _likedWorkIds.value = restoredLikedIds
+                saveCachedLikedWorkIds(uid, restoredLikedIds)
+
+                _works.value = _works.value.map {
+                    if (it.id == workId) {
+                        val restoredLikedBy = if (targetLiked) (it.likedBy - uid) else (it.likedBy + uid).distinct()
+                        it.copy(
+                            likesCount = maxOf(0, it.likesCount + if (targetLiked) -1 else 1),
+                            likedBy = restoredLikedBy
+                        )
+                    } else it
+                }
+                val updatedTrending = (_trendingWorks.value + _works.value).distinctBy { it.id }
+                    .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
+                    .sortedByDescending { it.likesCount }
+                _trendingWorks.value = updatedTrending
             },
             onError = {
                 com.chroma.studio.ui.components.ToastManager.showToast("Could not update like. Please try again.")
@@ -520,11 +574,28 @@ class DiscoverViewModel : ViewModel() {
         }
     }
 
-    fun deleteWork(workId: String) {
+    fun deleteWork(workId: String, onComplete: ((Boolean) -> Unit)? = null) {
+        if (workId.isBlank()) return
+
+        // Optimistic UI update across all active feeds and activity history states
         _works.value = _works.value.filter { it.id != workId }
+        _trendingWorks.value = _trendingWorks.value.filter { it.id != workId }
+        _archivedWorks.value = _archivedWorks.value.filter { it.id != workId }
+        _likedWorks.value = _likedWorks.value.filter { it.id != workId }
+        _savedWorks.value = _savedWorks.value.filter { it.id != workId }
+        _sharedWorks.value = _sharedWorks.value.filter { it.id != workId }
+        _likedWorkIds.value = _likedWorkIds.value - workId
+        _savedWorkIds.value = _savedWorkIds.value - workId
+
         viewModelScope.launch {
             val success = repository.deleteWork(workId)
-            if (!success) loadWorks(isRefresh = true)
+            if (success) {
+                com.chroma.studio.ui.components.ToastManager.showToast("Post deleted")
+            } else {
+                com.chroma.studio.ui.components.ToastManager.showToast("Failed to delete post")
+                loadWorks(isRefresh = true)
+            }
+            onComplete?.invoke(success)
         }
     }
 

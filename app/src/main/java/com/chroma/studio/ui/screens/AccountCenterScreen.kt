@@ -62,6 +62,7 @@ fun AccountCenterScreen(
     onNavigateToNotifications: (UserProfile) -> Unit,
     onNavigateToArchives: (UserProfile) -> Unit,
     onNavigateToActivityHistory: (UserProfile) -> Unit,
+    onNavigateToAppearance: (() -> Unit)? = null,
     onNavigateToPrivacyTerms: () -> Unit = {},
     onNavigateToSwitchLab: (() -> Unit)? = null,
     onBack: () -> Unit,
@@ -601,6 +602,19 @@ fun AccountCenterScreen(
                                 textDark = textDark,
                                 textMuted = textMuted,
                                 onClick = { profile?.let { onNavigateToActivityHistory(it) } }
+                            )
+
+                            HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
+
+                            OneUiSettingsRow(
+                                title = "Appearance & Themes",
+                                subtitle = "Dark mode, chat bubbles, and accent styling",
+                                icon = LucideFilled.Palette,
+                                iconTint = Color(0xFF0055FF),
+                                valueText = if (isDark) "Dark" else "Light",
+                                textDark = textDark,
+                                textMuted = textMuted,
+                                onClick = { onNavigateToAppearance?.invoke() }
                             )
 
                             HorizontalDivider(thickness = 0.5.dp, color = dividerColor)

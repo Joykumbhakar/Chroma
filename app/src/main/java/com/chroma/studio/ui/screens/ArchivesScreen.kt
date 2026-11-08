@@ -94,6 +94,9 @@ fun ArchivesScreen(
                             onLikeClick = {
                                 if (currentUserId != null) discoverVm.toggleLike(work.id, currentUserId) else onRequireLogin()
                             },
+                            onForceLike = {
+                                if (currentUserId != null) discoverVm.toggleLike(work.id, currentUserId, forceLike = true) else onRequireLogin()
+                            },
                             onAuthorClick = { /* Do nothing here */ },
                             onDownloadClick = { /* Optional */ },
                             onRemixClick = { /* Optional */ },

@@ -30,6 +30,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import coil.compose.AsyncImage
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.chat.data.AccentColorType
@@ -235,7 +238,8 @@ fun ChatHeader(
                             ) { (statusText, statusColor, isRec) ->
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                                 ) {
                                     if (isRec) {
                                         val infMic = rememberInfiniteTransition(label = "headerMicPulse")

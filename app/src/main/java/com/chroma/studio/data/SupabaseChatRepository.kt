@@ -46,6 +46,13 @@ class SupabaseChatRepository {
     private val decryptedMessageCache = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val roomDeletedAtCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
+    fun clearCaches() {
+        roomParticipantsCache.clear()
+        userPublicKeyCache.clear()
+        decryptedMessageCache.clear()
+        roomDeletedAtCache.clear()
+    }
+
     private fun getChatRoomId(uid1: String, uid2: String): String {
         return if (uid1 < uid2) "${uid1}_$uid2" else "${uid2}_$uid1"
     }
@@ -276,6 +283,9 @@ class SupabaseChatRepository {
                     transaction.update(roomRef, "lastMessage", displayMessage)
                     transaction.update(roomRef, "lastMessageTime", message.timestamp)
                     transaction.update(roomRef, "lastSender", currentUser.uid)
+                    transaction.update(roomRef, "lastMessageId", message.id)
+                    transaction.update(roomRef, "lastMessageIsRead", false)
+                    transaction.update(roomRef, "lastMessageIsDelivered", false)
                     transaction.update(roomRef, "unreadCount", updatedUnreadCount)
                     // Clear deletedBy for everyone so the chat resurrects in both inboxes.
                     // Old messages will still be hidden via the deletedAt timestamp.
@@ -333,7 +343,7 @@ class SupabaseChatRepository {
     suspend fun markAsRead(roomId: String) = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext
         try {
-            // Update Firebase unread count
+            // Update Firebase unread count & last message read/delivered flags
             val roomRef = chatsCollection.document(roomId)
             firestore.runTransaction { transaction ->
                 val roomSnapshot = transaction.get(roomRef)
@@ -342,96 +352,132 @@ class SupabaseChatRepository {
                     val updatedUnreadCount = room.unreadCount.toMutableMap()
                     updatedUnreadCount[currentUser.uid] = 0
                     transaction.update(roomRef, "unreadCount", updatedUnreadCount)
+                    if (room.lastSender != null && room.lastSender != currentUser.uid) {
+                        transaction.update(roomRef, "lastMessageIsRead", true)
+                        transaction.update(roomRef, "lastMessageIsDelivered", true)
+                    }
                 }
             }.await()
 
-            // Update Firestore individual messages as read
+            // Update Firestore individual messages as read & delivered
             try {
-                val unreadMessages = roomRef.collection("messages")
-                    .whereEqualTo("isRead", false)
+                val recentMessages = roomRef.collection("messages")
+                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .limit(100)
                     .get()
                     .await()
-                val docsToUpdate = unreadMessages.documents.filter { doc ->
+                val docsToUpdate = recentMessages.documents.filter { doc ->
                     val senderId = doc.getString("senderId")
-                    val isRead = doc.getBoolean("isRead") ?: false
+                    val isRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: false
                     !isRead && senderId != null && senderId != currentUser.uid
                 }
                 if (docsToUpdate.isNotEmpty()) {
                     docsToUpdate.chunked(450).forEach { chunk ->
                         val batch = firestore.batch()
                         for (doc in chunk) {
-                            batch.update(doc.reference, "isRead", true)
+                            batch.update(doc.reference, mapOf(
+                                "isRead" to true,
+                                "read" to true,
+                                "isDelivered" to true,
+                                "delivered" to true
+                            ))
                         }
                         batch.commit().await()
                     }
                 }
             } catch (e: Exception) {
-                // Fallback check recent messages in case index on isRead is unavailable
-                try {
-                    val recent = roomRef.collection("messages")
-                        .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                        .limit(50)
-                        .get()
-                        .await()
-                    val fallbackDocs = recent.documents.filter { doc ->
-                        val senderId = doc.getString("senderId")
-                        val isRead = doc.getBoolean("isRead") ?: false
-                        !isRead && senderId != null && senderId != currentUser.uid
-                    }
-                    if (fallbackDocs.isNotEmpty()) {
-                        fallbackDocs.chunked(450).forEach { chunk ->
-                            val batch = firestore.batch()
-                            for (doc in chunk) {
-                                batch.update(doc.reference, "isRead", true)
-                            }
-                            batch.commit().await()
-                        }
-                    }
-                } catch (e2: Exception) {
-                    // ignore
-                }
+                Log.w("SupabaseChatRepository", "markAsRead message batch update error: ${e.message}")
             }
-
-
-
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error marking as read", e)
         }
     }
 
-    fun observeRecentChats(): Flow<List<ChatRoom>> = callbackFlow {
-        val currentUser = auth.currentUser
-        if (currentUser == null) {
+    suspend fun markAsDelivered(roomId: String) = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext
+        try {
+            val roomRef = chatsCollection.document(roomId)
+
+            // 1. Update room's lastMessageIsDelivered if last sender was someone else
+            firestore.runTransaction { transaction ->
+                val roomSnapshot = transaction.get(roomRef)
+                val room = roomSnapshot.toObject(ChatRoom::class.java)
+                if (room != null && room.lastSender != null && room.lastSender != currentUser.uid && !room.lastMessageIsDelivered) {
+                    transaction.update(roomRef, "lastMessageIsDelivered", true)
+                }
+            }.await()
+
+            // 2. Mark undelivered messages from other users as delivered
+            try {
+                val recentMessages = roomRef.collection("messages")
+                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .limit(100)
+                    .get()
+                    .await()
+                val docsToUpdate = recentMessages.documents.filter { doc ->
+                    val senderId = doc.getString("senderId")
+                    val isDelivered = doc.getBoolean("isDelivered") ?: doc.getBoolean("delivered") ?: false
+                    !isDelivered && senderId != null && senderId != currentUser.uid
+                }
+                if (docsToUpdate.isNotEmpty()) {
+                    docsToUpdate.chunked(450).forEach { chunk ->
+                        val batch = firestore.batch()
+                        for (doc in chunk) {
+                            batch.update(doc.reference, mapOf(
+                                "isDelivered" to true,
+                                "delivered" to true
+                            ))
+                        }
+                        batch.commit().await()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("SupabaseChatRepository", "markAsDelivered message batch update error: ${e.message}")
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error marking as delivered", e)
+        }
+    }
+
+    fun observeRecentChats(targetUid: String? = null): Flow<List<ChatRoom>> = callbackFlow {
+        val uid = targetUid ?: auth.currentUser?.uid
+        if (uid.isNullOrBlank()) {
             trySend(emptyList())
             close()
             return@callbackFlow
         }
 
         val listener = chatsCollection
-            .whereArrayContains("participants", currentUser.uid)
+            .whereArrayContains("participants", uid)
             .addSnapshotListener { snapshot, e ->
                 if (e != null) {
-                    Log.e("SupabaseChatRepository", "Listen failed for chats", e)
-                    trySend(emptyList())
+                    Log.w("SupabaseChatRepository", "Listen failed for chats (offline/error): ${e.message}")
+                    val cached = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedRecentChats(
+                        com.chroma.studio.ChromaApp.instance
+                    )
+                    if (cached.isNotEmpty()) {
+                        trySend(cached)
+                    }
+                    close(e)
                     return@addSnapshotListener
                 }
 
                 val rawChats = snapshot?.documents?.mapNotNull { it.toObject(ChatRoom::class.java) } ?: emptyList()
                 for (chat in rawChats) {
                     roomParticipantsCache[chat.id] = chat.participants
-                    val dAt = chat.deletedAt[currentUser.uid] ?: 0L
+                    val dAt = chat.deletedAt[uid] ?: 0L
                     roomDeletedAtCache[chat.id] = dAt
                 }
-                val activeChats = rawChats.filter { !it.deletedBy.contains(currentUser.uid) }
+                val activeChats = rawChats.filter { !it.deletedBy.contains(uid) }
                 trySend(activeChats.sortedByDescending { it.lastMessageTime })
             }
 
         awaitClose { listener.remove() }
     }.flowOn(Dispatchers.IO)
 
-    fun observeMessages(roomId: String, limit: Long = 50): Flow<List<ChatMessage>> = callbackFlow {
-        val currentUserUid = auth.currentUser?.uid
-        if (currentUserUid == null) {
+    fun observeMessages(roomId: String, limit: Long = 50, targetUid: String? = null): Flow<List<ChatMessage>> = callbackFlow {
+        val currentUid = targetUid ?: auth.currentUser?.uid
+        if (currentUid.isNullOrBlank()) {
             trySend(emptyList())
             close()
             return@callbackFlow
@@ -449,15 +495,33 @@ class SupabaseChatRepository {
 
         val firestoreListener = query.limit(limit)
             .addSnapshotListener { snapshot, e ->
-                if (e == null && snapshot != null) {
+                if (e != null) {
+                    Log.w("SupabaseChatRepository", "Listen failed for messages in room $roomId (offline/error): ${e.message}")
+                    val cached = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedMessages(
+                        com.chroma.studio.ChromaApp.instance,
+                        roomId
+                    )
+                    if (cached.isNotEmpty()) {
+                        trySend(cached)
+                    }
+                    close(e)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
                     launch(Dispatchers.Default) {
-                        val currentUid = auth.currentUser?.uid
+                        val activeUid = targetUid ?: auth.currentUser?.uid
                         val messages = snapshot.documents.mapNotNull { doc ->
                             val rawMsg = doc.toObject(ChatMessage::class.java) ?: return@mapNotNull null
-                            val msg = if (rawMsg.id.isBlank() || rawMsg.id != doc.id) rawMsg.copy(id = doc.id) else rawMsg
+                            val docIsRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: rawMsg.isRead
+                            val docIsDelivered = doc.getBoolean("isDelivered") ?: doc.getBoolean("delivered") ?: rawMsg.isDelivered
+                            val msg = rawMsg.copy(
+                                id = if (rawMsg.id.isBlank() || rawMsg.id != doc.id) doc.id else rawMsg.id,
+                                isRead = docIsRead,
+                                isDelivered = docIsDelivered || docIsRead
+                            )
 
                             // Filter out messages deleted by current user for themselves
-                            if (currentUid != null && msg.deletedFor.contains(currentUid)) {
+                            if (activeUid != null && msg.deletedFor.contains(activeUid)) {
                                 return@mapNotNull null
                             }
 

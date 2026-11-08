@@ -80,7 +80,14 @@ object NotificationDispatcher {
                 val targetUserDoc = db.collection("users").document(targetUserId).get().await()
                 val targetFcmToken = targetUserDoc.getString("fcmToken")
                 if (!targetFcmToken.isNullOrBlank()) {
-                    val pushTitle = if (type == NotificationActionType.MESSAGE) actorName else "$actorName ($actorHandle)"
+                    val pushTitle = if (type == NotificationActionType.MESSAGE) {
+                        if (actionText.contains(" in ")) {
+                            val groupName = actionText.substringAfter(" in ")
+                            "$actorName in $groupName"
+                        } else {
+                            actorName
+                        }
+                    } else "$actorName ($actorHandle)"
                     val pushBody = detailText ?: actionText
                     FcmPushSender.sendPushNotification(
                         context = com.chroma.studio.ChromaApp.instance,

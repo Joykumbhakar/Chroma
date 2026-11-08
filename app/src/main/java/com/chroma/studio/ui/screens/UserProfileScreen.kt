@@ -176,6 +176,7 @@ fun UserProfileScreen(
     repository: WorkRepository,
     chatViewModel: com.chroma.studio.viewmodel.ChatViewModel,
     storyViewModel: com.chroma.studio.viewmodel.StoryViewModel? = null,
+    discoverViewModel: com.chroma.studio.viewmodel.DiscoverViewModel? = null,
     showBackButton: Boolean = true,
     onRequireLogin: () -> Unit,
     onLogout: (() -> Unit)? = null,
@@ -191,7 +192,7 @@ fun UserProfileScreen(
     onBack: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    val discoverVm = viewModel<DiscoverViewModel>()
+    val discoverVm = discoverViewModel ?: viewModel<DiscoverViewModel>()
     val storyVm = storyViewModel ?: viewModel<StoryViewModel>()
     val allStoryGroups by storyVm.storyGroups.collectAsState()
     val myStories by storyVm.myStories.collectAsState()
@@ -218,9 +219,10 @@ fun UserProfileScreen(
     var profile by remember { mutableStateOf<UserProfile?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isFollowing by remember { mutableStateOf(false) }
+    var isFollowRequested by remember { mutableStateOf(false) }
     val globalFollowingIds by com.chroma.studio.data.mutation.OptimisticFollowManager.followingUserIds.collectAsState()
     val followerDeltas by com.chroma.studio.data.mutation.OptimisticFollowManager.followerCountDeltas.collectAsState()
-    val isFollowingEffective = globalFollowingIds.contains(userId) || isFollowing
+    val isFollowingEffective = globalFollowingIds.contains(userId) || com.chroma.studio.data.mutation.FollowingLocalStorageManager.isFollowing(userId)
     val effectiveFollowerCount = maxOf(0, (profile?.followersCount ?: 0) + (followerDeltas[userId] ?: 0))
     val effectiveProfile = profile?.copy(followersCount = effectiveFollowerCount)
     var mutualFollowers by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
@@ -315,8 +317,13 @@ fun UserProfileScreen(
                 val serverFollowing = discoverVm.repository.checkIsFollowing(currentUserId, userId)
                 isFollowing = serverFollowing
                 if (serverFollowing) {
-                    com.chroma.studio.data.mutation.OptimisticFollowManager.seedFollowing(setOf(userId))
+                    com.chroma.studio.data.mutation.OptimisticFollowManager.seedFollowing(setOf(userId), currentUserId)
+                } else if (!com.chroma.studio.data.mutation.OptimisticFollowManager.hasPendingMutation(userId, currentUserId)) {
+                    com.chroma.studio.data.mutation.OptimisticFollowManager.removeFollowing(userId, currentUserId)
                 }
+            }
+            launch {
+                isFollowRequested = discoverVm.repository.checkHasFollowRequest(currentUserId, userId)
             }
             launch {
                 mutualFollowers = discoverVm.repository.getMutualFollowers(currentUserId, userId)
@@ -525,7 +532,18 @@ fun UserProfileScreen(
                     onToggleFollow = {
                         if (currentUserId == null) onRequireLogin()
                         else {
-                            discoverVm.toggleFollow(userId, currentUserId, baseFollowing = isFollowingEffective)
+                            val isPrivate = profile?.isPrivateAccount == true
+                            if (isPrivate && !isFollowingEffective) {
+                                if (isFollowRequested) {
+                                    isFollowRequested = false
+                                    scope.launch { discoverVm.repository.setFollow(currentUserId, userId, false) }
+                                } else {
+                                    isFollowRequested = true
+                                    scope.launch { discoverVm.repository.setFollow(currentUserId, userId, true) }
+                                }
+                            } else {
+                                discoverVm.toggleFollow(userId, currentUserId, baseFollowing = isFollowingEffective)
+                            }
                         }
                     },
                     onNavigateToEditProfile = onNavigateToEditProfile,
@@ -548,7 +566,8 @@ fun UserProfileScreen(
                         storyViewerInitialIndex = if (fullIdx >= 0) fullIdx else 0
                         showStoryViewer = true
                     },
-                    storyVm = storyVm
+                    storyVm = storyVm,
+                    isFollowRequested = isFollowRequested
                 )
             }
 
@@ -999,7 +1018,34 @@ fun UserProfileScreen(
                             onRequireLogin = onRequireLogin,
                             onLikeClick = {
                                 if (currentUserId != null) {
+                                    val willBeLiked = !likedWorkIds.contains(work.id)
                                     discoverVm.toggleLike(work.id, currentUserId)
+                                    works = works.map {
+                                        if (it.id == work.id) {
+                                            val newLikedBy = if (willBeLiked) (it.likedBy + currentUserId).distinct() else (it.likedBy - currentUserId)
+                                            it.copy(
+                                                likesCount = maxOf(0, it.likesCount + if (willBeLiked) 1 else -1),
+                                                likedBy = newLikedBy
+                                            )
+                                        } else it
+                                    }
+                                } else {
+                                    onRequireLogin()
+                                }
+                            },
+                            onForceLike = {
+                                if (currentUserId != null) {
+                                    discoverVm.toggleLike(work.id, currentUserId, forceLike = true)
+                                    works = works.map {
+                                        if (it.id == work.id) {
+                                            val newLikedBy = (it.likedBy + currentUserId).distinct()
+                                            val delta = if (it.likedBy.contains(currentUserId)) 0 else 1
+                                            it.copy(
+                                                likesCount = it.likesCount + delta,
+                                                likedBy = newLikedBy
+                                            )
+                                        } else it
+                                    }
                                 } else {
                                     onRequireLogin()
                                 }
@@ -1045,8 +1091,8 @@ fun UserProfileScreen(
                             onDeleteWork = { workId ->
                                 discoverVm.deleteWork(workId)
                                 works = works.filter { it.id != workId }
+                                userFlashes = userFlashes.filter { it.id != workId }
                                 selectedPostIndex = null
-                                ToastManager.showToast("Post deleted")
                             },
                             onEditWork = { workId, title, desc -> discoverVm.updateWork(workId, title, desc) },
                             onNavigateToOriginal = onNavigateToOriginal
@@ -1230,6 +1276,20 @@ fun UserProfileScreen(
                 if (clickedUid != userId) {
                     onNavigateToUserList?.invoke(clickedUid, "followers")
                 }
+            },
+            onReplySend = { authorId, text, storyId, thumbUrl ->
+                val myUid = currentUserId ?: ""
+                if (authorId.isNotBlank() && authorId != myUid && myUid.isNotBlank()) {
+                    val roomId = if (myUid < authorId) "${myUid}_${authorId}" else "${authorId}_${myUid}"
+                    scope.launch(Dispatchers.IO) {
+                        com.chroma.studio.data.ChatRepository.getInstance().sendMessage(
+                            roomId = roomId,
+                            text = text,
+                            storyId = storyId,
+                            storyThumbnailUrl = thumbUrl
+                        )
+                    }
+                }
             }
         )
     }
@@ -1406,7 +1466,10 @@ fun UserProfileScreen(
         },
         showBlockConfirmDialog = showBlockConfirmDialog,
         onShowBlockConfirmDialog = { showBlockConfirmDialog = it },
-        onUserBlocked = { isFollowing = false },
+        onUserBlocked = {
+            isFollowing = false
+            com.chroma.studio.data.mutation.OptimisticFollowManager.removeFollowing(userId, currentUserId)
+        },
         showReportUserSheet = showReportUserSheet,
         onShowReportUserSheet = { showReportUserSheet = it },
         selectedReportReason = selectedReportReason,
@@ -1429,17 +1492,11 @@ fun UserProfileScreen(
             message = "Are you sure you want to permanently delete this Flash video? This action cannot be undone.",
             confirmText = "Delete",
             onConfirm = {
+                val targetId = f.id
                 flashToDelete = null
-                scope.launch {
-                    val flashRepo = com.chroma.studio.data.FlashRepository()
-                    val success = flashRepo.deleteFlash(f.id)
-                    if (success) {
-                        userFlashes = userFlashes.filter { it.id != f.id }
-                        ToastManager.showToast("Flash video deleted")
-                    } else {
-                        ToastManager.showToast("Failed to delete video")
-                    }
-                }
+                userFlashes = userFlashes.filter { it.id != targetId }
+                works = works.filter { it.id != targetId }
+                discoverVm.deleteWork(targetId)
             },
             dismissText = "Cancel",
             onDismiss = { flashToDelete = null },
@@ -2618,7 +2675,8 @@ fun ProfileWorkCard(
             )
         }
 
-        if (work.likesCount > 0) {
+        val effectiveLikes = if (isLiked && work.likesCount == 0) 1 else work.likesCount
+        if (effectiveLikes > 0 || isLiked) {
             Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -2634,13 +2692,15 @@ fun ProfileWorkCard(
                     tint = if (isLiked) Color(0xFFFF2D55) else Color.White,
                     modifier = Modifier.size(11.dp)
                 )
-                Spacer(Modifier.width(3.dp))
-                Text(
-                    text = work.likesCount.toString(),
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (effectiveLikes > 0) {
+                    Spacer(Modifier.width(3.dp))
+                    Text(
+                        text = effectiveLikes.toString(),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         } else if (work.remixCount > 0) {
             Icon(

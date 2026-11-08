@@ -236,12 +236,17 @@ private fun AuthenticatedRoute(
                 val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
                 var loadedTabs by remember { mutableStateOf(setOf(0)) }
 
+                val chatVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.ChatViewModel>()
+                val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
+
                 val handleLogout: () -> Unit = {
                     // Optimistic instant UI transition directly to Login screen (never blank)
                     prefs.edit().putBoolean("is_first_launch", true).apply()
                     com.chroma.studio.data.SavedAccountManager.clearAllAccounts(this@HomeActivity)
                     com.chroma.studio.data.DiscoverRepository.getInstance().clearProfileCache()
                     com.chroma.studio.data.mutation.OptimisticFollowManager.reset()
+                    chatVm.resetForLogout()
+                    storyVm.resetForLogout()
                     coroutineScope.launch {
                         pagerState.scrollToPage(0)
                     }
@@ -329,22 +334,18 @@ private fun AuthenticatedRoute(
                     (currentRoute == "userProfile" && !isRouteHidingBottomNav && !isProfileStoryViewerActive) ||
                     (currentRoute == "user_list" && !isRouteHidingBottomNav)
                 ) && !isRouteHidingBottomNav && !isBottomOptionsVisible
-                val chatVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.ChatViewModel>()
                 val hazeState = remember { dev.chrisbanes.haze.HazeState() }
 
-                // Dynamically mark pages as loaded when currentPage, targetPage, or swipe gestures touch them
-                androidx.compose.runtime.LaunchedEffect(pagerState.currentPage, pagerState.targetPage, pagerState.currentPageOffsetFraction) {
-                    val cur = pagerState.currentPage
-                    val tgt = pagerState.targetPage
-                    val frac = pagerState.currentPageOffsetFraction
-                    val adjacent = when {
-                        frac > 0.02f -> (cur + 1).coerceAtMost(4)
-                        frac < -0.02f -> (cur - 1).coerceAtLeast(0)
-                        else -> cur
-                    }
-                    val needed = setOf(cur, tgt, adjacent)
-                    if (!loadedTabs.containsAll(needed)) {
-                        loadedTabs = loadedTabs + needed
+                // Dynamically mark pages as loaded when currentPage or targetPage changes (avoid frame thrashing during swipes)
+                androidx.compose.runtime.LaunchedEffect(pagerState) {
+                    androidx.compose.runtime.snapshotFlow {
+                        val cur = pagerState.currentPage
+                        val tgt = pagerState.targetPage
+                        setOf(cur, tgt)
+                    }.collect { needed ->
+                        if (!loadedTabs.containsAll(needed)) {
+                            loadedTabs = loadedTabs + needed
+                        }
                     }
                 }
 
@@ -608,7 +609,10 @@ private fun AuthenticatedRoute(
                         var isInitialSnapshot = true
                         val registration = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("chats")
                             .whereArrayContains("participants", uidToListen)
-                            .addSnapshotListener { snapshot, _ ->
+                            .addSnapshotListener { snapshot, e ->
+                                if (e != null || snapshot == null) {
+                                    return@addSnapshotListener
+                                }
                                 if (isInitialSnapshot) {
                                     isInitialSnapshot = false
                                     return@addSnapshotListener
@@ -635,13 +639,25 @@ private fun AuthenticatedRoute(
                                                 val senderId: String? = room.lastSender
                                                 val senderProfile: com.chroma.studio.model.UserProfile? = if (senderId != null) chatVm.getUserProfile(senderId) else null
                                                 val senderName = senderProfile?.displayName?.ifBlank { null } ?: if (room.isGroup) (room.name ?: "Group") else "New Message"
-                                                com.chroma.studio.ChatStateManager.emitInAppEvent(
-                                                    roomId = room.id,
-                                                    senderId = senderId ?: "",
-                                                    senderName = senderName,
-                                                    messageText = room.lastMessage,
-                                                    avatarUrl = senderProfile?.avatarUrl ?: ""
-                                                )
+                                                val isAppForeground = com.chroma.studio.ChatStateManager.isAppInForeground.value
+                                                if (isAppForeground) {
+                                                    com.chroma.studio.ChatStateManager.emitInAppEvent(
+                                                        roomId = room.id,
+                                                        senderId = senderId ?: "",
+                                                        senderName = senderName,
+                                                        messageText = room.lastMessage,
+                                                        avatarUrl = senderProfile?.avatarUrl ?: ""
+                                                    )
+                                                } else {
+                                                    com.chroma.studio.ChatNotificationBuilder.showHeadsUpNotification(
+                                                        context = this@HomeActivity,
+                                                        roomId = room.id,
+                                                        senderId = senderId ?: "",
+                                                        senderName = senderName,
+                                                        messageText = room.lastMessage,
+                                                        avatarUrl = senderProfile?.avatarUrl ?: ""
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -746,7 +762,14 @@ private fun AuthenticatedRoute(
                                                 shape = navShape,
                                                 spotColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.1f)
                                             )
-                                            .hazeChild(state = hazeState, shape = navShape)
+                                            .hazeChild(
+                                                state = hazeState,
+                                                shape = navShape,
+                                                style = dev.chrisbanes.haze.HazeDefaults.style(
+                                                    blurRadius = 16.dp,
+                                                    noiseFactor = 0f
+                                                )
+                                            )
                                             .background(color = bgColor, shape = navShape)
                                             .drawWithContent {
                                                 drawContent()
@@ -765,7 +788,7 @@ private fun AuthenticatedRoute(
                                         if (activeTabWidth > 0f) {
                                             Box(
                                                 modifier = Modifier
-                                                    .offset(x = with(density) { pillDisplayX.toDp() })
+                                                    .offset { androidx.compose.ui.unit.IntOffset(kotlin.math.round(pillDisplayX).toInt(), 0) }
                                                     .width(with(density) { activeTabWidth.toDp() })
                                                     .fillMaxHeight()
                                                     .padding(vertical = if (isDraggingPill) 6.dp else 10.dp)
@@ -952,7 +975,8 @@ private fun AuthenticatedRoute(
                         !prefs.getBoolean("has_completed_post_onboarding", false) -> "post_onboarding"
                         else -> "main"
                     }
-                    NavHost(navController, startDestination = targetDestination, modifier = androidx.compose.ui.Modifier.haze(state = hazeState)) {
+                    val navHostModifier = if (showBottomNav) androidx.compose.ui.Modifier.haze(state = hazeState) else androidx.compose.ui.Modifier
+                    NavHost(navController, startDestination = targetDestination, modifier = navHostModifier) {
                         composable("terms_agreement") {
                             com.chroma.studio.ui.screens.PrivacyPolicyTermsScreen(
                                 isFirstLaunch = !hasAcceptedTerms,
@@ -993,6 +1017,13 @@ private fun AuthenticatedRoute(
                                     prefs.edit().putBoolean("is_first_launch", false).apply()
                                     prefs.edit().putBoolean("has_accepted_terms", true).apply()
                                     prefs.edit().putBoolean("has_completed_post_onboarding", true).apply()
+                                    val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                                    if (currentUid != null) {
+                                        chatVm.reloadForUser(currentUid)
+                                        storyVm.loadStories()
+                                        com.chroma.studio.ChatStateManager.setCurrentUserId(currentUid)
+                                        com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+                                    }
                                     Toast.makeText(this@HomeActivity, "Welcome to Chroma Studio", Toast.LENGTH_SHORT).show()
                                     coroutineScope.launch {
                                         pagerState.scrollToPage(0)
@@ -1275,6 +1306,11 @@ private fun AuthenticatedRoute(
                                             navController.navigate("login")
                                         }
                                     } else {
+                                        androidx.compose.runtime.LaunchedEffect(auth.currentUser?.uid) {
+                                            auth.currentUser?.uid?.let { uid ->
+                                                chatVm.reloadForUser(uid)
+                                            }
+                                        }
                                         com.chroma.studio.chat.ChatScreen(
                                             chatViewModel = chatVm,
                                             storyViewModel = storyVm,
@@ -1612,38 +1648,40 @@ private fun AuthenticatedRoute(
                         var currentCustomCorners by remember { mutableStateOf<com.chroma.studio.chat.data.CustomCornerConfig>(settingsManager.customCorners) }
                         var currentAnimationStyle by remember { mutableStateOf<com.chroma.studio.chat.data.BubbleAnimationStyle>(settingsManager.animationStyle) }
 
-                        com.chroma.studio.chat.ui.components.AppearanceSettingsScreen(
-                            currentBubbleStyle = currentBubbleStyle,
-                            currentGlobeStyle = currentGlobeStyle,
-                            accentColor = com.chroma.studio.chat.data.AccentColorType.BLUE,
-                            currentCustomCorners = currentCustomCorners,
-                            onUpdateCustomCorners = {
-                                currentCustomCorners = it
-                                settingsManager.customCorners = it
-                            },
-                            currentAnimationStyle = currentAnimationStyle,
-                            onSelectAnimationStyle = {
-                                currentAnimationStyle = it
-                                settingsManager.animationStyle = it
-                            },
-                            onSelectBubbleStyle = {
-                                currentBubbleStyle = it
-                                settingsManager.bubbleStyle = it
-                            },
-                            onSelectGlobeStyle = {
-                                currentGlobeStyle = it
-                                settingsManager.globeStyle = it
-                            },
-                            onToggleAppearance = {
+                        com.chroma.studio.chat.ui.theme.ChatAppTheme(darkTheme = vm.isDarkMode) {
+                            com.chroma.studio.chat.ui.components.AppearanceSettingsScreen(
+                                currentBubbleStyle = currentBubbleStyle,
+                                currentGlobeStyle = currentGlobeStyle,
+                                accentColor = com.chroma.studio.chat.data.AccentColorType.BLUE,
+                                currentCustomCorners = currentCustomCorners,
+                                onUpdateCustomCorners = {
+                                    currentCustomCorners = it
+                                    settingsManager.customCorners = it
+                                },
+                                currentAnimationStyle = currentAnimationStyle,
+                                onSelectAnimationStyle = {
+                                    currentAnimationStyle = it
+                                    settingsManager.animationStyle = it
+                                },
+                                onSelectBubbleStyle = {
+                                    currentBubbleStyle = it
+                                    settingsManager.bubbleStyle = it
+                                },
+                                onSelectGlobeStyle = {
+                                    currentGlobeStyle = it
+                                    settingsManager.globeStyle = it
+                                },
+                                onToggleAppearance = {
                                     val newDark = !vm.isDarkMode
                                     vm.updateDarkMode(newDark)
                                     prefs.edit().putBoolean("is_dark_mode", newDark).apply()
                                     settingsManager.isDarkMode = newDark
                                 },
-                            onAccentCycle = {},
-                            onOpenWallpaperPicker = {},
-                            onClose = { navController.popBackStack() }
-                        )
+                                onAccentCycle = {},
+                                onOpenWallpaperPicker = {},
+                                onClose = { navController.popBackStack() }
+                            )
+                        }
                     }
 
                     composable("settings") {
@@ -1655,6 +1693,7 @@ private fun AuthenticatedRoute(
                                 onNavigateToNotifications = { navController.navigate("notifications") },
                                 onNavigateToArchives = { navController.navigate("archives") },
                                 onNavigateToActivityHistory = { navController.navigate("activity_history") },
+                                onNavigateToAppearance = { navController.navigate("appearance_settings") },
                                 onNavigateToPrivacyTerms = { navController.navigate("privacy_terms") },
                                 onNavigateToSwitchLab = { navController.navigate("switch_lab") },
                                 onBack = { navController.popBackStack() },
@@ -1839,10 +1878,9 @@ private fun AuthenticatedRoute(
                             val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
                             val currentUser = auth.currentUser
                             if (currentUser != null) {
-                                val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
                                 com.chroma.studio.ui.screens.ArchivesScreen(
                                     userId = currentUser.uid,
-                                    discoverVm = discoverVm,
+                                    discoverVm = this@HomeActivity.discoverVm,
                                     repository = vm.repository,
                                     onBack = { navController.popBackStack() },
                                     onRequireLogin = { navController.navigate("login") }
@@ -1856,10 +1894,9 @@ private fun AuthenticatedRoute(
                             val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
                             val currentUser = auth.currentUser
                             if (currentUser != null) {
-                                val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
                                 com.chroma.studio.ui.screens.ActivityHistoryScreen(
                                     userId = currentUser.uid,
-                                    discoverVm = discoverVm,
+                                    discoverVm = this@HomeActivity.discoverVm,
                                     repository = vm.repository,
                                     onBack = { navController.popBackStack() },
                                     onRequireLogin = { navController.navigate("login") },
@@ -2088,6 +2125,7 @@ private fun AuthenticatedRoute(
                             repository = vm.repository,
                             chatViewModel = chatVm,
                             storyViewModel = storyVm,
+                            discoverViewModel = this@HomeActivity.discoverVm,
                             onRequireLogin = { navController.navigate("login") },
                             onLogout = handleLogout,
                             onNavigateToChat = { otherUserId ->
@@ -2133,7 +2171,12 @@ private fun AuthenticatedRoute(
                     ) { backStackEntry ->
                         AuthenticatedRoute(navController, "Chat & Messages") {
                             val roomId = backStackEntry.arguments?.getString("roomId") ?: return@AuthenticatedRoute
-                            val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
+                            val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                            androidx.compose.runtime.LaunchedEffect(currentUid) {
+                                if (currentUid != null) {
+                                    chatVm.reloadForUser(currentUid)
+                                }
+                            }
                             com.chroma.studio.chat.ChatScreen(
                                 roomId = roomId,
                                 initialRoomId = roomId,
@@ -2185,11 +2228,10 @@ private fun AuthenticatedRoute(
                     ) { backStackEntry ->
                         val userId = backStackEntry.arguments?.getString("userId") ?: return@composable
                         val type = backStackEntry.arguments?.getString("type") ?: "followers"
-                        val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
                         com.chroma.studio.ui.screens.UserListScreen(
                             userId = userId,
                             type = type,
-                            discoverVm = discoverVm,
+                            discoverVm = this@HomeActivity.discoverVm,
                             onNavigateToUser = { uid -> navController.navigate("userProfile/$uid") },
                             onBack = { navController.popBackStack() }
                         )

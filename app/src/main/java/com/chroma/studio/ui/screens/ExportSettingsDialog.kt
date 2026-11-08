@@ -39,45 +39,45 @@ fun ExportSettingsDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .background(Color.White)
+                .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White)
                 .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
             Text(
                 text = "Export Video",
-                color = Color(0xFF111827),
+                color = colors.textMain,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(16.dp))
 
             // Resolution
-            Text("Resolution", color = Color(0xFF6B7280), fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
+            Text("Resolution", color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 resolutions.forEach { res ->
                     val selected = resolution == res
                     val label = if (res == 2160) "4K" else "${res}p"
-                    OptionChip(label, selected) { resolution = res }
+                    OptionChip(label, selected, colors.isDark) { resolution = res }
                 }
             }
             
             Spacer(Modifier.height(14.dp))
             
             // FPS
-            Text("Frame Rate", color = Color(0xFF6B7280), fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
+            Text("Frame Rate", color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 fpsList.forEach { f ->
-                    OptionChip("${f}fps", fps == f) { fps = f }
+                    OptionChip("${f}fps", fps == f, colors.isDark) { fps = f }
                 }
             }
             
             Spacer(Modifier.height(14.dp))
             
             // Codec
-            Text("Format", color = Color(0xFF6B7280), fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
+            Text("Format", color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 codecs.forEach { c ->
                     val label = if (c == "libx264") "H.264" else "HEVC"
-                    OptionChip(label, codec == c) { codec = c }
+                    OptionChip(label, codec == c, colors.isDark) { codec = c }
                 }
             }
             
@@ -92,9 +92,9 @@ fun ExportSettingsDialog(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f).height(44.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF3F4F6))
+                    colors = ButtonDefaults.buttonColors(containerColor = if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF3F4F6))
                 ) {
-                    Text("Cancel", color = Color(0xFF374151), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Cancel", color = if (colors.isDark) Color(0xFFF2F2F7) else Color(0xFF374151), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Button(
                     onClick = { onExport(ExportSettings(resolution, fps, codec)) },
@@ -110,16 +110,32 @@ fun ExportSettingsDialog(
 }
 
 @Composable
-private fun RowScope.OptionChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun RowScope.OptionChip(label: String, selected: Boolean, isDark: Boolean = false, onClick: () -> Unit) {
+    val chipBg = if (selected) {
+        if (isDark) Color(0xFF1E3A8A) else Color(0xFFEFF6FF)
+    } else {
+        if (isDark) Color(0xFF2C2C2E) else Color(0xFFF9FAFB)
+    }
+    val chipBorder = if (selected) {
+        Color(0xFF2563EB)
+    } else {
+        if (isDark) Color(0xFF3A3A3C) else Color(0xFFE5E7EB)
+    }
+    val chipText = if (selected) {
+        if (isDark) Color(0xFF93C5FD) else Color(0xFF2563EB)
+    } else {
+        if (isDark) Color(0xFFE5E7EB) else Color(0xFF374151)
+    }
+
     Box(
         modifier = Modifier
             .weight(1f)
             .height(38.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) Color(0xFFEFF6FF) else Color(0xFFF9FAFB))
+            .background(chipBg)
             .border(
                 width = if (selected) 2.dp else 1.dp,
-                color = if (selected) Color(0xFF2563EB) else Color(0xFFE5E7EB),
+                color = chipBorder,
                 shape = RoundedCornerShape(10.dp)
             )
             .clickable(onClick = onClick),
@@ -127,7 +143,7 @@ private fun RowScope.OptionChip(label: String, selected: Boolean, onClick: () ->
     ) {
         Text(
             text = label,
-            color = if (selected) Color(0xFF2563EB) else Color(0xFF374151),
+            color = chipText,
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
         )

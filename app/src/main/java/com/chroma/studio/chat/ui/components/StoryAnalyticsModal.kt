@@ -33,8 +33,94 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.chroma.studio.chat.data.Story
+import com.chroma.studio.chat.data.StoryViewerInfo
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.data.DiscoverRepository
+import com.chroma.studio.model.UserProfile
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/**
+ * Overload for the standard Domain Story model from Firestore (`com.chroma.studio.model.Story`).
+ * Automatically resolves and populates viewer profiles, handles like/view metrics, and displays
+ * the flagship Apple iOS Insights dashboard.
+ */
+@Composable
+fun StoryAnalyticsModal(
+    story: com.chroma.studio.model.Story,
+    onClose: () -> Unit,
+    onDeleteStory: (String) -> Unit
+) {
+    var viewerInfos by remember(story.id) { mutableStateOf<List<StoryViewerInfo>>(emptyList()) }
+    var isLoadingViewers by remember(story.id) { mutableStateOf(story.viewedBy.isNotEmpty() || story.likedBy.isNotEmpty()) }
+
+    LaunchedEffect(story.id, story.viewedBy, story.likedBy) {
+        val allUserIds = (story.viewedBy + story.likedBy).distinct()
+        if (allUserIds.isNotEmpty()) {
+            withContext(Dispatchers.IO) {
+                val repo = DiscoverRepository()
+                val infos = allUserIds.mapNotNull { uid ->
+                    try {
+                        val profile = repo.getUserProfile(uid)
+                        if (profile != null) {
+                            StoryViewerInfo(
+                                id = profile.uid,
+                                name = profile.displayName.ifBlank { "User" },
+                                username = if (profile.username.isNotBlank()) "@${profile.username}" else "",
+                                avatar = profile.avatarUrl,
+                                timeAgo = if (story.viewedBy.contains(uid)) "Viewed" else "Liked",
+                                reactedEmoji = if (story.likedBy.contains(uid)) "❤️" else null
+                            )
+                        } else null
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                viewerInfos = infos
+                isLoadingViewers = false
+            }
+        } else {
+            isLoadingViewers = false
+        }
+    }
+
+    val timeAgo = remember(story.timestamp) {
+        try {
+            android.text.format.DateUtils.getRelativeTimeSpanString(
+                story.timestamp,
+                System.currentTimeMillis(),
+                android.text.format.DateUtils.MINUTE_IN_MILLIS
+            ).toString()
+        } catch (_: Exception) {
+            "Recently"
+        }
+    }
+
+    val chatStory = remember(story, viewerInfos) {
+        Story(
+            id = story.id,
+            authorId = story.userId,
+            authorName = "You",
+            avatar = "",
+            timeAgo = timeAgo,
+            image = story.mediaUrl.ifBlank { null },
+            caption = story.textContent,
+            seen = true,
+            isMyStory = true,
+            viewCount = maxOf(story.views, story.viewedBy.size),
+            likesCount = maxOf(story.likes, story.likedBy.size),
+            viewers = viewerInfos
+        )
+    }
+
+    StoryAnalyticsModal(
+        story = chatStory,
+        onClose = onClose,
+        onDeleteStory = onDeleteStory,
+        isLoading = isLoadingViewers
+    )
+}
 
 /**
  * Flagship Professional Apple iOS Story Insights & Analytics Dashboard.
@@ -45,7 +131,8 @@ import com.chroma.studio.chat.ui.theme.LocalChatColors
 fun StoryAnalyticsModal(
     story: Story,
     onClose: () -> Unit,
-    onDeleteStory: (String) -> Unit
+    onDeleteStory: (String) -> Unit,
+    isLoading: Boolean = false
 ) {
     val colors = LocalChatColors.current
     var selectedFilter by remember { mutableStateOf("all") } // "all", "reactions", "replies"
@@ -152,6 +239,23 @@ fun StoryAnalyticsModal(
                                             .fillMaxSize()
                                             .background(Brush.verticalGradient(story.bgGradientColors))
                                     )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFFAF52DE)))),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = story.caption.take(15),
+                                            fontSize = 9.sp,
+                                            color = Color.White,
+                                            maxLines = 2,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                            modifier = Modifier.padding(2.dp)
+                                        )
+                                    }
                                 }
                             }
 
@@ -212,20 +316,25 @@ fun StoryAnalyticsModal(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Card 1: Views
+                    val retentionText = if (story.viewCount > 0) "${minOf(100, maxOf(10, 100 - (story.viewers.size * 2)))}% retained" else "0 views"
                     ProfessionalKpiCard(
                         title = "Views",
                         value = story.viewCount.toString(),
-                        badgeText = "94% retained",
+                        badgeText = retentionText,
                         badgeColor = Color(0xFF34C759),
                         icon = { LucideEye(tint = colors.iosBlue, size = 14.dp) },
                         modifier = Modifier.weight(1f)
                     )
 
                     // Card 2: Reactions
+                    val reactionRateText = if (story.viewCount > 0) {
+                        "%.1f%% rate".format((story.likesCount.toFloat() / story.viewCount.toFloat()) * 100f)
+                    } else "0% rate"
+
                     ProfessionalKpiCard(
                         title = "Reactions",
                         value = story.likesCount.toString(),
-                        badgeText = "28.4% rate",
+                        badgeText = reactionRateText,
                         badgeColor = Color(0xFF34C759),
                         icon = { LucideHeart(tint = Color(0xFFFF3B30), isFilled = true, size = 14.dp) },
                         modifier = Modifier.weight(1f)
@@ -234,7 +343,7 @@ fun StoryAnalyticsModal(
                     // Card 3: Replies
                     ProfessionalKpiCard(
                         title = "Replies",
-                        value = "6",
+                        value = "0",
                         badgeText = "Direct DMs",
                         badgeColor = colors.textMuted,
                         icon = { LucideMessageSquare(tint = Color(0xFFAF52DE), size = 14.dp) },
@@ -260,8 +369,7 @@ fun StoryAnalyticsModal(
                 ) {
                     val tabs = listOf(
                         "all" to "All Viewers (${story.viewers.size})",
-                        "reactions" to "Reactions (${story.viewers.count { it.reactedEmoji != null }})",
-                        "replies" to "Replies (2)"
+                        "reactions" to "Reactions (${story.viewers.count { it.reactedEmoji != null }})"
                     )
                     tabs.forEach { (key, title) ->
                         val isSelected = selectedFilter == key
@@ -314,17 +422,58 @@ fun StoryAnalyticsModal(
                 }
 
                 if (displayedViewers.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No interactions in this category yet",
-                            fontSize = 13.5.sp,
-                            color = colors.textMuted
-                        )
+                    if (isLoading) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .padding(vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            repeat(4) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(CircleShape)
+                                            .background(colors.borderSubtle.copy(alpha = 0.45f))
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(120.dp)
+                                                .height(14.dp)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(colors.borderSubtle.copy(alpha = 0.45f))
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .width(80.dp)
+                                                .height(10.dp)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(colors.borderSubtle.copy(alpha = 0.25f))
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (selectedFilter == "reactions") "No reactions yet" else "No viewers yet",
+                                fontSize = 13.5.sp,
+                                color = colors.textMuted
+                            )
+                        }
                     }
                 } else {
                     LazyColumn(
@@ -388,17 +537,18 @@ fun StoryAnalyticsModal(
 
                                 // Right Reaction Badge
                                 if (viewer.reactedEmoji != null) {
+                                    val isHeart = viewer.reactedEmoji == "❤️"
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(colors.iosBlueSubtle)
+                                            .background(if (isHeart) Color(0xFFFF2D55).copy(alpha = 0.12f) else colors.iosBlueSubtle)
                                             .padding(horizontal = 9.dp, vertical = 4.dp)
                                     ) {
                                         Text(
-                                            text = "${viewer.reactedEmoji} Reacted",
+                                            text = if (isHeart) "❤️ Liked" else "${viewer.reactedEmoji} Reacted",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = colors.iosBlue
+                                            color = if (isHeart) Color(0xFFFF2D55) else colors.iosBlue
                                         )
                                     }
                                 }

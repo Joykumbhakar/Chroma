@@ -133,11 +133,12 @@ object ChatAdapters {
 
         val timeStr = formatTime(msg.timestamp)
 
+        val isDelivered = msg.isDelivered || msg.isRead
         val statusStr = when {
             msg.isPending -> "pending"
             msg.isError -> "error"
             msg.isRead -> "read"
-            isOtherOnline -> "delivered"
+            isDelivered -> "delivered"
             else -> "sent"
         }
 
@@ -370,10 +371,14 @@ object ChatAdapters {
             val senderName = if (room.lastSender == currentUid) "You" else (lastSenderProf?.displayName ?: lastSenderProf?.username ?: chatName)
             val hasUnreadRecord = otherUid != null && room.unreadCount.containsKey(otherUid)
             val otherUnread = if (otherUid != null) room.unreadCount[otherUid] ?: 0 else 0
+            val isOtherZeroUnread = hasUnreadRecord && otherUnread == 0
+            val isReadStatus = room.lastMessageIsRead || (!room.isGroup && isOtherZeroUnread)
+            val isDeliveredStatus = isReadStatus || room.lastMessageIsDelivered || isOnline
+
             val computedStatus = when {
-                room.lastSender != currentUid -> "delivered"
-                hasUnreadRecord && otherUnread == 0 -> "read"
-                isOnline -> "delivered"
+                room.lastSender != currentUid -> if ((room.unreadCount[currentUid] ?: 0) == 0) "read" else "delivered"
+                isReadStatus -> "read"
+                isDeliveredStatus -> "delivered"
                 else -> "sent"
             }
             val previewText = if (room.lastMessage.startsWith("[POLL]:")) {

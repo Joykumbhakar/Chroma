@@ -62,9 +62,20 @@ object AudioPlayerManager {
             mediaPlayer = player
             _currentPlayingId.value = id
 
-            val isRemote = filePathOrUri.startsWith("http://") || filePathOrUri.startsWith("https://")
+            // Check if audio is already cached in local storage for instant offline playback
+            val cachedFile = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedMediaFile(context, filePathOrUri)
+            val effectivePath = if (cachedFile != null && cachedFile.exists() && cachedFile.length() > 0L) {
+                cachedFile.absolutePath
+            } else if (filePathOrUri.startsWith("file://")) {
+                filePathOrUri.removePrefix("file://")
+            } else {
+                filePathOrUri
+            }
+
+            val isRemote = effectivePath.startsWith("http://") || effectivePath.startsWith("https://")
             if (isRemote) {
-                player.setDataSource(filePathOrUri)
+                com.chroma.studio.chat.data.ChatLocalCacheManager.cacheMediaFile(context, effectivePath)
+                player.setDataSource(effectivePath)
                 player.setOnPreparedListener { mp ->
                     if (_currentPlayingId.value == id) {
                         applySpeed(mp, _playbackSpeed.value)
@@ -79,8 +90,8 @@ object AudioPlayerManager {
                     }
                 }
                 player.prepareAsync()
-            } else if (filePathOrUri.startsWith("content://")) {
-                player.setDataSource(context, Uri.parse(filePathOrUri))
+            } else if (effectivePath.startsWith("content://")) {
+                player.setDataSource(context, Uri.parse(effectivePath))
                 player.prepare()
                 applySpeed(player, _playbackSpeed.value)
                 player.start()
@@ -90,7 +101,7 @@ object AudioPlayerManager {
                 _playbackProgress.value = 0f
                 startProgressTracker()
             } else {
-                val file = File(filePathOrUri)
+                val file = File(effectivePath)
                 if (file.exists()) {
                     player.setDataSource(file.absolutePath)
                     player.prepare()
@@ -102,7 +113,7 @@ object AudioPlayerManager {
                     _playbackProgress.value = 0f
                     startProgressTracker()
                 } else {
-                    Log.w(TAG, "Audio file does not exist: $filePathOrUri")
+                    Log.w(TAG, "Audio file does not exist: $effectivePath")
                     stop()
                     return
                 }

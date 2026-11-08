@@ -145,6 +145,9 @@ class ChatRepository {
                     transaction.update(roomRef, "lastMessage", displayMessage)
                     transaction.update(roomRef, "lastMessageTime", message.timestamp)
                     transaction.update(roomRef, "lastSender", currentUser.uid)
+                    transaction.update(roomRef, "lastMessageId", message.id)
+                    transaction.update(roomRef, "lastMessageIsRead", false)
+                    transaction.update(roomRef, "lastMessageIsDelivered", false)
                     transaction.update(roomRef, "unreadCount", updatedUnreadCount)
                     transaction.update(roomRef, "deletedBy", emptyList<String>())
                 }
@@ -167,25 +170,79 @@ class ChatRepository {
                     val updatedUnreadCount = room.unreadCount.toMutableMap()
                     updatedUnreadCount[currentUser.uid] = 0
                     transaction.update(roomRef, "unreadCount", updatedUnreadCount)
+                    if (room.lastSender != null && room.lastSender != currentUser.uid) {
+                        transaction.update(roomRef, "lastMessageIsRead", true)
+                        transaction.update(roomRef, "lastMessageIsDelivered", true)
+                    }
                 }
             }.await()
             
-            // Mark individual messages as read (optional optimization: only update unread messages)
-            val unreadMessages = roomRef.collection("messages")
-                .whereEqualTo("isRead", false)
+            // Mark individual messages as read and delivered
+            val recentMessages = roomRef.collection("messages")
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(100)
                 .get()
                 .await()
-            
-            val batch = firestore.batch()
-            for (doc in unreadMessages) {
-                val msg = doc.toObject(ChatMessage::class.java)
-                if (msg.senderId != currentUser.uid) {
-                    batch.update(doc.reference, "isRead", true)
+            val docsToUpdate = recentMessages.documents.filter { doc ->
+                val senderId = doc.getString("senderId")
+                val isRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: false
+                !isRead && senderId != null && senderId != currentUser.uid
+            }
+            if (docsToUpdate.isNotEmpty()) {
+                docsToUpdate.chunked(450).forEach { chunk ->
+                    val batch = firestore.batch()
+                    for (doc in chunk) {
+                        batch.update(doc.reference, mapOf(
+                            "isRead" to true,
+                            "read" to true,
+                            "isDelivered" to true,
+                            "delivered" to true
+                        ))
+                    }
+                    batch.commit().await()
                 }
             }
-            batch.commit().await()
         } catch (e: Exception) {
             Log.e("ChatRepository", "Error marking as read", e)
+        }
+    }
+
+    suspend fun markAsDelivered(roomId: String) {
+        val currentUser = auth.currentUser ?: return
+        try {
+            val roomRef = chatsCollection.document(roomId)
+            firestore.runTransaction { transaction ->
+                val roomSnapshot = transaction.get(roomRef)
+                val room = roomSnapshot.toObject(ChatRoom::class.java)
+                if (room != null && room.lastSender != null && room.lastSender != currentUser.uid && !room.lastMessageIsDelivered) {
+                    transaction.update(roomRef, "lastMessageIsDelivered", true)
+                }
+            }.await()
+
+            val recentMessages = roomRef.collection("messages")
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(100)
+                .get()
+                .await()
+            val docsToUpdate = recentMessages.documents.filter { doc ->
+                val senderId = doc.getString("senderId")
+                val isDelivered = doc.getBoolean("isDelivered") ?: doc.getBoolean("delivered") ?: false
+                !isDelivered && senderId != null && senderId != currentUser.uid
+            }
+            if (docsToUpdate.isNotEmpty()) {
+                docsToUpdate.chunked(450).forEach { chunk ->
+                    val batch = firestore.batch()
+                    for (doc in chunk) {
+                        batch.update(doc.reference, mapOf(
+                            "isDelivered" to true,
+                            "delivered" to true
+                        ))
+                    }
+                    batch.commit().await()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error marking as delivered", e)
         }
     }
 
@@ -241,6 +298,17 @@ class ChatRepository {
             chatsCollection.document(roomId).update("favoritedBy", update).await()
         } catch (e: Exception) {
             Log.e("ChatRepository", "Error toggling favorite status", e)
+        }
+    }
+
+    companion object {
+        @Volatile
+        private var instance: ChatRepository? = null
+
+        fun getInstance(): ChatRepository {
+            return instance ?: synchronized(this) {
+                instance ?: ChatRepository().also { instance = it }
+            }
         }
     }
 }

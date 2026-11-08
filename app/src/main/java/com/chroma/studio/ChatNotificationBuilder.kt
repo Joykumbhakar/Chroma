@@ -68,6 +68,18 @@ object ChatNotificationBuilder {
 
     const val ACTION_MARK_READ = "ACTION_MARK_READ"
 
+    const val ACTION_QUICK_REPLY = "ACTION_QUICK_REPLY"
+
+    const val EXTRA_QUICK_REPLY_TEXT = "EXTRA_QUICK_REPLY_TEXT"
+
+    val QUICK_REPLIES = arrayOf(
+        "I am in the market",
+        "I have a call right now",
+        "Let's talk later",
+        "Okay 👍",
+        "On my way 🚗"
+    )
+
 
 
     /**
@@ -115,79 +127,63 @@ object ChatNotificationBuilder {
 
 
     fun ensureNotificationChannel(context: Context) {
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            val existingChannel = notificationManager.getNotificationChannel(CHANNEL_ID)
-
             val notifPrefs = context.getSharedPreferences("notification_settings", Context.MODE_PRIVATE)
-
             val selectedToneId = notifPrefs.getString("selected_notification_sound", "default")
-
             val toneObj = com.chroma.studio.chat.sound.AVAILABLE_NOTIFICATION_TONES.find { it.id == selectedToneId }
-
                 ?: com.chroma.studio.chat.sound.AVAILABLE_NOTIFICATION_TONES.first()
-
             val defaultSoundUri = android.net.Uri.parse("android.resource://" + context.packageName + "/" + toneObj.resId)
-
             val audioAttributes = AudioAttributes.Builder()
-
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
-
                 .build()
 
-
-
-            val currentChannelId = "${CHANNEL_ID}_$selectedToneId"
-
-            val activeChannel = notificationManager.getNotificationChannel(currentChannelId)
-
-            if (activeChannel == null) {
-
-                val channel = NotificationChannel(
-
-                    currentChannelId,
-
+            // 1. Ensure default base channel exists
+            if (notificationManager.getNotificationChannel(CHANNEL_ID) == null) {
+                val baseChannel = NotificationChannel(
+                    CHANNEL_ID,
                     CHANNEL_NAME,
-
                     NotificationManager.IMPORTANCE_HIGH
-
                 ).apply {
-
                     description = "High-priority heads-up chat alerts with direct reply and lockscreen display"
-
                     enableLights(true)
-
                     lightColor = 0xFF0381FE.toInt()
-
                     enableVibration(true)
-
                     vibrationPattern = longArrayOf(0, 250, 150, 250)
-
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-
                     setSound(defaultSoundUri, audioAttributes)
-
                     setBypassDnd(true)
-
                     setShowBadge(true)
-
                 }
-
-                notificationManager.createNotificationChannel(channel)
-
-            } else {
-
-                activeChannel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-
+                notificationManager.createNotificationChannel(baseChannel)
             }
 
+            // 2. Ensure customized tone channel exists
+            val currentChannelId = "${CHANNEL_ID}_$selectedToneId"
+            val activeChannel = notificationManager.getNotificationChannel(currentChannelId)
+            if (activeChannel == null) {
+                val channel = NotificationChannel(
+                    currentChannelId,
+                    CHANNEL_NAME,
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "High-priority heads-up chat alerts with direct reply and lockscreen display"
+                    enableLights(true)
+                    lightColor = 0xFF0381FE.toInt()
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 250, 150, 250)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    setSound(defaultSoundUri, audioAttributes)
+                    setBypassDnd(true)
+                    setShowBadge(true)
+                }
+                notificationManager.createNotificationChannel(channel)
+            } else {
+                activeChannel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
         }
-
     }
 
 
@@ -266,92 +262,76 @@ object ChatNotificationBuilder {
 
 
 
-        // 3. Direct Reply Action with RemoteInput (omitted for locked chats to prevent unauthorized replies)
-
+        // 3. Direct Reply Action with RemoteInput and Quick Reply Choices
         val remoteInput = RemoteInput.Builder(KEY_TEXT_REPLY)
-
-            .setLabel("Reply")
-
+            .setLabel("Reply...")
+            .setChoices(QUICK_REPLIES)
             .build()
 
-
-
         val replyIntent = Intent(context, ChatNotificationReceiver::class.java).apply {
-
             action = ACTION_REPLY
-
             putExtra("room_id", roomId)
-
             putExtra("sender_id", senderId)
-
             putExtra("notification_id", notificationId)
-
         }
 
         val replyPendingIntent = PendingIntent.getBroadcast(
-
             context,
-
             notificationId,
-
             replyIntent,
-
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
-
         )
 
         val replyAction = NotificationCompat.Action.Builder(
-
             R.drawable.ic_oscellion_notification,
-
             "Reply",
-
             replyPendingIntent
-
         )
-
             .addRemoteInput(remoteInput)
-
             .setAllowGeneratedReplies(true)
-
             .build()
 
-
-
-        // 4. Mark as Read Action
-
-        val markReadIntent = Intent(context, ChatNotificationReceiver::class.java).apply {
-
-            action = ACTION_MARK_READ
-
+        // 4. One-Tap Quick Reply Action: "Call later"
+        val quickReplyIntent = Intent(context, ChatNotificationReceiver::class.java).apply {
+            action = ACTION_QUICK_REPLY
             putExtra("room_id", roomId)
-
             putExtra("sender_id", senderId)
-
             putExtra("notification_id", notificationId)
+            putExtra(EXTRA_QUICK_REPLY_TEXT, "I have a call right now, let's talk later")
+        }
 
+        val quickReplyPendingIntent = PendingIntent.getBroadcast(
+            context,
+            notificationId + 200000,
+            quickReplyIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+        )
+
+        val quickReplyAction = NotificationCompat.Action.Builder(
+            0,
+            "Call later",
+            quickReplyPendingIntent
+        ).build()
+
+        // 5. Mark as Read Action
+        val markReadIntent = Intent(context, ChatNotificationReceiver::class.java).apply {
+            action = ACTION_MARK_READ
+            putExtra("room_id", roomId)
+            putExtra("sender_id", senderId)
+            putExtra("notification_id", notificationId)
         }
 
         val markReadPendingIntent = PendingIntent.getBroadcast(
-
             context,
-
             notificationId + 100000,
-
             markReadIntent,
-
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
-
         )
 
         val markReadAction = NotificationCompat.Action.Builder(
-
             0,
-
             "Mark as Read",
-
             markReadPendingIntent
-
         ).build()
 
 
@@ -391,12 +371,11 @@ object ChatNotificationBuilder {
                     .build()
 
                 val result = kotlinx.coroutines.runBlocking {
-
-                    imageLoader.execute(request)
-
+                    kotlinx.coroutines.withTimeoutOrNull(2500L) {
+                        imageLoader.execute(request)
+                    }
                 }
-
-                avatarBitmap = result.drawable?.toBitmap(128, 128)
+                avatarBitmap = result?.drawable?.toBitmap(128, 128)
 
             } catch (e: Throwable) {
 
@@ -471,11 +450,9 @@ object ChatNotificationBuilder {
 
 
         if (!isLocked) {
-
             builder.addAction(replyAction)
-
+            builder.addAction(quickReplyAction)
         }
-
         builder.addAction(markReadAction)
 
 

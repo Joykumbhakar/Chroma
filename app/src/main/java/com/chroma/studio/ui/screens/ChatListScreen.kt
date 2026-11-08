@@ -45,6 +45,8 @@ import com.chroma.studio.ui.components.AppleStatusVibrantGradient
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.ChatViewModel
 import com.chroma.studio.viewmodel.StoryViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.*
 import com.google.firebase.auth.FirebaseAuth
@@ -75,6 +77,7 @@ fun ChatListScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var viewingStoryGroupIndex by remember { mutableStateOf<Int?>(null) }
+    val scope = rememberCoroutineScope()
 
     // Colors matching the HTML theme
     val iosBlue = Color(0xFF0078FE)
@@ -510,6 +513,20 @@ fun ChatListScreen(
             onAuthorClick = { uid ->
                 viewingStoryGroupIndex = null
                 onNavigateToProfile(uid)
+            },
+            onReplySend = { authorId, text, storyId, thumbUrl ->
+                val myUid = currentUser?.uid ?: ""
+                if (authorId.isNotBlank() && authorId != myUid && myUid.isNotBlank()) {
+                    val roomId = if (myUid < authorId) "${myUid}_${authorId}" else "${authorId}_${myUid}"
+                    scope.launch(Dispatchers.IO) {
+                        com.chroma.studio.data.ChatRepository.getInstance().sendMessage(
+                            roomId = roomId,
+                            text = text,
+                            storyId = storyId,
+                            storyThumbnailUrl = thumbUrl
+                        )
+                    }
+                }
             }
         )
     }

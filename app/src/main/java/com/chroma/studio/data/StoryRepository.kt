@@ -189,12 +189,7 @@ class StoryRepository {
                     "likedBy" to FieldValue.arrayUnion(uid),
                     "likes" to FieldValue.increment(1)
                 )
-                try {
-                    docRef.update(updates).await()
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    docRef.set(mapOf("likedBy" to listOf(uid), "likes" to 1), SetOptions.merge()).await()
-                }
+                docRef.update(updates).await()
 
                 // Dispatch notification to story author
                 try {
@@ -218,12 +213,7 @@ class StoryRepository {
                     "likedBy" to FieldValue.arrayRemove(uid),
                     "likes" to FieldValue.increment(-1)
                 )
-                try {
-                    docRef.update(updates).await()
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    Log.w("StoryRepository", "unlike update fallback", e)
-                }
+                docRef.update(updates).await()
             }
             true
         } catch (e: Exception) {
@@ -262,9 +252,17 @@ class StoryRepository {
     /** Get IDs of users the current user follows. */
     suspend fun getFollowingIds(): List<String> {
         val uid = auth.currentUser?.uid ?: return emptyList()
+        val localIds = com.chroma.studio.data.mutation.FollowingLocalStorageManager.getFollowingIds(null, uid)
+        if (localIds.isNotEmpty()) {
+            return localIds.toList()
+        }
         return try {
-            usersCol.document(uid).collection("following").get().await()
+            val serverIds = usersCol.document(uid).collection("following").get().await()
                 .documents.map { it.id }
+            if (serverIds.isNotEmpty()) {
+                com.chroma.studio.data.mutation.FollowingLocalStorageManager.saveFollowingIds(null, uid, serverIds.toSet())
+            }
+            serverIds
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             emptyList()
@@ -289,6 +287,55 @@ class StoryRepository {
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("StoryRepository", "saveOnlyFriends error", e)
+        }
+    }
+
+    /**
+     * Fetch a story and its parent story group by story ID.
+     * Enforces the 24-hour freshness rule (expiresAt > now || (now - timestamp) < 24h).
+     * Returns null if the story does not exist or has expired.
+     */
+    suspend fun fetchStoryGroupForStory(storyId: String): Pair<UserStoryGroup, Story>? {
+        if (storyId.isBlank()) return null
+        return try {
+            val storyDoc = storiesCol.document(storyId).get().await()
+            if (!storyDoc.exists()) return null
+
+            val story = storyDoc.toObject(Story::class.java)?.copy(id = storyDoc.id) ?: return null
+            val now = System.currentTimeMillis()
+            val isAlive = if (story.expiresAt > 0L) story.expiresAt > now else (now - story.timestamp) < 86_400_000L
+            if (!isAlive) return null
+
+            val userDoc = usersCol.document(story.userId).get().await()
+            val userProfile = userDoc.toObject(UserProfile::class.java)?.copy(uid = story.userId)
+                ?: UserProfile(uid = story.userId, displayName = "Story Creator")
+
+            val activeStoriesSnapshot = try {
+                val cutoff = now - 86_400_000L
+                storiesCol.whereEqualTo("userId", story.userId)
+                    .whereGreaterThan("timestamp", cutoff)
+                    .get().await()
+            } catch (_: Exception) { null }
+
+            val groupStories = if (activeStoriesSnapshot != null && !activeStoriesSnapshot.isEmpty) {
+                activeStoriesSnapshot.documents.mapNotNull { doc ->
+                    doc.toObject(Story::class.java)?.copy(id = doc.id)
+                }.sortedBy { it.timestamp }
+            } else {
+                listOf(story)
+            }
+
+            val group = UserStoryGroup(
+                userId = story.userId,
+                userProfile = userProfile,
+                stories = if (groupStories.any { it.id == story.id }) groupStories else groupStories + story,
+                allSeen = false
+            )
+            Pair(group, story)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error fetching story for $storyId", e)
+            null
         }
     }
 }

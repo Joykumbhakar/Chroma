@@ -128,7 +128,7 @@ data class ChatMessage(
     val callType: String? = null,
     val time: String,
     val timestamp: Long = System.currentTimeMillis(),
-    val status: String = "read", // "sent", "delivered", "read"
+    val status: String = "sent", // "pending", "sent", "delivered", "read", "seen"
     val reactions: Map<String, Int> = emptyMap(),
     val userReaction: String? = null,
     val replyTo: ReplyQuote? = null,

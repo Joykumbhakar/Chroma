@@ -721,32 +721,63 @@ private fun rememberHighlightedText(
     query: String,
     highlightColor: Color
 ) = remember(fullText, query, highlightColor) {
-    val cleanQuery = query.trim().removePrefix("#")
-    if (cleanQuery.isBlank()) {
+    val cleanQuery = query.trim().removePrefix("#").removePrefix("@").trim()
+    if (cleanQuery.isBlank() || fullText.isBlank()) {
         buildAnnotatedString { append(fullText) }
     } else {
-        buildAnnotatedString {
-            val lowerFull = fullText.lowercase()
-            val lowerQ = cleanQuery.lowercase()
+        val lowerFull = fullText.lowercase()
+        val tokens = cleanQuery.split("\\s+".toRegex())
+            .filter { it.isNotBlank() }
+            .map { it.lowercase() }
+            .distinct()
+
+        val intervals = mutableListOf<IntRange>()
+        for (token in tokens) {
             var startIndex = 0
             while (startIndex < fullText.length) {
-                val matchIndex = lowerFull.indexOf(lowerQ, startIndex)
-                if (matchIndex == -1) {
-                    append(fullText.substring(startIndex))
-                    break
+                val matchIdx = lowerFull.indexOf(token, startIndex)
+                if (matchIdx == -1) break
+                intervals.add(matchIdx until (matchIdx + token.length))
+                startIndex = matchIdx + token.length
+            }
+        }
+
+        if (intervals.isEmpty()) {
+            buildAnnotatedString { append(fullText) }
+        } else {
+            intervals.sortBy { it.first }
+            val mergedIntervals = mutableListOf<IntRange>()
+            var current = intervals[0]
+            for (i in 1 until intervals.size) {
+                val next = intervals[i]
+                if (next.first <= current.last + 1) {
+                    current = current.first..maxOf(current.last, next.last)
+                } else {
+                    mergedIntervals.add(current)
+                    current = next
                 }
-                if (matchIndex > startIndex) {
-                    append(fullText.substring(startIndex, matchIndex))
+            }
+            mergedIntervals.add(current)
+
+            buildAnnotatedString {
+                var currentIndex = 0
+                for (range in mergedIntervals) {
+                    if (range.first > currentIndex) {
+                        append(fullText.substring(currentIndex, range.first))
+                    }
+                    withStyle(
+                        SpanStyle(
+                            color = highlightColor,
+                            fontWeight = FontWeight.Bold
+                        )
+                    ) {
+                        append(fullText.substring(range.first, minOf(range.last + 1, fullText.length)))
+                    }
+                    currentIndex = range.last + 1
                 }
-                withStyle(
-                    SpanStyle(
-                        color = highlightColor,
-                        fontWeight = FontWeight.Bold
-                    )
-                ) {
-                    append(fullText.substring(matchIndex, matchIndex + cleanQuery.length))
+                if (currentIndex < fullText.length) {
+                    append(fullText.substring(currentIndex))
                 }
-                startIndex = matchIndex + cleanQuery.length
             }
         }
     }
@@ -858,7 +889,7 @@ fun SearchScreen(
         }
     }
 
-    // Debounced User Search
+    // Debounced User Search with instant local cache + parallel case-insensitive Firestore lookup
     LaunchedEffect(searchQuery) {
         val q = searchQuery.trim()
         if (q.isBlank()) {
@@ -866,14 +897,49 @@ fun SearchScreen(
             isSearchingUsers = false
             return@LaunchedEffect
         }
+        val cleanQ = q.removePrefix("@").trim()
+        if (cleanQ.isNotBlank()) {
+            // Instant 0ms local match from in-memory works to eliminate perceived latency
+            val localMatches = allWorks.mapNotNull { work ->
+                if (work.creatorId.isBlank()) null
+                else {
+                    val uName = work.authorUsername
+                    val dName = work.authorDisplayName
+                    val matches = uName.contains(cleanQ, ignoreCase = true) ||
+                                  dName.contains(cleanQ, ignoreCase = true)
+                    if (matches) {
+                        UserProfile(
+                            uid = work.creatorId,
+                            username = work.authorUsername,
+                            displayName = work.authorDisplayName,
+                            avatarUrl = work.authorAvatarUrl,
+                            verified = work.authorVerified
+                        )
+                    } else null
+                }
+            }.distinctBy { it.uid }
+
+            if (localMatches.isNotEmpty()) {
+                userResults = localMatches
+            } else if (userResults.isNotEmpty()) {
+                userResults = emptyList()
+            }
+        }
         isSearchingUsers = true
-        delay(200)
+        delay(150)
         try {
-            userResults = withContext(Dispatchers.IO) {
+            val remoteResults = withContext(Dispatchers.IO) {
                 discoverVm.repository.searchUsers(q)
             }
+            if (remoteResults.isNotEmpty()) {
+                val remoteIds = remoteResults.map { it.uid }.toSet()
+                val merged = remoteResults + userResults.filter { it.uid !in remoteIds }
+                userResults = merged
+            } else if (userResults.isEmpty()) {
+                userResults = emptyList()
+            }
         } catch (_: Exception) {
-            userResults = emptyList()
+            // Keep local matches if any, else empty
         } finally {
             isSearchingUsers = false
         }
@@ -1641,7 +1707,7 @@ fun SearchScreen(
 
                     // ── Search Mode: Creators Section ────────────────────────
                     if (selectedScope == SearchScope.ALL || selectedScope == SearchScope.CREATORS) {
-                        if (isSearchingUsers) {
+                        if (isSearchingUsers && userResults.isEmpty()) {
                             item(span = StaggeredGridItemSpan.FullLine) {
                                 Box(
                                     modifier = Modifier
@@ -1658,14 +1724,28 @@ fun SearchScreen(
                             }
                         } else if (userResults.isNotEmpty()) {
                             item(span = StaggeredGridItemSpan.FullLine) {
-                                Text(
-                                    text = "Creators (${userResults.size})",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = textMuted,
-                                    fontFamily = InterFontFamily,
-                                    modifier = Modifier.padding(start = 6.dp, top = 6.dp, bottom = 2.dp)
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 6.dp, top = 6.dp, bottom = 2.dp, end = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Creators (${userResults.size})",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = textMuted,
+                                        fontFamily = InterFontFamily
+                                    )
+                                    if (isSearchingUsers) {
+                                        CircularProgressIndicator(
+                                            color = activeAccent,
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 1.5.dp
+                                        )
+                                    }
+                                }
                             }
                             items(
                                 items = userResults,
@@ -1809,7 +1889,7 @@ fun SearchScreen(
                                     onDoubleTapLike = {
                                         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                                         if (!uid.isNullOrBlank()) {
-                                            discoverVm.toggleLike(work.id, uid)
+                                            discoverVm.toggleLike(work.id, uid, forceLike = true)
                                         }
                                     }
                                 )
@@ -2034,7 +2114,7 @@ fun SearchScreen(
                                 onDoubleTapLike = {
                                     val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                                     if (!uid.isNullOrBlank()) {
-                                        discoverVm.toggleLike(work.id, uid)
+                                        discoverVm.toggleLike(work.id, uid, forceLike = true)
                                     }
                                 }
                             )
@@ -2055,7 +2135,35 @@ fun SearchScreen(
                 onToggleLike = {
                     val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                     if (!uid.isNullOrBlank() && !com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                        val willBeLiked = !likedWorkIds.contains(post.id)
                         discoverVm.toggleLike(post.id, uid)
+                        selectedPreviewPost = selectedPreviewPost?.let { p ->
+                            if (p.id == post.id) {
+                                val newLikedBy = if (willBeLiked) (p.likedBy + uid).distinct() else (p.likedBy - uid)
+                                p.copy(
+                                    likesCount = maxOf(0, p.likesCount + if (willBeLiked) 1 else -1),
+                                    likedBy = newLikedBy
+                                )
+                            } else p
+                        }
+                    } else {
+                        onRequireLogin()
+                    }
+                },
+                onForceLike = {
+                    val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                    if (!uid.isNullOrBlank() && !com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                        discoverVm.toggleLike(post.id, uid, forceLike = true)
+                        selectedPreviewPost = selectedPreviewPost?.let { p ->
+                            if (p.id == post.id) {
+                                val newLikedBy = (p.likedBy + uid).distinct()
+                                val delta = if (p.likedBy.contains(uid)) 0 else 1
+                                p.copy(
+                                    likesCount = p.likesCount + delta,
+                                    likedBy = newLikedBy
+                                )
+                            } else p
+                        }
                     } else {
                         onRequireLogin()
                     }
@@ -2145,7 +2253,7 @@ private fun CreatorSearchResultCard(
                     if (user.bio.isNotBlank()) {
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = user.bio,
+                            text = rememberHighlightedText(user.bio, searchQuery, accentColor),
                             color = colors.textMain.copy(alpha = 0.7f),
                             fontSize = 11.5.sp,
                             fontFamily = InterFontFamily,
@@ -2329,7 +2437,8 @@ fun ExploreQuickLookSheet(
     onNavigateToPost: () -> Unit,
     onRemix: () -> Unit,
     isLiked: Boolean = false,
-    onToggleLike: (() -> Unit)? = null
+    onToggleLike: (() -> Unit)? = null,
+    onForceLike: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val colors = LocalOscellionColors.current
@@ -2337,7 +2446,9 @@ fun ExploreQuickLookSheet(
     val scope = rememberCoroutineScope()
 
     var localIsLiked by remember(post.id, isLiked) { mutableStateOf(isLiked) }
-    var localLikesCountDelta by remember(post.id) { mutableIntStateOf(0) }
+    LaunchedEffect(post.id, isLiked) {
+        localIsLiked = isLiked
+    }
     val effectiveJson = remember(post.jsonUrl, post.workUrls) {
         post.jsonUrl.ifBlank { post.workUrls.firstOrNull().orEmpty() }
     }
@@ -2472,7 +2583,16 @@ fun ExploreQuickLookSheet(
         else "Experience this creative masterwork crafted with layered vector art and fluid effects on Chroma Studio."
     }
 
-    val effectiveLikes = (post.likesCount + localLikesCountDelta).coerceAtLeast(0)
+    val currentUserId = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }
+    val effectiveLikes = remember(post.likesCount, post.likedBy, localIsLiked, currentUserId) {
+        val hasUserLikedInPost = !currentUserId.isNullOrBlank() && post.likedBy.contains(currentUserId)
+        val delta = when {
+            localIsLiked && !hasUserLikedInPost -> 1
+            !localIsLiked && hasUserLikedInPost -> -1
+            else -> 0
+        }
+        maxOf(0, post.likesCount + delta)
+    }
 
     Dialog(
         onDismissRequest = { closeWithAnimation(null) },
@@ -2503,9 +2623,12 @@ fun ExploreQuickLookSheet(
                                 onDoubleTap = { offset ->
                                     if (!localIsLiked) {
                                         localIsLiked = true
-                                        localLikesCountDelta += 1
                                         likeBounced = true
-                                        onToggleLike?.invoke()
+                                        if (onForceLike != null) {
+                                            onForceLike()
+                                        } else {
+                                            onToggleLike?.invoke()
+                                        }
                                     }
                                     doubleTapLikeState.trigger(offset)
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -2973,9 +3096,7 @@ fun ExploreQuickLookSheet(
                                     )
                                     .clickable {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        val nextLiked = !localIsLiked
-                                        localIsLiked = nextLiked
-                                        localLikesCountDelta += if (nextLiked) 1 else -1
+                                        localIsLiked = !localIsLiked
                                         likeBounced = true
                                         onToggleLike?.invoke()
                                     },
@@ -3146,10 +3267,8 @@ fun ExploreWorkGridCard(
     val haptic = LocalHapticFeedback.current
     val doubleTapLikeState = rememberDoubleTapLikeState()
     var localIsLiked by remember(work.id, isLiked) { mutableStateOf(isLiked) }
-    var localLikesCountDelta by remember(work.id) { mutableIntStateOf(0) }
     var layers by remember(work.jsonUrl) { mutableStateOf<List<GradientLayer>?>(LayerCache.get(work.jsonUrl)) }
-
-    LaunchedEffect(isLiked) {
+    LaunchedEffect(work.id, isLiked) {
         localIsLiked = isLiked
     }
 
@@ -3188,7 +3307,6 @@ fun ExploreWorkGridCard(
                         onDoubleTap = { offset ->
                             if (!localIsLiked) {
                                 localIsLiked = true
-                                localLikesCountDelta += 1
                                 onDoubleTapLike?.invoke()
                             }
                             doubleTapLikeState.trigger(offset)
@@ -3308,8 +3426,17 @@ fun ExploreWorkGridCard(
                 modifier = Modifier.weight(1f)
             )
 
-            val effectiveLikes = (work.likesCount + localLikesCountDelta).coerceAtLeast(0)
-            if (effectiveLikes > 0) {
+            val currentUserId = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }
+            val effectiveLikes = remember(work.likesCount, work.likedBy, localIsLiked, currentUserId) {
+                val hasUserLikedInPost = !currentUserId.isNullOrBlank() && work.likedBy.contains(currentUserId)
+                val delta = when {
+                    localIsLiked && !hasUserLikedInPost -> 1
+                    !localIsLiked && hasUserLikedInPost -> -1
+                    else -> 0
+                }
+                maxOf(0, work.likesCount + delta)
+            }
+            if (effectiveLikes > 0 || localIsLiked) {
                 Row(
                     modifier = Modifier
                         .clip(CircleShape)

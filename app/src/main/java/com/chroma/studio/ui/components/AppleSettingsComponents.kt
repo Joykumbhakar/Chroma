@@ -352,7 +352,7 @@ fun AppleSettingsSearchBar(
         Icon(
             imageVector = Lucide.Search,
             contentDescription = null,
-            tint = Color(0xFF8E8E93),
+            tint = colors.textMuted,
             modifier = Modifier.size(15.dp)
         )
 
@@ -360,7 +360,7 @@ fun AppleSettingsSearchBar(
             if (query.isEmpty()) {
                 Text(
                     text = placeholder,
-                    color = Color(0xFF8E8E93),
+                    color = colors.textMuted,
                     fontSize = 14.5.sp
                 )
             }
@@ -381,7 +381,7 @@ fun AppleSettingsSearchBar(
             Icon(
                 imageVector = Lucide.X,
                 contentDescription = "Clear",
-                tint = Color(0xFF8E8E93),
+                tint = colors.textMuted,
                 modifier = Modifier
                     .size(15.dp)
                     .clickable { onQueryChange("") }
@@ -445,7 +445,7 @@ fun AppleSettingsProfileHeaderCard(
                 )
                 Text(
                     text = handleOrEmail.ifBlank { "Apple Account, iCloud & Media" },
-                    color = Color(0xFF8E8E93),
+                    color = colors.textMuted,
                     fontSize = 12.5.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -506,7 +506,7 @@ fun AppleSettingsGroup(
         if (!footer.isNullOrBlank()) {
             Text(
                 text = footer,
-                color = Color(0xFF8E8E93),
+                color = if (isDark) Color(0xFF8E8E93) else Color(0xFF6D6D72),
                 fontSize = 12.sp,
                 lineHeight = 16.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
@@ -655,7 +655,7 @@ fun AppleSettingNavRow(
                 if (!subtitle.isNullOrBlank()) {
                     Text(
                         text = subtitle,
-                        color = Color(0xFF8E8E93),
+                        color = colors.textMuted,
                         fontSize = 12.sp,
                         lineHeight = 15.sp,
                         maxLines = 1,
@@ -744,7 +744,7 @@ fun AppleSettingToggleRow(
                 if (!subtitle.isNullOrBlank()) {
                     Text(
                         text = subtitle,
-                        color = Color(0xFF8E8E93),
+                        color = colors.textMuted,
                         fontSize = 12.sp,
                         lineHeight = 15.sp,
                         maxLines = 1,
@@ -772,7 +772,7 @@ fun AppleSettingToggleRow(
                     Icon(
                         imageVector = Lucide.Info,
                         contentDescription = "Info",
-                        tint = Color(0xFF8E8E93),
+                        tint = colors.textMuted,
                         modifier = Modifier.size(20.dp)
                     )
                 }

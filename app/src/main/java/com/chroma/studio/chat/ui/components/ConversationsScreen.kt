@@ -88,6 +88,10 @@ fun ConversationsScreen(
     stories: List<Story> = emptyList(),
     storyGroups: List<UserStoryGroup> = emptyList(),
     hasMyStory: Boolean = false,
+    isUploadingStory: Boolean = false,
+    isUploadFailed: Boolean = false,
+    isLoadingStories: Boolean = false,
+    onRetryUpload: (() -> Unit)? = null,
     onMyStoryClick: (() -> Unit)? = null,
     onStoryGroupClick: ((Int) -> Unit)? = null,
     chats: List<ChatConversation>,
@@ -871,13 +875,18 @@ fun ConversationsScreen(
             item(key = "conversations_stories_carousel") {
                 StoriesSection(
                     stories = storyGroups,
-                    isLoading = false,
+                    isLoading = isLoadingStories,
                     hasMyStory = hasMyStory,
+                    isUploading = isUploadingStory,
+                    isUploadFailed = isUploadFailed,
+                    onRetryUpload = onRetryUpload,
                     gapColor = colors.appBg,
                     myStoryAvatarUrl = currentUser.avatar,
                     onMyStoryClick = {
                         SoundManager.playReaction()
-                        if (hasMyStory && onMyStoryClick != null) {
+                        if (isUploadFailed && onRetryUpload != null) {
+                            onRetryUpload()
+                        } else if (hasMyStory && onMyStoryClick != null) {
                             onMyStoryClick()
                         } else {
                             onAddStoryClick()
@@ -885,7 +894,11 @@ fun ConversationsScreen(
                     },
                     onAddStoryClick = {
                         SoundManager.playReaction()
-                        onAddStoryClick()
+                        if (isUploadFailed && onRetryUpload != null) {
+                            onRetryUpload()
+                        } else {
+                            onAddStoryClick()
+                        }
                     },
                     onStoryClick = { groupIdx ->
                         SoundManager.playReaction()

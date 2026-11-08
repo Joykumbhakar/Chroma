@@ -6,6 +6,12 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -191,20 +197,35 @@ object OnlineStatusManager {
         return roomId
     }
 
+    private var backgroundGraceJob: Job? = null
+    private val presenceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     fun setAppForegrounded(isForeground: Boolean) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val db = getDatabase()
         val onlineRef = db.getReference("users/$uid/online")
         val lastOnlineRef = db.getReference("users/$uid/lastOnline")
-        try {
-            if (isForeground) {
+
+        if (isForeground) {
+            backgroundGraceJob?.cancel()
+            backgroundGraceJob = null
+            try {
                 onlineRef.setValue(true)
-            } else {
-                onlineRef.setValue(false)
-                lastOnlineRef.setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to update foreground presence: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to update foreground presence: ${e.message}")
+        } else {
+            // WhatsApp-grade 4,000ms grace period for transient network switches/app switches
+            backgroundGraceJob?.cancel()
+            backgroundGraceJob = presenceScope.launch {
+                delay(4000L)
+                try {
+                    onlineRef.setValue(false)
+                    lastOnlineRef.setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to update background presence: ${e.message}")
+                }
+            }
         }
     }
 

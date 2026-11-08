@@ -549,26 +549,6 @@ fun DiscoverScreen(
                 }
             }
 
-            val communityShimmerTransition = rememberInfiniteTransition(label = "community_feed_shimmer")
-            val communityShimmerTranslate by communityShimmerTransition.animateFloat(
-                initialValue = -300f,
-                targetValue = 1400f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 1250, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "community_shimmer_translate"
-            )
-            val communityShimmerBrush = Brush.linearGradient(
-                colors = if (colors.isDark) {
-                    listOf(Color(0xFF1E2028), Color(0xFF2F323D), Color(0xFF1E2028))
-                } else {
-                    listOf(Color(0xFFE5E9F0), Color(0xFFF4F7FB), Color(0xFFE5E9F0))
-                },
-                start = Offset(communityShimmerTranslate, 0f),
-                end = Offset(communityShimmerTranslate + 350f, 180f)
-            )
-
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(top = 2.dp, bottom = 110.dp),
@@ -656,7 +636,7 @@ fun DiscoverScreen(
                         count = 4,
                         key = { "skeleton_post_$it" }
                     ) {
-                        SkeletonPost(shimmerBrush = communityShimmerBrush)
+                        SkeletonPost()
                     }
                 } else if (filteredWorks.isEmpty()) {
                     item(key = "empty_state") {
@@ -683,7 +663,7 @@ fun DiscoverScreen(
                             key = { it.id },
                             contentType = { work -> if (isVideoPost(work)) "video_feed_item" else "post_feed_item" }
                         ) { work ->
-                            val isFollowing = followingUserIds.contains(work.creatorId)
+                            val isFollowing = followingUserIds.contains(work.creatorId) || com.chroma.studio.data.mutation.FollowingLocalStorageManager.isFollowing(work.creatorId)
                             FeedPostCard(
                                 work = work,
                                 isLiked = likedWorkIds.contains(work.id),
@@ -800,7 +780,7 @@ fun DiscoverScreen(
                         // End Point Stretch Loader / All Caught Up indicator
                         if (isLoadingMore) {
                             item(key = "end_stretch_loader") {
-                                SkeletonPost(shimmerBrush = communityShimmerBrush)
+                                SkeletonPost()
                             }
                         } else {
                             item(key = "end_of_feed") {
@@ -825,6 +805,19 @@ fun DiscoverScreen(
                 onAuthorClick = { userId ->
                     onAuthorClick(userId, null)
                     showStoryViewer = false
+                },
+                onReplySend = { authorId, text, storyId, thumbUrl ->
+                    if (authorId.isNotBlank() && authorId != currentUserId) {
+                        val roomId = if (currentUserId < authorId) "${currentUserId}_${authorId}" else "${authorId}_${currentUserId}"
+                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                            com.chroma.studio.data.ChatRepository.getInstance().sendMessage(
+                                roomId = roomId,
+                                text = text,
+                                storyId = storyId,
+                                storyThumbnailUrl = thumbUrl
+                            )
+                        }
+                    }
                 }
             )
         }
@@ -2738,7 +2731,7 @@ private fun FeedPostHeader(
                     }
                 }
 
-                if (!isOwner) {
+                if (!isOwner && !isFollowingCreator) {
                     Text(
                         text = "•",
                         color = Color(0xFF8E8E93),
@@ -2746,8 +2739,8 @@ private fun FeedPostHeader(
                         lineHeight = 11.sp
                     )
                     Text(
-                        text = if (isFollowingCreator) "Following" else "Follow",
-                        color = if (isFollowingCreator) Color(0xFF8E8E93) else Color(0xFF0381FE),
+                        text = "Follow",
+                        color = Color(0xFF0381FE),
                         fontSize = 11.sp,
                         lineHeight = 13.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -2786,6 +2779,8 @@ private fun FeedPostActionRow(
     currentUserId: String?,
     onRequireLogin: () -> Unit,
     onLikeClick: () -> Unit,
+    localCommentsCountDelta: Int = 0,
+    onCommentClick: (() -> Unit)? = null,
     onRemixClick: () -> Unit,
     onRemixWork: ((DiscoverPost) -> Unit)?,
     onDownloadClick: () -> Unit,
@@ -2796,11 +2791,9 @@ private fun FeedPostActionRow(
     val colors = LocalOscellionColors.current
 
     val initialLiked = isLiked || (!currentUserId.isNullOrBlank() && work.likedBy.contains(currentUserId))
-    var locallyLiked by remember(work.id, isLiked, work.likedBy) { mutableStateOf(initialLiked) }
-    var localLikesCountDelta by remember(work.id) { mutableIntStateOf(0) }
-    LaunchedEffect(isLiked, work.likedBy) {
-        locallyLiked = isLiked || (!currentUserId.isNullOrBlank() && work.likedBy.contains(currentUserId))
-        localLikesCountDelta = 0
+    var locallyLiked by remember(work.id, isLiked) { mutableStateOf(initialLiked) }
+    LaunchedEffect(work.id, isLiked) {
+        locallyLiked = isLiked
     }
 
     var locallyRemixed by remember(work.id) {
@@ -2855,7 +2848,16 @@ private fun FeedPostActionRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             val effectiveLiked = locallyLiked
-            val displayLikesCount = (work.likesCount + localLikesCountDelta).coerceAtLeast(0)
+            val displayLikesCount = remember(work.likesCount, work.likedBy, effectiveLiked, currentUserId) {
+                val hasUserLikedInPost = !currentUserId.isNullOrBlank() && work.likedBy.contains(currentUserId)
+                val base = work.likesCount
+                val delta = when {
+                    effectiveLiked && !hasUserLikedInPost -> 1
+                    !effectiveLiked && hasUserLikedInPost -> -1
+                    else -> 0
+                }
+                maxOf(0, base + delta)
+            }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -2867,13 +2869,7 @@ private fun FeedPostActionRow(
                         if (uid.isNullOrBlank() || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                             onRequireLogin()
                         } else {
-                            val nextLiked = !locallyLiked
-                            locallyLiked = nextLiked
-                            localLikesCountDelta = if (nextLiked) {
-                                if (!isLiked) 1 else 0
-                            } else {
-                                if (isLiked) -1 else 0
-                            }
+                            locallyLiked = !locallyLiked
                             onLikeClick()
                         }
                     }
@@ -2894,6 +2890,43 @@ private fun FeedPostActionRow(
                         lineHeight = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
+                }
+            }
+
+            // 2. Comments (YouTube-Grade Comment Sheet)
+            if (!work.turnOffComments) {
+                val displayCommentsCount = (work.effectiveCommentsCount + localCommentsCountDelta).coerceAtLeast(0)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .height(30.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable {
+                            val uid = FirebaseAuth.getInstance().currentUser?.uid
+                            if (uid.isNullOrBlank() || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                onRequireLogin()
+                            } else {
+                                onCommentClick?.invoke()
+                            }
+                        }
+                        .padding(horizontal = 3.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.MessageCircle,
+                        contentDescription = "Comments",
+                        tint = colors.textMain,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    if (displayCommentsCount > 0) {
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "$displayCommentsCount",
+                            color = colors.textMain,
+                            fontSize = 12.sp,
+                            lineHeight = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
 
@@ -3549,6 +3582,9 @@ private fun FeedPostModals(
     }
 }
 
+private data class CachedAuthorProfile(val avatarUrl: String, val username: String, val displayName: String, val verified: Boolean)
+private val postAuthorProfileCache = java.util.concurrent.ConcurrentHashMap<String, CachedAuthorProfile>()
+
 @Composable
 fun FeedPostCard(
     work: DiscoverPost,
@@ -3601,9 +3637,19 @@ fun FeedPostCard(
     var resolvedDisplayName by remember(work.id) { mutableStateOf(if (work.authorDisplayName.isNotBlank()) work.authorDisplayName else work.authorUsername) }
     var resolvedUsername by remember(work.id) { mutableStateOf(work.authorUsername) }
     var resolvedVerified by remember(work.id) { mutableStateOf(work.authorVerified) }
+    var showCommentsSheet by remember(work.id) { mutableStateOf(false) }
+    var localCommentCountDelta by remember(work.id) { mutableIntStateOf(0) }
     // FIX 5: Resolve missing displayName OR username OR avatarUrl from Firestore/FirebaseAuth so posts never show "@ • 1h ago"
     LaunchedEffect(work.creatorId) {
         if ((work.authorAvatarUrl.isBlank() || work.authorDisplayName.isBlank() || work.authorUsername.isBlank()) && work.creatorId.isNotBlank()) {
+            val cached = postAuthorProfileCache[work.creatorId]
+            if (cached != null) {
+                if (resolvedAvatarUrl.isBlank()) resolvedAvatarUrl = cached.avatarUrl
+                if (resolvedUsername.isBlank()) resolvedUsername = cached.username
+                if (resolvedDisplayName.isBlank()) resolvedDisplayName = cached.displayName
+                resolvedVerified = cached.verified
+                return@LaunchedEffect
+            }
             try {
                 val doc = FirebaseFirestore.getInstance().collection("users").document(work.creatorId).get().await()
                 val authUser = FirebaseAuth.getInstance().currentUser
@@ -3622,6 +3668,8 @@ fun FeedPostCard(
                     ?.takeIf { it.isNotBlank() }
                     ?: if (isCurrentAuthUser) authUser?.displayName.orEmpty() else ""
 
+                val isVerified = doc.getBoolean("verified") ?: resolvedVerified
+
                 if (resolvedAvatarUrl.isBlank() && fetchedAvatar.isNotBlank()) {
                     resolvedAvatarUrl = fetchedAvatar
                 }
@@ -3631,7 +3679,8 @@ fun FeedPostCard(
                 if (resolvedDisplayName.isBlank()) {
                     resolvedDisplayName = fetchedDisplay.ifBlank { fetchedUsername.ifBlank { "Chroma Creator" } }
                 }
-                resolvedVerified = doc.getBoolean("verified") ?: resolvedVerified
+                resolvedVerified = isVerified
+                postAuthorProfileCache[work.creatorId] = CachedAuthorProfile(resolvedAvatarUrl, resolvedUsername, resolvedDisplayName, resolvedVerified)
             } catch (_: Exception) {}
         }
     }
@@ -3713,7 +3762,7 @@ fun FeedPostCard(
                 onToggleFeedMute = onToggleFeedMute,
                 onDoubleTap = { offset ->
                     val uid = FirebaseAuth.getInstance().currentUser?.uid
-                    if (uid.isNullOrBlank()) {
+                    if (uid.isNullOrBlank() || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                         onRequireLogin()
                     } else {
                         if (onForceLike != null) {
@@ -3739,6 +3788,8 @@ fun FeedPostCard(
             currentUserId = currentUserId,
             onRequireLogin = onRequireLogin,
             onLikeClick = onLikeClick,
+            localCommentsCountDelta = localCommentCountDelta,
+            onCommentClick = { showCommentsSheet = true },
             onRemixClick = onRemixClick,
             onRemixWork = onRemixWork,
             onDownloadClick = onDownloadClick,
@@ -3782,6 +3833,22 @@ fun FeedPostCard(
         onRemixWork = onRemixWork,
         onUpdateVisibility = onUpdateVisibility
     )
+
+    if (showCommentsSheet) {
+        com.chroma.studio.ui.components.YouTubeCommentsSheet(
+            targetId = work.id,
+            targetCommentCount = (work.effectiveCommentsCount + localCommentCountDelta).coerceAtLeast(0),
+            creatorId = work.creatorId,
+            creatorUsername = resolvedUsername,
+            creatorAvatarUrl = resolvedAvatarUrl,
+            turnOffComments = work.turnOffComments,
+            onDismiss = { showCommentsSheet = false },
+            onCommentCountChanged = { delta ->
+                localCommentCountDelta += delta
+            },
+            onRequireLogin = onRequireLogin
+        )
+    }
 }
 
 @Composable

@@ -2101,13 +2101,15 @@ fun NotificationsFeedScreen(
 
 
             if (currentUid != null) {
-
                 scope.launch {
-
+                    if (removed.type == NotificationActionType.FOLLOW_REQUEST && removed.actorUid.isNotBlank()) {
+                        com.chroma.studio.data.DiscoverRepository.getInstance().rejectFollowRequest(
+                            requesterUid = removed.actorUid,
+                            currentUserId = currentUid
+                        )
+                    }
                     NotificationDispatcher.deleteNotification(currentUid, removed.id)
-
                 }
-
             }
 
         }
@@ -2232,7 +2234,7 @@ fun NotificationsFeedScreen(
 
                 if (currentUid != null && item.actorUid.isNotBlank()) {
 
-                    val currentlyFollowing = followingUserIds.contains(item.actorUid) || item.following
+                    val currentlyFollowing = followingUserIds.contains(item.actorUid)
 
                     val next = !currentlyFollowing
 
@@ -2273,17 +2275,10 @@ fun NotificationsFeedScreen(
                     removeNotification(item)
 
                     scope.launch {
-
-                        com.chroma.studio.data.DiscoverRepository.getInstance().setFollow(
-
-                            currentUserId = item.actorUid,
-
-                            targetUserId = currentUid,
-
-                            targetFollow = true
-
+                        com.chroma.studio.data.DiscoverRepository.getInstance().approveFollowRequest(
+                            requesterUid = item.actorUid,
+                            currentUserId = currentUid
                         )
-
                     }
 
                 }
@@ -2979,7 +2974,7 @@ fun NotificationsFeedScreen(
 
                                 items(followRequests, key = { it.id }) { item ->
 
-                                    val isFollowing = followingUserIds.contains(item.actorUid) || item.following
+                                    val isFollowing = followingUserIds.contains(item.actorUid)
 
                                     SwipeableNotificationCard(
 
@@ -3045,7 +3040,7 @@ fun NotificationsFeedScreen(
 
                                     items(sectionItems, key = { it.id }) { item ->
 
-                                        val isFollowing = followingUserIds.contains(item.actorUid) || item.following
+                                        val isFollowing = followingUserIds.contains(item.actorUid)
 
                                         SwipeableNotificationCard(
 

@@ -3612,7 +3612,7 @@ private fun AddPhotoMediaSheet(
         ) {
             Text(
                 "Add to Photo Canvas",
-                color = Color(0xFF1C1C1E),
+                color = colors.textMain,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -3657,9 +3657,9 @@ private fun AddPhotoMediaSheet(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(opt.label, color = colors.textMain, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text(opt.subtext, color = Color(0xFF6B7280), fontSize = 11.sp)
+                        Text(opt.subtext, color = colors.textMuted, fontSize = 11.sp)
                     }
-                    Icon(Lucide.ChevronRight, contentDescription = null, tint = Color(0xFF333333), modifier = Modifier.size(16.dp))
+                    Icon(Lucide.ChevronRight, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
                 }
             }
 
@@ -3735,18 +3735,21 @@ private fun PhotoProjectSettingsPanel(
             ) {
                 ProjectRatio.values().forEach { ratio ->
                     val selected = state.projectRatio == ratio
+                    val chipBg = if (selected) Color(0xFF3B82F6) else (if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF3F4F6))
+                    val chipBorder = if (selected) Color(0xFF3B82F6) else (if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFE5E7EB))
+                    val chipText = if (selected) Color.White else (if (colors.isDark) Color(0xFFF2F2F7) else Color(0xFF374151))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
-                            .background(if (selected) Color(0xFF3B82F6) else Color(0xFFF3F4F6))
-                            .border(1.dp, if (selected) Color(0xFF3B82F6) else Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
+                            .background(chipBg)
+                            .border(1.dp, chipBorder, RoundedCornerShape(10.dp))
                             .clickable { onRatioChange(ratio) }
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = ratio.label,
-                            color = if (selected) Color.White else Color(0xFF374151),
+                            color = chipText,
                             fontSize = 13.sp,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                         )
@@ -3770,12 +3773,17 @@ private fun PhotoProjectSettingsPanel(
             )
             options.forEach { option ->
                 val selected = state.videoFitMode == option.mode
+                val rowBg = if (selected) (if (colors.isDark) Color(0xFF1E3A8A) else Color(0xFFEFF6FF)) else (if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF9FAFB))
+                val rowBorder = if (selected) Color(0xFF3B82F6) else (if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFE5E7EB))
+                val iconBoxBg = if (selected) Color(0xFF3B82F6) else (if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFE5E7EB))
+                val iconTint = if (selected) Color.White else (if (colors.isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280))
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (selected) Color(0xFFEFF6FF) else Color(0xFFF9FAFB))
-                        .border(1.5.dp, if (selected) Color(0xFF3B82F6) else Color(0xFFE5E7EB), RoundedCornerShape(12.dp))
+                        .background(rowBg)
+                        .border(1.5.dp, rowBorder, RoundedCornerShape(12.dp))
                         .clickable { onFitModeChange(option.mode) }
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -3785,14 +3793,14 @@ private fun PhotoProjectSettingsPanel(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) Color(0xFF3B82F6) else Color(0xFFE5E7EB)),
+                            .background(iconBoxBg),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(option.icon, contentDescription = null, tint = if (selected) Color.White else Color(0xFF6B7280), modifier = Modifier.size(18.dp))
+                        Icon(option.icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp))
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(option.label, color = if (selected) Color(0xFF3B82F6) else Color(0xFF1C1C1E), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        Text(option.desc, color = Color(0xFF8E8E93), fontSize = 11.sp)
+                        Text(option.label, color = if (selected) Color(0xFF3B82F6) else colors.textMain, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(option.desc, color = colors.textMuted, fontSize = 11.sp)
                     }
                     if (selected) {
                         Icon(Lucide.Check, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(18.dp))
@@ -3947,18 +3955,20 @@ private fun PhotoExportSettingsDialog(
                 ) {
                     listOf(1080 to "1080p", 2160 to "4K UHD", 4320 to "8K Max").forEach { (res, label) ->
                         val sel = resolution == res
+                        val pillBg = if (sel) Color(0xFF0381FE) else (if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7))
+                        val pillText = if (sel) Color.White else (if (colors.isDark) Color(0xFFF2F2F7) else Color(0xFF1C1C1E))
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(34.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (sel) Color(0xFF0381FE) else Color(0xFFF2F2F7))
+                                .background(pillBg)
                                 .clickable { resolution = res },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = label,
-                                color = if (sel) Color.White else Color(0xFF1C1C1E),
+                                color = pillText,
                                 fontSize = 12.sp,
                                 fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium
                             )
@@ -3973,18 +3983,20 @@ private fun PhotoExportSettingsDialog(
                 ) {
                     listOf("PNG", "JPEG", "WEBP").forEach { fmt ->
                         val sel = format == fmt
+                        val pillBg = if (sel) Color(0xFF0381FE) else (if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7))
+                        val pillText = if (sel) Color.White else (if (colors.isDark) Color(0xFFF2F2F7) else Color(0xFF1C1C1E))
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(34.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (sel) Color(0xFF0381FE) else Color(0xFFF2F2F7))
+                                .background(pillBg)
                                 .clickable { format = fmt },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = fmt,
-                                color = if (sel) Color.White else Color(0xFF1C1C1E),
+                                color = pillText,
                                 fontSize = 12.sp,
                                 fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium
                             )

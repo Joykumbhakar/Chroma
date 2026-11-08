@@ -60,6 +60,7 @@ class WorkRepository(context: Context) {
 
     private val prefs = context.getSharedPreferences("chroma_works", Context.MODE_PRIVATE)
     private val KEY_IDS = "work_ids"
+    private val layersCache = android.util.LruCache<String, List<GradientLayer>>(100)
 
     /** Load all non-deleted works, sorted newest first. */
     fun loadActiveWorks(): List<ChromaWork> {
@@ -116,9 +117,15 @@ class WorkRepository(context: Context) {
         return com.chroma.studio.utils.DataCompressionUtils.compressText(raw)
     }
 
+
+
     /** Deserialize layers from JSON string (supports remote URLs, compressed base64, and legacy raw JSON). */
     fun deserializeLayers(json: String): List<GradientLayer> {
         if (json.isBlank()) return emptyList()
+
+        val cached = layersCache.get(json)
+        if (cached != null) return cached
+
         return try {
             val content = if (json.startsWith("http://") || json.startsWith("https://")) {
                 java.net.URL(json).readText()
@@ -130,11 +137,17 @@ class WorkRepository(context: Context) {
             } catch (_: Throwable) {
                 content
             }
-            chromaGson.fromJson(raw, layerListType) ?: emptyList()
+            val result = chromaGson.fromJson<List<GradientLayer>>(raw, layerListType) ?: emptyList()
+            if (result.isNotEmpty()) {
+                layersCache.put(json, result)
+            }
+            result
         } catch (e: Exception) {
             emptyList()
         }
     }
+
+
 
     fun setLiveWallpaperId(id: String) {
         prefs.edit().putString("live_wallpaper_id", id).apply()

@@ -10,6 +10,7 @@ import com.chroma.studio.data.CloudinaryClient
 import com.chroma.studio.data.StoryRepository
 import com.chroma.studio.data.StoryLikeSyncManager
 import com.chroma.studio.model.Story
+import com.chroma.studio.model.UserProfile
 import com.chroma.studio.model.UserStoryGroup
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +18,21 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
+
+/**
+ * Saved state of a pending story upload to enable instantaneous retry
+ * without having the user start from zero if upload fails.
+ */
+data class PendingStoryUpload(
+    val uri: Uri? = null,
+    val textContent: String = "",
+    val textFormat: String = "",
+    val backgroundColor: String = "",
+    val audienceType: String = "public",
+    val customAudienceIds: List<String> = emptyList(),
+    val isTextStory: Boolean = false,
+    val failedAt: Long = System.currentTimeMillis()
+)
 
 class StoryViewModel : ViewModel() {
     private val repository = StoryRepository()
@@ -37,6 +53,10 @@ class StoryViewModel : ViewModel() {
     private val _uploadError = MutableStateFlow<String?>(null)
     val uploadError: StateFlow<String?> = _uploadError.asStateFlow()
 
+    // Preserved failed upload state for zero-friction one-tap retry
+    private val _failedStoryUpload = MutableStateFlow<PendingStoryUpload?>(null)
+    val failedStoryUpload: StateFlow<PendingStoryUpload?> = _failedStoryUpload.asStateFlow()
+
     // Liked story IDs backed by offline-first StoryLikeSyncManager with LocalStorage Cache
     val likedStoryIds: StateFlow<Set<String>> = StoryLikeSyncManager.likedStoryIds
 
@@ -48,13 +68,49 @@ class StoryViewModel : ViewModel() {
     private val _onlyFriendsIds = MutableStateFlow<List<String>>(emptyList())
     val onlyFriendsIds: StateFlow<List<String>> = _onlyFriendsIds.asStateFlow()
 
+    private var authStateListener: FirebaseAuth.AuthStateListener? = null
+
     init {
         val currentUid = auth.currentUser?.uid
         if (!currentUid.isNullOrBlank()) {
             StoryLikeSyncManager.initForUser(currentUid)
+            loadStories()
+            loadOnlyFriends()
         }
-        loadStories()
-        loadOnlyFriends()
+
+        authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+            val uid = firebaseAuth.currentUser?.uid
+            if (!uid.isNullOrBlank()) {
+                StoryLikeSyncManager.initForUser(uid)
+                loadStories()
+                loadOnlyFriends()
+            } else {
+                resetForLogout()
+            }
+        }
+        try {
+            auth.addAuthStateListener(authStateListener!!)
+        } catch (e: Exception) {
+            Log.e("StoryViewModel", "Error adding auth state listener", e)
+        }
+    }
+
+    fun resetForLogout() {
+        _storyGroups.value = emptyList()
+        _myStories.value = emptyList()
+        _onlyFriendsIds.value = emptyList()
+        _isUploading.value = false
+        _uploadError.value = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        authStateListener?.let {
+            try {
+                auth.removeAuthStateListener(it)
+            } catch (_: Exception) {}
+        }
+        authStateListener = null
     }
 
     fun loadOnlyFriends() {
@@ -141,6 +197,9 @@ class StoryViewModel : ViewModel() {
                         currentGroups.add(groups.first())
                     }
                     _storyGroups.value = currentGroups
+                    if (currentUid != null) {
+                        StoryLikeSyncManager.mergeRemoteStories(groups, currentUid)
+                    }
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -155,6 +214,13 @@ class StoryViewModel : ViewModel() {
                 val serverStories = repository.fetchMyStories()
                 val pendingStories = _myStories.value.filter { it.id.startsWith("temp_") }
                 _myStories.value = (pendingStories + serverStories).distinctBy { it.id }
+                val currentUid = auth.currentUser?.uid
+                if (currentUid != null && serverStories.isNotEmpty()) {
+                    StoryLikeSyncManager.mergeRemoteStories(
+                        listOf(UserStoryGroup(userId = currentUid, userProfile = UserProfile(uid = currentUid), stories = serverStories)),
+                        currentUid
+                    )
+                }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
             }
@@ -189,22 +255,39 @@ class StoryViewModel : ViewModel() {
             timestamp = System.currentTimeMillis()
         )
         _myStories.value = listOf(optimisticStory) + _myStories.value.filter { it.id != tempId }
+        _failedStoryUpload.value = null
+        _uploadError.value = null
 
         viewModelScope.launch {
             _isUploading.value = true
-            _uploadError.value = null
             try {
                 val bytes = com.chroma.studio.utils.ImageUtils.compressChatImage(context, uri)
                 if (bytes == null || bytes.isEmpty()) {
-                    _myStories.value = _myStories.value.filter { it.id != tempId }
-                    _uploadError.value = "Failed to process image"
+                    _failedStoryUpload.value = PendingStoryUpload(
+                        uri = uri,
+                        textContent = textContent,
+                        textFormat = textFormat,
+                        backgroundColor = backgroundColor,
+                        audienceType = audienceType,
+                        customAudienceIds = targetAudienceIds,
+                        isTextStory = false
+                    )
+                    _uploadError.value = "Failed to process image. Tap to retry."
                     return@launch
                 }
 
                 val url = CloudinaryClient.uploadImage(bytes, folder = "stories")
                 if (url == null) {
-                    _myStories.value = _myStories.value.filter { it.id != tempId }
-                    _uploadError.value = "Upload failed. Please try again."
+                    _failedStoryUpload.value = PendingStoryUpload(
+                        uri = uri,
+                        textContent = textContent,
+                        textFormat = textFormat,
+                        backgroundColor = backgroundColor,
+                        audienceType = audienceType,
+                        customAudienceIds = targetAudienceIds,
+                        isTextStory = false
+                    )
+                    _uploadError.value = "Upload failed. Tap to retry."
                     return@launch
                 }
                 repository.publishStory(
@@ -215,13 +298,23 @@ class StoryViewModel : ViewModel() {
                     textFormat = textFormat,
                     backgroundColor = backgroundColor
                 )
+                _failedStoryUpload.value = null
+                _uploadError.value = null
                 _myStories.value = _myStories.value.filter { it.id != tempId }
                 loadMyStories()
                 loadStories()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                _myStories.value = _myStories.value.filter { it.id != tempId }
-                _uploadError.value = "Error: ${e.message}"
+                _failedStoryUpload.value = PendingStoryUpload(
+                    uri = uri,
+                    textContent = textContent,
+                    textFormat = textFormat,
+                    backgroundColor = backgroundColor,
+                    audienceType = audienceType,
+                    customAudienceIds = targetAudienceIds,
+                    isTextStory = false
+                )
+                _uploadError.value = "Upload failed: ${e.localizedMessage ?: "Network error"}. Tap to retry."
                 Log.e("StoryViewModel", "uploadStory error", e)
             } finally {
                 _isUploading.value = false
@@ -250,24 +343,72 @@ class StoryViewModel : ViewModel() {
             timestamp = System.currentTimeMillis()
         )
         _myStories.value = listOf(optimisticStory) + _myStories.value.filter { it.id != tempId }
+        _failedStoryUpload.value = null
+        _uploadError.value = null
 
         viewModelScope.launch {
             _isUploading.value = true
-            _uploadError.value = null
             try {
                 repository.publishTextStory(textContent, textFormat, backgroundColor, audienceType, customAudienceIds)
+                _failedStoryUpload.value = null
+                _uploadError.value = null
                 _myStories.value = _myStories.value.filter { it.id != tempId }
                 loadMyStories()
                 loadStories()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                _myStories.value = _myStories.value.filter { it.id != tempId }
-                _uploadError.value = "Error: ${e.message}"
+                _failedStoryUpload.value = PendingStoryUpload(
+                    textContent = textContent,
+                    textFormat = textFormat,
+                    backgroundColor = backgroundColor,
+                    audienceType = audienceType,
+                    customAudienceIds = customAudienceIds,
+                    isTextStory = true
+                )
+                _uploadError.value = "Upload failed: ${e.localizedMessage ?: "Network error"}. Tap to retry."
                 Log.e("StoryViewModel", "publishTextStory error", e)
             } finally {
                 _isUploading.value = false
             }
         }
+    }
+
+    /**
+     * Resumes and re-attempts the exact story upload from the saved pending state
+     * without forcing the user to re-select media or re-type from zero.
+     */
+    fun retryFailedUpload(context: Context) {
+        val pending = _failedStoryUpload.value ?: return
+        _failedStoryUpload.value = null
+        _uploadError.value = null
+        if (pending.isTextStory) {
+            publishTextStory(
+                textContent = pending.textContent,
+                textFormat = pending.textFormat,
+                backgroundColor = pending.backgroundColor,
+                audienceType = pending.audienceType,
+                customAudienceIds = pending.customAudienceIds
+            )
+        } else if (pending.uri != null) {
+            uploadStory(
+                context = context,
+                uri = pending.uri,
+                audienceType = pending.audienceType,
+                customAudienceIds = pending.customAudienceIds,
+                textContent = pending.textContent,
+                textFormat = pending.textFormat,
+                backgroundColor = pending.backgroundColor
+            )
+        }
+    }
+
+    /**
+     * Clears failed upload state and discards the optimistic temporary story item.
+     */
+    fun clearFailedUpload() {
+        _failedStoryUpload.value = null
+        _uploadError.value = null
+        _myStories.value = _myStories.value.filter { !it.id.startsWith("temp_") }
     }
 
     fun markViewed(storyId: String) {
@@ -356,5 +497,9 @@ class StoryViewModel : ViewModel() {
             if (updated.isEmpty()) null else group.copy(stories = updated)
         }
         viewModelScope.launch { repository.deleteStory(storyId) }
+    }
+
+    suspend fun fetchStoryGroupForStory(storyId: String): Pair<UserStoryGroup, Story>? {
+        return repository.fetchStoryGroupForStory(storyId)
     }
 }

@@ -71,7 +71,16 @@ fun UserListScreen(
     val colors = LocalOscellionColors.current
 
     LaunchedEffect(userId, type) {
-        isLoading = true
+        if (type == "following" && currentUserId != null && userId == currentUserId) {
+            val cached = com.chroma.studio.data.mutation.FollowingLocalStorageManager.getCachedFollowingUsers(null, userId)
+            if (cached.isNotEmpty()) {
+                users = cached
+                isLoading = false
+            }
+        }
+        if (users.isEmpty()) {
+            isLoading = true
+        }
         // Fetch the list of users to display
         val list = if (type == "followers") {
             discoverVm.repository.getFollowers(userId)
@@ -85,7 +94,8 @@ fun UserListScreen(
             val followingList = discoverVm.repository.getFollowing(currentUserId)
             val set = followingList.map { it.uid }.toSet()
             currentUserFollowingIds = set
-            com.chroma.studio.data.mutation.OptimisticFollowManager.seedFollowing(set)
+            com.chroma.studio.data.mutation.OptimisticFollowManager.seedFollowing(set, currentUserId)
+            com.chroma.studio.data.mutation.FollowingLocalStorageManager.saveFollowingUsers(null, currentUserId, followingList)
         }
         isLoading = false
     }
@@ -128,7 +138,7 @@ fun UserListScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(users, key = { it.uid }) { user ->
-                        val isFollowingUser = globalFollowingIds.contains(user.uid)
+                        val isFollowingUser = globalFollowingIds.contains(user.uid) || com.chroma.studio.data.mutation.FollowingLocalStorageManager.isFollowing(user.uid)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

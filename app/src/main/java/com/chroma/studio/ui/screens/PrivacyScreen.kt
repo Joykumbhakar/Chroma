@@ -24,7 +24,7 @@ fun PrivacyScreen(
     onSave: (UserProfile) -> Unit,
     onBack: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
     var isPrivate by remember { mutableStateOf(profile.isPrivateAccount) }
     var allowTagging by remember { mutableStateOf(profile.allowTagging) }
     var showOnline by remember { mutableStateOf(profile.showOnlineStatus) }

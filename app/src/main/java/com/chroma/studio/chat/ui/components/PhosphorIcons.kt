@@ -263,9 +263,9 @@ fun PhosphorSingleCheck(tint: Color = Color(0xFF8696A0), size: Dp = 13.dp, modif
         val scale = size.toPx() / 24f
         val stroke = Stroke(width = 2.2f * scale, cap = StrokeCap.Round, join = StrokeJoin.Round)
         val path = Path().apply {
-            moveTo(4.75f * scale, 12.75f * scale)
-            lineTo(9.5f * scale, 17.5f * scale)
-            lineTo(19.25f * scale, 7f * scale)
+            moveTo(3.5f * scale, 12f * scale)
+            lineTo(8.5f * scale, 17f * scale)
+            lineTo(19.5f * scale, 6f * scale)
         }
         drawPath(path, color = tint, style = stroke)
     }
@@ -282,18 +282,18 @@ fun PhosphorDoubleCheck(tint: Color = Color(0xFF8696A0), size: Dp = 15.5.dp, mod
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
         val stroke = Stroke(width = 2.2f * scale, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        // First check
+        // First check (left)
         val path1 = Path().apply {
-            moveTo(1.75f * scale, 12.75f * scale)
-            lineTo(6.5f * scale, 17.5f * scale)
-            lineTo(16.25f * scale, 7f * scale)
+            moveTo(2f * scale, 12f * scale)
+            lineTo(7f * scale, 17f * scale)
+            lineTo(17.5f * scale, 6.5f * scale)
         }
         drawPath(path1, color = tint, style = stroke)
-        // Second check (staggered)
+        // Second check (right flank, clean parallel lines without intersecting or cutting path 1)
         val path2 = Path().apply {
-            moveTo(7.75f * scale, 12.75f * scale)
-            lineTo(12.5f * scale, 17.5f * scale)
-            lineTo(22.25f * scale, 7f * scale)
+            moveTo(11.5f * scale, 14.5f * scale)
+            lineTo(13.5f * scale, 17f * scale)
+            lineTo(22f * scale, 7.5f * scale)
         }
         drawPath(path2, color = tint, style = stroke)
     }

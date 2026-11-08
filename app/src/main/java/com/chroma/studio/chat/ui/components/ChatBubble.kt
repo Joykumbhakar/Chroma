@@ -344,6 +344,7 @@ private fun MessageReactionDock(
     onCloseDock: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
     AnimatedVisibility(
@@ -486,7 +487,8 @@ data class MessageRowCallbacks(
     val onViewPollVotes: ((PollData) -> Unit)? = null,
     val onToggleSelect: () -> Unit = {},
     val onQuoteClick: ((String) -> Unit)? = null,
-    val onRetry: (() -> Unit)? = null
+    val onRetry: (() -> Unit)? = null,
+    val onStoryClick: ((storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null
 )
 
 @Immutable
@@ -883,6 +885,7 @@ private fun MessageBubbleCard(
     isHeartBurstActive: Boolean
 ) {
     val haptic = LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val bubbleStyle = config.bubbleStyle
     val customCornerConfig = config.customCornerConfig
     val animationStyle = config.animationStyle
@@ -1029,7 +1032,8 @@ private fun MessageBubbleCard(
                     onClosePoll = callbacks.onClosePoll,
                     onViewPollVotes = callbacks.onViewPollVotes,
                     onQuoteClick = callbacks.onQuoteClick,
-                    onRetry = callbacks.onRetry
+                    onRetry = callbacks.onRetry,
+                    onStoryClick = callbacks.onStoryClick
                 )
             }
 
@@ -1082,6 +1086,7 @@ fun MessageRow(
     }
 
     val haptic = LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showReactionDock by remember { mutableStateOf(false) }
     var isHeartBurstActive by remember { mutableStateOf(false) }
     var heartJob by remember { mutableStateOf<Job?>(null) }
@@ -1251,9 +1256,11 @@ private fun MessageBubbleInnerContent(
     onClosePoll: (() -> Unit)? = null,
     onViewPollVotes: ((PollData) -> Unit)?,
     onQuoteClick: ((String) -> Unit)? = null,
-    onRetry: (() -> Unit)? = null
+    onRetry: (() -> Unit)? = null,
+    onStoryClick: ((storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Column(
         modifier = Modifier.padding(
@@ -1329,7 +1336,7 @@ private fun MessageBubbleInnerContent(
         }
 
         // ── Instagram-Style Story Reply Header & Thumbnail Card ────────────────
-        val isStoryReply = message.storyThumbnailUrl != null || message.mediaType == "story_reply" || message.storyId != null
+        val isStoryReply = message.storyThumbnailUrl != null || message.mediaType == "story_reply" || message.storyId != null || (message.text?.startsWith("Replying to story:", ignoreCase = true) == true)
         if (isStoryReply) {
             val storyThumb = message.storyThumbnailUrl ?: ""
             val headerText = if (isOutgoing) "Replied to their story" else "Replied to your story"
@@ -1338,6 +1345,9 @@ private fun MessageBubbleInnerContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 6.dp)
+                    .clickable(enabled = onStoryClick != null) {
+                        onStoryClick?.invoke(message.storyId, message.storyThumbnailUrl)
+                    }
             ) {
                 // Subtle Instagram header label
                 Row(
@@ -1384,6 +1394,9 @@ private fun MessageBubbleInnerContent(
                             color = if (isOutgoing) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.18f),
                             shape = RoundedCornerShape(12.dp)
                         )
+                        .clickable(enabled = onStoryClick != null) {
+                            onStoryClick?.invoke(message.storyId, message.storyThumbnailUrl)
+                        }
                 ) {
                     val isTextStory = storyThumb.startsWith("text:") || storyThumb.startsWith("markdown://")
                     if (isTextStory) {
@@ -1415,8 +1428,11 @@ private fun MessageBubbleInnerContent(
                             )
                         }
                     } else if (storyThumb.isNotBlank()) {
+                        val resolvedStoryThumb = remember(storyThumb) {
+                            com.chroma.studio.chat.data.ChatLocalCacheManager.getOfflineSafeMediaUrl(context, storyThumb)
+                        }
                         AsyncImage(
-                            model = storyThumb,
+                            model = resolvedStoryThumb,
                             contentDescription = "Story preview thumbnail",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
@@ -1452,8 +1468,11 @@ private fun MessageBubbleInnerContent(
         // 2. Media Content
         when (message.mediaType) {
             "sticker" -> {
-                val stickerUrl = message.localUri ?: message.mediaUrl
-                if (!stickerUrl.isNullOrEmpty()) {
+                val rawStickerUrl = message.localUri ?: message.mediaUrl
+                if (!rawStickerUrl.isNullOrEmpty()) {
+                    val stickerUrl = remember(rawStickerUrl) {
+                        com.chroma.studio.chat.data.ChatLocalCacheManager.getOfflineSafeMediaUrl(context, rawStickerUrl)
+                    }
                     Box(
                         modifier = Modifier
                             .padding(vertical = 4.dp)
@@ -1472,7 +1491,10 @@ private fun MessageBubbleInnerContent(
                 }
             }
             "image", "image_stack" -> {
-                val urls = if (message.mediaUrls.isNotEmpty()) message.mediaUrls else listOfNotNull(message.mediaUrl)
+                val rawUrls = if (message.mediaUrls.isNotEmpty()) message.mediaUrls else listOfNotNull(message.mediaUrl)
+                val urls = remember(rawUrls) {
+                    rawUrls.map { com.chroma.studio.chat.data.ChatLocalCacheManager.getOfflineSafeMediaUrl(context, it) }
+                }
                 if (urls.size > 1) {
                     MediaStackGrid(
                         mediaUrls = urls,
@@ -1540,9 +1562,13 @@ private fun MessageBubbleInnerContent(
                 }
             }
             "voice" -> {
+                val rawAudio = message.localUri ?: message.mediaUrl ?: ""
+                val resolvedAudio = remember(rawAudio) {
+                    com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedMediaFile(context, rawAudio)?.absolutePath ?: rawAudio
+                }
                 VoiceNotePlayer(
                     messageId = message.id,
-                    audioPath = message.localUri ?: message.mediaUrl ?: "",
+                    audioPath = resolvedAudio,
                     waveformSamples = message.waveformSamples,
                     durationSec = message.voiceDuration,
                     isOutgoing = isOutgoing,
@@ -1687,9 +1713,18 @@ private fun MessageBubbleInnerContent(
             var revealedSpoilers by remember(message.id) { mutableStateOf(setOf<String>()) }
             var textLayoutResult by remember(message.id) { mutableStateOf<TextLayoutResult?>(null) }
 
-            val annotatedText = remember(message.text, searchQuery, visual, isOutgoing, revealedSpoilers) {
+            val displayText = remember(message.text, isStoryReply) {
+                if (isStoryReply && message.text?.startsWith("Replying to story:", ignoreCase = true) == true) {
+                    val extracted = message.text.removePrefix("Replying to story:").trim().trim('"', '\'')
+                    if (extracted.isNotBlank()) extracted else message.text
+                } else {
+                    message.text
+                }
+            }
+
+            val annotatedText = remember(displayText, searchQuery, visual, isOutgoing, revealedSpoilers) {
                 parseMarkdownToAnnotatedString(
-                    text = message.text,
+                    text = displayText,
                     visual = visual,
                     isOutgoing = isOutgoing,
                     searchQuery = searchQuery,
@@ -3817,6 +3852,7 @@ fun MediaStackGrid(
 
     val colors = LocalChatColors.current
     val haptic = LocalHapticFeedback.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
     var viewMode by remember { mutableStateOf(if (count > 1) "stack" else "single") }

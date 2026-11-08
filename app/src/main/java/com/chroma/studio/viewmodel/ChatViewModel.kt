@@ -34,6 +34,18 @@ class ChatViewModel : ViewModel() {
     private var lastTypingSendTime: Long = 0L
     private var recordingHeartbeatJob: kotlinx.coroutines.Job? = null
     private var currentActivityStatus: String? = null
+    private val recipientExpiryJobs = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Job>()
+    private val activityPresenceController = com.chroma.studio.chat.controller.ChatActivityPresenceController(
+        scope = viewModelScope,
+        onDispatchActivity = { roomId, activity ->
+            currentActivityStatus = activity
+            val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+            val normalizedRoomId = com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(roomId, currentUid, currentOtherUserId)
+            viewModelScope.launch {
+                com.chroma.studio.data.OnlineStatusManager.setChatActivity(normalizedRoomId, activity)
+            }
+        }
+    )
     private var statusTtlMonitorJob: kotlinx.coroutines.Job? = null
     private val receivedActivityTimestamps = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, Long>>()
     private val typingListeners = mutableMapOf<String, com.google.firebase.database.ValueEventListener>()
@@ -98,8 +110,11 @@ class ChatViewModel : ViewModel() {
 
     private var chatsJob: Job? = null
     private var messagesJob: Job? = null
+    private var storiesJob: Job? = null
     private var onlineStatusListener: ValueEventListener? = null
     private var currentOtherUserId: String? = null
+    private var authStateListener: com.google.firebase.auth.FirebaseAuth.AuthStateListener? = null
+    private var currentAuthUserId: String? = null
 
     private var messageLimit = 50L
 
@@ -113,14 +128,48 @@ class ChatViewModel : ViewModel() {
     val mutedChatIds: StateFlow<Set<String>> = _mutedChatIds.asStateFlow()
 
     init {
-        observeChats()
-        loadStories()
-        loadMutedChats()
-        loadBlockedUsers()
+        // Immediately load recent chats from local storage so conversation list appears on Frame 0 offline
+        try {
+            val cachedChats = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedRecentChats(
+                com.chroma.studio.ChromaApp.instance
+            )
+            if (cachedChats.isNotEmpty()) {
+                _recentChats.value = cachedChats
+                _isLoadingChats.value = false
+            }
+        } catch (_: Exception) {}
+
+        val initialUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+        val initialUid = initialUser?.uid
+        if (!initialUid.isNullOrBlank()) {
+            currentAuthUserId = initialUid
+            reloadForUser(initialUid)
+        } else {
+            _isLoadingChats.value = false
+        }
+
+        authStateListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { auth ->
+            val newUid = auth.currentUser?.uid
+            if (newUid != currentAuthUserId) {
+                val oldUid = currentAuthUserId
+                currentAuthUserId = newUid
+                if (!newUid.isNullOrBlank()) {
+                    reloadForUser(newUid)
+                } else if (oldUid != null) {
+                    resetForLogout()
+                }
+            }
+        }
+        try {
+            com.google.firebase.auth.FirebaseAuth.getInstance().addAuthStateListener(authStateListener!!)
+        } catch (e: Exception) {
+            android.util.Log.e("ChatViewModel", "Error adding auth state listener", e)
+        }
     }
 
     private fun loadStories() {
-        viewModelScope.launch {
+        storiesJob?.cancel()
+        storiesJob = viewModelScope.launch {
             _recentChats.collect { chats ->
                 refreshStoriesInternal(chats)
             }
@@ -216,36 +265,166 @@ class ChatViewModel : ViewModel() {
         ref.addValueEventListener(onlineStatusListener!!)
     }
 
-    private fun observeChats() {
+    fun observeChats(targetUid: String? = null) {
+        val currentUid = targetUid ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (currentUid.isNullOrBlank()) {
+            _recentChats.value = emptyList()
+            _isLoadingChats.value = false
+            return
+        }
+
         chatsJob?.cancel()
         chatsJob = viewModelScope.launch {
             _isLoadingChats.value = true
-            repository.observeRecentChats().collect { chats ->
-                _recentChats.value = chats
-                _isLoadingChats.value = false
+            try {
+                repository.observeRecentChats(currentUid).collect { chats ->
+                    if (chats.isNotEmpty()) {
+                        _recentChats.value = chats
+                        _isLoadingChats.value = false
+                        try {
+                            com.chroma.studio.chat.data.ChatLocalCacheManager.saveRecentChats(
+                                com.chroma.studio.ChromaApp.instance,
+                                chats
+                            )
+                        } catch (_: Exception) {}
+                    } else if (_recentChats.value.isEmpty()) {
+                        _recentChats.value = emptyList()
+                        _isLoadingChats.value = false
+                    }
 
-                // Pre-load top recent chat messages into memory cache in background (0ms open)
-                try {
-                    com.chroma.studio.chat.data.ChatLocalCacheManager.preloadRooms(
-                        com.chroma.studio.ChromaApp.instance,
-                        chats.map { it.id }
-                    )
-                } catch (e: Exception) {
-                    // ignore
+                    // Pre-load top recent chat messages into memory cache in background (0ms open)
+                    try {
+                        com.chroma.studio.chat.data.ChatLocalCacheManager.preloadRooms(
+                            com.chroma.studio.ChromaApp.instance,
+                            chats.map { it.id }
+                        )
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+
+                    // Asynchronously fetch profiles for all chat participants
+                    val allUids = chats.flatMap { it.participants }.distinct()
+                    fetchProfilesForUsers(allUids)
+
+                    // Observe real-time online presence for all contacts
+                    val otherUids = allUids.filter { it != currentUid }
+                    observeUsersPresence(otherUids)
+
+                    observeTypingStatuses(chats)
+
+                    // Auto-mark incoming undelivered messages as delivered in realtime
+                    launch(Dispatchers.IO) {
+                        for (chat in chats) {
+                            if (chat.lastSender != null && chat.lastSender != currentUid && !chat.lastMessageIsDelivered) {
+                                repository.markAsDelivered(chat.id)
+                            }
+                        }
+                    }
                 }
-
-                // Asynchronously fetch profiles for all chat participants
-                val allUids = chats.flatMap { it.participants }.distinct()
-                fetchProfilesForUsers(allUids)
-
-                // Observe real-time online presence for all contacts
-                val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                val otherUids = if (currentUid != null) allUids.filter { it != currentUid } else allUids
-                observeUsersPresence(otherUids)
-
-                observeTypingStatuses(chats)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                android.util.Log.e("ChatViewModel", "observeChats error", e)
+                _isLoadingChats.value = false
             }
         }
+    }
+
+    fun reloadForUser(userId: String? = null) {
+        val uid = userId ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (uid.isNullOrBlank()) {
+            resetForLogout()
+            return
+        }
+
+        val isSameUser = currentAuthUserId == uid
+        val isAlreadyObserving = chatsJob?.isActive == true && _recentChats.value.isNotEmpty()
+        if (isSameUser && isAlreadyObserving) {
+            return
+        }
+
+        currentAuthUserId = uid
+        com.chroma.studio.ChatStateManager.setCurrentUserId(uid)
+
+        observeChats(uid)
+        loadStories()
+        loadMutedChats()
+        loadBlockedUsers()
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val userDoc = firestore.collection("users").document(uid).get().await()
+                if (userDoc.getString("publicKey").isNullOrBlank()) {
+                    val pubKey = com.chroma.studio.utils.CryptoHelper.getPublicKeyBase64()
+                    if (pubKey.isNotBlank()) {
+                        firestore.collection("users").document(uid).update("publicKey", pubKey)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun resetForLogout() {
+        currentAuthUserId = null
+        chatsJob?.cancel()
+        chatsJob = null
+        messagesJob?.cancel()
+        messagesJob = null
+        storiesJob?.cancel()
+        storiesJob = null
+
+        currentOtherUserId?.let {
+            onlineStatusListener?.let { listener ->
+                try {
+                    com.chroma.studio.data.OnlineStatusManager.getDatabase().getReference("users/$it").removeEventListener(listener)
+                } catch (_: Exception) {}
+            }
+        }
+        onlineStatusListener = null
+        currentOtherUserId = null
+
+        for (unsubscribe in presenceListeners.values) {
+            try { unsubscribe() } catch (_: Exception) {}
+        }
+        presenceListeners.clear()
+
+        typingDebounceJob?.cancel()
+        typingDebounceJob = null
+        typingHeartbeatJob?.cancel()
+        typingHeartbeatJob = null
+        recordingHeartbeatJob?.cancel()
+        recordingHeartbeatJob = null
+        statusTtlMonitorJob?.cancel()
+        statusTtlMonitorJob = null
+
+        val db = com.chroma.studio.data.OnlineStatusManager.getDatabase()
+        for ((roomId, listener) in typingListeners) {
+            try {
+                db.getReference("status/$roomId").removeEventListener(listener)
+            } catch (_: Exception) {}
+        }
+        typingListeners.clear()
+        receivedActivityTimestamps.clear()
+
+        _recentChats.value = emptyList()
+        _serverMessages.value = emptyList()
+        _localMessages.value = emptyList()
+        _activeRoomId.value = null
+        _isLoadingChats.value = false
+        _isOtherUserOnline.value = false
+        _otherUserLastSeen.value = null
+        _onlineUsersPresence.value = emptyMap()
+        _stories.value = emptyList()
+        _userProfiles.value = emptyMap()
+        _typingStatuses.value = emptyMap()
+        _blockedUserIds.value = emptySet()
+        _mutedChatIds.value = emptySet()
+
+        repository.clearCaches()
+        com.chroma.studio.chat.data.ChatLocalCacheManager.clearMemoryCache()
+        com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = null
+        com.chroma.studio.ChatStateManager.clearActiveChat()
+        com.chroma.studio.ChatStateManager.setCurrentUserId(null)
     }
 
     fun startChat(otherUserId: String, onRoomReady: (String) -> Unit) {
@@ -291,13 +470,20 @@ class ChatViewModel : ViewModel() {
             return
         }
 
-        // Switching to a new/different room: reset previous messages so they don't flash or leak
-        if (previousRoomId != roomId) {
-            _serverMessages.value = emptyList()
-            _localMessages.value = emptyList()
-        }
         _activeRoomId.value = roomId
         com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = roomId
+
+        // 1. INSTANT OFFLINE LOCAL STORAGE LOAD (WhatsApp / Telegram architecture):
+        // Synchronously load from local storage (L1 memory or L2 disk) BEFORE anything else.
+        // This guarantees that when entering a chat, historical messages appear on Frame 0 (0ms)
+        // with ZERO blank screen, ZERO opening from zero, and 100% offline access in Airplane mode.
+        val cached = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedMessages(
+            com.chroma.studio.ChromaApp.instance,
+            roomId
+        )
+        _serverMessages.value = cached
+        _localMessages.value = emptyList()
+
         observeRoomTyping(roomId)
 
         // Observe participant presence in real-time
@@ -314,30 +500,8 @@ class ChatViewModel : ViewModel() {
         }
         com.chroma.studio.ChatStateManager.setActiveChat(recipientId = otherUid, roomId = roomId)
 
-        // 1. INSTANT OFFLINE PRE-LOAD (Telegram / WhatsApp technique):
-        // First check in-memory L1 cache (0ms synchronous)
-        val inMemoryCached = com.chroma.studio.chat.data.ChatLocalCacheManager.getMemoryCachedMessages(roomId)
-        if (!inMemoryCached.isNullOrEmpty()) {
-            _serverMessages.value = inMemoryCached
-        } else {
-            // Asynchronously load disk L2 cache on Dispatchers.IO to never block the main thread
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    val diskCached = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedMessages(
-                        com.chroma.studio.ChromaApp.instance,
-                        roomId
-                    )
-                    if (diskCached.isNotEmpty() && _activeRoomId.value == roomId && _serverMessages.value.isEmpty()) {
-                        _serverMessages.value = diskCached
-                    }
-                } catch (e: Exception) {
-                    // ignore
-                }
-            }
-        }
-
-        // 2. Initial viewport limit: 30 messages (prevents overload crashes on open)
-        messageLimit = 30L
+        // 2. Viewport limit: start with 30 messages or size of cached
+        messageLimit = 30L.coerceAtLeast(cached.size.toLong())
         observeMessages(roomId)
 
         // Optimistically mark as read in local state
@@ -434,19 +598,37 @@ class ChatViewModel : ViewModel() {
         messagesJob?.cancel()
         messagesJob = viewModelScope.launch {
             repository.observeMessages(roomId, messageLimit).collect { msgs ->
-                _serverMessages.value = msgs
-                // Auto-mark incoming messages as read when user is actively viewing this room
-                val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                if (currentUserId != null && _activeRoomId.value == roomId) {
-                    val hasUnreadFromOther = msgs.any { it.senderId != currentUserId && !it.isRead }
-                    if (hasUnreadFromOther) {
-                        launch(Dispatchers.IO) {
-                            repository.markAsRead(roomId)
+                // CRITICAL OFFLINE PROTECTION:
+                // Only update server messages if new messages arrived from server or Firestore cache.
+                // Never wipe out non-empty cached messages if an empty list arrives during offline transitions.
+                if (msgs.isNotEmpty()) {
+                    _serverMessages.value = msgs
+                    // WhatsApp-grade immediate eviction of typing indicator on message arrival
+                    val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                    if (currentUserId != null) {
+                        val otherSenders = msgs.map { it.senderId }.filter { it != currentUserId }.toSet()
+                        otherSenders.forEach { senderId ->
+                            evictUserTypingActivity(roomId, senderId)
+                        }
+
+                        // Auto-mark incoming messages as read when user is actively viewing this room, or delivered otherwise
+                        if (_activeRoomId.value == roomId) {
+                            val hasUnreadFromOther = msgs.any { it.senderId != currentUserId && !it.isRead }
+                            if (hasUnreadFromOther) {
+                                launch(Dispatchers.IO) {
+                                    repository.markAsRead(roomId)
+                                }
+                            }
+                        } else {
+                            val hasUndeliveredFromOther = msgs.any { it.senderId != currentUserId && !it.isDelivered }
+                            if (hasUndeliveredFromOther) {
+                                launch(Dispatchers.IO) {
+                                    repository.markAsDelivered(roomId)
+                                }
+                            }
                         }
                     }
-                }
-                // Asynchronously save to local offline cache so next open is instant
-                if (msgs.isNotEmpty()) {
+                    // Asynchronously save to local offline cache so next open is instant and media is cached
                     try {
                         com.chroma.studio.chat.data.ChatLocalCacheManager.saveMessages(
                             com.chroma.studio.ChromaApp.instance,
@@ -456,6 +638,8 @@ class ChatViewModel : ViewModel() {
                     } catch (e: Exception) {
                         // ignore
                     }
+                } else if (_serverMessages.value.isEmpty()) {
+                    _serverMessages.value = emptyList()
                 }
             }
         }
@@ -669,67 +853,42 @@ class ChatViewModel : ViewModel() {
      *   during long continuous typing sessions.
      * - Immediately clears when input becomes blank or a message is dispatched.
      */
+    fun onTextInputChanged(newText: String, roomIdOverride: String? = null) {
+        val rawRoomId = roomIdOverride ?: _activeRoomId.value ?: return
+        activityPresenceController.onTextChanged(newText, rawRoomId)
+    }
+
     fun setTypingStatus(isTyping: Boolean, roomIdOverride: String? = null) {
+        val rawRoomId = roomIdOverride ?: _activeRoomId.value ?: return
         if (isTyping) {
-            // Send "typing" ONLY when transitioning from non-typing to typing (first keystroke)
-            if (currentActivityStatus != "typing") {
-                setChatActivity("typing", force = true, roomIdOverride = roomIdOverride)
-                lastTypingSendTime = System.currentTimeMillis()
-                // Start sparse heartbeat to keep receiver indicator alive during long typing
-                typingHeartbeatJob?.cancel()
-                typingHeartbeatJob = viewModelScope.launch {
-                    while (isActive) {
-                        kotlinx.coroutines.delay(5000)
-                        if (currentActivityStatus == "typing") {
-                            lastTypingSendTime = System.currentTimeMillis()
-                            setChatActivity("typing", force = true, roomIdOverride = roomIdOverride)
-                        }
-                    }
-                }
-            }
-            // Reset the 3-second inactivity timer on every keystroke (NO network write)
-            typingDebounceJob?.cancel()
-            typingDebounceJob = viewModelScope.launch {
-                kotlinx.coroutines.delay(3000)
-                // User stopped typing for 3 seconds — clear immediately
-                typingHeartbeatJob?.cancel()
-                typingHeartbeatJob = null
-                lastTypingSendTime = 0L
-                setChatActivity(null, roomIdOverride = roomIdOverride)
-            }
+            activityPresenceController.onTextChanged("...", rawRoomId)
         } else {
-            // Explicit clear (message sent, text cleared, etc.)
-            typingDebounceJob?.cancel()
-            typingHeartbeatJob?.cancel()
-            typingHeartbeatJob = null
-            lastTypingSendTime = 0L
-            setChatActivity(null, roomIdOverride = roomIdOverride)
+            activityPresenceController.onTextChanged("", rawRoomId)
         }
     }
 
-    /**
-     * WhatsApp-grade recording indicator:
-     * - Immediately dispatches "recording" status upon mic activation.
-     * - Maintains an active 1800ms heartbeat to prevent receiver TTL expiration during long voice notes.
-     * - Immediately cancels and removes status upon send, release, or cancel.
-     */
     fun setRecordingStatus(isRecording: Boolean, roomIdOverride: String? = null) {
-        typingDebounceJob?.cancel()
-        typingHeartbeatJob?.cancel()
-        typingHeartbeatJob = null
-        recordingHeartbeatJob?.cancel()
-        lastTypingSendTime = 0L
-
+        val rawRoomId = roomIdOverride ?: _activeRoomId.value ?: return
         if (isRecording) {
-            setChatActivity("recording", force = true, roomIdOverride = roomIdOverride)
-            recordingHeartbeatJob = viewModelScope.launch {
-                while (isActive) {
-                    kotlinx.coroutines.delay(1800)
-                    setChatActivity("recording", force = true, roomIdOverride = roomIdOverride)
-                }
-            }
+            activityPresenceController.onRecordingStarted(rawRoomId)
         } else {
-            setChatActivity(null, roomIdOverride = roomIdOverride)
+            activityPresenceController.onRecordingStopped(rawRoomId)
+        }
+    }
+
+    fun evictUserTypingActivity(roomId: String, userId: String) {
+        val compositeKey = "$roomId:$userId"
+        recipientExpiryJobs.remove(compositeKey)?.cancel()
+        val currentMap = _typingStatuses.value
+        val roomActivities = currentMap[roomId] ?: return
+        if (roomActivities.containsKey(userId)) {
+            val updatedRoomActivities = roomActivities - userId
+            val newMap = if (updatedRoomActivities.isNotEmpty()) {
+                currentMap + (roomId to updatedRoomActivities)
+            } else {
+                currentMap - roomId
+            }
+            _typingStatuses.value = newMap
         }
     }
 
@@ -1040,6 +1199,7 @@ class ChatViewModel : ViewModel() {
 
     fun closeChat() {
         // Clear any active typing/recording indicators before leaving
+        activityPresenceController.onPauseOrBackground()
         typingDebounceJob?.cancel()
         typingHeartbeatJob?.cancel()
         typingHeartbeatJob = null
@@ -1209,6 +1369,12 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    fun markAsDelivered(roomId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.markAsDelivered(roomId)
+        }
+    }
+
     fun markMultipleAsRead(roomIds: List<String>) {
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
         val currentChats = _recentChats.value.toMutableList()
@@ -1372,6 +1538,13 @@ class ChatViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
+        authStateListener?.let { listener ->
+            try {
+                com.google.firebase.auth.FirebaseAuth.getInstance().removeAuthStateListener(listener)
+            } catch (_: Exception) {}
+        }
+        authStateListener = null
+
         currentOtherUserId?.let {
             onlineStatusListener?.let { listener ->
                 com.chroma.studio.data.OnlineStatusManager.getDatabase().getReference("users/$it").removeEventListener(listener)
@@ -1457,11 +1630,20 @@ class ChatViewModel : ViewModel() {
                         is Map<*, *> -> value["status"] as? String ?: value["activity"] as? String
                         else -> null
                     }
+                    val compositeKey = "$roomId:$userId"
                     if (!status.isNullOrBlank()) {
                         activityMap[userId] = status
                         roomTimestamps[userId] = now
+                        // WhatsApp 5-second per-participant fallback expiry timer
+                        recipientExpiryJobs[compositeKey]?.cancel()
+                        recipientExpiryJobs[compositeKey] = viewModelScope.launch {
+                            kotlinx.coroutines.delay(5000L)
+                            evictUserTypingActivity(roomId, userId)
+                            evictUserTypingActivity(rawRoomId, userId)
+                        }
                     } else {
                         roomTimestamps.remove(userId)
+                        recipientExpiryJobs.remove(compositeKey)?.cancel()
                     }
                 }
                 val newStatus = if (activityMap.isNotEmpty()) {

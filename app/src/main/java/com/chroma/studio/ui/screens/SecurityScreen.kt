@@ -26,7 +26,7 @@ fun SecurityScreen(
     onSave: (UserProfile) -> Unit,
     onBack: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
     val scope = rememberCoroutineScope()
     val auth = FirebaseAuth.getInstance()
     val user = auth.currentUser

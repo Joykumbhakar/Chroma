@@ -20,6 +20,7 @@ import com.chroma.studio.ui.components.AppleEmptyStateView
 
 import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 
 import androidx.compose.foundation.lazy.LazyColumn
@@ -354,6 +355,7 @@ private fun ChatScreenContent(
     val likedStoryIds by effectiveStoryVm.likedStoryIds.collectAsState()
 
     val isUploadingStory by effectiveStoryVm.isUploading.collectAsState()
+    val failedStoryUpload by effectiveStoryVm.failedStoryUpload.collectAsState()
 
     var showStoryViewer by remember { mutableStateOf(false) }
 
@@ -369,6 +371,8 @@ private fun ChatScreenContent(
     var isStickerStudioOpen by remember { mutableStateOf(false) }
 
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
+    var storyViewerInitialStoryId by remember { mutableStateOf<String?>(null) }
+    var storyViewerStandaloneGroup by remember { mutableStateOf<com.chroma.studio.model.UserStoryGroup?>(null) }
 
 
 
@@ -414,6 +418,13 @@ private fun ChatScreenContent(
 
     val mutedChatIds by (chatViewModel?.mutedChatIds?.collectAsState() ?: remember { mutableStateOf(emptySet()) })
     val blockedUserIds by (chatViewModel?.blockedUserIds?.collectAsState() ?: remember { mutableStateOf(emptySet()) })
+
+    // Ensure chats are actively observed when ChatScreen is displayed for the current user
+    LaunchedEffect(currentUid) {
+        if (currentUid.isNotBlank()) {
+            chatViewModel?.reloadForUser(currentUid)
+        }
+    }
 
 
 
@@ -640,7 +651,7 @@ private fun ChatScreenContent(
 
     val rawMessages by (chatViewModel?.currentMessages?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
 
-    val liveMessages = remember(rawMessages, userProfiles, currentUid, isOtherOnline) {
+    val liveMessages = remember(rawMessages, userProfiles, currentUid, isOtherOnline, isActiveOnline) {
 
         if (rawMessages.isNotEmpty()) {
 
@@ -648,7 +659,7 @@ private fun ChatScreenContent(
 
             rawMessages.reversed().map { msg ->
 
-                ChatAdapters.toDisplayMessage(msg, currentUid, userProfiles, rawMap, isOtherOnline)
+                ChatAdapters.toDisplayMessage(msg, currentUid, userProfiles, rawMap, isActiveOnline)
 
             }
 
@@ -899,19 +910,23 @@ private fun ChatScreenContent(
     val imeVisible = WindowInsets.isImeVisible
 
     LaunchedEffect(imeVisible) {
-
         if (imeVisible && isInsideChat && activeChat.messages.isNotEmpty()) {
-
             delay(50)
-
             val totalItemCount = (if (allMessages.size > visibleMessageCount) 1 else 0) + 1 + activeChat.messages.size
-
             val targetIndex = (totalItemCount - 1).coerceAtLeast(0)
-
             listState.animateScrollToItem(targetIndex)
-
         }
+    }
 
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val isListDragged by listState.interactionSource.collectIsDraggedAsState()
+
+    LaunchedEffect(isListDragged) {
+        if (isListDragged && imeVisible) {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+        }
     }
 
 
@@ -1160,7 +1175,7 @@ private fun ChatScreenContent(
             mediaUrl = uri.toString(),
             text = caption?.takeIf { it.isNotBlank() },
             time = getCurrentTimeFormatted(),
-            status = "sent",
+            status = "pending",
             replyTo = replyQuoteSnapshot
         )
         if (chatViewModel == null || activeChatId.startsWith("mock_")) {
@@ -1193,7 +1208,7 @@ private fun ChatScreenContent(
             mediaUrl = sticker.uri,
             text = null,
             time = getCurrentTimeFormatted(),
-            status = "sent",
+            status = "pending",
             replyTo = replyQuoteSnapshot
         )
         if (chatViewModel == null || activeChatId.startsWith("mock_")) {
@@ -1226,7 +1241,7 @@ private fun ChatScreenContent(
             mediaUrl = uri.toString(),
             text = caption?.takeIf { it.isNotBlank() },
             time = getCurrentTimeFormatted(),
-            status = "sent",
+            status = "pending",
             replyTo = replyQuoteSnapshot
         )
         if (chatViewModel == null || activeChatId.startsWith("mock_")) {
@@ -1991,6 +2006,9 @@ private fun ChatScreenContent(
                     storyGroups = storyGroups,
                     myStories = myStories,
                     hasMyStory = myStories.isNotEmpty(),
+                    isUploadingStory = isUploadingStory,
+                    isUploadFailed = failedStoryUpload != null,
+                    onRetryUpload = { effectiveStoryVm.retryFailedUpload(context) },
                     chats = chats,
                     activeTab = activeTab,
                     onTabSelected = { activeTab = it },
@@ -2180,6 +2198,12 @@ private fun ChatScreenContent(
                 storyGroups = storyGroups,
 
                 hasMyStory = myStories.isNotEmpty(),
+
+                isUploadingStory = isUploadingStory,
+
+                isUploadFailed = failedStoryUpload != null,
+
+                onRetryUpload = { effectiveStoryVm.retryFailedUpload(context) },
 
                 onMyStoryClick = {
 
@@ -3201,7 +3225,7 @@ private fun ChatScreenContent(
                             .fillMaxWidth()
                     ) {
                             ActiveChatMessageStream(
-                        modifier = Modifier.fillMaxSize().imeNestedScroll(),
+                        modifier = Modifier.fillMaxSize(),
                         listState = listState,
                         activeChat = activeChat,
                         allMessages = allMessages,
@@ -3277,6 +3301,51 @@ private fun ChatScreenContent(
                         onNavigateToProfile = onNavigateToProfile,
                         onExpandVisibleCount = { count ->
                             visibleMessageCount = count
+                        },
+                        onStoryClick = { clickedStoryId, _ ->
+                            if (clickedStoryId.isNullOrBlank()) {
+                                showToast("This story has expired or is no longer available")
+                            } else {
+                                val inMyStories = myStories.find { it.id == clickedStoryId }
+                                if (inMyStories != null) {
+                                    val now = System.currentTimeMillis()
+                                    val isAlive = if (inMyStories.expiresAt > 0L) inMyStories.expiresAt > now else (now - inMyStories.timestamp) < 86_400_000L
+                                    if (!isAlive) {
+                                        showToast("This story has expired")
+                                    } else {
+                                        storyViewerInitialStoryId = clickedStoryId
+                                        storyViewerInitialIndex = -1
+                                        showStoryViewer = true
+                                    }
+                                } else {
+                                    val groupIdx = storyGroups.indexOfFirst { g -> g.stories.any { it.id == clickedStoryId } }
+                                    if (groupIdx >= 0) {
+                                        val group = storyGroups[groupIdx]
+                                        val s = group.stories.first { it.id == clickedStoryId }
+                                        val now = System.currentTimeMillis()
+                                        val isAlive = if (s.expiresAt > 0L) s.expiresAt > now else (now - s.timestamp) < 86_400_000L
+                                        if (!isAlive) {
+                                            showToast("This story has expired")
+                                        } else {
+                                            storyViewerInitialStoryId = clickedStoryId
+                                            storyViewerInitialIndex = groupIdx
+                                            showStoryViewer = true
+                                        }
+                                    } else {
+                                        coroutineScope.launch {
+                                            val pair = effectiveStoryVm.fetchStoryGroupForStory(clickedStoryId)
+                                            if (pair != null) {
+                                                storyViewerStandaloneGroup = pair.first
+                                                storyViewerInitialStoryId = clickedStoryId
+                                                storyViewerInitialIndex = 0
+                                                showStoryViewer = true
+                                            } else {
+                                                showToast("This story has expired")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     )
                     }
@@ -3444,7 +3513,7 @@ private fun ChatScreenContent(
 
                                     if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
-                                        chatViewModel.setTypingStatus(it.isNotBlank(), roomIdOverride = activeChatId)
+                                        chatViewModel.onTextInputChanged(it, roomIdOverride = activeChatId)
 
                                     }
 
@@ -3996,7 +4065,7 @@ private fun ChatScreenContent(
 
         // Fullscreen Story Viewer (Unified StoryViewerScreen)
 
-        if (showStoryViewer && (storyGroups.isNotEmpty() || myStories.isNotEmpty())) {
+        if (showStoryViewer && (storyGroups.isNotEmpty() || myStories.isNotEmpty() || storyViewerStandaloneGroup != null)) {
 
             val myProfile = remember(currentUser) {
 
@@ -4012,9 +4081,17 @@ private fun ChatScreenContent(
 
             }
 
+            val combinedStoryGroups = remember(storyGroups, storyViewerStandaloneGroup) {
+                if (storyViewerStandaloneGroup != null && storyGroups.none { it.userId == storyViewerStandaloneGroup?.userId }) {
+                    listOf(storyViewerStandaloneGroup!!) + storyGroups
+                } else {
+                    storyGroups
+                }
+            }
+
             StoryViewerScreen(
 
-                storyGroups = storyGroups,
+                storyGroups = combinedStoryGroups,
 
                 initialGroupIndex = storyViewerInitialIndex,
 
@@ -4028,11 +4105,17 @@ private fun ChatScreenContent(
 
                 currentUserProfile = myProfile,
 
-                onClose = { showStoryViewer = false },
+                onClose = {
+                    showStoryViewer = false
+                    storyViewerInitialStoryId = null
+                    storyViewerStandaloneGroup = null
+                },
 
                 onAuthorClick = { authorId ->
 
                     showStoryViewer = false
+                    storyViewerInitialStoryId = null
+                    storyViewerStandaloneGroup = null
 
                     if (onNavigateToUserProfile != null) {
 
@@ -4046,7 +4129,7 @@ private fun ChatScreenContent(
 
                 },
 
-                onReplySend = { authorId, replyMsg, _, _ ->
+                onReplySend = { authorId, replyMsg, storyId, storyThumbnailUrl ->
 
                     if (chatViewModel != null && authorId.isNotBlank() && authorId != currentUid) {
 
@@ -4054,11 +4137,18 @@ private fun ChatScreenContent(
 
                         chatViewModel.openChat(roomId)
 
-                        chatViewModel.sendMessage("Replying to story: \"$replyMsg\"")
+                        chatViewModel.sendStoryReply(
+                            roomId = roomId,
+                            text = replyMsg,
+                            storyId = storyId,
+                            storyThumbnailUrl = storyThumbnailUrl
+                        )
 
                     }
 
-                }
+                },
+
+                initialStoryId = storyViewerInitialStoryId
 
             )
 
@@ -5912,7 +6002,7 @@ private fun ChatScreenContent(
 
                             time = getCurrentTimeFormatted(),
 
-                            status = "delivered"
+                            status = "pending"
 
                         )
 

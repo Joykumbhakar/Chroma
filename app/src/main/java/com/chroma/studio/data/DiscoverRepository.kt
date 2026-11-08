@@ -236,6 +236,22 @@ class DiscoverRepository {
 
         incrementRemixCount(originalPost.id, user.uid)
 
+        // Dispatch real-time REMIX notification to original creator
+        try {
+            if (!originalPost.creatorId.isNullOrBlank() && originalPost.creatorId != user.uid) {
+                NotificationDispatcher.sendNotification(
+                    targetUserId = originalPost.creatorId,
+                    type = com.chroma.studio.model.NotificationActionType.REMIX,
+                    actionText = "remixed your artwork",
+                    detailText = remixTitle.ifBlank { originalPost.title },
+                    targetPreviewUrl = remixedPost.imageUrl ?: originalPost.imageUrl,
+                    targetId = newWorkId
+                )
+            }
+        } catch (e: Exception) {
+            Log.w("DiscoverRepository", "Failed to dispatch remix notification: ${e.message}")
+        }
+
         return remixedPost
     }
 
@@ -615,17 +631,62 @@ class DiscoverRepository {
             val userLikeRef = usersCollection.document(userId).collection("liked_posts").document(workId)
             val now = System.currentTimeMillis()
 
+            var postAuthorId: String? = null
+            var postTitle: String? = null
+            var postThumb: String? = null
+
             if (targetLiked) {
-                // 1. Atomically update community_works post: add to likedBy array and increment likesCount
-                val updates = mapOf(
-                    "likedBy" to FieldValue.arrayUnion(userId),
-                    "likesCount" to FieldValue.increment(1)
-                )
+                // 1. Update community_works post: add to likedBy array and increment likesCount
                 try {
-                    workRef.update(updates).await()
+                    val postDoc = workRef.get().await()
+                    if (postDoc.exists()) {
+                        postAuthorId = postDoc.getString("creatorId")
+                        postTitle = postDoc.getString("title") ?: "post"
+                        postThumb = postDoc.getString("thumbnailUrl") ?: postDoc.getString("imageUrl")
+                        val currentLikes = postDoc.getLong("likesCount") ?: 0L
+                        val likedBy = postDoc.get("likedBy") as? List<String> ?: emptyList()
+                        if (!likedBy.contains(userId)) {
+                            workRef.update(
+                                mapOf(
+                                    "likedBy" to FieldValue.arrayUnion(userId),
+                                    "likesCount" to currentLikes + 1
+                                )
+                            ).await()
+                        }
+                    }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
-                    workRef.set(mapOf("likedBy" to listOf(userId), "likesCount" to 1), SetOptions.merge()).await()
+                    Log.w("DiscoverRepository", "community_works like update warning", e)
+                }
+
+                // Also check and update flash_videos if applicable
+                try {
+                    val flashRef = db.collection("flash_videos").document(workId)
+                    val flashDoc = flashRef.get().await()
+                    if (flashDoc.exists()) {
+                        if (postAuthorId.isNullOrBlank()) {
+                            postAuthorId = flashDoc.getString("creatorId")
+                            postTitle = flashDoc.getString("caption") ?: flashDoc.getString("title") ?: "video"
+                            postThumb = flashDoc.getString("thumbnailUrl")
+                        }
+                        val currentLikes = flashDoc.getLong("likesCount") ?: 0L
+                        val likedBy = flashDoc.get("likedBy") as? List<String> ?: emptyList()
+                        if (!likedBy.contains(userId)) {
+                            flashRef.update(
+                                mapOf(
+                                    "likedBy" to FieldValue.arrayUnion(userId),
+                                    "dislikedBy" to FieldValue.arrayRemove(userId),
+                                    "likesCount" to currentLikes + 1
+                                )
+                            ).await()
+                        }
+                        try {
+                            flashRef.collection("likes").document(userId).set(mapOf("timestamp" to now)).await()
+                        } catch (_: Exception) {}
+                    }
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.w("DiscoverRepository", "flash_videos like update warning", e)
                 }
 
                 // 2. Resilient subcollection updates
@@ -644,32 +705,60 @@ class DiscoverRepository {
 
                 // 3. Dispatch real notification to post author
                 try {
-                    val postDoc = workRef.get().await()
-                    val creatorId = postDoc.getString("creatorId")
-                    val title = postDoc.getString("title") ?: "post"
-                    val thumb = postDoc.getString("thumbnailUrl") ?: postDoc.getString("imageUrl")
-                    if (!creatorId.isNullOrBlank() && creatorId != userId) {
+                    if (!postAuthorId.isNullOrBlank() && postAuthorId != userId) {
                         NotificationDispatcher.sendNotification(
-                            targetUserId = creatorId,
+                            targetUserId = postAuthorId,
                             type = com.chroma.studio.model.NotificationActionType.LIKE,
                             actionText = "liked your post",
-                            detailText = title,
-                            targetPreviewUrl = thumb,
+                            detailText = postTitle ?: "post",
+                            targetPreviewUrl = postThumb,
                             targetId = workId
                         )
                     }
                 } catch (_: Exception) {}
             } else {
-                // 1. Atomically update community_works post: remove from likedBy array and decrement likesCount
-                val updates = mapOf(
-                    "likedBy" to FieldValue.arrayRemove(userId),
-                    "likesCount" to FieldValue.increment(-1)
-                )
+                // 1. Unlike in community_works
                 try {
-                    workRef.update(updates).await()
+                    val postDoc = workRef.get().await()
+                    if (postDoc.exists()) {
+                        val currentLikes = postDoc.getLong("likesCount") ?: 0L
+                        val likedBy = postDoc.get("likedBy") as? List<String> ?: emptyList()
+                        if (likedBy.contains(userId)) {
+                            workRef.update(
+                                mapOf(
+                                    "likedBy" to FieldValue.arrayRemove(userId),
+                                    "likesCount" to maxOf(0L, currentLikes - 1)
+                                )
+                            ).await()
+                        }
+                    }
                 } catch (e: Exception) {
                     if (e is kotlinx.coroutines.CancellationException) throw e
                     Log.w("DiscoverRepository", "workRef unlike update warning", e)
+                }
+
+                // Also unlike in flash_videos if applicable
+                try {
+                    val flashRef = db.collection("flash_videos").document(workId)
+                    val flashDoc = flashRef.get().await()
+                    if (flashDoc.exists()) {
+                        val currentLikes = flashDoc.getLong("likesCount") ?: 0L
+                        val likedBy = flashDoc.get("likedBy") as? List<String> ?: emptyList()
+                        if (likedBy.contains(userId)) {
+                            flashRef.update(
+                                mapOf(
+                                    "likedBy" to FieldValue.arrayRemove(userId),
+                                    "likesCount" to maxOf(0L, currentLikes - 1)
+                                )
+                            ).await()
+                        }
+                        try {
+                            flashRef.collection("likes").document(userId).delete().await()
+                        } catch (_: Exception) {}
+                    }
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.w("DiscoverRepository", "flashRef unlike update warning", e)
                 }
 
                 // 2. Remove from subcollections
@@ -702,14 +791,90 @@ class DiscoverRepository {
     }
 
     suspend fun deleteWork(workId: String): Boolean {
-        return try {
-            collection.document(workId).delete().await()
-            true
+        if (workId.isBlank()) return false
+        val currentUid = auth.currentUser?.uid ?: return false
+        var deletedAny = false
+
+        // 1. Try deleting from community_works
+        try {
+            val commDoc = collection.document(workId).get().await()
+            if (commDoc.exists()) {
+                val creatorId = commDoc.getString("creatorId") ?: commDoc.getString("userId")
+                if (creatorId == currentUid || creatorId.isNullOrBlank()) {
+                    collection.document(workId).delete().await()
+                    deletedAny = true
+                    Log.d("DiscoverRepository", "Deleted $workId from community_works")
+                }
+            }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            Log.e("DiscoverRepository", "Error deleting work", e)
-            false
+            Log.w("DiscoverRepository", "Error checking/deleting community_works doc: $workId", e)
         }
+
+        // 2. Try deleting from flash_videos (cross-collection consistency)
+        try {
+            val flashDoc = db.collection("flash_videos").document(workId).get().await()
+            if (flashDoc.exists()) {
+                val creatorId = flashDoc.getString("creatorId") ?: flashDoc.getString("userId")
+                if (creatorId == currentUid || creatorId.isNullOrBlank()) {
+                    db.collection("flash_videos").document(workId).delete().await()
+                    deletedAny = true
+                    Log.d("DiscoverRepository", "Deleted $workId from flash_videos")
+                }
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w("DiscoverRepository", "Error checking/deleting flash_videos doc: $workId", e)
+        }
+
+        // 3. Fallback direct delete if neither document was confirmed via get()
+        if (!deletedAny) {
+            try {
+                collection.document(workId).delete().await()
+                deletedAny = true
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+            try {
+                db.collection("flash_videos").document(workId).delete().await()
+                deletedAny = true
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+        }
+
+        // 4. Clean up user interactions, likes subcollections, and associated comments
+        if (deletedAny) {
+            try {
+                collection.document(workId).collection("likes").document(currentUid).delete().await()
+            } catch (_: Exception) {}
+            try {
+                db.collection("flash_videos").document(workId).collection("likes").document(currentUid).delete().await()
+            } catch (_: Exception) {}
+            try {
+                db.collection("users").document(currentUid).collection("liked_posts").document(workId).delete().await()
+            } catch (_: Exception) {}
+            try {
+                db.collection("users").document(currentUid).collection("saved_posts").document(workId).delete().await()
+            } catch (_: Exception) {}
+            try {
+                db.collection("users").document(currentUid).collection("shared_posts").document(workId).delete().await()
+            } catch (_: Exception) {}
+            try {
+                val commentsSnapshot = db.collection("flash_comments")
+                    .whereEqualTo("videoId", workId)
+                    .get().await()
+                for (doc in commentsSnapshot.documents) {
+                    try {
+                        if (doc.getString("userId") == currentUid) {
+                            doc.reference.delete().await()
+                        }
+                    } catch (_: Exception) {}
+                }
+            } catch (_: Exception) {}
+        }
+
+        return deletedAny
     }
 
     suspend fun updateWork(workId: String, newTitle: String, newDescription: String): Boolean {
@@ -745,7 +910,66 @@ class DiscoverRepository {
             val targetUserFollowersRef = usersCollection.document(targetUserId).collection("followers").document(currentUserId)
             val currentUserDoc = usersCollection.document(currentUserId)
             val targetUserDoc = usersCollection.document(targetUserId)
+            val targetRequestRef = usersCollection.document(targetUserId).collection("follow_requests").document(currentUserId)
 
+            val targetSnap = targetUserDoc.get().await()
+            val isPrivate = (targetSnap.getBoolean("privateAccount") ?: targetSnap.getBoolean("isPrivateAccount")) ?: false
+
+            if (isPrivate) {
+                if (targetFollow) {
+                    val alreadyFollowing = currentUserFollowingRef.get().await().exists()
+                    if (alreadyFollowing) return true
+
+                    // For private accounts: record pending follow request without instant following
+                    val reqData = mapOf(
+                        "timestamp" to System.currentTimeMillis(),
+                        "requesterUid" to currentUserId
+                    )
+                    targetRequestRef.set(reqData).await()
+
+                    try {
+                        NotificationDispatcher.sendNotification(
+                            targetUserId = targetUserId,
+                            type = com.chroma.studio.model.NotificationActionType.FOLLOW_REQUEST,
+                            actionText = "requested to follow you",
+                            targetId = currentUserId
+                        )
+                    } catch (e: Exception) {
+                        Log.w("DiscoverRepository", "Failed to dispatch follow request notification", e)
+                    }
+                } else {
+                    // Cancel follow request if pending, or unfollow if already following
+                    try {
+                        targetRequestRef.delete().await()
+                    } catch (_: Exception) {}
+
+                    val wasFollowing = currentUserFollowingRef.get().await().exists()
+                    if (wasFollowing) {
+                        db.runTransaction { transaction ->
+                            transaction.delete(currentUserFollowingRef)
+                            transaction.delete(targetUserFollowersRef)
+                            transaction.set(currentUserDoc, mapOf("followingCount" to FieldValue.increment(-1)), SetOptions.merge())
+                            transaction.set(targetUserDoc, mapOf("followersCount" to FieldValue.increment(-1)), SetOptions.merge())
+                            true
+                        }.await()
+                    }
+
+                    // Recall/delete pending FOLLOW_REQUEST notification from target user's notifications
+                    try {
+                        val notifSnapshot = usersCollection.document(targetUserId)
+                            .collection("notifications")
+                            .whereEqualTo("actorUid", currentUserId)
+                            .whereEqualTo("type", "FOLLOW_REQUEST")
+                            .get().await()
+                        for (doc in notifSnapshot.documents) {
+                            doc.reference.delete().await()
+                        }
+                    } catch (_: Exception) {}
+                }
+                return true
+            }
+
+            // Public Account: direct follow/unfollow transaction
             val succeeded = db.runTransaction { transaction ->
                 val followingDoc = transaction.get(currentUserFollowingRef)
                 val alreadyFollowing = followingDoc.exists()
@@ -769,18 +993,10 @@ class DiscoverRepository {
 
             if (succeeded && targetFollow) {
                 try {
-                    val targetSnap = targetUserDoc.get().await()
-                    val isPrivate = targetSnap.getBoolean("privateAccount") ?: false
-                    val notifType = if (isPrivate) {
-                        com.chroma.studio.model.NotificationActionType.FOLLOW_REQUEST
-                    } else {
-                        com.chroma.studio.model.NotificationActionType.FOLLOW
-                    }
-                    val actionMsg = if (isPrivate) "requested to follow you" else "started following you"
                     NotificationDispatcher.sendNotification(
                         targetUserId = targetUserId,
-                        type = notifType,
-                        actionText = actionMsg,
+                        type = com.chroma.studio.model.NotificationActionType.FOLLOW,
+                        actionText = "started following you",
                         targetId = currentUserId
                     )
                 } catch (e: Exception) {
@@ -796,22 +1012,112 @@ class DiscoverRepository {
         }
     }
 
+    suspend fun approveFollowRequest(requesterUid: String, currentUserId: String): Boolean {
+        if (requesterUid.isBlank() || currentUserId.isBlank() || requesterUid == currentUserId) return false
+        return try {
+            val requesterFollowingRef = usersCollection.document(requesterUid).collection("following").document(currentUserId)
+            val currentUserFollowersRef = usersCollection.document(currentUserId).collection("followers").document(requesterUid)
+            val requesterDoc = usersCollection.document(requesterUid)
+            val currentUserDoc = usersCollection.document(currentUserId)
+            val requestRef = usersCollection.document(currentUserId).collection("follow_requests").document(requesterUid)
+
+            db.runTransaction { transaction ->
+                val timestamp = mapOf("timestamp" to System.currentTimeMillis())
+                transaction.set(requesterFollowingRef, timestamp)
+                transaction.set(currentUserFollowersRef, timestamp)
+                transaction.set(requesterDoc, mapOf("followingCount" to FieldValue.increment(1)), SetOptions.merge())
+                transaction.set(currentUserDoc, mapOf("followersCount" to FieldValue.increment(1)), SetOptions.merge())
+                transaction.delete(requestRef)
+                true
+            }.await()
+
+            try {
+                NotificationDispatcher.sendNotification(
+                    targetUserId = requesterUid,
+                    type = com.chroma.studio.model.NotificationActionType.FOLLOW,
+                    actionText = "accepted your follow request",
+                    targetId = currentUserId
+                )
+            } catch (e: Exception) {
+                Log.w("DiscoverRepository", "Failed to dispatch follow accepted notification", e)
+            }
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "Error approving follow request", e)
+            false
+        }
+    }
+
+    suspend fun rejectFollowRequest(requesterUid: String, currentUserId: String): Boolean {
+        if (requesterUid.isBlank() || currentUserId.isBlank()) return false
+        return try {
+            val requestRef = usersCollection.document(currentUserId).collection("follow_requests").document(requesterUid)
+            requestRef.delete().await()
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "Error rejecting follow request", e)
+            false
+        }
+    }
+
+    suspend fun checkHasFollowRequest(currentUserId: String, targetUserId: String): Boolean {
+        if (currentUserId.isBlank() || targetUserId.isBlank()) return false
+        return try {
+            val requestRef = usersCollection.document(targetUserId).collection("follow_requests").document(currentUserId)
+            requestRef.get().await().exists()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            false
+        }
+    }
+
     suspend fun toggleFollow(currentUserId: String, targetUserId: String): Boolean {
         val currentlyFollowing = checkIsFollowing(currentUserId, targetUserId)
         return setFollow(currentUserId, targetUserId, !currentlyFollowing)
     }
     
+    suspend fun getLikedWorkIds(userId: String): Set<String> {
+        if (userId.isBlank()) return emptySet()
+        return try {
+            val snapshot = usersCollection.document(userId).collection("liked_posts").get().await()
+            snapshot.documents.map { it.id }.toSet()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "Error fetching liked work IDs", e)
+            emptySet()
+        }
+    }
+
     suspend fun hasLiked(workId: String, userId: String): Boolean {
         if (workId.isBlank() || userId.isBlank()) return false
         return try {
+            // 1. Authoritative check on user's own liked_posts subcollection
+            val userLikeDoc = usersCollection.document(userId).collection("liked_posts").document(workId).get().await()
+            if (userLikeDoc.exists()) return true
+
+            // 2. Check community_works document
             val doc = collection.document(workId).get().await()
-            val likedBy = doc.get("likedBy") as? List<String>
-            if (likedBy != null) {
-                likedBy.contains(userId)
+            if (doc.exists()) {
+                val likedBy = doc.get("likedBy") as? List<String>
+                if (likedBy != null) {
+                    if (likedBy.contains(userId)) return true
+                } else {
+                    val likeDoc = collection.document(workId).collection("likes").document(userId).get().await()
+                    if (likeDoc.exists()) return true
+                }
             } else {
-                val likeDoc = collection.document(workId).collection("likes").document(userId).get().await()
-                likeDoc.exists()
+                // 3. Check flash_videos document
+                val flashDoc = db.collection("flash_videos").document(workId).get().await()
+                if (flashDoc.exists()) {
+                    val likedBy = flashDoc.get("likedBy") as? List<String>
+                    if (likedBy?.contains(userId) == true) return true
+                    val flashLikeDoc = flashDoc.reference.collection("likes").document(userId).get().await()
+                    if (flashLikeDoc.exists()) return true
+                }
             }
+            false
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             false
@@ -1156,44 +1462,167 @@ class DiscoverRepository {
     }
 
     suspend fun searchUsers(query: String): List<UserProfile> {
-        if (query.isBlank()) return emptyList()
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return emptyList()
+        val cleanQuery = trimmed.removePrefix("@").trim()
+        if (cleanQuery.isBlank()) return emptyList()
+
         return try {
-            val cleanQuery = query.removePrefix("@")
-            
-            val usernameSnapshot = usersCollection
-                .orderBy("username")
-                .startAt(cleanQuery)
-                .endAt(cleanQuery + "\uf8ff")
-                .limit(20)
-                .get()
-                .await()
-                
-            val displayNameSnapshot = usersCollection
-                .orderBy("displayName")
-                .startAt(cleanQuery)
-                .endAt(cleanQuery + "\uf8ff")
-                .limit(20)
-                .get()
-                .await()
-                
-            val results = mutableSetOf<UserProfile>()
-            results.addAll(usernameSnapshot.toObjects(UserProfile::class.java))
-            results.addAll(displayNameSnapshot.toObjects(UserProfile::class.java))
-            
-            // Also try lowercase username just in case they typed uppercase
-            if (cleanQuery.any { it.isUpperCase() }) {
-                val lowerQuery = cleanQuery.lowercase()
-                val lowerUserSnapshot = usersCollection
-                    .orderBy("username")
-                    .startAt(lowerQuery)
-                    .endAt(lowerQuery + "\uf8ff")
-                    .limit(20)
-                    .get()
-                    .await()
-                results.addAll(lowerUserSnapshot.toObjects(UserProfile::class.java))
+            val lower = cleanQuery.lowercase()
+            val upper = cleanQuery.uppercase()
+            val capitalized = cleanQuery.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+            val words = cleanQuery.split("\\s+".toRegex()).filter { it.isNotBlank() }
+            val titleCasedWords = words.joinToString(" ") { word ->
+                word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
             }
-            
-            results.toList()
+
+            // Distinct prefix variants to query across Firestore indexes
+            val prefixVariants = mutableSetOf(cleanQuery, lower, capitalized, upper, titleCasedWords)
+            if (words.size > 1) {
+                for (w in words) {
+                    if (w.length >= 2) {
+                        prefixVariants.add(w)
+                        prefixVariants.add(w.lowercase())
+                        prefixVariants.add(w.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() })
+                    }
+                }
+            }
+
+            val collectedProfiles = coroutineScope {
+                val deferredList = mutableListOf<kotlinx.coroutines.Deferred<List<UserProfile>>>()
+
+                // 1. Query username prefix for each variant
+                val usernameVariants = prefixVariants.map { it.lowercase() }.toSet()
+                for (v in usernameVariants) {
+                    deferredList.add(async {
+                        try {
+                            usersCollection
+                                .orderBy("username")
+                                .startAt(v)
+                                .endAt(v + "\uf8ff")
+                                .limit(25)
+                                .get()
+                                .await()
+                                .toObjects(UserProfile::class.java)
+                        } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) throw e
+                            emptyList()
+                        }
+                    })
+                }
+
+                // 2. Query displayName prefix for each variant
+                for (v in prefixVariants) {
+                    deferredList.add(async {
+                        try {
+                            usersCollection
+                                .orderBy("displayName")
+                                .startAt(v)
+                                .endAt(v + "\uf8ff")
+                                .limit(25)
+                                .get()
+                                .await()
+                                .toObjects(UserProfile::class.java)
+                        } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) throw e
+                            emptyList()
+                        }
+                    })
+                }
+
+                // 3. Query broad user pool to catch middle-name/substring/bio matches
+                deferredList.add(async {
+                    try {
+                        usersCollection
+                            .limit(80)
+                            .get()
+                            .await()
+                            .toObjects(UserProfile::class.java)
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        emptyList()
+                    }
+                })
+
+                deferredList.awaitAll().flatten()
+            }
+
+            // Deduplicate by UID (and filter out blanks)
+            val uniqueCandidates = collectedProfiles
+                .filter { it.uid.isNotBlank() }
+                .distinctBy { it.uid }
+
+            // Filter candidates: candidate must match query case-insensitively
+            // in username, displayName, bio, customEmail, or individual words
+            val filtered = uniqueCandidates.filter { user ->
+                val uName = user.username.lowercase()
+                val dName = user.displayName.lowercase()
+                val bio = user.bio.lowercase()
+                val email = user.customEmail.lowercase()
+
+                // 1. Single or full query substring match
+                if (uName.contains(lower) || dName.contains(lower) || bio.contains(lower) || email.contains(lower)) {
+                    return@filter true
+                }
+
+                // 2. Multi-word: All query words match in username or displayName
+                if (words.size > 1 && words.all { w ->
+                    val wl = w.lowercase()
+                    uName.contains(wl) || dName.contains(wl)
+                }) {
+                    return@filter true
+                }
+
+                // 3. Any query word of length >= 2 matches word boundary in displayName
+                if (words.any { w ->
+                    val wl = w.lowercase()
+                    wl.length >= 2 && dName.split("\\s+".toRegex()).any { it.startsWith(wl) }
+                }) {
+                    return@filter true
+                }
+
+                false
+            }
+
+            // Relevance scoring: lower number = higher ranking
+            fun calculateScore(user: UserProfile): Int {
+                val uName = user.username.lowercase()
+                val dName = user.displayName.lowercase()
+                val bio = user.bio.lowercase()
+
+                // Exact matches
+                if (uName == lower) return 0
+                if (dName == lower) return 1
+
+                // Prefix matches
+                if (uName.startsWith(lower)) return 2
+                if (dName.startsWith(lower)) return 3
+
+                // Word prefix in displayName (e.g. "Carter" matching "Alex Carter")
+                val nameWords = dName.split("\\s+".toRegex())
+                if (nameWords.any { it.startsWith(lower) }) return 4
+
+                // Contains in username
+                if (uName.contains(lower)) return 5
+
+                // Contains in displayName
+                if (dName.contains(lower)) return 6
+
+                // All words match
+                if (words.size > 1 && words.all { w -> uName.contains(w.lowercase()) || dName.contains(w.lowercase()) }) return 7
+
+                // Bio or email match
+                if (bio.contains(lower) || user.customEmail.lowercase().contains(lower)) return 8
+
+                return 9
+            }
+
+            filtered.sortedWith(
+                compareBy<UserProfile> { calculateScore(it) }
+                    .thenByDescending { it.verified }
+                    .thenByDescending { it.followersCount }
+                    .thenBy { it.displayName.lowercase() }
+            )
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error searching users", e)
@@ -1255,18 +1684,63 @@ class DiscoverRepository {
         }
     }
 
-    /** Alias scoped only to username prefix — used by Flash @mention autocomplete. */
+    /** Scoped username search — used by Flash @mention autocomplete with case-insensitive matching and relevance ranking. */
     suspend fun searchUsersByUsername(usernamePrefix: String): List<UserProfile> {
-        if (usernamePrefix.isBlank()) return emptyList()
+        val clean = usernamePrefix.trim().removePrefix("@")
+        if (clean.isBlank()) return emptyList()
+        val lower = clean.lowercase()
         return try {
-            val snapshot = usersCollection
-                .orderBy("username")
-                .startAt(usernamePrefix.lowercase())
-                .endAt(usernamePrefix.lowercase() + "\uf8ff")
-                .limit(8)
-                .get()
-                .await()
-            snapshot.toObjects(UserProfile::class.java)
+            coroutineScope {
+                val d1 = async {
+                    try {
+                        usersCollection
+                            .orderBy("username")
+                            .startAt(lower)
+                            .endAt(lower + "\uf8ff")
+                            .limit(12)
+                            .get()
+                            .await()
+                            .toObjects(UserProfile::class.java)
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        emptyList()
+                    }
+                }
+                val d2 = async {
+                    if (clean != lower) {
+                        try {
+                            usersCollection
+                                .orderBy("username")
+                                .startAt(clean)
+                                .endAt(clean + "\uf8ff")
+                                .limit(12)
+                                .get()
+                                .await()
+                                .toObjects(UserProfile::class.java)
+                        } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) throw e
+                            emptyList()
+                        }
+                    } else emptyList()
+                }
+                val all = (d1.await() + d2.await())
+                    .filter { it.uid.isNotBlank() }
+                    .distinctBy { it.uid }
+
+                all.sortedWith(
+                    compareBy<UserProfile> {
+                        val u = it.username.lowercase()
+                        when {
+                            u == lower -> 0
+                            u.startsWith(lower) -> 1
+                            u.contains(lower) -> 2
+                            else -> 3
+                        }
+                    }
+                        .thenByDescending { it.verified }
+                        .thenByDescending { it.followersCount }
+                ).take(8)
+            }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             emptyList()

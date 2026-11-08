@@ -789,6 +789,8 @@ fun SpringPillSwitch(
 fun SpringToggleShowcaseScreen(
     onBack: (() -> Unit)? = null
 ) {
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
     val context = LocalContext.current
     val config = AppSpringPhysics.globalConfig
     val view = LocalView.current
@@ -824,7 +826,7 @@ fun SpringToggleShowcaseScreen(
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFF0B0C10)
+        color = if (isDark) Color(0xFF0B0C10) else Color(0xFFF4F4F6)
     ) {
         Column(
             modifier = Modifier
@@ -855,19 +857,19 @@ fun SpringToggleShowcaseScreen(
                         Icon(
                             imageVector = Lucide.ArrowLeft,
                             contentDescription = "Back",
-                            tint = Color.White,
+                            tint = if (isDark) Color.White else Color(0xFF0F172A),
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
                             text = "Settings",
-                            color = Color(0xFFA1A1AA),
+                            color = if (isDark) Color(0xFFA1A1AA) else Color(0xFF64748B),
                             fontSize = 14.sp
                         )
                     }
 
                     Text(
                         text = "Toggle Switch Lab",
-                        color = Color.White,
+                        color = if (isDark) Color.White else Color(0xFF0F172A),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -887,7 +889,7 @@ fun SpringToggleShowcaseScreen(
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
-                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
+                HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f), thickness = 0.5.dp)
             }
 
             Column(

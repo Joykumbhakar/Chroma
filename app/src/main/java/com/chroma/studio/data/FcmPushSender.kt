@@ -39,17 +39,12 @@ object FcmPushSender {
     fun init(context: Context) {
         if (privateKey != null) return
         try {
-            val hasKey = try {
-                context.assets.list("")?.contains("serviceAccountKey.json") == true
-            } catch (_: Exception) {
-                false
-            }
-            if (!hasKey) {
+            val jsonString = try {
+                context.assets.open("serviceAccountKey.json").bufferedReader().use { it.readText() }
+            } catch (fnf: Exception) {
                 Log.d(TAG, "serviceAccountKey.json not bundled; skipping local service account push dispatch.")
                 return
             }
-
-            val jsonString = context.assets.open("serviceAccountKey.json").bufferedReader().use { it.readText() }
             val json = JSONObject(jsonString)
             projectId = json.optString("project_id", "chromamelt")
             clientEmail = json.getString("client_email")
