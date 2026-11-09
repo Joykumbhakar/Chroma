@@ -38,7 +38,7 @@
         ".read": "auth != null",
         "$uid": {
           ".write": "auth != null && auth.uid === $uid",
-          ".validate": "newData.isBoolean()"
+          ".validate": "!newData.exists() || (newData.isString() && (newData.val() === 'typing' || newData.val() === 'recording'))"
         }
       }
     }
