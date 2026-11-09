@@ -317,32 +317,20 @@ class SupabaseChatRepository {
                         text.isNotBlank() -> text.take(200)
                         else -> "New message"
                     }
-                    if (room.isGroup) {
-                        val otherParticipants = room.participants.filter { it != currentUser.uid }
-                        for (recipientId in otherParticipants) {
-                            NotificationDispatcher.sendNotification(
-                                targetUserId = recipientId,
-                                type = com.chroma.studio.model.NotificationActionType.MESSAGE,
-                                actionText = "sent a message in ${room.name ?: "Group"}",
-                                detailText = displaySnippet,
-                                targetPreviewUrl = imageUrl,
-                                targetId = roomId,
-                                messageType = messageType
-                            )
-                        }
+                    val recipients = if (room.isGroup) {
+                        room.participants.filter { it != currentUser.uid }
                     } else {
-                        val recipientId = room.participants.firstOrNull { it != currentUser.uid }
-                        if (!recipientId.isNullOrBlank()) {
-                            NotificationDispatcher.sendNotification(
-                                targetUserId = recipientId,
-                                type = com.chroma.studio.model.NotificationActionType.MESSAGE,
-                                actionText = "sent you a message",
-                                detailText = displaySnippet,
-                                targetPreviewUrl = imageUrl,
-                                targetId = roomId,
-                                messageType = messageType
-                            )
-                        }
+                        listOfNotNull(room.participants.firstOrNull { it != currentUser.uid })
+                    }
+                    if (recipients.isNotEmpty()) {
+                        NotificationDispatcher.sendChatPush(
+                            recipientIds = recipients,
+                            roomId = roomId,
+                            groupName = if (room.isGroup) room.name else null,
+                            body = displaySnippet,
+                            messageType = messageType,
+                            messageId = messageId
+                        )
                     }
                 }
             } catch (_: Exception) {}

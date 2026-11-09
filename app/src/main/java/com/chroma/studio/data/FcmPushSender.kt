@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -17,150 +19,119 @@ import java.security.PrivateKey
 import java.security.Signature
 import java.security.spec.PKCS8EncodedKeySpec
 
+enum class FcmResult { SENT, FAILED, UNREGISTERED }
+
 /**
- * Direct Firebase Cloud Messaging (FCM HTTP v1) Push Dispatcher.
- * Automatically handles Google Service Account OAuth2 token minting,
+ * Direct FCM HTTP v1 push sender with mutex-locked token minting,
  * in-memory token caching with refresh, and high-priority heads-up push dispatch.
  */
 object FcmPushSender {
     private const val TAG = "FcmPushSender"
 
-    private var cachedToken: String? = null
-    private var tokenExpiryEpochMs: Long = 0L
+    @Volatile private var cachedToken: String? = null
+    @Volatile private var tokenExpiryEpochMs: Long = 0L
+    private val tokenMutex = Mutex()
 
     private var clientEmail: String? = null
     private var privateKey: PrivateKey? = null
     private var projectId: String = "chromamelt"
 
-    /**
-     * Initializes service account credentials from asset bundle.
-     */
     @Synchronized
     fun init(context: Context) {
         if (privateKey != null) return
         try {
             val jsonString = try {
                 context.assets.open("serviceAccountKey.json").bufferedReader().use { it.readText() }
-            } catch (fnf: Exception) {
-                Log.d(TAG, "serviceAccountKey.json not bundled; skipping local service account push dispatch.")
+            } catch (e: Exception) {
+                Log.d(TAG, "serviceAccountKey.json not bundled; local push dispatch disabled.")
                 return
             }
             val json = JSONObject(jsonString)
             projectId = json.optString("project_id", "chromamelt")
             clientEmail = json.getString("client_email")
 
-            val rawPem = json.getString("private_key")
-            val cleanPem = rawPem
+            val cleanPem = json.getString("private_key")
                 .replace("-----BEGIN PRIVATE KEY-----", "")
                 .replace("-----END PRIVATE KEY-----", "")
                 .replace("\\s+".toRegex(), "")
                 .trim()
 
-            val decodedKey = Base64.decode(cleanPem, Base64.DEFAULT)
-            val keySpec = PKCS8EncodedKeySpec(decodedKey)
-            val keyFactory = KeyFactory.getInstance("RSA")
-            privateKey = keyFactory.generatePrivate(keySpec)
+            val keySpec = PKCS8EncodedKeySpec(Base64.decode(cleanPem, Base64.DEFAULT))
+            privateKey = KeyFactory.getInstance("RSA").generatePrivate(keySpec)
             Log.d(TAG, "Initialized FCM service account for $clientEmail (project: $projectId)")
-        } catch (e: java.io.FileNotFoundException) {
-            Log.d(TAG, "serviceAccountKey.json not bundled in assets")
         } catch (e: Exception) {
             Log.w(TAG, "FCM service account credentials not loaded: ${e.message}")
         }
     }
 
-    /**
-     * Obtains a valid Google OAuth2 Bearer token, minting or refreshing if expired.
-     */
+    /** Returns a cached OAuth2 token, minting a new one (once, even under parallel sends) if needed. */
     suspend fun getAccessToken(context: Context): String? = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        if (cachedToken != null && now < (tokenExpiryEpochMs - 60_000)) {
-            return@withContext cachedToken
+        val fast = cachedToken
+        if (fast != null && now < tokenExpiryEpochMs - 60_000) return@withContext fast
+
+        tokenMutex.withLock {
+            val n = System.currentTimeMillis()
+            val c = cachedToken
+            if (c != null && n < tokenExpiryEpochMs - 60_000) c else mintToken(context, n)
         }
+    }
 
+    private fun b64Url(bytes: ByteArray) =
+        Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+
+    private fun mintToken(context: Context, now: Long): String? {
         init(context)
-        val email = clientEmail ?: return@withContext null
-        val pk = privateKey ?: return@withContext null
-
+        val email = clientEmail ?: return null
+        val pk = privateKey ?: return null
+        var conn: HttpURLConnection? = null
         try {
             val nowSec = now / 1000
-            val expSec = nowSec + 3600
+            val header = JSONObject().put("alg", "RS256").put("typ", "JWT")
+            val claim = JSONObject()
+                .put("iss", email).put("sub", email)
+                .put("aud", "https://oauth2.googleapis.com/token")
+                .put("iat", nowSec).put("exp", nowSec + 3600)
+                .put("scope", "https://www.googleapis.com/auth/firebase.messaging")
 
-            // Header
-            val headerJson = JSONObject().apply {
-                put("alg", "RS256")
-                put("typ", "JWT")
-            }
-            val headerEnc = Base64.encodeToString(
-                headerJson.toString().toByteArray(Charsets.UTF_8),
-                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
-            )
+            val unsigned = b64Url(header.toString().toByteArray()) + "." + b64Url(claim.toString().toByteArray())
+            val sig = Signature.getInstance("SHA256withRSA").apply {
+                initSign(pk); update(unsigned.toByteArray(Charsets.UTF_8))
+            }.sign()
+            val jwt = unsigned + "." + b64Url(sig)
 
-            // Claim set
-            val claimJson = JSONObject().apply {
-                put("iss", email)
-                put("sub", email)
-                put("aud", "https://oauth2.googleapis.com/token")
-                put("iat", nowSec)
-                put("exp", expSec)
-                put("scope", "https://www.googleapis.com/auth/firebase.messaging")
-            }
-            val claimEnc = Base64.encodeToString(
-                claimJson.toString().toByteArray(Charsets.UTF_8),
-                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
-            )
-
-            val unsignedToken = "$headerEnc.$claimEnc"
-
-            val signer = Signature.getInstance("SHA256withRSA")
-            signer.initSign(pk)
-            signer.update(unsignedToken.toByteArray(Charsets.UTF_8))
-            val sigBytes = signer.sign()
-            val sigEnc = Base64.encodeToString(
-                sigBytes,
-                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
-            )
-
-            val signedJwt = "$unsignedToken.$sigEnc"
-
-            // Exchange assertion for access token
-            val url = URL("https://oauth2.googleapis.com/token")
-            val conn = url.openConnection() as HttpURLConnection
+            conn = URL("https://oauth2.googleapis.com/token").openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
+            val post = "grant_type=" + URLEncoder.encode("urn:ietf:params:oauth:grant-type:jwt-bearer", "UTF-8") +
+                    "&assertion=" + URLEncoder.encode(jwt, "UTF-8")
+            OutputStreamWriter(conn.outputStream).use { it.write(post) }
 
-            val postData = "grant_type=" + URLEncoder.encode("urn:ietf:params:oauth:grant-type:jwt-bearer", "UTF-8") +
-                    "&assertion=" + URLEncoder.encode(signedJwt, "UTF-8")
-
-            OutputStreamWriter(conn.outputStream).use { it.write(postData) }
-
-            val responseCode = conn.responseCode
-            if (responseCode == 200) {
-                val responseStr = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() }
-                val respJson = JSONObject(responseStr)
-                val token = respJson.getString("access_token")
-                val expiresInSec = respJson.optLong("expires_in", 3600L)
-                cachedToken = token
-                tokenExpiryEpochMs = now + (expiresInSec * 1000)
-                Log.d(TAG, "Minted new FCM OAuth2 bearer token successfully")
-                return@withContext token
+            return if (conn.responseCode == 200) {
+                val resp = JSONObject(BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText() })
+                cachedToken = resp.getString("access_token")
+                tokenExpiryEpochMs = now + resp.optLong("expires_in", 3600L) * 1000
+                cachedToken
             } else {
-                val errStr = BufferedReader(InputStreamReader(conn.errorStream ?: conn.inputStream)).use { it.readText() }
-                Log.e(TAG, "OAuth2 token exchange failed ($responseCode): $errStr")
-                return@withContext null
+                val err = BufferedReader(InputStreamReader(conn.errorStream ?: conn.inputStream)).use { it.readText() }
+                Log.e(TAG, "OAuth2 token exchange failed (${conn.responseCode}): $err")
+                null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error minting OAuth token", e)
-            return@withContext null
+            return null
+        } finally {
+            conn?.disconnect()
         }
     }
 
     /**
-     * Sends an FCM HTTP v1 message to [targetFcmToken].
-     * @param messageType One of "text", "image", "video", "audio"/"voice", "file" — used to
-     *   show the right icon/label in the notification even before the app decrypts the message.
+     * Sends a DATA-ONLY, high-priority message. Data-only is deliberate: it guarantees
+     * onMessageReceived runs (app killed / screen locked) so ChatNotificationBuilder can build the
+     * MessagingStyle heads-up with Direct Reply.
      */
     suspend fun sendPushNotification(
         context: Context,
@@ -170,14 +141,14 @@ object FcmPushSender {
         senderName: String,
         messageText: String,
         avatarUrl: String = "",
-        messageType: String = "text"
-    ): Boolean = withContext(Dispatchers.IO) {
-        if (targetFcmToken.isBlank()) return@withContext false
-        val token = getAccessToken(context) ?: return@withContext false
+        messageType: String = "text",
+        groupName: String = "",
+        messageId: String = ""
+    ): FcmResult = withContext(Dispatchers.IO) {
+        if (targetFcmToken.isBlank()) return@withContext FcmResult.FAILED
+        val token = getAccessToken(context) ?: return@withContext FcmResult.FAILED
 
-        // Derive the display body — use the passed messageText (already a human-readable snippet)
-        // but ensure media types always show a friendly label as fallback.
-        val notificationBody = when {
+        val body = when {
             messageText.isNotBlank() -> messageText
             messageType == "audio" || messageType == "voice" -> "🎤 Voice message"
             messageType == "video" -> "🎥 Sent a video"
@@ -186,61 +157,53 @@ object FcmPushSender {
             else -> "New message"
         }
 
+        var conn: HttpURLConnection? = null
         try {
-            val url = URL("https://fcm.googleapis.com/v1/projects/$projectId/messages:send")
-            val conn = url.openConnection() as HttpURLConnection
+            conn = URL("https://fcm.googleapis.com/v1/projects/$projectId/messages:send")
+                .openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.doOutput = true
             conn.setRequestProperty("Authorization", "Bearer $token")
-            conn.setRequestProperty("Content-Type", "application/json; UTF-8")
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
             conn.connectTimeout = 10000
             conn.readTimeout = 10000
 
-            val messagePayload = JSONObject().apply {
-                val msg = JSONObject().apply {
-                    put("token", targetFcmToken)
-                    // Data-only payload: onMessageReceived fires even when app is killed / screen locked.
-                    // ChatNotificationBuilder builds the full MessagingStyle heads-up with Direct Reply.
-                    put("data", JSONObject().apply {
-                        put("roomId", roomId)
-                        put("senderId", senderId)
-                        put("senderName", senderName)
-                        put("title", senderName)
-                        put("body", notificationBody)
-                        put("message", notificationBody)
-                        put("avatarUrl", avatarUrl)
-                        put("messageType", messageType)
-                    })
-                    put("android", JSONObject().apply {
-                        put("priority", "HIGH")
-                        // fcm_fallback_notification_channel_id ensures delivery on
-                        // restricted-battery OEM devices (Xiaomi/Redmi/Oppo/Vivo)
-                        // that block data-only messages in doze mode.
-                        put("fcm_options", JSONObject().apply {
-                            put("analytics_label", "chat_message")
-                        })
-                        put("direct_boot_ok", true)
-                    })
-                }
-                put("message", msg)
-            }
+            val payload = JSONObject().put("message", JSONObject().apply {
+                put("token", targetFcmToken)
+                put("data", JSONObject().apply {
+                    put("roomId", roomId)
+                    put("senderId", senderId)
+                    put("senderName", senderName)
+                    put("groupName", groupName)
+                    put("title", if (groupName.isNotBlank()) "$senderName in $groupName" else senderName)
+                    put("body", body)
+                    put("message", body)
+                    put("avatarUrl", avatarUrl)
+                    put("messageType", messageType)
+                    put("messageId", messageId)
+                    put("sentAt", System.currentTimeMillis().toString())
+                })
+                put("android", JSONObject().apply {
+                    put("priority", "HIGH")
+                    put("ttl", "86400s") // Retry up to 24h if device is offline
+                    put("direct_boot_ok", true)
+                    put("fcm_options", JSONObject().put("analytics_label", "chat_message"))
+                })
+            })
 
-            OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use {
-                it.write(messagePayload.toString())
-            }
+            OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(payload.toString()) }
 
-            val responseCode = conn.responseCode
-            if (responseCode == 200) {
-                Log.d(TAG, "FCM message successfully dispatched to $targetFcmToken for room $roomId")
-                return@withContext true
-            } else {
-                val errStr = BufferedReader(InputStreamReader(conn.errorStream ?: conn.inputStream)).use { it.readText() }
-                Log.w(TAG, "FCM push dispatch returned code $responseCode: $errStr")
-                return@withContext false
-            }
+            val code = conn.responseCode
+            if (code == 200) return@withContext FcmResult.SENT
+
+            val err = BufferedReader(InputStreamReader(conn.errorStream ?: conn.inputStream)).use { it.readText() }
+            Log.w(TAG, "FCM push returned $code: $err")
+            if (code == 404 && err.contains("UNREGISTERED")) FcmResult.UNREGISTERED else FcmResult.FAILED
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to send FCM push to $targetFcmToken", e)
-            return@withContext false
+            Log.e(TAG, "Failed to send FCM push", e)
+            FcmResult.FAILED
+        } finally {
+            conn?.disconnect()
         }
     }
 }

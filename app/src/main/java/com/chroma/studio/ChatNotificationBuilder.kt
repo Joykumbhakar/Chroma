@@ -1,475 +1,473 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
-
 package com.chroma.studio
 
-
-
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Notification
-
 import android.app.NotificationChannel
-
 import android.app.NotificationManager
-
 import android.app.PendingIntent
-
 import android.content.Context
-
 import android.content.Intent
-
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
-
+import android.graphics.BitmapFactory
+import android.graphics.BitmapShader
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Shader
 import android.media.AudioAttributes
-
 import android.media.RingtoneManager
-
+import android.net.Uri
 import android.os.Build
-
 import android.os.PowerManager
-
 import android.util.Log
-
+import android.util.LruCache
 import androidx.core.app.NotificationCompat
-
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
-
 import androidx.core.app.RemoteInput
-
+import androidx.core.content.ContextCompat
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
-
-import androidx.core.graphics.drawable.toBitmap
-
-import coil.ImageLoader
-
-import coil.request.ImageRequest
-
-import coil.transform.CircleCropTransformation
-
-
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
-
- * System notification builder creating Heads-Up alerts with Direct Reply,
-
- * Lock Screen wakeup, and options to Mark as Read when the app is in the background or closed.
-
+ * WhatsApp-style chat notifications:
+ *  - Heads-up popup (IMPORTANCE_HIGH channel) that also displays cleanly on the lock screen
+ *  - Screen illumination (PowerManager wake lock) when the device is locked/sleeping
+ *  - MessagingStyle: multiple messages from the same chat STACK in one clean thread
+ *  - Circular sender avatar (falls back to a coloured initial)
+ *  - Reply (inline RemoteInput) + Mark as read actions
+ *  - Dynamic conversation shortcut -> displays in system "Conversations" section & bubbles on Android 11+
+ *  - Bundle summary when several chats are active
+ *  - Respects biometric locked chats ("New message" only, no preview and no Reply)
+ *  - Sent replies update the notification in-place ("You: <reply>") without hanging spinners
+ *  - Respects user-customized notification tone preferences
  */
-
 object ChatNotificationBuilder {
-
-    private const val TAG = "ChatNotifBuilder"
+    private const val TAG = "ChatNotificationBuilder"
 
     const val CHANNEL_ID = "chat_notifications_heads_up"
-
     const val CHANNEL_NAME = "Chat Messages"
+    private const val GROUP_KEY = "com.chroma.studio.CHAT_MESSAGES"
+    private const val SUMMARY_ID = 0x7001
+    private const val MAX_STACKED = 10
 
-    const val KEY_TEXT_REPLY = "KEY_TEXT_REPLY"
-
-    const val ACTION_REPLY = "ACTION_REPLY"
-
-    const val ACTION_MARK_READ = "ACTION_MARK_READ"
-
+    const val KEY_TEXT_REPLY = "key_text_reply"
+    const val EXTRA_ROOM_ID = "roomId"
+    const val EXTRA_SENDER_ID = "senderId"
+    const val ACTION_REPLY = "com.chroma.studio.action.CHAT_REPLY"
+    const val ACTION_MARK_READ = "com.chroma.studio.action.CHAT_MARK_READ"
+    const val ACTION_DISMISSED = "com.chroma.studio.action.CHAT_DISMISSED"
     const val ACTION_QUICK_REPLY = "ACTION_QUICK_REPLY"
-
     const val EXTRA_QUICK_REPLY_TEXT = "EXTRA_QUICK_REPLY_TEXT"
 
-    val QUICK_REPLIES = arrayOf(
-        "I am in the market",
-        "I have a call right now",
-        "Let's talk later",
-        "Okay 👍",
-        "On my way 🚗"
-    )
+    private data class Entry(val sender: String, val senderId: String, val text: String, val ts: Long, val self: Boolean)
+    private data class Meta(val senderName: String, val senderId: String, val groupName: String, val avatarUrl: String, val locked: Boolean)
 
+    private val avatarCache = LruCache<String, Bitmap>(16)
 
+    // ------------------------------------------------------------------------------------------
+    // Public API
+    // ------------------------------------------------------------------------------------------
 
     /**
-
      * Wakes up the screen when the device is locked/asleep so that incoming notifications
-
      * are immediately visible on the lock screen.
-
      */
-
     fun wakeUpScreen(context: Context) {
-
         try {
-
             val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
-
             if (powerManager != null && !powerManager.isInteractive) {
-
                 @Suppress("DEPRECATION")
-
                 val wakeLock = powerManager.newWakeLock(
-
                     PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
-
                     PowerManager.ACQUIRE_CAUSES_WAKEUP or
-
                     PowerManager.ON_AFTER_RELEASE,
-
                     "oscellion:chat_lockscreen_wake"
-
                 )
-
                 wakeLock.acquire(4000L) // 4-second timeout to illuminate lock screen
-
             }
-
         } catch (e: Exception) {
-
             Log.w(TAG, "Screen wakeup failed", e)
-
         }
-
     }
 
+    /**
+     * Resolves the active notification channel ID and sound URI based on user preferences.
+     */
+    fun getActiveChannelId(context: Context): String {
+        val notifPrefs = context.getSharedPreferences("notification_settings", Context.MODE_PRIVATE)
+        val selectedToneId = notifPrefs.getString("selected_notification_sound", "default") ?: "default"
+        return "${CHANNEL_ID}_$selectedToneId"
+    }
 
+    fun ensureChannel(context: Context) {
+        ensureNotificationChannel(context)
+    }
 
     fun ensureNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-            val notifPrefs = context.getSharedPreferences("notification_settings", Context.MODE_PRIVATE)
-            val selectedToneId = notifPrefs.getString("selected_notification_sound", "default")
-            val toneObj = com.chroma.studio.chat.sound.AVAILABLE_NOTIFICATION_TONES.find { it.id == selectedToneId }
-                ?: com.chroma.studio.chat.sound.AVAILABLE_NOTIFICATION_TONES.first()
-            val defaultSoundUri = android.net.Uri.parse("android.resource://" + context.packageName + "/" + toneObj.resId)
-            val audioAttributes = AudioAttributes.Builder()
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
-                .build()
-
-            // 1. Ensure default base channel exists
-            if (notificationManager.getNotificationChannel(CHANNEL_ID) == null) {
-                val baseChannel = NotificationChannel(
-                    CHANNEL_ID,
-                    CHANNEL_NAME,
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "High-priority heads-up chat alerts with direct reply and lockscreen display"
-                    enableLights(true)
-                    lightColor = 0xFF0381FE.toInt()
-                    enableVibration(true)
-                    vibrationPattern = longArrayOf(0, 250, 150, 250)
-                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                    setSound(defaultSoundUri, audioAttributes)
-                    setBypassDnd(true)
-                    setShowBadge(true)
-                }
-                notificationManager.createNotificationChannel(baseChannel)
-            }
-
-            // 2. Ensure customized tone channel exists
-            val currentChannelId = "${CHANNEL_ID}_$selectedToneId"
-            val activeChannel = notificationManager.getNotificationChannel(currentChannelId)
-            if (activeChannel == null) {
-                val channel = NotificationChannel(
-                    currentChannelId,
-                    CHANNEL_NAME,
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "High-priority heads-up chat alerts with direct reply and lockscreen display"
-                    enableLights(true)
-                    lightColor = 0xFF0381FE.toInt()
-                    enableVibration(true)
-                    vibrationPattern = longArrayOf(0, 250, 150, 250)
-                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                    setSound(defaultSoundUri, audioAttributes)
-                    setBypassDnd(true)
-                    setShowBadge(true)
-                }
-                notificationManager.createNotificationChannel(channel)
-            } else {
-                activeChannel.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            }
-        }
-    }
-
-
-
-    fun showHeadsUpNotification(
-
-        context: Context,
-
-        roomId: String,
-
-        senderId: String,
-
-        senderName: String,
-
-        messageText: String,
-
-        avatarUrl: String = "",
-
-        isLocked: Boolean = false
-
-    ) {
-
-        // 1. Wake the display if asleep / locked
-
-        wakeUpScreen(context)
-
-
-
-        // 2. Ensure high-importance public channel
-
-        ensureNotificationChannel(context)
-
-
-
-        val notificationId = if (roomId.isNotBlank()) {
-
-            Math.abs(roomId.hashCode())
-
-        } else if (senderId.isNotBlank()) {
-
-            Math.abs(senderId.hashCode())
-
-        } else {
-
-            (System.currentTimeMillis() % 100000).toInt()
-
-        }
-
-
-
-        // Tap action: open HomeActivity to this chat
-
-        val contentIntent = Intent(context, HomeActivity::class.java).apply {
-
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-
-            putExtra("room_id", roomId)
-
-            putExtra("sender_id", senderId)
-
-            putExtra("open_chat", true)
-
-        }
-
-        val contentPendingIntent = PendingIntent.getActivity(
-
-            context,
-
-            notificationId,
-
-            contentIntent,
-
-            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
-
-        )
-
-
-
-        // 3. Direct Reply Action with RemoteInput and Quick Reply Choices
-        val remoteInput = RemoteInput.Builder(KEY_TEXT_REPLY)
-            .setLabel("Reply...")
-            .setChoices(QUICK_REPLIES)
-            .build()
-
-        val replyIntent = Intent(context, ChatNotificationReceiver::class.java).apply {
-            action = ACTION_REPLY
-            putExtra("room_id", roomId)
-            putExtra("sender_id", senderId)
-            putExtra("notification_id", notificationId)
-        }
-
-        val replyPendingIntent = PendingIntent.getBroadcast(
-            context,
-            notificationId,
-            replyIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
-        )
-
-        val replyAction = NotificationCompat.Action.Builder(
-            R.drawable.ic_oscellion_notification,
-            "Reply",
-            replyPendingIntent
-        )
-            .addRemoteInput(remoteInput)
-            .setAllowGeneratedReplies(true)
-            .build()
-
-        // 4. One-Tap Quick Reply Action: "Call later"
-        val quickReplyIntent = Intent(context, ChatNotificationReceiver::class.java).apply {
-            action = ACTION_QUICK_REPLY
-            putExtra("room_id", roomId)
-            putExtra("sender_id", senderId)
-            putExtra("notification_id", notificationId)
-            putExtra(EXTRA_QUICK_REPLY_TEXT, "I have a call right now, let's talk later")
-        }
-
-        val quickReplyPendingIntent = PendingIntent.getBroadcast(
-            context,
-            notificationId + 200000,
-            quickReplyIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
-        )
-
-        val quickReplyAction = NotificationCompat.Action.Builder(
-            0,
-            "Call later",
-            quickReplyPendingIntent
-        ).build()
-
-        // 5. Mark as Read Action
-        val markReadIntent = Intent(context, ChatNotificationReceiver::class.java).apply {
-            action = ACTION_MARK_READ
-            putExtra("room_id", roomId)
-            putExtra("sender_id", senderId)
-            putExtra("notification_id", notificationId)
-        }
-
-        val markReadPendingIntent = PendingIntent.getBroadcast(
-            context,
-            notificationId + 100000,
-            markReadIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
-        )
-
-        val markReadAction = NotificationCompat.Action.Builder(
-            0,
-            "Mark as Read",
-            markReadPendingIntent
-        ).build()
-
-
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = context.getSystemService(NotificationManager::class.java) ?: return
 
         val notifPrefs = context.getSharedPreferences("notification_settings", Context.MODE_PRIVATE)
-
         val selectedToneId = notifPrefs.getString("selected_notification_sound", "default") ?: "default"
-
         val toneObj = com.chroma.studio.chat.sound.AVAILABLE_NOTIFICATION_TONES.find { it.id == selectedToneId }
-
             ?: com.chroma.studio.chat.sound.AVAILABLE_NOTIFICATION_TONES.first()
+        val customSoundUri = Uri.parse("android.resource://" + context.packageName + "/" + toneObj.resId)
 
-        val customSoundUri = android.net.Uri.parse("android.resource://" + context.packageName + "/" + toneObj.resId)
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
 
-        val currentChannelId = "${CHANNEL_ID}_$selectedToneId"
+        val activeChannelId = "${CHANNEL_ID}_$selectedToneId"
 
-
-
-        // 5. Try fetching sender avatar bitmap for rich circular icon
-
-        var avatarBitmap: Bitmap? = null
-
-        if (avatarUrl.isNotBlank() && !isLocked) {
-
-            try {
-
-                val imageLoader = ImageLoader(context)
-
-                val request = ImageRequest.Builder(context)
-
-                    .data(avatarUrl)
-
-                    .transformations(CircleCropTransformation())
-
-                    .allowHardware(false)
-
-                    .build()
-
-                val result = kotlinx.coroutines.runBlocking {
-                    kotlinx.coroutines.withTimeoutOrNull(2500L) {
-                        imageLoader.execute(request)
-                    }
-                }
-                avatarBitmap = result?.drawable?.toBitmap(128, 128)
-
-            } catch (e: Throwable) {
-
-                Log.d(TAG, "Avatar image download skipped: ${e.message}")
-
+        // Ensure customized tone channel exists
+        if (nm.getNotificationChannel(activeChannelId) == null) {
+            val channel = NotificationChannel(activeChannelId, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "High-priority heads-up chat alerts with direct reply and lockscreen display"
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 250, 150, 250)
+                enableLights(true)
+                lightColor = Color.parseColor("#0381FE")
+                setShowBadge(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setSound(customSoundUri, audioAttributes)
+                setBypassDnd(true)
             }
-
+            nm.createNotificationChannel(channel)
         }
-
-
-
-        val displayContent = if (isLocked) "🔒 Locked chat: 1 new message" else messageText
-
-
-
-        // 6. Build Person & MessagingStyle
-
-        val personBuilder = Person.Builder()
-
-            .setName(senderName)
-
-            .setKey(senderId)
-
-        if (avatarBitmap != null) {
-
-            personBuilder.setIcon(IconCompat.createWithBitmap(avatarBitmap))
-
-        }
-
-        val person = personBuilder.build()
-
-
-
-        val messagingStyle = NotificationCompat.MessagingStyle(person)
-
-            .setConversationTitle(senderName)
-
-            .setGroupConversation(false)
-
-            .addMessage(displayContent, System.currentTimeMillis(), person)
-
-
-
-        val builder = NotificationCompat.Builder(context, currentChannelId)
-
-            .setSmallIcon(R.drawable.ic_oscellion_notification)
-
-            .setContentTitle(senderName)
-
-            .setContentText(displayContent)
-
-            .setStyle(messagingStyle)
-
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-
-            .setSound(customSoundUri)
-
-            .setLights(0xFF0381FE.toInt(), 500, 500)
-
-            .setVibrate(longArrayOf(0, 250, 150, 250))
-
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-
-            .setFullScreenIntent(contentPendingIntent, false) // Instant heads-up popup on lock screen
-
-            .setAutoCancel(true)
-
-            .setContentIntent(contentPendingIntent)
-
-
-
-        if (!isLocked) {
-            builder.addAction(replyAction)
-            builder.addAction(quickReplyAction)
-        }
-        builder.addAction(markReadAction)
-
-
-
-        if (avatarBitmap != null) {
-
-            builder.setLargeIcon(avatarBitmap)
-
-        }
-
-
-
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        notificationManager.notify(notificationId, builder.build())
-
     }
 
-}
+    /** Call from onMessageReceived when the app is in background / killed. */
+    fun showHeadsUpNotification(
+        context: Context,
+        roomId: String,
+        senderId: String,
+        senderName: String,
+        messageText: String,
+        avatarUrl: String = "",
+        isLocked: Boolean = false,
+        groupName: String = "",
+        messageType: String = "text"
+    ) {
+        val app = context.applicationContext
+        val key = roomId.ifBlank { senderId }
+        if (key.isBlank()) return
 
+        wakeUpScreen(app)
+        ensureNotificationChannel(app)
+
+        val meta = Meta(senderName, senderId, groupName, avatarUrl, isLocked)
+        val text = if (isLocked) "New message" else messageText
+        val entries = Store.append(app, key, meta, Entry(senderName, senderId, text, System.currentTimeMillis(), false))
+        post(app, key, roomId, meta, entries, silent = false)
+    }
+
+    /**
+     * Called after an inline reply was sent (or failed) so the notification stops showing the
+     * progress spinner and shows "You: <reply>" like WhatsApp.
+     */
+    fun appendOwnReply(context: Context, roomId: String, senderId: String, text: String, failed: Boolean = false) {
+        val app = context.applicationContext
+        val key = roomId.ifBlank { senderId }
+        val meta = Store.loadMeta(app, key) ?: return
+        val shown = if (failed) "⚠ Not sent: $text" else text
+        val entries = Store.append(app, key, meta, Entry("You", "self", shown, System.currentTimeMillis(), true))
+        post(app, key, roomId, meta, entries, silent = true)
+    }
+
+    /** Call when the user opens the chat, taps Mark as read, etc. */
+    fun cancelForRoom(context: Context, roomId: String, senderId: String = "") {
+        val app = context.applicationContext
+        val key = roomId.ifBlank { senderId }
+        if (key.isBlank()) return
+        Store.clear(app, key)
+        val nm = NotificationManagerCompat.from(app)
+        nm.cancel(key.hashCode())
+        removeSummaryIfEmpty(app)
+    }
+
+    fun clearHistory(context: Context, key: String) = Store.clear(context.applicationContext, key)
+
+    // ------------------------------------------------------------------------------------------
+    // Posting
+    // ------------------------------------------------------------------------------------------
+
+    @SuppressLint("MissingPermission")
+    private fun post(context: Context, key: String, roomId: String, meta: Meta, entries: List<Entry>, silent: Boolean) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.w(TAG, "POST_NOTIFICATIONS not granted - notification skipped")
+            return
+        }
+        val nm = NotificationManagerCompat.from(context)
+        if (!nm.areNotificationsEnabled()) return
+
+        val notifId = key.hashCode()
+        val channelId = getActiveChannelId(context)
+        val avatar = if (meta.locked) null else loadAvatar(meta.avatarUrl, meta.senderName)
+        val isGroup = meta.groupName.isNotBlank()
+
+        val me = Person.Builder().setName("You").setKey("self").build()
+        val senderPerson = Person.Builder()
+            .setName(meta.senderName)
+            .setKey(meta.senderId.ifBlank { key })
+            .apply { avatar?.let { setIcon(IconCompat.createWithBitmap(it)) } }
+            .build()
+
+        val style = NotificationCompat.MessagingStyle(me)
+        if (isGroup) {
+            style.conversationTitle = meta.groupName
+            style.isGroupConversation = true
+        }
+        entries.forEach { e ->
+            val p = when {
+                e.self -> me
+                e.senderId == meta.senderId -> senderPerson
+                else -> Person.Builder().setName(e.sender).setKey(e.senderId).build()
+            }
+            style.addMessage(e.text, e.ts, p)
+        }
+
+        // Conversation shortcut -> "Conversations" section + better lock-screen treatment (API 30+)
+        val launch = launchIntent(context, roomId, meta.senderId)
+        val shortcutId = "chat_$key"
+        try {
+            val shortcut = ShortcutInfoCompat.Builder(context, shortcutId)
+                .setShortLabel(if (isGroup) meta.groupName else meta.senderName)
+                .setLongLived(true)
+                .setIntent(Intent(launch).apply { action = Intent.ACTION_VIEW })
+                .setPerson(senderPerson)
+                .apply { avatar?.let { setIcon(IconCompat.createWithAdaptiveBitmap(it)) } }
+                .build()
+            ShortcutManagerCompat.pushDynamicShortcut(context, shortcut)
+        } catch (e: Exception) {
+            Log.w(TAG, "Shortcut push failed: ${e.message}")
+        }
+
+        val contentPi = PendingIntent.getActivity(
+            context, notifId, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val dismissPi = receiverPi(context, ACTION_DISMISSED, key, roomId, meta.senderId, mutable = false)
+        val markReadPi = receiverPi(context, ACTION_MARK_READ, key, roomId, meta.senderId, mutable = false)
+
+        val publicVersion = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_oscellion_notification)
+            .setContentTitle(meta.senderName)
+            .setContentText("New message")
+            .setColor(Color.parseColor("#0381FE"))
+            .build()
+
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_oscellion_notification)
+            .setColor(Color.parseColor("#0381FE"))
+            .setStyle(style)
+            .setContentTitle(if (isGroup) meta.groupName else meta.senderName)
+            .setContentText(entries.lastOrNull()?.text ?: "")
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPublicVersion(publicVersion)
+            .setShortcutId(shortcutId)
+            .setWhen(entries.lastOrNull()?.ts ?: System.currentTimeMillis())
+            .setShowWhen(true)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(silent)
+            .setGroup(GROUP_KEY)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+            .setFullScreenIntent(contentPi, false)
+            .setContentIntent(contentPi)
+            .setDeleteIntent(dismissPi)
+            .apply { avatar?.let { setLargeIcon(it) } }
+
+        if (!meta.locked) {
+            val remoteInput = RemoteInput.Builder(KEY_TEXT_REPLY).setLabel("Reply").build()
+            val replyPi = receiverPi(context, ACTION_REPLY, key, roomId, meta.senderId, mutable = true)
+            builder.addAction(
+                NotificationCompat.Action.Builder(android.R.drawable.ic_menu_send, "Reply", replyPi)
+                    .addRemoteInput(remoteInput)
+                    .setAllowGeneratedReplies(true)
+                    .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
+                    .setShowsUserInterface(false)
+                    .build()
+            )
+        }
+        builder.addAction(
+            NotificationCompat.Action.Builder(android.R.drawable.ic_menu_view, "Mark as read", markReadPi)
+                .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ)
+                .setShowsUserInterface(false)
+                .build()
+        )
+
+        nm.notify(notifId, builder.build())
+
+        // Summary so multiple chats bundle neatly
+        val summary = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_oscellion_notification)
+            .setColor(Color.parseColor("#0381FE"))
+            .setStyle(NotificationCompat.InboxStyle().setSummaryText("New messages"))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setGroup(GROUP_KEY)
+            .setGroupSummary(true)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+            .setAutoCancel(true)
+            .setContentIntent(contentPi)
+            .build()
+        nm.notify(SUMMARY_ID, summary)
+    }
+
+    private fun removeSummaryIfEmpty(context: Context) {
+        try {
+            val nm = context.getSystemService(NotificationManager::class.java) ?: return
+            val children = nm.activeNotifications.count { it.id != SUMMARY_ID && it.notification.group == GROUP_KEY }
+            if (children == 0) NotificationManagerCompat.from(context).cancel(SUMMARY_ID)
+        } catch (_: Exception) {}
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------------------------------
+
+    private fun launchIntent(context: Context, roomId: String, senderId: String): Intent {
+        val base = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()
+        return base.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_ROOM_ID, roomId)
+            putExtra(EXTRA_SENDER_ID, senderId)
+            putExtra("from_notification", true)
+        }
+    }
+
+    private fun receiverPi(
+        context: Context, action: String, key: String, roomId: String, senderId: String, mutable: Boolean
+    ): PendingIntent {
+        val intent = Intent(context, ChatActionReceiver::class.java).apply {
+            this.action = action
+            putExtra(EXTRA_ROOM_ID, roomId)
+            putExtra(EXTRA_SENDER_ID, senderId)
+        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or when {
+            mutable && Build.VERSION.SDK_INT >= 31 -> PendingIntent.FLAG_MUTABLE
+            !mutable -> PendingIntent.FLAG_IMMUTABLE
+            else -> 0
+        }
+        return PendingIntent.getBroadcast(context, key.hashCode() * 31 + action.hashCode(), intent, flags)
+    }
+
+    // ---- Avatar --------------------------------------------------------------------------------
+
+    private fun loadAvatar(url: String, name: String): Bitmap {
+        val size = 192
+        if (url.startsWith("http")) {
+            avatarCache.get(url)?.let { return it }
+            var conn: HttpURLConnection? = null
+            try {
+                conn = URL(url).openConnection() as HttpURLConnection
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                val bmp = conn.inputStream.use { BitmapFactory.decodeStream(it) }
+                if (bmp != null) {
+                    val circle = toCircle(bmp, size)
+                    avatarCache.put(url, circle)
+                    return circle
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Avatar load failed: ${e.message}")
+            } finally {
+                conn?.disconnect()
+            }
+        }
+        return initialAvatar(name, size)
+    }
+
+    private fun toCircle(src: Bitmap, size: Int): Bitmap {
+        val min = minOf(src.width, src.height)
+        val square = Bitmap.createBitmap(src, (src.width - min) / 2, (src.height - min) / 2, min, min)
+        val scaled = Bitmap.createScaledBitmap(square, size, size, true)
+        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = BitmapShader(scaled, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+        }
+        Canvas(out).drawCircle(size / 2f, size / 2f, size / 2f, paint)
+        return out
+    }
+
+    private fun initialAvatar(name: String, size: Int): Bitmap {
+        val palette = intArrayOf(
+            0xFF0381FE.toInt(), 0xFF00B8D4.toInt(), 0xFFFF6D00.toInt(),
+            0xFF00C853.toInt(), 0xFFD500F9.toInt(), 0xFFFF4081.toInt()
+        )
+        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(out)
+        c.drawCircle(size / 2f, size / 2f, size / 2f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = palette[(name.hashCode() and 0x7fffffff) % palette.size]
+        })
+        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE; textSize = size * 0.46f; textAlign = Paint.Align.CENTER; isFakeBoldText = true
+        }
+        val initial = name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+        c.drawText(initial, size / 2f, size / 2f - (text.descent() + text.ascent()) / 2f, text)
+        return out
+    }
+
+    // ---- Persistent stack of recent messages per chat ------------------------------------------
+
+    private object Store {
+        private const val PREFS = "chat_notif_store"
+
+        @Synchronized
+        fun append(context: Context, key: String, meta: Meta, entry: Entry): List<Entry> {
+            val list = loadEntries(context, key).toMutableList()
+            list.add(entry)
+            while (list.size > MAX_STACKED) list.removeAt(0)
+            val obj = JSONObject().apply {
+                put("meta", JSONObject().apply {
+                    put("senderName", meta.senderName); put("senderId", meta.senderId)
+                    put("groupName", meta.groupName); put("avatarUrl", meta.avatarUrl); put("locked", meta.locked)
+                })
+                put("entries", JSONArray().apply {
+                    list.forEach {
+                        put(JSONObject().put("s", it.sender).put("i", it.senderId)
+                            .put("t", it.text).put("ts", it.ts).put("self", it.self))
+                    }
+                })
+            }
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(key, obj.toString()).apply()
+            return list
+        }
+
+        @Synchronized
+        fun loadMeta(context: Context, key: String): Meta? = try {
+            val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(key, null)
+            raw?.let {
+                val m = JSONObject(it).getJSONObject("meta")
+                Meta(m.getString("senderName"), m.getString("senderId"), m.getString("groupName"),
+                    m.getString("avatarUrl"), m.getBoolean("locked"))
+            }
+        } catch (_: Exception) { null }
+
+        private fun loadEntries(context: Context, key: String): List<Entry> = try {
+            val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(key, null)
+            if (raw == null) emptyList() else {
+                val arr = JSONObject(raw).getJSONArray("entries")
+                (0 until arr.length()).map {
+                    val o = arr.getJSONObject(it)
+                    Entry(o.getString("s"), o.getString("i"), o.getString("t"), o.getLong("ts"), o.getBoolean("self"))
+                }
+            }
+        } catch (_: Exception) { emptyList() }
+
+        @Synchronized
+        fun clear(context: Context, key: String) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(key).apply()
+        }
+    }
+}

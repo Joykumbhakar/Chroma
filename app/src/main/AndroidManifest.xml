@@ -158,6 +158,14 @@
             </intent-filter>
         </receiver>
 
+        <receiver android:name=".ChatActionReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.chroma.studio.action.CHAT_REPLY" />
+                <action android:name="com.chroma.studio.action.CHAT_MARK_READ" />
+                <action android:name="com.chroma.studio.action.CHAT_DISMISSED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Home Screen Widget: Studio Quick Actions (4x1 & 4x2) -->
         <receiver
             android:name=".widget.OscellionQuickActionsWidgetProvider"
