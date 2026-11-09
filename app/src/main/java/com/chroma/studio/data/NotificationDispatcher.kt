@@ -29,7 +29,8 @@ object NotificationDispatcher {
         actionText: String,
         detailText: String? = null,
         targetPreviewUrl: String? = null,
-        targetId: String? = null
+        targetId: String? = null,
+        messageType: String = "text"
     ): Boolean = withContext(Dispatchers.IO) {
         val currentUid = auth.currentUser?.uid ?: return@withContext false
         if (targetUserId.isBlank() || targetUserId == currentUid) {
@@ -96,7 +97,8 @@ object NotificationDispatcher {
                         senderId = currentUid,
                         senderName = pushTitle,
                         messageText = pushBody,
-                        avatarUrl = actorAvatarUrl ?: ""
+                        avatarUrl = actorAvatarUrl ?: "",
+                        messageType = messageType
                     )
                 }
             } catch (e: Exception) {

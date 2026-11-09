@@ -293,17 +293,29 @@ class SupabaseChatRepository {
                 }
             }.await()
 
-            // 3. Dispatch activity notification to recipient(s)
+            // 3. Dispatch FCM push notification to recipient(s)
+            // NOTE: We use the original plaintext `text` (before encryption) for the notification
+            // snippet so the receiver sees readable content, not ciphertext.
             try {
                 val roomSnap = roomRef.get().await()
                 val room = roomSnap.toObject(ChatRoom::class.java)
                 if (room != null) {
-                    val displaySnippet = if (imageUrl != null) {
-                        if (messageType == "video") "Sent a video" else if (messageType == "audio") "Sent a voice message" else "Sent a photo"
-                    } else if (text.startsWith("[POLL]:")) {
-                        "Created a poll"
-                    } else {
-                        text
+                    // Build a human-readable notification body based on message type
+                    val displaySnippet = when {
+                        messageType == "audio" || messageType == "voice" -> "🎤 Voice message"
+                        messageType == "video" -> "🎥 Sent a video"
+                        messageType == "image" || (imageUrl != null && messageType == "text") -> "📷 Sent a photo"
+                        imageUrl != null && messageType == "audio" -> "🎤 Voice message"
+                        imageUrl != null -> "📎 Sent a file"
+                        workId != null -> "🎨 Shared a work"
+                        storyId != null || storyThumbnailUrl != null -> "↩️ Replied to your story"
+                        text.startsWith("[POLL]:") -> {
+                            val question = text.removePrefix("[POLL]:").substringBefore("|||").trim()
+                            "📊 Poll: $question"
+                        }
+                        // Use original plain `text` — NOT the encrypted finalMessageText
+                        text.isNotBlank() -> text.take(200)
+                        else -> "New message"
                     }
                     if (room.isGroup) {
                         val otherParticipants = room.participants.filter { it != currentUser.uid }
@@ -314,7 +326,8 @@ class SupabaseChatRepository {
                                 actionText = "sent a message in ${room.name ?: "Group"}",
                                 detailText = displaySnippet,
                                 targetPreviewUrl = imageUrl,
-                                targetId = roomId
+                                targetId = roomId,
+                                messageType = messageType
                             )
                         }
                     } else {
@@ -326,7 +339,8 @@ class SupabaseChatRepository {
                                 actionText = "sent you a message",
                                 detailText = displaySnippet,
                                 targetPreviewUrl = imageUrl,
-                                targetId = roomId
+                                targetId = roomId,
+                                messageType = messageType
                             )
                         }
                     }

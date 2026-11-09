@@ -159,6 +159,8 @@ object FcmPushSender {
 
     /**
      * Sends an FCM HTTP v1 message to [targetFcmToken].
+     * @param messageType One of "text", "image", "video", "audio"/"voice", "file" — used to
+     *   show the right icon/label in the notification even before the app decrypts the message.
      */
     suspend fun sendPushNotification(
         context: Context,
@@ -167,10 +169,22 @@ object FcmPushSender {
         senderId: String,
         senderName: String,
         messageText: String,
-        avatarUrl: String = ""
+        avatarUrl: String = "",
+        messageType: String = "text"
     ): Boolean = withContext(Dispatchers.IO) {
         if (targetFcmToken.isBlank()) return@withContext false
         val token = getAccessToken(context) ?: return@withContext false
+
+        // Derive the display body — use the passed messageText (already a human-readable snippet)
+        // but ensure media types always show a friendly label as fallback.
+        val notificationBody = when {
+            messageText.isNotBlank() -> messageText
+            messageType == "audio" || messageType == "voice" -> "🎤 Voice message"
+            messageType == "video" -> "🎥 Sent a video"
+            messageType == "image" -> "📷 Sent a photo"
+            messageType == "file" -> "📎 Sent a file"
+            else -> "New message"
+        }
 
         try {
             val url = URL("https://fcm.googleapis.com/v1/projects/$projectId/messages:send")
@@ -185,20 +199,27 @@ object FcmPushSender {
             val messagePayload = JSONObject().apply {
                 val msg = JSONObject().apply {
                     put("token", targetFcmToken)
-                    // High-priority data-only payload ensures onMessageReceived is ALWAYS triggered
-                    // even when app is closed or on lock screen, allowing ChatNotificationBuilder
-                    // to execute PowerManager screen wakeup, MessagingStyle, and Direct Reply.
+                    // Data-only payload: onMessageReceived fires even when app is killed / screen locked.
+                    // ChatNotificationBuilder builds the full MessagingStyle heads-up with Direct Reply.
                     put("data", JSONObject().apply {
                         put("roomId", roomId)
                         put("senderId", senderId)
                         put("senderName", senderName)
                         put("title", senderName)
-                        put("body", messageText)
-                        put("message", messageText)
+                        put("body", notificationBody)
+                        put("message", notificationBody)
                         put("avatarUrl", avatarUrl)
+                        put("messageType", messageType)
                     })
                     put("android", JSONObject().apply {
                         put("priority", "HIGH")
+                        // fcm_fallback_notification_channel_id ensures delivery on
+                        // restricted-battery OEM devices (Xiaomi/Redmi/Oppo/Vivo)
+                        // that block data-only messages in doze mode.
+                        put("fcm_options", JSONObject().apply {
+                            put("analytics_label", "chat_message")
+                        })
+                        put("direct_boot_ok", true)
                     })
                 }
                 put("message", msg)

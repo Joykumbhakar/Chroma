@@ -69,8 +69,19 @@ open class ChromaMessagingService : FirebaseMessagingService() {
         val senderId = data["senderId"] ?: data["sender_id"] ?: data["userId"] ?: ""
         val recipientId = data["recipientId"] ?: data["recipient_id"] ?: ""
         val roomId = data["roomId"] ?: data["room_id"] ?: ""
+        val messageType = data["messageType"] ?: data["message_type"] ?: "text"
         val title = data["title"] ?: data["senderName"] ?: data["sender_name"] ?: remoteMessage.notification?.title ?: "New Message"
-        val body = data["body"] ?: data["text"] ?: data["message"] ?: remoteMessage.notification?.body ?: "You have a new message."
+        // Use the body from the FCM payload directly (already a human-readable snippet from displaySnippet)
+        // Fall back to a type-specific label if the body is missing or looks like ciphertext.
+        val rawBody = data["body"] ?: data["text"] ?: data["message"] ?: remoteMessage.notification?.body ?: ""
+        val body = when {
+            rawBody.isNotBlank() -> rawBody
+            messageType == "audio" || messageType == "voice" -> "🎤 Voice message"
+            messageType == "video" -> "🎥 Sent a video"
+            messageType == "image" -> "📷 Sent a photo"
+            messageType == "file" -> "📎 Sent a file"
+            else -> "You have a new message."
+        }
         val avatarUrl = data["avatarUrl"] ?: data["avatar_url"] ?: data["senderAvatar"] ?: ""
 
         val currentUserId = ChatStateManager.currentUserId.value 
