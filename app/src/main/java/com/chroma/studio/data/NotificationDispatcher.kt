@@ -13,6 +13,10 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
+/**
+ * Real-time notification dispatcher and management pipeline for ChromaStudio / ChromaMelt.
+ * Centralizes dispatching, deleting, reading, and clearing activity notifications in Firestore.
+ */
 object NotificationDispatcher {
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
@@ -72,9 +76,11 @@ object NotificationDispatcher {
         }.awaitAll()
     }
 
-    // ---------------------------------------------------------------------------------------
-    // Activity-feed notifications (likes, comments, follows, system drops)
-    // ---------------------------------------------------------------------------------------
+    /**
+     * Dispatch an activity notification to a target user.
+     * Prevents self-notifications, reads the acting user's profile metadata,
+     * and atomically writes the notification payload to `users/{targetUserId}/notifications/{notifId}`.
+     */
     suspend fun sendNotification(
         targetUserId: String,
         type: NotificationActionType,
@@ -85,17 +91,23 @@ object NotificationDispatcher {
         messageType: String = "text"
     ): Boolean = withContext(Dispatchers.IO) {
         val currentUid = auth.currentUser?.uid ?: return@withContext false
-        if (targetUserId.isBlank() || targetUserId == currentUid) return@withContext false
+        if (targetUserId.isBlank() || targetUserId == currentUid) {
+            return@withContext false // Never notify the acting user
+        }
 
         try {
+            // Retrieve current user's profile data for rich notification attribution
             val actorDoc = db.collection("users").document(currentUid).get().await()
             val actorName = actorDoc.getString("displayName")?.ifBlank { null }
-                ?: auth.currentUser?.displayName ?: "Chroma Creator"
+                ?: auth.currentUser?.displayName
+                ?: "Chroma Creator"
             val rawUsername = actorDoc.getString("username")
             val actorHandle = if (!rawUsername.isNullOrBlank()) {
                 if (rawUsername.startsWith("@")) rawUsername else "@$rawUsername"
             } else "@user"
             val actorAvatarUrl = actorDoc.getString("avatarUrl")
+            val actorGender = actorDoc.getString("gender")
+            val isVerified = actorDoc.getBoolean("verified") ?: false
 
             val notifId = UUID.randomUUID().toString()
             val notification = ChromaNotification(
@@ -105,8 +117,8 @@ object NotificationDispatcher {
                 actorName = actorName,
                 actorHandle = actorHandle,
                 actorAvatarUrl = actorAvatarUrl,
-                actorGender = actorDoc.getString("gender"),
-                isVerified = actorDoc.getBoolean("verified") ?: false,
+                actorGender = actorGender,
+                isVerified = isVerified,
                 actionText = actionText,
                 detailText = detailText,
                 targetPreviewUrl = targetPreviewUrl,
@@ -115,21 +127,34 @@ object NotificationDispatcher {
                 targetId = targetId
             )
 
-            db.collection("users").document(targetUserId)
-                .collection("notifications").document(notifId)
-                .set(notification.toMap()).await()
+            db.collection("users")
+                .document(targetUserId)
+                .collection("notifications")
+                .document(notifId)
+                .set(notification.toMap())
+                .await()
 
+            // Trigger real-time FCM push notification to target device
             try {
-                val targetFcmToken = db.collection("users").document(targetUserId).get().await()
-                    .getString("fcmToken")
+                val targetUserDoc = db.collection("users").document(targetUserId).get().await()
+                val targetFcmToken = targetUserDoc.getString("fcmToken")
                 if (!targetFcmToken.isNullOrBlank()) {
+                    val pushTitle = if (type == NotificationActionType.MESSAGE) {
+                        if (actionText.contains(" in ")) {
+                            val groupName = actionText.substringAfter(" in ")
+                            "$actorName in $groupName"
+                        } else {
+                            actorName
+                        }
+                    } else "$actorName ($actorHandle)"
+                    val pushBody = detailText ?: actionText
                     FcmPushSender.sendPushNotification(
                         context = com.chroma.studio.ChromaApp.instance,
                         targetFcmToken = targetFcmToken,
                         roomId = targetId ?: "",
                         senderId = currentUid,
-                        senderName = "$actorName ($actorHandle)",
-                        messageText = detailText ?: actionText,
+                        senderName = pushTitle,
+                        messageText = pushBody,
                         avatarUrl = actorAvatarUrl ?: "",
                         messageType = messageType
                     )
@@ -137,6 +162,7 @@ object NotificationDispatcher {
             } catch (e: Exception) {
                 Log.w("NotificationDispatcher", "Could not trigger FCM push: ${e.message}")
             }
+
             true
         } catch (e: Exception) {
             Log.e("NotificationDispatcher", "Failed to dispatch notification to $targetUserId", e)
@@ -144,6 +170,9 @@ object NotificationDispatcher {
         }
     }
 
+    /**
+     * Dispatch an official welcome notification to initialize the activity feed for a new or active user.
+     */
     suspend fun sendWelcomeNotification(userId: String): Boolean = withContext(Dispatchers.IO) {
         val currentUid = auth.currentUser?.uid ?: return@withContext false
         if (userId.isBlank()) return@withContext false
@@ -174,6 +203,9 @@ object NotificationDispatcher {
         }
     }
 
+    /**
+     * Mark all unread notifications as read for a given user.
+     */
     suspend fun markAllAsRead(userId: String): Boolean = withContext(Dispatchers.IO) {
         if (userId.isBlank()) return@withContext false
         try {
@@ -193,6 +225,9 @@ object NotificationDispatcher {
         }
     }
 
+    /**
+     * Delete a single notification.
+     */
     suspend fun deleteNotification(userId: String, notifId: String): Boolean = withContext(Dispatchers.IO) {
         if (userId.isBlank() || notifId.isBlank()) return@withContext false
         try {
@@ -207,6 +242,9 @@ object NotificationDispatcher {
         }
     }
 
+    /**
+     * Toggle or update read status for a single notification.
+     */
     suspend fun updateNotificationRead(userId: String, notifId: String, isRead: Boolean): Boolean = withContext(Dispatchers.IO) {
         if (userId.isBlank() || notifId.isBlank()) return@withContext false
         try {
@@ -221,6 +259,9 @@ object NotificationDispatcher {
         }
     }
 
+    /**
+     * Clear all notifications for a user in batches.
+     */
     suspend fun clearAllNotifications(userId: String): Boolean = withContext(Dispatchers.IO) {
         if (userId.isBlank()) return@withContext false
         try {

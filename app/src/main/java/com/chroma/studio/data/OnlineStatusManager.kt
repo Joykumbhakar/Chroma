@@ -1,6 +1,7 @@
 package com.chroma.studio.data
 
 import android.util.Log
+import com.chroma.studio.ChatStateManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
@@ -59,8 +60,10 @@ object OnlineStatusManager {
                 val connected = snapshot.getValue(Boolean::class.java) ?: false
                 if (connected) {
                     Log.d(TAG, "Connected to Firebase RTDB")
-                    // When connected, set online to true
-                    onlineRef.setValue(true)
+                    // Only mark online if the user actually has the app open in foreground!
+                    if (ChatStateManager.isAppInForeground.value) {
+                        onlineRef.setValue(true)
+                    }
                     
                     // Add this device to connections list
                     val con = myConnectionsRef.push()

@@ -52,7 +52,7 @@ open class ChromaMessagingService : FirebaseMessagingService() {
         handleMessagePayload(remoteMessage)
     }
 
-    /** Runs a short network call to completion before the service is allowed to terminate. */
+    /** Runs a short network call to completion before the service is allowed to die. */
     private fun runBounded(block: suspend () -> Unit) {
         try {
             runBlocking { withTimeoutOrNull(5_000) { block() } }
@@ -84,7 +84,7 @@ open class ChromaMessagingService : FirebaseMessagingService() {
         }
         val avatarUrl = data["avatarUrl"] ?: data["avatar_url"] ?: data["senderAvatar"] ?: ""
 
-        // De-duplicate (FCM can redeliver the same message on network reconnects)
+        // De-duplicate (FCM can redeliver the same message)
         if (messageId.isNotBlank()) {
             synchronized(seenMessageIds) {
                 if (seenMessageIds.containsKey(messageId)) return
@@ -94,7 +94,7 @@ open class ChromaMessagingService : FirebaseMessagingService() {
 
         val currentUserId = ChatStateManager.currentUserId.value ?: FirebaseAuth.getInstance().currentUser?.uid
 
-        // Rule 1: own message -> ignore
+        // Rule 1: own message -> nothing
         if (senderId.isNotBlank() && currentUserId != null && senderId == currentUserId) return
 
         val isForeground = ChatStateManager.isAppInForeground.value
@@ -103,7 +103,7 @@ open class ChromaMessagingService : FirebaseMessagingService() {
             roomId = roomId
         )
 
-        // Rule 2: foreground + inside this chat -> no popup, mark read immediately
+        // Rule 2: foreground + inside this chat -> no popup, mark read
         if (isForeground && isUserInActiveChat) {
             if (roomId.isNotBlank()) runBounded {
                 val repo = SupabaseChatRepository()
@@ -129,12 +129,12 @@ open class ChromaMessagingService : FirebaseMessagingService() {
             return
         }
 
-        // Rule 4: background / killed / locked -> WhatsApp-style heads-up popup
+        // Rule 4: background / killed / locked -> WhatsApp-style heads-up popup.
         val prefs = getSharedPreferences("chat_security_preferences", MODE_PRIVATE)
         val lockedIds = prefs.getStringSet("locked_chat_ids", emptySet()) ?: emptySet()
         val isLocked = (roomId.isNotBlank() && roomId in lockedIds) || (senderId.isNotBlank() && senderId in lockedIds)
 
-        // Show the notification FIRST (instant user experience), then report delivered
+        // Show the notification FIRST (time-critical), then report "delivered" (double grey ticks).
         ChatNotificationBuilder.showHeadsUpNotification(
             context = this,
             roomId = roomId,

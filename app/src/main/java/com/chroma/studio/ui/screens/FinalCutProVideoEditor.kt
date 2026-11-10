@@ -830,7 +830,11 @@ private fun saveVideoViaMediaStoreFallback(context: Context, source: File, title
                 put(android.provider.MediaStore.Video.Media.RELATIVE_PATH, "Movies/ChromaStudio")
                 put(android.provider.MediaStore.Video.Media.IS_PENDING, 1)
             }
-            val uri = resolver.insert(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+            val uri = resolver.insert(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+                ?: run {
+                    values.put(android.provider.MediaStore.Video.Media.RELATIVE_PATH, "DCIM/ChromaStudio")
+                    resolver.insert(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+                } ?: return null
             try {
                 resolver.openOutputStream(uri)?.use { out -> source.inputStream().use { it.copyTo(out) } }
                     ?: run { resolver.delete(uri, null, null); return null }
@@ -856,7 +860,13 @@ private fun saveVideoViaMediaStoreFallback(context: Context, source: File, title
                 @Suppress("DEPRECATION")
                 put(android.provider.MediaStore.Video.Media.DATA, dest.absolutePath)
             }
-            resolver.insert(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+            var scannedUri: Uri? = null
+            android.media.MediaScannerConnection.scanFile(
+                context,
+                arrayOf(dest.absolutePath),
+                arrayOf("video/mp4")
+            ) { _, u -> scannedUri = u }
+            scannedUri ?: resolver.insert(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) ?: Uri.fromFile(dest)
         }
     } catch (t: Throwable) {
         android.util.Log.e("FinalCutProVideoEditor", "MediaStore fallback save failed", t)
@@ -1611,43 +1621,74 @@ fun FinalCutProVideoEditorScreen(
                         }
                         primary ?: saveVideoViaMediaStoreFallback(context, exportedFile, galleryTitle)
                     }
-                    // Only delete the rendered file once it is safely in the gallery — never lose the output.
-                    if (savedUri != null) {
+
+                    // For external sharing, resolve FileProvider URI directly from exportedFile (or fallback to savedUri)
+                    val shareableUri = if (shareExternal) {
+                        try {
+                            if (exportedFile.exists() && exportedFile.length() > 0L) {
+                                androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.provider",
+                                    exportedFile
+                                )
+                            } else savedUri
+                        } catch (t: Throwable) {
+                            android.util.Log.w("FinalCutProVideoEditor", "FileProvider share URI generation failed", t)
+                            savedUri
+                        }
+                    } else null
+
+                    // Only delete the rendered file once it is safely in the gallery AND NOT actively being shared
+                    if (savedUri != null && !shareExternal) {
                         try { exportedFile.delete() } catch (_: Throwable) {}
-                    } else {
+                    } else if (savedUri == null) {
                         android.util.Log.e("FinalCutProVideoEditor", "Gallery save failed; rendered file kept at ${exportedFile.absolutePath}")
                     }
+
                     restorePreviewAfterExport()
                     exportProgress = 1.0f
                     delay(150L)
                     SoundManager.playSend(context)
                     isExporting = false
                     showExportSheet = false
-                    if (savedUri != null) {
-                        if (shareExternal) {
-                            ExportHelper.shareVideo(context, savedUri, "Share Video")
+
+                    if (shareExternal) {
+                        val targetUri = shareableUri ?: savedUri
+                        if (targetUri != null) {
+                            ExportHelper.shareVideo(context, targetUri, "Share Video")
+                            ToastManager.showToast("Video ready to share! 🚀")
                         } else {
-                            ToastManager.showToast(
-                                message = "Video saved to Gallery!",
-                                actionLabel = "View",
-                                durationMs = 5000L,
-                                onAction = {
-                                    try {
-                                        val viewIntent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                            setDataAndType(savedUri, "video/mp4")
-                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        }
-                                        context.startActivity(viewIntent)
-                                    } catch (e: Throwable) {
-                                        android.util.Log.w("FinalCutProVideoEditor", "Could not open saved video intent", e)
-                                    }
-                                }
-                            )
+                            ToastManager.showToast("Failed to prepare video for sharing")
                         }
+                    } else if (savedUri != null) {
+                        ToastManager.showToast(
+                            message = "Video saved to Gallery!",
+                            actionLabel = "View",
+                            durationMs = 5000L,
+                            onAction = {
+                                try {
+                                    val viewIntent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                        setDataAndType(savedUri, "video/mp4")
+                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(viewIntent)
+                                } catch (e: Throwable) {
+                                    android.util.Log.w("FinalCutProVideoEditor", "Could not open saved video intent", e)
+                                }
+                            }
+                        )
                     } else {
-                        ToastManager.showToast(if (shareExternal) "Failed to prepare video for sharing" else "Failed to save video to Gallery")
+                        ToastManager.showToast("Failed to save video to Gallery")
                     }
                 } else {
+                    if (totalDurationSec > 60f) {
+                        isExporting = false
+                        showExportSheet = false
+                        restorePreviewAfterExport()
+                        showDurationWarningDialog = true
+                        ToastManager.showToast("Videos shared to Studio must be 60 seconds or less")
+                        return@launch
+                    }
                     exportStageText = "Sending to Studio..."
                     exportProgress = 0.95f
                     try {
@@ -12158,40 +12199,97 @@ fun FcpExportSheet(
     var selectedFps by remember { mutableStateOf("30 FPS") }
     val resolutions = listOf("720p", "1080p", "4K")
     val frameRates = listOf("24 FPS", "30 FPS", "60 FPS")
-    val sheetBg = if (colors.isDark) Color(0xFF181A22) else Color(0xFFFFFFFF)
-    val cardBg = if (colors.isDark) Color(0xFF222633) else Color(0xFFF3F5F9)
+
+    val sheetBg = if (colors.isDark) Color(0xFF14161F) else Color(0xFFFFFFFF)
+    val cardBg = if (colors.isDark) Color(0xFF1C202C) else Color(0xFFF1F5F9)
+    val cardBorder = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
+
+    // Calculate dimensions based on aspect ratio & resolution
+    val baseDim = when (selectedRes) {
+        "720p" -> 720
+        "4K" -> 2160
+        else -> 1080
+    }
+    val (resWidth, resHeight) = when (aspectRatio) {
+        FcpAspectRatio.VERTICAL_9_16 -> Pair(baseDim, ((baseDim * 16f) / 9f).toInt())
+        FcpAspectRatio.WIDESCREEN_16_9 -> Pair(((baseDim * 16f) / 9f).toInt(), baseDim)
+        FcpAspectRatio.SQUARE_1_1 -> Pair(baseDim, baseDim)
+        FcpAspectRatio.CINEMATIC_21_9 -> Pair(((baseDim * 21f) / 9f).toInt(), baseDim)
+    }
+    val resDimensionStr = "${resWidth} × ${resHeight}"
+
+    // Dynamic file size estimation
+    val fpsFactor = when {
+        selectedFps.contains("60") -> 1.35f
+        selectedFps.contains("24") -> 0.90f
+        else -> 1.0f
+    }
+    val baseMbps = when (selectedRes) {
+        "720p" -> 4.5f
+        "4K" -> 28.0f
+        else -> 12.0f
+    }
+    val totalMbps = (baseMbps * fpsFactor) + 0.192f // 192kbps audio
+    val estimatedSizeMb = (totalMbps * totalDurationSec.coerceAtLeast(1f)) / 8f
+    val estimatedSizeStr = if (estimatedSizeMb < 1f) {
+        "${(estimatedSizeMb * 1024).toInt().coerceAtLeast(150)} KB"
+    } else if (estimatedSizeMb >= 1000f) {
+        "%.2f GB".format(estimatedSizeMb / 1024f)
+    } else {
+        "%.1f MB".format(estimatedSizeMb)
+    }
+
+    val durMin = (totalDurationSec / 60).toInt()
+    val durSec = (totalDurationSec % 60).toInt()
+    val timeFormatted = "%02d:%02d".format(durMin, durSec)
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = exportProgress.coerceIn(0f, 1f),
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "exportProgressAnim"
+    )
 
     Dialog(
-        onDismissRequest = { onDismiss() },
+        onDismissRequest = { if (!isExporting) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.65f))
-                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onDismiss() },
+                .background(Color.Black.copy(alpha = 0.70f))
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) {
+                    if (!isExporting) onDismiss()
+                },
             contentAlignment = Alignment.BottomCenter
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
                     .background(sheetBg)
-                    .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}
-                    .padding(horizontal = 20.dp, vertical = 20.dp)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {}
+                    .padding(horizontal = 20.dp, vertical = 18.dp)
             ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Top Drag Handle
+                    // Top Drag Pill
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterHorizontally)
-                            .width(40.dp)
+                            .width(44.dp)
                             .height(4.5.dp)
                             .clip(RoundedCornerShape(50))
-                            .background(colors.textMuted.copy(alpha = 0.25f))
+                            .background(colors.textMuted.copy(alpha = 0.28f))
                     )
 
                     // Header Row: App Logo Badge + Title + Subtitle + Close Button
@@ -12206,37 +12304,49 @@ fun FcpExportSheet(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(11.dp))
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(13.dp))
                                     .background(
                                         Brush.linearGradient(
-                                            listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
+                                            listOf(Color(0xFF2563EB), Color(0xFF7C3AED))
                                         )
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
-                                OscellionNotificationBadge(size = 20.dp, tint = Color.White)
+                                OscellionNotificationBadge(size = 22.dp, tint = Color.White)
                             }
                             Column {
                                 Text(
                                     text = "Export & Render",
-                                    fontSize = 18.sp,
+                                    fontSize = 18.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = colors.textMain
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Oscellion Studio Final Cut Pro Master Engine",
-                                    fontSize = 11.5.sp,
-                                    color = colors.textMuted
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF10B981))
+                                    )
+                                    Text(
+                                        text = "Hardware Accelerated · H.264 / AAC",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colors.textMuted
+                                    )
+                                }
                             }
                         }
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(34.dp)
                                 .clip(CircleShape)
-                                .background(if (colors.isDark) Color(0xFF252936) else Color(0xFFF1F5F9))
+                                .background(if (colors.isDark) Color(0xFF232736) else Color(0xFFE2E8F0))
                                 .clickable(onClick = { if (isExporting) onCancelExport() else onDismiss() }),
                             contentAlignment = Alignment.Center
                         ) {
@@ -12249,71 +12359,227 @@ fun FcpExportSheet(
                         }
                     }
 
-                    // Project Summary Card
+                    // Project Summary Specs (Samsung One UI 7 Focus Block: 2x2 Grid)
+                    val separatorColor = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(26.dp))
                             .background(cardBg)
-                            .padding(vertical = 12.dp, horizontal = 8.dp)
+                            .border(1.dp, cardBorder, RoundedCornerShape(26.dp))
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            val durMin = (totalDurationSec / 60).toInt()
-                            val durSec = (totalDurationSec % 60).toInt()
-                            val timeStr = "%02d:%02d".format(durMin, durSec)
-                            val separatorColor = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
+                            // Row 1: Duration & Dimensions
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 1. Duration
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (colors.isDark) Color(0xFF1E2433) else Color(0xFFEFF6FF)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.Clock,
+                                            contentDescription = null,
+                                            tint = Color(0xFF3B82F6),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "Duration",
+                                            fontSize = 11.sp,
+                                            color = colors.textMuted,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = timeFormatted,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.textMain
+                                        )
+                                    }
+                                }
 
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Duration", fontSize = 11.sp, color = colors.textMuted, fontWeight = FontWeight.Normal)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(timeStr, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
+                                Box(
+                                    modifier = Modifier
+                                        .width(1.dp)
+                                        .height(30.dp)
+                                        .background(separatorColor)
+                                )
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                // 2. Output Dimensions
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (colors.isDark) Color(0xFF261E38) else Color(0xFFFAF5FF)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.Maximize2,
+                                            contentDescription = null,
+                                            tint = Color(0xFF8B5CF6),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "Dimensions",
+                                            fontSize = 11.sp,
+                                            color = colors.textMuted,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = resDimensionStr,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.primary
+                                        )
+                                    }
+                                }
                             }
-                            Box(modifier = Modifier.width(1.dp).height(22.dp).background(separatorColor))
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Clips", fontSize = 11.sp, color = colors.textMuted, fontWeight = FontWeight.Normal)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text("$clipCount", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
-                            }
-                            Box(modifier = Modifier.width(1.dp).height(22.dp).background(separatorColor))
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Titles", fontSize = 11.sp, color = colors.textMuted, fontWeight = FontWeight.Normal)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text("$textLayerCount", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
-                            }
-                            Box(modifier = Modifier.width(1.dp).height(22.dp).background(separatorColor))
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Format", fontSize = 11.sp, color = colors.textMuted, fontWeight = FontWeight.Normal)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(aspectRatio.label.split(" ").firstOrNull() ?: "9:16", fontSize = 14.5.sp, fontWeight = FontWeight.Bold, color = colors.primary)
+
+                            // Hairline Divider between Row 1 and Row 2
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(separatorColor)
+                            )
+
+                            // Row 2: Timeline & Est. File Size
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 3. Timeline
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (colors.isDark) Color(0xFF2B2416) else Color(0xFFFEFCE8)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.Layers,
+                                            contentDescription = null,
+                                            tint = Color(0xFFF59E0B),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "Timeline",
+                                            fontSize = 11.sp,
+                                            color = colors.textMuted,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = "$clipCount clip" + (if (clipCount != 1) "s" else "") + (if (textLayerCount > 0) " · $textLayerCount text" else ""),
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.textMain
+                                        )
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .width(1.dp)
+                                        .height(30.dp)
+                                        .background(separatorColor)
+                                )
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                // 4. Est. File Size
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (colors.isDark) Color(0xFF132A22) else Color(0xFFECFDF5)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.HardDrive,
+                                            contentDescription = null,
+                                            tint = Color(0xFF10B981),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "Est. Size",
+                                            fontSize = 11.sp,
+                                            color = colors.textMuted,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = "~$estimatedSizeStr",
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF10B981)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
 
-                    // Active Custom Soundtrack Badge (if attached)
+                    // Audio Track Spec Card
                     if (customAudio != null) {
-                        val audioBg = if (colors.isDark) Color(0xFF064E3B).copy(alpha = 0.35f) else Color(0xFFECFDF5)
+                        val audioBg = if (colors.isDark) Color(0xFF064E3B).copy(alpha = 0.30f) else Color(0xFFECFDF5)
+                        val audioBorder = if (colors.isDark) Color(0xFF059669).copy(alpha = 0.35f) else Color(0xFFA7F3D0)
                         val audioIconBg = if (colors.isDark) Color(0xFF059669) else Color(0xFF10B981)
                         val audioSubColor = if (colors.isDark) Color(0xFF6EE7B7) else Color(0xFF047857)
-                        val audioLoopBg = if (colors.isDark) Color(0xFF065F46) else Color(0xFFD1FAE5)
-                        val audioLoopText = if (colors.isDark) Color(0xFFA7F3D0) else Color(0xFF065F46)
 
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .background(audioBg)
+                                .border(1.dp, audioBorder, RoundedCornerShape(16.dp))
                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(audioIconBg),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -12321,7 +12587,7 @@ fun FcpExportSheet(
                                     imageVector = if (customAudio.isExtractedFromVideo) Lucide.Film else Lucide.Music,
                                     contentDescription = "Audio track",
                                     tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                             Column(modifier = Modifier.weight(1f)) {
@@ -12333,9 +12599,9 @@ fun FcpExportSheet(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(modifier = Modifier.height(1.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = if (customAudio.muteOriginalVideo) "Replaces video audio (original muted)" else "Mixed with original video audio",
+                                    text = if (customAudio.muteOriginalVideo) "Replaces video audio (original muted)" else "Mixed with camera audio · AAC 48kHz",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = audioSubColor,
@@ -12346,14 +12612,14 @@ fun FcpExportSheet(
                             if (customAudio.loopAudio) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(audioLoopBg)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (colors.isDark) Color(0xFF065F46) else Color(0xFFD1FAE5))
                                         .padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
                                     Text(
                                         text = "Looping",
                                         fontSize = 10.sp,
-                                        color = audioLoopText,
+                                        color = if (colors.isDark) Color(0xFFA7F3D0) else Color(0xFF065F46),
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -12361,51 +12627,352 @@ fun FcpExportSheet(
                         }
                     }
 
+                    // Render vs Options Mode
                     if (isExporting) {
-                        Column(
+                        // Flagship Render Monitor
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(cardBg)
+                                .border(1.dp, Color(0xFF2563EB).copy(alpha = 0.30f), RoundedCornerShape(22.dp))
+                                .padding(vertical = 20.dp, horizontal = 16.dp)
                         ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                // Circular Radial Gauge
+                                Box(
+                                    modifier = Modifier.size(130.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Canvas(modifier = Modifier.fillMaxSize()) {
+                                        val strokeW = 10.dp.toPx()
+                                        val radius = (size.minDimension - strokeW) / 2f
+                                        val centerPt = Offset(size.width / 2f, size.height / 2f)
+                                        // Track ring
+                                        drawCircle(
+                                            color = colors.textMuted.copy(alpha = 0.14f),
+                                            radius = radius,
+                                            center = centerPt,
+                                            style = Stroke(width = strokeW)
+                                        )
+                                        // Sweeping progress arc
+                                        drawArc(
+                                            brush = Brush.sweepGradient(
+                                                listOf(
+                                                    Color(0xFF2563EB),
+                                                    Color(0xFF8B5CF6),
+                                                    Color(0xFF38BDF8),
+                                                    Color(0xFF2563EB)
+                                                )
+                                            ),
+                                            startAngle = -90f,
+                                            sweepAngle = animatedProgress * 360f,
+                                            useCenter = false,
+                                            topLeft = Offset(centerPt.x - radius, centerPt.y - radius),
+                                            size = Size(radius * 2f, radius * 2f),
+                                            style = Stroke(width = strokeW, cap = StrokeCap.Round)
+                                        )
+                                    }
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "${(animatedProgress * 100).toInt()}%",
+                                            fontSize = 28.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = colors.textMain
+                                        )
+                                        Text(
+                                            text = "ENCODING",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 1.2.sp,
+                                            color = Color(0xFF3B82F6)
+                                        )
+                                    }
+                                }
+
+                                // Stage Text & Linear Bar
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.Sparkles,
+                                            contentDescription = null,
+                                            tint = Color(0xFF2563EB),
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Text(
+                                            text = exportStageText,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = colors.textMain,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                    LiquidGlassProgressBar(
+                                        progress = animatedProgress,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(8.dp),
+                                        height = 8.dp
+                                    )
+                                    Text(
+                                        text = "Hardware encoder active · Please keep app in foreground",
+                                        fontSize = 11.sp,
+                                        color = colors.textMuted,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+
+                                // Cancel Button
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(46.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0xFFEF4444).copy(alpha = 0.12f))
+                                        .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+                                        .clickable(onClick = onCancelExport),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.X,
+                                            contentDescription = "Cancel",
+                                            tint = Color(0xFFEF4444),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Cancel Render",
+                                            color = Color(0xFFEF4444),
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Resolution Preset Cards (720p, 1080p, 4K)
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = exportStageText,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    text = "Resolution",
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = colors.textMain
                                 )
                                 Text(
-                                    text = "${(exportProgress * 100).toInt()}%",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.primary
+                                    text = "Hardware Accelerated",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF10B981)
                                 )
                             }
-                            LiquidGlassProgressBar(
-                                progress = exportProgress,
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                resolutions.forEach { res ->
+                                    val isSel = res == selectedRes
+                                    val isPro = res == "1080p"
+                                    val subtitle = when (res) {
+                                        "720p" -> "Fast HD"
+                                        "4K" -> "Cinema"
+                                        else -> "Full HD"
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(72.dp)
+                                            .then(
+                                                if (isSel) Modifier.shadow(
+                                                    6.dp,
+                                                    RoundedCornerShape(16.dp),
+                                                    spotColor = Color(0xFF2563EB).copy(alpha = 0.45f)
+                                                )
+                                                else Modifier
+                                            )
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(
+                                                if (isSel) Brush.linearGradient(
+                                                    listOf(Color(0xFF1D4ED8), Color(0xFF2563EB))
+                                                )
+                                                else Brush.linearGradient(listOf(cardBg, cardBg))
+                                            )
+                                            .border(
+                                                1.dp,
+                                                if (isSel) Color(0xFF60A5FA).copy(alpha = 0.40f) else cardBorder,
+                                                RoundedCornerShape(16.dp)
+                                            )
+                                            .clickable { selectedRes = res }
+                                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = res,
+                                                    fontSize = 14.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isSel) Color.White else colors.textMain
+                                                )
+                                                if (isPro) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                            .background(
+                                                                if (isSel) Color.White.copy(alpha = 0.22f)
+                                                                else Color(0xFF2563EB).copy(alpha = 0.15f)
+                                                            )
+                                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "PRO",
+                                                            fontSize = 8.5.sp,
+                                                            fontWeight = FontWeight.Black,
+                                                            color = if (isSel) Color.White else Color(0xFF2563EB)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = subtitle,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (isSel) Color.White.copy(alpha = 0.85f) else colors.textMuted
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Frame Rate Selector (24, 30, 60 FPS)
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = "Frame Rate",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textMain
+                            )
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(8.dp),
-                                height = 8.dp
-                            )
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(cardBg)
+                                    .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
+                                    .padding(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                frameRates.forEach { fps ->
+                                    val isSel = fps == selectedFps
+                                    val fpsDesc = when {
+                                        fps.contains("24") -> "Cinema"
+                                        fps.contains("60") -> "Smooth"
+                                        else -> "Standard"
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(38.dp)
+                                            .clip(RoundedCornerShape(11.dp))
+                                            .background(
+                                                if (isSel) colors.primary
+                                                else Color.Transparent
+                                            )
+                                            .clickable { selectedFps = fps },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = fps,
+                                                fontSize = 12.5.sp,
+                                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSel) Color.White else colors.textMain
+                                            )
+                                            Text(
+                                                text = "($fpsDesc)",
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Normal,
+                                                color = if (isSel) Color.White.copy(alpha = 0.8f) else colors.textMuted
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Codec details strip
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (colors.isDark) Color(0xFF181B26) else Color(0xFFE9EDF5))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "Encoding video stream with color matrix and audio mix",
-                                fontSize = 11.sp,
-                                color = colors.textMuted
+                                text = "MP4 · H.264 High Profile · AAC 48kHz Stereo · Rec.709 Color",
+                                fontSize = 10.5.sp,
+                                color = colors.textMuted,
+                                fontWeight = FontWeight.Normal
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                        }
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        // Action Buttons
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // 1. Export & Post to Studio (Hero Button)
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(44.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFFEF4444).copy(alpha = 0.12f))
-                                    .clickable(onClick = onCancelExport),
+                                    .height(52.dp)
+                                    .shadow(
+                                        elevation = 6.dp,
+                                        shape = RoundedCornerShape(16.dp),
+                                        spotColor = Color(0xFF2563EB).copy(alpha = 0.45f)
+                                    )
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(Color(0xFF1D4ED8), Color(0xFF2563EB), Color(0xFF6366F1))
+                                        )
+                                    )
+                                    .clickable { onExportToStudio(selectedRes, selectedFps) },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
@@ -12413,112 +12980,34 @@ fun FcpExportSheet(
                                     horizontalArrangement = Arrangement.Center
                                 ) {
                                     Icon(
-                                        imageVector = Lucide.X,
-                                        contentDescription = "Cancel",
-                                        tint = Color(0xFFEF4444),
-                                        modifier = Modifier.size(16.dp)
+                                        imageVector = Lucide.Sparkles,
+                                        contentDescription = "Export & Post to Studio",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Cancel Export",
-                                        color = Color(0xFFEF4444),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold
+                                        text = if (totalDurationSec > 60f) "Export & Post to Studio (Max 60s)" else "Export & Post to Studio",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.5.sp
                                     )
                                 }
                             }
-                        }
-                    } else {
-                        // Resolution selector (Zero borders, solid selected pill)
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Resolution", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+
+                            // 2. Save to Gallery & Share Video (Side-by-side)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                resolutions.forEach { res ->
-                                    val isSel = res == selectedRes
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(42.dp)
-                                            .then(
-                                                if (isSel) Modifier.shadow(3.dp, RoundedCornerShape(12.dp), spotColor = colors.primary.copy(alpha = 0.35f))
-                                                else Modifier
-                                            )
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(
-                                                if (isSel) colors.primary
-                                                else cardBg
-                                            )
-                                            .clickable { selectedRes = res },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = res,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (isSel) Color.White else colors.textMain
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Frame rate selector (Zero borders, solid selected pill)
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Frame Rate", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                frameRates.forEach { fps ->
-                                    val isSel = fps == selectedFps
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(42.dp)
-                                            .then(
-                                                if (isSel) Modifier.shadow(3.dp, RoundedCornerShape(12.dp), spotColor = colors.primary.copy(alpha = 0.35f))
-                                                else Modifier
-                                            )
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(
-                                                if (isSel) colors.primary
-                                                else cardBg
-                                            )
-                                            .clickable { selectedFps = fps },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = fps,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (isSel) Color.White else colors.textMain
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // Action buttons with Zero Borders
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                // 1. Save to Gallery
+                                // Save to Gallery
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(48.dp)
                                         .clip(RoundedCornerShape(14.dp))
                                         .background(cardBg)
+                                        .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
                                         .clickable { onSaveToGallery(selectedRes, selectedFps) }
                                         .padding(horizontal = 8.dp),
                                     contentAlignment = Alignment.Center
@@ -12533,7 +13022,7 @@ fun FcpExportSheet(
                                                 .clip(RoundedCornerShape(8.dp))
                                                 .background(
                                                     Brush.linearGradient(
-                                                        colors = listOf(Color(0xFF059669), Color(0xFF10B981))
+                                                        listOf(Color(0xFF059669), Color(0xFF10B981))
                                                     )
                                                 ),
                                             contentAlignment = Alignment.Center
@@ -12555,13 +13044,14 @@ fun FcpExportSheet(
                                     }
                                 }
 
-                                // 2. Share Video
+                                // Share Video
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(48.dp)
                                         .clip(RoundedCornerShape(14.dp))
                                         .background(cardBg)
+                                        .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
                                         .clickable { onShareVideo(selectedRes, selectedFps) }
                                         .padding(horizontal = 8.dp),
                                     contentAlignment = Alignment.Center
@@ -12576,7 +13066,7 @@ fun FcpExportSheet(
                                                 .clip(RoundedCornerShape(8.dp))
                                                 .background(
                                                     Brush.linearGradient(
-                                                        colors = listOf(Color(0xFF6366F1), Color(0xFF8B5CF6))
+                                                        listOf(Color(0xFF6366F1), Color(0xFF8B5CF6))
                                                     )
                                                 ),
                                             contentAlignment = Alignment.Center
@@ -12599,52 +13089,14 @@ fun FcpExportSheet(
                                 }
                             }
 
-                            // 3. Export & Post to Studio
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp)
-                                    .shadow(
-                                        elevation = 4.dp,
-                                        shape = RoundedCornerShape(14.dp),
-                                        spotColor = Color(0xFF2563EB).copy(alpha = 0.40f)
-                                    )
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(
-                                        Brush.linearGradient(
-                                            colors = listOf(Color(0xFF1D4ED8), Color(0xFF2563EB), Color(0xFF3B82F6))
-                                        )
-                                    )
-                                    .clickable { onExportToStudio(selectedRes, selectedFps) },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.Sparkles,
-                                        contentDescription = "Export & Post to Studio",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(7.dp))
-                                    Text(
-                                        text = "Export & Post to Studio",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
-                                    )
-                                }
-                            }
-
-                            // 4. Save Draft Only
+                            // 3. Save Draft Only
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(44.dp)
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(cardBg)
+                                    .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
                                     .clickable { onSaveDraftOnly() },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -12674,6 +13126,7 @@ fun FcpExportSheet(
         }
     }
 }
+
 // ============================================================================
 // FLAT WHITE PLAYBACK ICONS & TRANSPORT CONTROLS
 // (100% Vector Geometry matching User HTML/CSS Mockup)

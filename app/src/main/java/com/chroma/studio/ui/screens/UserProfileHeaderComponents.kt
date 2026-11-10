@@ -17,6 +17,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -694,7 +696,9 @@ fun UserProfileBioDetailsSection(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
             ) {
                 // Website Link Chip
                 if (webUrl != null) {
@@ -708,6 +712,11 @@ fun UserProfileBioDetailsSection(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
                             .background(if (colors.isDark) Color(0xFF0381FE).copy(alpha = 0.15f) else Color(0xFFEFF5FF))
+                            .border(
+                                width = 0.5.dp,
+                                color = if (colors.isDark) Color(0xFF0381FE).copy(alpha = 0.30f) else Color(0xFF0381FE).copy(alpha = 0.20f),
+                                shape = RoundedCornerShape(999.dp)
+                            )
                             .clickable {
                                 try {
                                     val target = if (webUrl.startsWith("http://") || webUrl.startsWith("https://")) webUrl else "https://$webUrl"
@@ -716,7 +725,7 @@ fun UserProfileBioDetailsSection(
                                     ToastManager.showToast("Could not open link")
                                 }
                             }
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -734,7 +743,9 @@ fun UserProfileBioDetailsSection(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 letterSpacing = (-0.01).em,
-                                lineHeight = 14.sp,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
                                 style = ProfileTightTextStyle
                             )
                             Icon(
@@ -753,6 +764,11 @@ fun UserProfileBioDetailsSection(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
                             .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFEFF4F9))
+                            .border(
+                                width = 0.5.dp,
+                                color = if (colors.isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(999.dp)
+                            )
                             .clickable {
                                 try {
                                     val target = if (ghUrl.startsWith("http://") || ghUrl.startsWith("https://")) ghUrl else "https://$ghUrl"
@@ -761,11 +777,11 @@ fun UserProfileBioDetailsSection(
                                     ToastManager.showToast("Could not open GitHub")
                                 }
                             }
-                            .padding(horizontal = 9.dp, vertical = 4.dp)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Image(
                                 painter = painterResource(id = R.drawable.ic_social_github),
@@ -777,7 +793,9 @@ fun UserProfileBioDetailsSection(
                                 color = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF20314A),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
-                                lineHeight = 14.sp,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
                                 style = ProfileTightTextStyle
                             )
                         }
@@ -790,6 +808,11 @@ fun UserProfileBioDetailsSection(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
                             .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFEFF4F9))
+                            .border(
+                                width = 0.5.dp,
+                                color = if (colors.isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.08f),
+                                shape = RoundedCornerShape(999.dp)
+                            )
                             .clickable {
                                 try {
                                     val target = if (igUrl.startsWith("http://") || igUrl.startsWith("https://")) igUrl else "https://$igUrl"
@@ -798,11 +821,11 @@ fun UserProfileBioDetailsSection(
                                     ToastManager.showToast("Could not open Instagram")
                                 }
                             }
-                            .padding(horizontal = 9.dp, vertical = 4.dp)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Image(
                                 painter = painterResource(id = R.drawable.ic_social_instagram),
@@ -814,7 +837,9 @@ fun UserProfileBioDetailsSection(
                                 color = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF20314A),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
-                                lineHeight = 14.sp,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
                                 style = ProfileTightTextStyle
                             )
                         }

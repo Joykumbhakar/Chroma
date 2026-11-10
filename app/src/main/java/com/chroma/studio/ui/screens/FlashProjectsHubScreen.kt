@@ -28,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -338,19 +339,25 @@ fun FlashProjectsHubScreen(
                         }
                     }
 
-                    // Right: Primary "+ New Video" Button
+                    // Right: Primary One UI "+ New Video" Capsule Button
                     Button(
                         onClick = {
                             SoundManager.playTap(context)
                             showInAppGallery = true
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = colors.primary,
+                            containerColor = Color(0xFF0381FE),
                             contentColor = Color.White
                         ),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                        modifier = Modifier.height(36.dp)
+                        shape = RoundedCornerShape(999.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier
+                            .height(38.dp)
+                            .shadow(
+                                elevation = 2.dp,
+                                shape = RoundedCornerShape(999.dp),
+                                spotColor = Color(0xFF0381FE).copy(alpha = 0.35f)
+                            )
                     ) {
                         Icon(
                             imageVector = Lucide.Video,
@@ -363,60 +370,70 @@ fun FlashProjectsHubScreen(
                             text = "New Video",
                             color = Color.White,
                             fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
             }
 
-            HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+            HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.35f), thickness = 0.5.dp)
 
             // ══════════════════════════════════════════════════════════════════
-            // FILTER TABS: All / Draft / Saved
+            // ONE UI SIGNATURE SEGMENTED FILTER TABS: All / Draft / Saved
             // ══════════════════════════════════════════════════════════════════
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                FlashHubFilter.entries.forEach { filter ->
-                    val isSelected = selectedFilter == filter
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(if (colors.isDark) Color(0xFF1E2028) else Color(0xFFF1F3F7))
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FlashHubFilter.entries.forEach { filter ->
+                        val isSelected = selectedFilter == filter
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (isSelected) Color(0xFF0381FE)
-                                else if (colors.isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
+                                .then(
+                                    if (isSelected) Modifier.shadow(
+                                        elevation = 2.dp,
+                                        shape = RoundedCornerShape(999.dp),
+                                        ambientColor = Color.Black.copy(alpha = 0.08f),
+                                        spotColor = Color.Black.copy(alpha = 0.16f)
+                                    ) else Modifier
+                                )
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(
+                                    if (isSelected) Color(0xFF0381FE)
+                                    else Color.Transparent
+                                )
+                                .clickable(
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() }
+                                ) {
+                                    SoundManager.playTap(context)
+                                    selectedFilter = filter
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = filter.label,
+                                color = if (isSelected) Color.White else if (colors.isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
                             )
-                            .border(
-                                width = if (isSelected) 1.5.dp else 1.dp,
-                                color = if (isSelected) Color(0xFF0381FE) else if (colors.isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() }
-                            ) {
-                                SoundManager.playTap(context)
-                                selectedFilter = filter
-                            }
-                            .padding(horizontal = 16.dp, vertical = 7.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = filter.label,
-                            color = if (isSelected) Color.White else colors.textMuted,
-                            fontSize = 13.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                        )
+                        }
                     }
                 }
             }
-
-            HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
 
             // ══════════════════════════════════════════════════════════════════
             // 3*... GRID LAYOUT: 3 Fixed Columns of Flash Videos & Drafts
@@ -475,24 +492,31 @@ fun FlashProjectsHubScreen(
                                         showInAppGallery = true
                                     },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = colors.primary,
+                                        containerColor = Color(0xFF0381FE),
                                         contentColor = Color.White
                                     ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+                                    shape = RoundedCornerShape(999.dp),
+                                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
+                                    modifier = Modifier
+                                        .height(48.dp)
+                                        .shadow(
+                                            elevation = 3.dp,
+                                            shape = RoundedCornerShape(999.dp),
+                                            spotColor = Color(0xFF0381FE).copy(alpha = 0.35f)
+                                        )
                                 ) {
                                     Icon(
                                         imageVector = Lucide.Video,
                                         contentDescription = null,
                                         tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Text(
                                         text = "Pick or Record Video",
                                         color = Color.White,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }

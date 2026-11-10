@@ -16,7 +16,9 @@ google-services.json
 serviceAccountKey.json
 firebase_backup*.json
 
-# Scratch files and temporary test scripts
+*.log
+firebase-debug.log
+
 __pycache__/
 *.pyc
 *.py

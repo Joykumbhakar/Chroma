@@ -22,8 +22,10 @@ import java.security.spec.PKCS8EncodedKeySpec
 enum class FcmResult { SENT, FAILED, UNREGISTERED }
 
 /**
- * Direct FCM HTTP v1 push sender with mutex-locked token minting,
- * in-memory token caching with refresh, and high-priority heads-up push dispatch.
+ * Direct FCM HTTP v1 sender.
+ *
+ * Uses serviceAccountKey.json to mint short-lived OAuth2 tokens and dispatch
+ * high-priority DATA-ONLY push messages directly via Firebase Cloud Messaging HTTP v1 API.
  */
 object FcmPushSender {
     private const val TAG = "FcmPushSender"
@@ -131,7 +133,7 @@ object FcmPushSender {
     /**
      * Sends a DATA-ONLY, high-priority message. Data-only is deliberate: it guarantees
      * onMessageReceived runs (app killed / screen locked) so ChatNotificationBuilder can build the
-     * MessagingStyle heads-up with Direct Reply.
+     * MessagingStyle heads-up with Direct Reply. Never add a "notification" block.
      */
     suspend fun sendPushNotification(
         context: Context,
@@ -185,7 +187,7 @@ object FcmPushSender {
                 })
                 put("android", JSONObject().apply {
                     put("priority", "HIGH")
-                    put("ttl", "86400s") // Retry up to 24h if device is offline
+                    put("ttl", "86400s") // keep retrying for 24h if the phone is off/offline
                     put("direct_boot_ok", true)
                     put("fcm_options", JSONObject().put("analytics_label", "chat_message"))
                 })

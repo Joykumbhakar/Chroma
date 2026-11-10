@@ -5240,7 +5240,7 @@ private fun ChatScreenContent(
 
                         val realParticipantIds = members.mapNotNull { it.id.takeIf { id -> id.isNotBlank() && id != currentUser.id } }
 
-                        chatViewModel.createGroup(groupName, "Group created", realParticipantIds, groupAvatar) { generatedRoomId ->
+                        chatViewModel.createGroup(groupName, "Group created", realParticipantIds, groupAvatar, newGroupId) { generatedRoomId ->
 
                             activeChatId = generatedRoomId
 

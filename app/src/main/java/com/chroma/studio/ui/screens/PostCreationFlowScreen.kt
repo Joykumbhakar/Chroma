@@ -15,6 +15,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
@@ -60,9 +61,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.data.DiscoverRepository
+import com.chroma.studio.data.StoryRepository
+import com.chroma.studio.data.WorkRepository
+import com.chroma.studio.model.ChromaWork
+import com.chroma.studio.model.FlashMediaType
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.AppleSwitch
 import com.chroma.studio.ui.components.OneUiIconBadge
@@ -72,6 +78,8 @@ import com.chroma.studio.ui.components.GalleryMediaTypeFilter
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.utils.compressImageToUnder50KB
+import com.chroma.studio.viewmodel.FlashViewModel
+import com.chroma.studio.viewmodel.StoryViewModel
 import com.composables.icons.lucide.*
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
@@ -82,13 +90,23 @@ import java.io.FileOutputStream
 import java.util.UUID
 
 /**
- * 3-Stage Instagram-style Post Creation & Onboarding Flow
+ * Universal Post Types for Chroma Studio Creator System.
+ */
+enum class PostType(val id: String, val title: String, val subtitle: String, val icon: ImageVector) {
+    PHOTO("photo", "Photo Post", "Multi-Image & Carousel", Lucide.Image),
+    FLASH("flash", "Flash Video", "Short-Form Video & Reels", Lucide.Film),
+    WORK("work", "Creative Work", "Portfolio Showcase & Masterwork", Lucide.Palette),
+    STORY("story", "24h Story", "Ephemeral 24h Status", Lucide.Sparkles)
+}
+
+/**
+ * 3-Stage Universal Post Creation Flow
  * Following Samsung One UI 7.0 design principles.
  */
 enum class PostCreationStep {
-    MEDIA_PICKER,   // Stage 1: Select photo from gallery or camera
-    IMAGE_EDITOR,   // Stage 2: Dedicated Apple-style Image Editor
-    POST_DETAILS    // Stage 3: Caption, tags, creator mentions, location, audience & publishing
+    MEDIA_PICKER,   // Stage 1: Select media source / project
+    IMAGE_EDITOR,   // Stage 2: Dedicated Apple/One UI Editor & Studio Preview
+    POST_DETAILS    // Stage 3: Title/Caption, metadata, tags, audience, permissions & publishing
 }
 
 /**
@@ -138,55 +156,22 @@ private val QUICK_FILTER_PRESETS = listOf(
     QuickFilterPreset(
         id = "clarendon",
         name = "Clarendon",
-        description = "Deep shadows and cool cyan highlights",
+        description = "Cool shadows with intense warm highlights",
         matrix = floatArrayOf(
-            1.12f, 0f, 0.08f, 0f, 8f,
-            0f, 1.15f, 0.05f, 0f, 10f,
-            0.08f, 0.05f, 1.25f, 0f, 15f,
+            1.20f, 0f, 0f, 0f, 4f,
+            0f, 1.15f, 0f, 0f, 2f,
+            0f, 0f, 1.30f, 0f, 10f,
             0f, 0f, 0f, 1f, 0f
         )
     ),
     QuickFilterPreset(
-        id = "mono",
-        name = "Noir Mono",
-        description = "High-contrast black & white film",
+        id = "mono_noir",
+        name = "Mono Noir",
+        description = "Deep blacks, studio contrast monochrome",
         matrix = floatArrayOf(
-            0.33f, 0.59f, 0.11f, 0f, 0f,
-            0.33f, 0.59f, 0.11f, 0f, 0f,
-            0.33f, 0.59f, 0.11f, 0f, 0f,
-            0f, 0f, 0f, 1f, 0f
-        )
-    ),
-    QuickFilterPreset(
-        id = "warm_sunset",
-        name = "Warm Glow",
-        description = "Golden hour amber sunlight",
-        matrix = floatArrayOf(
-            1.22f, 0.06f, 0f, 0f, 15f,
-            0.05f, 1.10f, 0f, 0f, 8f,
-            0f, 0f, 0.88f, 0f, -8f,
-            0f, 0f, 0f, 1f, 0f
-        )
-    ),
-    QuickFilterPreset(
-        id = "cool_breeze",
-        name = "Cool Cyan",
-        description = "Atmospheric chill and modern blue hue",
-        matrix = floatArrayOf(
-            0.92f, 0f, 0.08f, 0f, -5f,
-            0f, 1.05f, 0.12f, 0f, 6f,
-            0.05f, 0.10f, 1.22f, 0f, 18f,
-            0f, 0f, 0f, 1f, 0f
-        )
-    ),
-    QuickFilterPreset(
-        id = "matte_fade",
-        name = "Matte Fade",
-        description = "Muted editorial finish with lifted shadows",
-        matrix = floatArrayOf(
-            0.95f, 0.05f, 0.05f, 0f, 20f,
-            0.05f, 0.95f, 0.05f, 0f, 20f,
-            0.05f, 0.05f, 0.95f, 0f, 20f,
+            0.30f, 0.59f, 0.11f, 0f, -5f,
+            0.30f, 0.59f, 0.11f, 0f, -5f,
+            0.30f, 0.59f, 0.11f, 0f, -5f,
             0f, 0f, 0f, 1f, 0f
         )
     ),
@@ -206,7 +191,9 @@ private val QUICK_FILTER_PRESETS = listOf(
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PostCreationFlowScreen(
-    initialPhotoUri: Uri? = null,
+    initialPostType: PostType = PostType.PHOTO,
+    initialMediaUri: Uri? = null,
+    initialPhotoUri: Uri? = initialMediaUri,
     onFinish: () -> Unit,
     onClose: () -> Unit
 ) {
@@ -215,18 +202,26 @@ fun PostCreationFlowScreen(
     val isDark = isSystemInDarkTheme()
     val scope = rememberCoroutineScope()
     val discoverRepo = remember { DiscoverRepository() }
+    val workRepo = remember { WorkRepository(context) }
+    val storyVm: StoryViewModel = viewModel()
+    val flashVm: FlashViewModel = viewModel()
+
+    // Active Post Type
+    var currentPostType by remember { mutableStateOf(initialPostType) }
+
+    val effectiveInitialUri = initialMediaUri ?: initialPhotoUri
 
     // Navigation Step
     var currentStep by remember {
         mutableStateOf(
-            if (initialPhotoUri != null) PostCreationStep.IMAGE_EDITOR
+            if (effectiveInitialUri != null) PostCreationStep.IMAGE_EDITOR
             else PostCreationStep.MEDIA_PICKER
         )
     }
 
     // Media & Editing States
     var selectedPhotoUris by remember {
-        mutableStateOf<List<Uri>>(if (initialPhotoUri != null) listOf(initialPhotoUri) else emptyList())
+        mutableStateOf<List<Uri>>(if (effectiveInitialUri != null) listOf(effectiveInitialUri) else emptyList())
     }
     var currentPhotoIndex by remember { mutableIntStateOf(0) }
     var editedPhotoUris by remember { mutableStateOf<Map<Uri, Uri>>(emptyMap()) }
@@ -236,17 +231,63 @@ fun PostCreationFlowScreen(
     val editedPhotoUri: Uri? by remember {
         derivedStateOf { rawPhotoUri?.let { editedPhotoUris[it] } }
     }
-    var selectedAspectRatio by remember { mutableStateOf("4:5") }
-    var selectedFilterIndex by remember { mutableIntStateOf(0) }
-    var brightnessOffset by remember { mutableFloatStateOf(0f) } // -50 to +50
-    var contrastScale by remember { mutableFloatStateOf(1f) }    // 0.7 to 1.3
 
-    // Pro Advanced Editor Portal Gate
-    var showAdvanceEditor by remember { mutableStateOf(false) }
+    // Work-specific Project selection state
+    var selectedLocalWork by remember { mutableStateOf<ChromaWork?>(null) }
+    var userSavedWorks by remember { mutableStateOf<List<ChromaWork>>(emptyList()) }
+    LaunchedEffect(currentPostType) {
+        if (currentPostType == PostType.WORK) {
+            withContext(Dispatchers.IO) {
+                try {
+                    userSavedWorks = workRepo.loadActiveWorks()
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    // Story-specific states
+    var useGradientCanvas by remember { mutableStateOf(false) }
+    var storyGradientIndex by remember { mutableIntStateOf(0) }
+    var storyHeadline by remember { mutableStateOf("") }
+    var storyBody by remember { mutableStateOf("") }
+
+    // Flash-specific states
+    var flashTrimStartMs by remember { mutableLongStateOf(0L) }
+    var flashTrimEndMs by remember { mutableLongStateOf(60000L) }
+    var audioTrackName by remember { mutableStateOf("Original Audio") }
+
+    // Aspect Ratio & Filters
+    var selectedAspectRatio by remember {
+        mutableStateOf(
+            when (currentPostType) {
+                PostType.PHOTO -> "4:5"
+                PostType.FLASH -> "9:16"
+                PostType.WORK -> "4:3"
+                PostType.STORY -> "9:16"
+            }
+        )
+    }
+    var selectedFilterIndex by remember { mutableIntStateOf(0) }
+    var brightnessOffset by remember { mutableFloatStateOf(0f) }
+    var contrastScale by remember { mutableFloatStateOf(1f) }
+
+    // Work category & details
+    var workCategory by remember { mutableStateOf("Digital Art") }
+    var workToolsUsed by remember { mutableStateOf(listOf("Chroma Studio")) }
+    var allowDownload by remember { mutableStateOf(true) }
 
     // Post Details Input States
     var caption by remember { mutableStateOf("") }
-    var tags by remember { mutableStateOf(listOf("art", "creative")) }
+    var tags by remember {
+        mutableStateOf(
+            when (currentPostType) {
+                PostType.PHOTO -> listOf("art", "creative", "photo")
+                PostType.FLASH -> listOf("flash", "reels", "motion")
+                PostType.WORK -> listOf("design", "branding", "artwork")
+                PostType.STORY -> listOf("moment", "daily")
+            }
+        )
+    }
     var tagInput by remember { mutableStateOf("") }
     var mentions by remember { mutableStateOf(emptyList<String>()) }
     var mentionInput by remember { mutableStateOf("") }
@@ -279,106 +320,169 @@ fun PostCreationFlowScreen(
     // Combined active matrix for Quick Filter
     val activeColorMatrix = remember(selectedFilterIndex, brightnessOffset, contrastScale) {
         val base = QUICK_FILTER_PRESETS[selectedFilterIndex].matrix.copyOf()
-        // Apply brightness offset
         base[4] += brightnessOffset
         base[9] += brightnessOffset
         base[14] += brightnessOffset
-        // Apply contrast scale
         base[0] *= contrastScale
         base[6] *= contrastScale
         base[12] *= contrastScale
         ColorMatrix(base)
     }
 
-    // Export quick-filtered image to cache file if needed
-    suspend fun renderFilteredBitmap(sourceUri: Uri): Uri = withContext(Dispatchers.IO) {
-        try {
-            val inputStream = context.contentResolver.openInputStream(sourceUri)
-            val originalBitmap = BitmapFactory.decodeStream(inputStream)
-            inputStream?.close()
-
-            if (selectedFilterIndex == 0 && brightnessOffset == 0f && contrastScale == 1f) {
-                return@withContext sourceUri
-            }
-
-            val resultBitmap = Bitmap.createBitmap(
-                originalBitmap.width,
-                originalBitmap.height,
-                Bitmap.Config.ARGB_8888
-            )
-            val canvas = AndroidCanvas(resultBitmap)
-            val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
-                val androidMatrix = AndroidColorMatrix(activeColorMatrix.values)
-                colorFilter = ColorMatrixColorFilter(androidMatrix)
-            }
-            canvas.drawBitmap(originalBitmap, 0f, 0f, paint)
-
-            val compressedBytes = com.chroma.studio.utils.ImageUtils.compressPostBitmap(resultBitmap)
-                ?: run {
-                    val fb = java.io.ByteArrayOutputStream()
-                    resultBitmap.compress(Bitmap.CompressFormat.JPEG, 92, fb)
-                    fb.toByteArray()
-                }
-            val ext = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) "webp" else "jpg"
-            val cacheFile = File(context.cacheDir, "post_filter_${UUID.randomUUID()}.$ext")
-            cacheFile.writeBytes(compressedBytes)
-            Uri.fromFile(cacheFile)
-        } catch (_: Exception) {
-            sourceUri
-        }
-    }
-
     // Share / Publish Post
     fun executePublish() {
-        if (selectedPhotoUris.isEmpty()) {
-            Toast.makeText(context, "Please select a photo first", Toast.LENGTH_SHORT).show()
-            return
-        }
         val user = FirebaseAuth.getInstance().currentUser
         if (user == null) {
             Toast.makeText(context, "Please log in to share posts", Toast.LENGTH_SHORT).show()
             return
         }
 
+        if (currentPostType != PostType.STORY || !useGradientCanvas) {
+            if (selectedPhotoUris.isEmpty() && selectedLocalWork == null) {
+                Toast.makeText(context, "Please select media first", Toast.LENGTH_SHORT).show()
+                return
+            }
+        }
+
         isPublishing = true
         scope.launch {
             try {
-                val success = withContext(Dispatchers.IO) {
-                    if (selectedPhotoUris.size > 1) {
-                        val bytesList = selectedPhotoUris.mapNotNull { rawUri ->
-                            val finalUri = editedPhotoUris[rawUri] ?: rawUri
-                            com.chroma.studio.utils.ImageUtils.compressPostImage(context, finalUri)
+                when (currentPostType) {
+                    PostType.PHOTO -> {
+                        val success = withContext(Dispatchers.IO) {
+                            if (selectedPhotoUris.size > 1) {
+                                val bytesList = selectedPhotoUris.mapNotNull { rawUri ->
+                                    val finalUri = editedPhotoUris[rawUri] ?: rawUri
+                                    com.chroma.studio.utils.ImageUtils.compressPostImage(context, finalUri)
+                                }
+                                if (bytesList.isEmpty()) throw Exception("Failed to process images")
+                                discoverRepo.uploadMultiImagePost(
+                                    imageBytesList = bytesList,
+                                    caption = caption.ifBlank { "Untitled creation" },
+                                    description = if (locationInput.isNotBlank()) "📍 $locationInput" else "",
+                                    aspectRatio = selectedAspectRatio,
+                                    tags = tags,
+                                    mentions = mentions
+                                )
+                            } else {
+                                val singleRaw = selectedPhotoUris.first()
+                                val finalToUploadUri = editedPhotoUris[singleRaw] ?: singleRaw
+                                val imageBytes = com.chroma.studio.utils.ImageUtils.compressPostImage(context, finalToUploadUri)
+                                    ?: throw Exception("Failed to process image")
+                                discoverRepo.uploadImagePost(
+                                    imageBytes = imageBytes,
+                                    caption = caption.ifBlank { "Untitled creation" },
+                                    description = if (locationInput.isNotBlank()) "📍 $locationInput" else "",
+                                    aspectRatio = selectedAspectRatio,
+                                    tags = tags,
+                                    mentions = mentions
+                                )
+                            }
                         }
-                        if (bytesList.isEmpty()) throw Exception("Failed to process images")
-                        discoverRepo.uploadMultiImagePost(
-                            imageBytesList = bytesList,
-                            caption = caption.ifBlank { "Untitled creation" },
-                            description = if (locationInput.isNotBlank()) "📍 $locationInput" else "",
-                            aspectRatio = selectedAspectRatio,
-                            tags = tags,
-                            mentions = mentions
-                        )
-                    } else {
-                        val singleRaw = selectedPhotoUris.first()
-                        val finalToUploadUri = editedPhotoUris[singleRaw] ?: singleRaw
-                        val imageBytes = com.chroma.studio.utils.ImageUtils.compressPostImage(context, finalToUploadUri) ?: throw Exception("Failed to process image")
-                        discoverRepo.uploadImagePost(
-                            imageBytes = imageBytes,
-                            caption = caption.ifBlank { "Untitled creation" },
-                            description = if (locationInput.isNotBlank()) "📍 $locationInput" else "",
-                            aspectRatio = selectedAspectRatio,
-                            tags = tags,
-                            mentions = mentions
+                        if (success) {
+                            SoundManager.playSend()
+                            Toast.makeText(context, "Photo post shared successfully! ✨", Toast.LENGTH_SHORT).show()
+                            onFinish()
+                        } else {
+                            Toast.makeText(context, "Upload failed. Please try again.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+
+                    PostType.FLASH -> {
+                        val videoUri = editedPhotoUri ?: selectedPhotoUris.firstOrNull() ?: throw Exception("No video selected")
+                        val finalCaption = caption.ifBlank { "Untitled Flash Reel" }
+                        flashVm.publishFlash(
+                            context = context,
+                            mediaUri = videoUri,
+                            mediaType = FlashMediaType.VIDEO,
+                            trimStartMs = flashTrimStartMs,
+                            trimEndMs = flashTrimEndMs,
+                            thumbnailBitmap = null,
+                            caption = finalCaption,
+                            hashtags = tags,
+                            mentions = mentions,
+                            filterName = "Normal",
+                            onSuccess = {
+                                SoundManager.playSend()
+                                Toast.makeText(context, "Flash Reel published successfully! ⚡", Toast.LENGTH_SHORT).show()
+                                onFinish()
+                            },
+                            onError = { err ->
+                                Toast.makeText(context, "Flash post error: $err", Toast.LENGTH_SHORT).show()
+                            }
                         )
                     }
-                }
 
-                if (success) {
-                    SoundManager.playSend()
-                    Toast.makeText(context, "Post shared successfully!", Toast.LENGTH_SHORT).show()
-                    onFinish()
-                } else {
-                    Toast.makeText(context, "Upload failed. Please try again.", Toast.LENGTH_SHORT).show()
+                    PostType.WORK -> {
+                        val success = withContext(Dispatchers.IO) {
+                            val localWork = selectedLocalWork
+                            if (localWork != null) {
+                                val userProfile = discoverRepo.getUserProfile(user.uid)
+                                val shared = discoverRepo.shareWork(
+                                    work = localWork,
+                                    authorName = userProfile?.displayName ?: (user.displayName ?: "Creator"),
+                                    authorUsername = userProfile?.username ?: "creator",
+                                    creatorId = user.uid,
+                                    authorAvatarUrl = userProfile?.avatarUrl ?: "",
+                                    authorVerified = userProfile?.verified ?: false,
+                                    aspectRatio = selectedAspectRatio
+                                )
+                                shared
+                            } else {
+                                val singleRaw = selectedPhotoUris.first()
+                                val finalToUploadUri = editedPhotoUris[singleRaw] ?: singleRaw
+                                val imageBytes = com.chroma.studio.utils.ImageUtils.compressPostImage(context, finalToUploadUri)
+                                    ?: throw Exception("Failed to process artwork image")
+                                val descWithTools = buildString {
+                                    if (caption.isNotBlank()) append(caption).append("\n\n")
+                                    append("Category: ").append(workCategory).append("\n")
+                                    if (workToolsUsed.isNotEmpty()) append("Tools: ").append(workToolsUsed.joinToString(", ")).append("\n")
+                                    if (locationInput.isNotBlank()) append("📍 ").append(locationInput)
+                                }
+                                discoverRepo.uploadImagePost(
+                                    imageBytes = imageBytes,
+                                    caption = caption.ifBlank { "New Masterwork" },
+                                    description = descWithTools,
+                                    aspectRatio = selectedAspectRatio,
+                                    tags = tags + listOf(workCategory.lowercase().replace(" ", "")),
+                                    mentions = mentions
+                                )
+                            }
+                        }
+                        if (success) {
+                            SoundManager.playSend()
+                            Toast.makeText(context, "Creative Work published to Portfolio! 🎨", Toast.LENGTH_SHORT).show()
+                            onFinish()
+                        } else {
+                            Toast.makeText(context, "Failed to publish work.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+
+                    PostType.STORY -> {
+                        val targetAudience = if (selectedAudience == "Only Friends") "only_friends" else "public"
+                        if (useGradientCanvas || selectedPhotoUris.isEmpty()) {
+                            val currentTheme = StoryGradientThemes.getOrElse(storyGradientIndex) { StoryGradientThemes.first() }
+                            val bgHex = String.format("#%06X", (0xFFFFFF and currentTheme.colors.first().hashCode()))
+                            storyVm.publishTextStory(
+                                textContent = if (storyHeadline.isNotBlank()) (storyHeadline + "\n" + storyBody) else caption.ifBlank { "Story Moment" },
+                                textFormat = "story_v1",
+                                backgroundColor = bgHex,
+                                audienceType = targetAudience,
+                                customAudienceIds = emptyList()
+                            )
+                        } else {
+                            val storyUri = selectedPhotoUris.first()
+                            storyVm.uploadStory(
+                                context = context,
+                                uri = storyUri,
+                                audienceType = targetAudience,
+                                textContent = caption
+                            )
+                        }
+                        SoundManager.playSend()
+                        Toast.makeText(context, "Story published! 🌟 (Expires in 24h)", Toast.LENGTH_SHORT).show()
+                        onFinish()
+                    }
                 }
             } catch (e: Exception) {
                 Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -393,31 +497,110 @@ fun PostCreationFlowScreen(
         when (currentStep) {
             PostCreationStep.POST_DETAILS -> currentStep = PostCreationStep.IMAGE_EDITOR
             PostCreationStep.IMAGE_EDITOR -> {
-                if (initialPhotoUri != null) onClose()
+                if (effectiveInitialUri != null) onClose()
                 else currentStep = PostCreationStep.MEDIA_PICKER
             }
             PostCreationStep.MEDIA_PICKER -> onClose()
         }
     }
 
-    // Stage 2: Render dedicated Apple-style ChromaPhotoEditorScreen directly before upload steps
-    if (currentStep == PostCreationStep.IMAGE_EDITOR && rawPhotoUri != null) {
-        val targetUri = editedPhotoUri ?: rawPhotoUri!!
-        val activeRaw = rawPhotoUri!!
-        ChromaPhotoEditorScreen(
-            photoUri = targetUri,
-            exportButtonLabel = "Next",
-            onExportSuccess = { proEditedUri ->
-                editedPhotoUris = editedPhotoUris + (activeRaw to proEditedUri)
-                SoundManager.playReaction()
-                currentStep = PostCreationStep.POST_DETAILS
-            },
-            onBack = {
-                if (initialPhotoUri != null) onClose()
-                else currentStep = PostCreationStep.MEDIA_PICKER
+    // Stage 2: Render Tailored Editor depending on PostType
+    if (currentStep == PostCreationStep.IMAGE_EDITOR) {
+        when (currentPostType) {
+            PostType.PHOTO -> {
+                if (rawPhotoUri != null) {
+                    val targetUri = editedPhotoUri ?: rawPhotoUri!!
+                    val activeRaw = rawPhotoUri!!
+                    ChromaPhotoEditorScreen(
+                        photoUri = targetUri,
+                        exportButtonLabel = "Next",
+                        onExportSuccess = { proEditedUri ->
+                            editedPhotoUris = editedPhotoUris + (activeRaw to proEditedUri)
+                            SoundManager.playReaction()
+                            currentStep = PostCreationStep.POST_DETAILS
+                        },
+                        onBack = {
+                            if (effectiveInitialUri != null) onClose()
+                            else currentStep = PostCreationStep.MEDIA_PICKER
+                        }
+                    )
+                    return
+                }
             }
-        )
-        return
+
+            PostType.FLASH -> {
+                if (rawPhotoUri != null) {
+                    FinalCutProVideoEditorScreen(
+                        initialUri = rawPhotoUri,
+                        onDone = { startMs, endMs, clips ->
+                            val renderedUri = clips.firstOrNull() ?: rawPhotoUri
+                            if (renderedUri != null) {
+                                selectedPhotoUris = listOf(renderedUri)
+                                editedPhotoUris = editedPhotoUris + (rawPhotoUri!! to renderedUri)
+                            }
+                            flashTrimStartMs = 0L
+                            flashTrimEndMs = endMs
+                            SoundManager.playReaction()
+                            currentStep = PostCreationStep.POST_DETAILS
+                        },
+                        onBack = {
+                            if (effectiveInitialUri != null) onClose()
+                            else currentStep = PostCreationStep.MEDIA_PICKER
+                        }
+                    )
+                    return
+                }
+            }
+
+            PostType.WORK -> {
+                WorkStudioPresentationView(
+                    coverUri = editedPhotoUri ?: rawPhotoUri,
+                    selectedWork = selectedLocalWork,
+                    aspectRatio = selectedAspectRatio,
+                    onAspectRatioChange = { selectedAspectRatio = it },
+                    category = workCategory,
+                    onCategoryChange = { workCategory = it },
+                    tools = workToolsUsed,
+                    onToggleTool = { tool ->
+                        workToolsUsed = if (workToolsUsed.contains(tool)) workToolsUsed - tool else workToolsUsed + tool
+                        SoundManager.playReaction()
+                    },
+                    onNext = {
+                        SoundManager.playReaction()
+                        currentStep = PostCreationStep.POST_DETAILS
+                    },
+                    onBack = {
+                        if (effectiveInitialUri != null) onClose()
+                        else currentStep = PostCreationStep.MEDIA_PICKER
+                    },
+                    isDark = isDark
+                )
+                return
+            }
+
+            PostType.STORY -> {
+                StoryStudioStylingView(
+                    backgroundUri = editedPhotoUri ?: rawPhotoUri,
+                    useGradientCanvas = useGradientCanvas,
+                    selectedThemeIndex = storyGradientIndex,
+                    onThemeIndexChange = { storyGradientIndex = it },
+                    headline = storyHeadline,
+                    onHeadlineChange = { storyHeadline = it },
+                    body = storyBody,
+                    onBodyChange = { storyBody = it },
+                    onNext = {
+                        SoundManager.playReaction()
+                        currentStep = PostCreationStep.POST_DETAILS
+                    },
+                    onBack = {
+                        if (effectiveInitialUri != null) onClose()
+                        else currentStep = PostCreationStep.MEDIA_PICKER
+                    },
+                    isDark = isDark
+                )
+                return
+            }
+        }
     }
 
     val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
@@ -426,12 +609,13 @@ fun PostCreationFlowScreen(
         containerColor = screenBg,
         topBar = {
             OneUiPostCreationTopBar(
+                postType = currentPostType,
                 currentStep = currentStep,
                 onBack = {
                     when (currentStep) {
                         PostCreationStep.POST_DETAILS -> currentStep = PostCreationStep.IMAGE_EDITOR
                         PostCreationStep.IMAGE_EDITOR -> {
-                            if (initialPhotoUri != null) onClose()
+                            if (effectiveInitialUri != null) onClose()
                             else currentStep = PostCreationStep.MEDIA_PICKER
                         }
                         PostCreationStep.MEDIA_PICKER -> onClose()
@@ -440,7 +624,7 @@ fun PostCreationFlowScreen(
                 onNext = {
                     when (currentStep) {
                         PostCreationStep.MEDIA_PICKER -> {
-                            if (selectedPhotoUris.isNotEmpty()) {
+                            if (selectedPhotoUris.isNotEmpty() || selectedLocalWork != null || useGradientCanvas) {
                                 SoundManager.playReaction()
                                 currentStep = PostCreationStep.IMAGE_EDITOR
                             }
@@ -448,44 +632,104 @@ fun PostCreationFlowScreen(
                         PostCreationStep.IMAGE_EDITOR -> {
                             currentStep = PostCreationStep.POST_DETAILS
                         }
-                        PostCreationStep.POST_DETAILS -> executePublish()
+                        PostCreationStep.POST_DETAILS -> {
+                            executePublish()
+                        }
                     }
                 },
                 isNextEnabled = when (currentStep) {
-                    PostCreationStep.MEDIA_PICKER -> selectedPhotoUris.isNotEmpty()
-                    PostCreationStep.IMAGE_EDITOR -> selectedPhotoUris.isNotEmpty()
+                    PostCreationStep.MEDIA_PICKER -> selectedPhotoUris.isNotEmpty() || selectedLocalWork != null || useGradientCanvas
+                    PostCreationStep.IMAGE_EDITOR -> true
                     PostCreationStep.POST_DETAILS -> !isPublishing
                 },
                 isPublishing = isPublishing,
                 isDark = isDark
             )
         }
-    ) { paddingValues ->
+    ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(innerPadding)
         ) {
             when (currentStep) {
                 PostCreationStep.MEDIA_PICKER -> {
-                    // STAGE 1: ONE UI SQUIRCLE GALLERY PICKER
-                    OscellionGalleryLayout(
-                        title = "New Post",
-                        badgeText = "",
-                        maxSelection = 10,
-                        allowedMediaFilter = GalleryMediaTypeFilter.PHOTOS,
-                        showCameraTile = true,
-                        onPhotosSelected = { uris ->
-                            if (uris.isNotEmpty()) {
-                                selectedPhotoUris = uris
-                                currentPhotoIndex = 0
-                                editedPhotoUris = emptyMap()
-                                SoundManager.playReaction()
-                                currentStep = PostCreationStep.IMAGE_EDITOR
-                            }
-                        },
-                        onClose = onClose
-                    )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // 1. One UI 7 Pill Segmented Tab Bar for switching Post Types
+                        PostTypeSegmentedBar(
+                            selectedType = currentPostType,
+                            onSelectType = { newType ->
+                                if (currentPostType != newType) {
+                                    SoundManager.playReaction()
+                                    currentPostType = newType
+                                    selectedPhotoUris = emptyList()
+                                    selectedLocalWork = null
+                                    useGradientCanvas = false
+                                }
+                            },
+                            isDark = isDark
+                        )
+
+                        // 2. Extra quick actions for WORK or STORY
+                        if (currentPostType == PostType.WORK && userSavedWorks.isNotEmpty()) {
+                            WorkSavedProjectsQuickStrip(
+                                works = userSavedWorks,
+                                selectedWork = selectedLocalWork,
+                                onSelectWork = { w ->
+                                    selectedLocalWork = w
+                                    caption = w.name
+                                    SoundManager.playReaction()
+                                    currentStep = PostCreationStep.IMAGE_EDITOR
+                                },
+                                isDark = isDark
+                            )
+                        }
+
+                        if (currentPostType == PostType.STORY) {
+                            StoryGradientPromptCard(
+                                onSelectGradient = {
+                                    useGradientCanvas = true
+                                    SoundManager.playReaction()
+                                    currentStep = PostCreationStep.IMAGE_EDITOR
+                                },
+                                isDark = isDark
+                            )
+                        }
+
+                        // 3. Media Picker Gallery with filter tailored to PostType
+                        val mediaFilter = when (currentPostType) {
+                            PostType.PHOTO -> GalleryMediaTypeFilter.PHOTOS
+                            PostType.FLASH -> GalleryMediaTypeFilter.VIDEOS
+                            PostType.WORK -> GalleryMediaTypeFilter.PHOTOS
+                            PostType.STORY -> GalleryMediaTypeFilter.ALL
+                        }
+
+                        val maxMediaCount = when (currentPostType) {
+                            PostType.PHOTO -> 10
+                            PostType.FLASH -> 1
+                            PostType.WORK -> 4
+                            PostType.STORY -> 1
+                        }
+
+                        OscellionGalleryLayout(
+                            title = currentPostType.title,
+                            badgeText = if (currentPostType == PostType.FLASH) "Max 60s" else "",
+                            maxSelection = maxMediaCount,
+                            allowedMediaFilter = mediaFilter,
+                            showCameraTile = true,
+                            onPhotosSelected = { uris ->
+                                if (uris.isNotEmpty()) {
+                                    selectedPhotoUris = uris
+                                    currentPhotoIndex = 0
+                                    editedPhotoUris = emptyMap()
+                                    useGradientCanvas = false
+                                    SoundManager.playReaction()
+                                    currentStep = PostCreationStep.IMAGE_EDITOR
+                                }
+                            },
+                            onClose = onClose
+                        )
+                    }
                 }
 
                 PostCreationStep.IMAGE_EDITOR -> {
@@ -494,9 +738,15 @@ fun PostCreationFlowScreen(
 
                 PostCreationStep.POST_DETAILS -> {
                     // STAGE 3: POST INFORMATION INPUTS & PUBLISHING
-                    PostDetailsInputView(
-                        previewUri = editedPhotoUri ?: rawPhotoUri!!,
+                    UniversalPostDetailsInputView(
+                        postType = currentPostType,
+                        previewUri = editedPhotoUri ?: rawPhotoUri,
                         selectedPhotoUris = selectedPhotoUris,
+                        selectedWork = selectedLocalWork,
+                        useGradientCanvas = useGradientCanvas,
+                        storyGradientIndex = storyGradientIndex,
+                        storyHeadline = storyHeadline,
+                        storyBody = storyBody,
                         colorMatrix = if (editedPhotoUri == null) activeColorMatrix else null,
                         aspectRatio = selectedAspectRatio,
                         caption = caption,
@@ -538,6 +788,12 @@ fun PostCreationFlowScreen(
                         onAllowRemixChange = { allowRemix = it },
                         highQuality = highQualityUpload,
                         onHighQualityChange = { highQualityUpload = it },
+                        audioTrackName = audioTrackName,
+                        onAudioTrackChange = { audioTrackName = it },
+                        workCategory = workCategory,
+                        onWorkCategoryChange = { workCategory = it },
+                        allowDownload = allowDownload,
+                        onAllowDownloadChange = { allowDownload = it },
                         isPublishing = isPublishing,
                         onPublish = { executePublish() },
                         isDark = isDark
@@ -549,10 +805,11 @@ fun PostCreationFlowScreen(
 }
 
 /**
- * Top Navigation Bar with Step Pill Indicator
+ * Top Navigation Bar with Step Pill Indicator & PostType Label
  */
 @Composable
 private fun OneUiPostCreationTopBar(
+    postType: PostType,
     currentStep: PostCreationStep,
     onBack: () -> Unit,
     onNext: () -> Unit,
@@ -573,7 +830,7 @@ private fun OneUiPostCreationTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Back / Close Icon Button (One UI Circular Badge)
+        // Back / Close Icon Button
         Box(
             modifier = Modifier
                 .size(40.dp)
@@ -627,7 +884,17 @@ private fun OneUiPostCreationTopBar(
             }
         }
 
-        // Action Button: "Next" or "Share" (One UI Galaxy Blue Pill)
+        // Action Button: "Next" or Post Action (One UI Galaxy Blue Pill)
+        val buttonLabel = when (currentStep) {
+            PostCreationStep.POST_DETAILS -> when (postType) {
+                PostType.PHOTO -> "Share"
+                PostType.FLASH -> "Post Flash"
+                PostType.WORK -> "Publish"
+                PostType.STORY -> "Story"
+            }
+            else -> "Next"
+        }
+
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(999.dp))
@@ -649,10 +916,7 @@ private fun OneUiPostCreationTopBar(
                 )
             } else {
                 Text(
-                    text = when (currentStep) {
-                        PostCreationStep.POST_DETAILS -> "Share"
-                        else -> "Next"
-                    },
+                    text = buttonLabel,
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isNextEnabled) Color.White else (if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)),
@@ -664,24 +928,223 @@ private fun OneUiPostCreationTopBar(
 }
 
 /**
- * Stage 2: Quick Filter, Aspect Ratio & Pro Editor Portal
+ * Top Segmented Bar to Switch Post Types (Photo, Flash, Work, Story)
  */
 @Composable
-private fun PostQuickFilterView(
-    photoUri: Uri,
-    selectedPhotoUris: List<Uri> = emptyList(),
-    currentPhotoIndex: Int = 0,
-    onSelectPhotoIndex: (Int) -> Unit = {},
+private fun PostTypeSegmentedBar(
+    selectedType: PostType,
+    onSelectType: (PostType) -> Unit,
+    isDark: Boolean
+) {
+    val barBg = if (isDark) Color(0xFF141822) else Color(0xFFE2E8F0)
+    val activePillBg = if (isDark) Color(0xFF0381FE) else Color(0xFF0381FE)
+    val inactiveText = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(barBg)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        PostType.entries.forEach { type ->
+            val isSelected = type == selectedType
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(if (isSelected) activePillBg else Color.Transparent)
+                    .clickable { onSelectType(type) }
+                    .padding(vertical = 7.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = type.icon,
+                        contentDescription = type.title,
+                        tint = if (isSelected) Color.White else inactiveText,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Text(
+                        text = type.title.split(" ").first(),
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (isSelected) Color.White else inactiveText,
+                        fontFamily = InterFontFamily
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Quick Picker for User's Saved Chroma Works
+ */
+@Composable
+private fun WorkSavedProjectsQuickStrip(
+    works: List<ChromaWork>,
+    selectedWork: ChromaWork?,
+    onSelectWork: (ChromaWork) -> Unit,
+    isDark: Boolean
+) {
+    val textMain = if (isDark) Color.White else Color(0xFF0F172A)
+    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Pick From Your Chroma Works",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = textMain,
+                fontFamily = InterFontFamily
+            )
+            Text(
+                text = "${works.size} projects",
+                fontSize = 11.sp,
+                color = textMuted,
+                fontFamily = InterFontFamily
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(works) { work ->
+                val isSelected = selectedWork?.id == work.id
+                Box(
+                    modifier = Modifier
+                        .width(130.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (isDark) Color(0xFF161A24) else Color.White)
+                        .border(
+                            width = if (isSelected) 1.5.dp else 0.5.dp,
+                            color = if (isSelected) Color(0xFF0381FE) else (if (isDark) Color(0xFF262C38) else Color(0xFFE2E8F0)),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                        .clickable { onSelectWork(work) }
+                        .padding(10.dp)
+                ) {
+                    Column {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFF0381FE))))
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = work.name.ifBlank { "Untitled" },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = textMain,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Canvas project",
+                            fontSize = 10.sp,
+                            color = textMuted
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Quick Option Card to start Story with a Gradient Theme
+ */
+@Composable
+private fun StoryGradientPromptCard(
+    onSelectGradient: () -> Unit,
+    isDark: Boolean
+) {
+    val textMain = if (isDark) Color.White else Color(0xFF0F172A)
+    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                Brush.horizontalGradient(
+                    if (isDark) listOf(Color(0xFF1E1035), Color(0xFF0F0C20))
+                    else listOf(Color(0xFFEEF2FF), Color(0xFFF5F3FF))
+                )
+            )
+            .border(
+                0.5.dp,
+                if (isDark) Color(0xFF6366F1).copy(alpha = 0.4f) else Color(0xFF6366F1).copy(alpha = 0.2f),
+                RoundedCornerShape(18.dp)
+            )
+            .clickable { onSelectGradient() }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Brush.linearGradient(listOf(Color(0xFF4A00E0), Color(0xFFFF416C)))),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Lucide.Sparkles, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Create with Gradient Story Canvas",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = textMain,
+                fontFamily = InterFontFamily
+            )
+            Text(
+                text = "Type thoughts, quotes & design on live vibrant colors",
+                fontSize = 11.5.sp,
+                color = textMuted,
+                fontFamily = InterFontFamily
+            )
+        }
+        Icon(Lucide.ChevronRight, contentDescription = null, tint = Color(0xFF6366F1), modifier = Modifier.size(16.dp))
+    }
+}
+
+/**
+ * Dedicated Presentation Studio for Creative Work Posts (Stage 2)
+ */
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+private fun WorkStudioPresentationView(
+    coverUri: Uri?,
+    selectedWork: ChromaWork?,
     aspectRatio: String,
     onAspectRatioChange: (String) -> Unit,
-    selectedFilterIndex: Int,
-    onFilterSelect: (Int) -> Unit,
-    colorMatrix: ColorMatrix,
-    brightnessOffset: Float,
-    onBrightnessChange: (Float) -> Unit,
-    contrastScale: Float,
-    onContrastChange: (Float) -> Unit,
-    onOpenAdvanceEditor: () -> Unit,
+    category: String,
+    onCategoryChange: (String) -> Unit,
+    tools: List<String>,
+    onToggleTool: (String) -> Unit,
+    onNext: () -> Unit,
+    onBack: () -> Unit,
     isDark: Boolean
 ) {
     val scrollState = rememberScrollState()
@@ -696,319 +1159,357 @@ private fun PostQuickFilterView(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Live Preview Canvas (Aspect Ratio adaptive)
-        val ratioFloat = when (aspectRatio) {
-            "1:1" -> 1f
-            "4:5" -> 0.8f
-            "16:9" -> 1.777f
-            else -> 0.8f
-        }
-
+        // Presentation Preview Card
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(ratioFloat.coerceIn(0.6f, 1.8f))
-                .clip(RoundedCornerShape(26.dp))
+                .aspectRatio(if (aspectRatio == "16:9") 1.777f else if (aspectRatio == "1:1") 1f else 1.333f)
+                .clip(RoundedCornerShape(24.dp))
                 .background(if (isDark) Color(0xFF161A22) else Color.White)
-                .shadow(12.dp, RoundedCornerShape(26.dp), spotColor = Color.Black.copy(alpha = 0.08f)),
+                .shadow(12.dp, RoundedCornerShape(24.dp)),
             contentAlignment = Alignment.Center
         ) {
-            AsyncImage(
-                model = photoUri,
-                contentDescription = "Preview",
-                contentScale = ContentScale.Crop,
-                colorFilter = ColorFilter.colorMatrix(colorMatrix),
-                modifier = Modifier.fillMaxSize()
-            )
-
-            if (selectedPhotoUris.size > 1) {
+            if (coverUri != null) {
+                AsyncImage(
+                    model = coverUri,
+                    contentDescription = "Work Cover",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(12.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(Color.Black.copy(alpha = 0.65f))
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "${currentPhotoIndex + 1} / ${selectedPhotoUris.size}",
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        fontFamily = InterFontFamily
-                    )
-                }
-            }
-        }
-
-        // Multi-photo thumbnail strip selector
-        if (selectedPhotoUris.size > 1) {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-                contentPadding = PaddingValues(horizontal = 8.dp)
-            ) {
-                itemsIndexed(selectedPhotoUris) { idx, uri ->
-                    val isCurrent = idx == currentPhotoIndex
-                    Box(
-                        modifier = Modifier
-                            .size(54.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .border(
-                                width = if (isCurrent) 2.5.dp else 1.dp,
-                                color = if (isCurrent) Color(0xFF0381FE) else (if (isDark) Color(0xFF262C38) else Color(0xFFCBD5E1)),
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            .clickable {
-                                onSelectPhotoIndex(idx)
-                            }
-                    ) {
-                        AsyncImage(
-                            model = uri,
-                            contentDescription = "Photo ${idx + 1}",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(3.dp)
-                                .clip(CircleShape)
-                                .background(if (isCurrent) Color(0xFF0381FE) else Color.Black.copy(alpha = 0.6f))
-                                .size(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "${idx + 1}",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 2. Aspect Ratio Selectors (Border-less White Capsules)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val ratios = listOf("1:1" to "Square", "4:5" to "Portrait", "16:9" to "Landscape")
-            ratios.forEach { (ratioKey, label) ->
-                val isSelected = aspectRatio == ratioKey
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 4.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(
-                            if (isSelected) Color(0xFF0381FE)
-                            else (if (isDark) Color(0xFF161A22) else Color.White)
-                        )
-                        .clickable {
-                            SoundManager.playReaction()
-                            onAspectRatioChange(ratioKey)
-                        }
-                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                        .fillMaxSize()
+                        .background(Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFF0381FE)))),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "$ratioKey $label",
-                        fontSize = 12.5.sp,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (isSelected) Color.White else textMuted,
-                        fontFamily = InterFontFamily
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Lucide.Palette, null, tint = Color.White, modifier = Modifier.size(40.dp))
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = selectedWork?.name ?: "Chroma Canvas Project",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
             }
         }
 
-        // 3. ✨ THE PRO-EDITOR GATEWAY BUTTON ✨
-        // Clean One UI 26dp squircle card inviting users to pro tools without forcing it.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(26.dp))
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF0381FE).copy(alpha = if (isDark) 0.18f else 0.10f),
-                            Color(0xFF4F46E5).copy(alpha = if (isDark) 0.14f else 0.06f)
-                        )
-                    )
-                )
-                .clickable { onOpenAdvanceEditor() }
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-        ) {
+        // Aspect Ratio Pills
+        OneUiSettingsGroup(title = "Showcase Ratio") {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OneUiIconBadge(
-                        icon = Lucide.Sparkles,
-                        iconColor = Color(0xFF0381FE)
-                    )
-                    Column {
-                        Text(
-                            text = "Open Advanced Photo Editor",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = textMain,
-                            fontFamily = InterFontFamily
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = "Color grading, optics, grain, stickers, text & crop",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = textMuted,
-                            fontFamily = InterFontFamily
-                        )
-                    }
-                }
-
-                Icon(
-                    imageVector = Lucide.ChevronRight,
-                    contentDescription = null,
-                    tint = Color(0xFF0381FE),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-
-        // 4. Instant Filter Presets Carousel (Instagram-style)
-        OneUiSettingsGroup(
-            title = "Instant Filters",
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                itemsIndexed(QUICK_FILTER_PRESETS) { index, preset ->
-                    val isSelected = index == selectedFilterIndex
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .width(68.dp)
-                            .clickable {
-                                SoundManager.playReaction()
-                                onFilterSelect(index)
-                            }
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .border(
-                                    width = if (isSelected) 2.5.dp else 0.dp,
-                                    color = if (isSelected) Color(0xFF0381FE) else Color.Transparent,
-                                    shape = RoundedCornerShape(16.dp)
-                                )
-                                .background(if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AsyncImage(
-                                model = photoUri,
-                                contentDescription = preset.name,
-                                contentScale = ContentScale.Crop,
-                                colorFilter = ColorFilter.colorMatrix(ColorMatrix(preset.matrix)),
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-
-                        Spacer(Modifier.height(6.dp))
-
-                        Text(
-                            text = preset.name,
-                            fontSize = 11.5.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color(0xFF0381FE) else textMuted,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
-
-        // 5. Quick Tweak Sliders (Brightness & Contrast)
-        OneUiSettingsGroup(
-            title = "Quick Adjust",
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Brightness Slider
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                listOf("4:3", "16:9", "1:1").forEach { ratio ->
+                    val isSelected = aspectRatio == ratio
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (isSelected) Color(0xFF0381FE) else (if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9)))
+                            .clickable {
+                                SoundManager.playReaction()
+                                onAspectRatioChange(ratio)
+                            }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Icon(Lucide.Sun, contentDescription = null, tint = textMuted, modifier = Modifier.size(14.dp))
-                            Text("Brightness", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = textMain)
-                        }
-                        Text("${brightnessOffset.toInt()}", fontSize = 12.sp, color = textMuted)
-                    }
-                    Slider(
-                        value = brightnessOffset,
-                        onValueChange = onBrightnessChange,
-                        valueRange = -50f..50f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF0381FE),
-                            activeTrackColor = Color(0xFF0381FE)
+                        Text(
+                            text = ratio,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else textMuted
                         )
-                    )
-                }
-
-                // Contrast Slider
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Icon(Lucide.SlidersHorizontal, contentDescription = null, tint = textMuted, modifier = Modifier.size(14.dp))
-                            Text("Contrast", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = textMain)
-                        }
-                        Text("${((contrastScale - 1f) * 100).toInt()}%", fontSize = 12.sp, color = textMuted)
                     }
-                    Slider(
-                        value = contrastScale,
-                        onValueChange = onContrastChange,
-                        valueRange = 0.7f..1.3f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF0381FE),
-                            activeTrackColor = Color(0xFF0381FE)
-                        )
-                    )
                 }
             }
+        }
+
+        // Project Category Selector
+        OneUiSettingsGroup(title = "Project Category") {
+            val categories = listOf("Digital Art", "UI / UX", "3D & Motion", "Branding", "Illustration", "Typography")
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                categories.forEach { cat ->
+                    val isSelected = category == cat
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (isSelected) Color(0xFF0381FE) else (if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9)))
+                            .clickable {
+                                SoundManager.playReaction()
+                                onCategoryChange(cat)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = cat,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isSelected) Color.White else textMuted
+                        )
+                    }
+                }
+            }
+        }
+
+        // Tools Used Selector
+        OneUiSettingsGroup(title = "Tools Used") {
+            val toolPresets = listOf("Chroma Studio", "Figma", "Blender", "Procreate", "Photoshop", "Illustrator")
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                toolPresets.forEach { tool ->
+                    val isSelected = tools.contains(tool)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (isSelected) Color(0xFF10B981) else (if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9)))
+                            .clickable { onToggleTool(tool) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = tool,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isSelected) Color.White else textMuted
+                        )
+                    }
+                }
+            }
+        }
+
+        Button(
+            onClick = onNext,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            shape = RoundedCornerShape(999.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE))
+        ) {
+            Text("Proceed to Work Details", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 /**
- * Stage 3: Post Details Input & Information Form
+ * Dedicated Styling Studio for 24h Story Posts (Stage 2)
+ */
+@Composable
+private fun StoryStudioStylingView(
+    backgroundUri: Uri?,
+    useGradientCanvas: Boolean,
+    selectedThemeIndex: Int,
+    onThemeIndexChange: (Int) -> Unit,
+    headline: String,
+    onHeadlineChange: (String) -> Unit,
+    body: String,
+    onBodyChange: (String) -> Unit,
+    onNext: () -> Unit,
+    onBack: () -> Unit,
+    isDark: Boolean
+) {
+    val textMain = if (isDark) Color.White else Color(0xFF0F172A)
+    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val activeTheme = StoryGradientThemes.getOrElse(selectedThemeIndex) { StoryGradientThemes.first() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // 9:16 Full Screen Live Story Card
+        Box(
+            modifier = Modifier
+                .width(220.dp)
+                .height(390.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(Brush.verticalGradient(activeTheme.colors))
+                .shadow(16.dp, RoundedCornerShape(26.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (backgroundUri != null && !useGradientCanvas) {
+                AsyncImage(
+                    model = backgroundUri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.35f))
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (headline.isNotBlank()) {
+                    Text(
+                        text = headline,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                if (body.isNotBlank()) {
+                    Text(
+                        text = body,
+                        fontSize = 14.sp,
+                        color = Color.White.copy(alpha = 0.9f),
+                        textAlign = TextAlign.Center
+                    )
+                } else if (headline.isBlank()) {
+                    Text(
+                        text = "Your Story text will appear here",
+                        fontSize = 13.sp,
+                        color = Color.White.copy(alpha = 0.6f),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            // Expiration pill badge
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Lucide.Clock, null, tint = Color.White, modifier = Modifier.size(10.dp))
+                    Text("24h", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // Live Gradient Theme Selector
+        OneUiSettingsGroup(title = "Gradient Story Palette") {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(StoryGradientThemes) { idx, theme ->
+                    val isSelected = idx == selectedThemeIndex
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Brush.linearGradient(theme.colors))
+                            .border(
+                                width = if (isSelected) 2.5.dp else 1.dp,
+                                color = if (isSelected) Color.White else Color.Transparent,
+                                shape = CircleShape
+                            )
+                            .clickable {
+                                SoundManager.playReaction()
+                                onThemeIndexChange(idx)
+                            }
+                    )
+                }
+            }
+        }
+
+        // Text Overlay inputs
+        OneUiSettingsGroup(title = "Story Content") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextField(
+                    value = headline,
+                    onValueChange = onHeadlineChange,
+                    placeholder = { Text("Add headline / mood...", fontSize = 13.sp, color = textMuted) },
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                        unfocusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedTextColor = textMain,
+                        unfocusedTextColor = textMain
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                TextField(
+                    value = body,
+                    onValueChange = onBodyChange,
+                    placeholder = { Text("Write your story message...", fontSize = 13.sp, color = textMuted) },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                        unfocusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedTextColor = textMain,
+                        unfocusedTextColor = textMain
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 60.dp, max = 120.dp)
+                )
+            }
+        }
+
+        Button(
+            onClick = onNext,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            shape = RoundedCornerShape(999.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE))
+        ) {
+            Text("Proceed to Story Settings", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/**
+ * Universal Stage 3: Post Details Input & Information Form tailored to PostType
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PostDetailsInputView(
-    previewUri: Uri,
+private fun UniversalPostDetailsInputView(
+    postType: PostType,
+    previewUri: Uri?,
     selectedPhotoUris: List<Uri> = emptyList(),
+    selectedWork: ChromaWork? = null,
+    useGradientCanvas: Boolean = false,
+    storyGradientIndex: Int = 0,
+    storyHeadline: String = "",
+    storyBody: String = "",
     colorMatrix: ColorMatrix?,
     aspectRatio: String,
     caption: String,
@@ -1032,6 +1533,12 @@ private fun PostDetailsInputView(
     onAllowRemixChange: (Boolean) -> Unit,
     highQuality: Boolean,
     onHighQualityChange: (Boolean) -> Unit,
+    audioTrackName: String,
+    onAudioTrackChange: (String) -> Unit,
+    workCategory: String,
+    onWorkCategoryChange: (String) -> Unit,
+    allowDownload: Boolean,
+    onAllowDownloadChange: (Boolean) -> Unit,
     isPublishing: Boolean,
     onPublish: () -> Unit,
     isDark: Boolean
@@ -1039,7 +1546,6 @@ private fun PostDetailsInputView(
     val scrollState = rememberScrollState()
     val textMain = if (isDark) Color.White else Color(0xFF0F172A)
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val cardBg = if (isDark) Color(0xFF161A22) else Color.White
     val focusManager = LocalFocusManager.current
 
     Column(
@@ -1051,7 +1557,7 @@ private fun PostDetailsInputView(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. One UI Viewing Header Area
+        // 1. One UI Viewing Header Area tailored to PostType
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1059,15 +1565,25 @@ private fun PostDetailsInputView(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "New Post",
-                fontSize = 32.sp,
+                text = when (postType) {
+                    PostType.PHOTO -> "New Photo Post"
+                    PostType.FLASH -> "Publish Flash Video"
+                    PostType.WORK -> "Publish Creative Work"
+                    PostType.STORY -> "Share 24h Story"
+                },
+                fontSize = 30.sp,
                 fontWeight = FontWeight.Light,
                 color = textMain,
                 fontFamily = InterFontFamily
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "Share your creation with the community",
+                text = when (postType) {
+                    PostType.PHOTO -> "Share your visual moments with high fidelity"
+                    PostType.FLASH -> "Drop dynamic short-form video into the community feed"
+                    PostType.WORK -> "Showcase your masterwork to the global creator network"
+                    PostType.STORY -> "Share a fleeting moment that expires in 24 hours"
+                },
                 fontSize = 13.sp,
                 color = textMuted,
                 fontFamily = InterFontFamily
@@ -1093,34 +1609,36 @@ private fun PostDetailsInputView(
                             .clip(RoundedCornerShape(16.dp))
                             .background(if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0))
                     ) {
-                        AsyncImage(
-                            model = previewUri,
-                            contentDescription = "Post Thumbnail",
-                            contentScale = ContentScale.Crop,
-                            colorFilter = colorMatrix?.let { ColorFilter.colorMatrix(it) },
-                            modifier = Modifier.fillMaxSize()
-                        )
-
-                        // Multi-Photo Indicator Badge
-                        if (selectedPhotoUris.size > 1) {
+                        if (useGradientCanvas && postType == PostType.STORY) {
+                            val activeTheme = StoryGradientThemes.getOrElse(storyGradientIndex) { StoryGradientThemes.first() }
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(4.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFF0381FE))
-                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    .fillMaxSize()
+                                    .background(Brush.linearGradient(activeTheme.colors)),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "${selectedPhotoUris.size}",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
+                                Icon(Lucide.Sparkles, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                            }
+                        } else if (previewUri != null) {
+                            AsyncImage(
+                                model = previewUri,
+                                contentDescription = "Post Thumbnail",
+                                contentScale = ContentScale.Crop,
+                                colorFilter = colorMatrix?.let { ColorFilter.colorMatrix(it) },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFF0381FE)))),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(postType.icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
                             }
                         }
 
-                        // Aspect Ratio Pill Badge
+                        // Badge on Thumbnail
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
@@ -1130,7 +1648,11 @@ private fun PostDetailsInputView(
                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                         ) {
                             Text(
-                                text = aspectRatio,
+                                text = when (postType) {
+                                    PostType.FLASH -> "9:16"
+                                    PostType.STORY -> "Story"
+                                    else -> aspectRatio
+                                },
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -1138,159 +1660,289 @@ private fun PostDetailsInputView(
                         }
                     }
 
-                // Multiline Caption Input
-                Column(modifier = Modifier.weight(1f)) {
-                    TextField(
-                        value = caption,
-                        onValueChange = { if (it.length <= 1000) onCaptionChange(it) },
-                        placeholder = {
-                            Text(
-                                text = "Write a caption or thoughts...",
-                                color = textMuted,
-                                fontSize = 14.sp
-                            )
-                        },
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            disabledContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            focusedTextColor = textMain,
-                            unfocusedTextColor = textMain
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 72.dp, max = 140.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Text(
-                            text = "${caption.length}/1000",
-                            fontSize = 11.sp,
-                            color = textMuted
+                    // Multiline Caption Input
+                    Column(modifier = Modifier.weight(1f)) {
+                        TextField(
+                            value = caption,
+                            onValueChange = { if (it.length <= 1000) onCaptionChange(it) },
+                            placeholder = {
+                                Text(
+                                    text = when (postType) {
+                                        PostType.PHOTO -> "Write a caption or thoughts..."
+                                        PostType.FLASH -> "Describe your flash reel..."
+                                        PostType.WORK -> "Project title & concept..."
+                                        PostType.STORY -> "Story subtext (optional)..."
+                                    },
+                                    color = textMuted,
+                                    fontSize = 14.sp
+                                )
+                            },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                focusedTextColor = textMain,
+                                unfocusedTextColor = textMain
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 72.dp, max = 140.dp)
                         )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            Text(
+                                text = "${caption.length}/1000",
+                                fontSize = 11.sp,
+                                color = textMuted
+                            )
+                        }
                     }
                 }
-            }
 
-            // If multiple photos selected, display thumbnails row
-            if (selectedPhotoUris.size > 1) {
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "${selectedPhotoUris.size} Photos in Post",
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF0381FE),
-                    fontFamily = InterFontFamily
-                )
-                Spacer(Modifier.height(6.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    itemsIndexed(selectedPhotoUris) { idx, uri ->
+                // Extra Work-specific category tag badge
+                if (postType == PostType.WORK) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0))
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF0381FE).copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            AsyncImage(
-                                model = uri,
-                                contentDescription = "Photo ${idx + 1}",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            Text("Category: $workCategory", color = Color(0xFF0381FE), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        if (selectedWork != null) {
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(3.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.65f))
-                                    .size(16.dp),
-                                contentAlignment = Alignment.Center
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF10B981).copy(alpha = 0.15f))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
                             ) {
-                                Text(
-                                    text = "${idx + 1}",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
+                                Text("Chroma Project", color = Color(0xFF10B981), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
                 }
-            }
-        }
-    }
 
-        // 3. Creative Discovery Tags Group
-        OneUiSettingsGroup(title = "Tags & Topics") {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Active Tags Chips Flow
-                if (tags.isNotEmpty()) {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                // If multiple photos selected, display thumbnails row
+                if (selectedPhotoUris.size > 1 && postType == PostType.PHOTO) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "${selectedPhotoUris.size} Photos in Post",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF0381FE),
+                        fontFamily = InterFontFamily
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        tags.forEach { tag ->
+                        itemsIndexed(selectedPhotoUris) { idx, uri ->
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .background(if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9))
-                                    .clickable { onRemoveTag(tag) }
-                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    .size(52.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0))
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                AsyncImage(
+                                    model = uri,
+                                    contentDescription = "Photo ${idx + 1}",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .padding(3.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.65f))
+                                        .size(16.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = "#$tag",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF0381FE)
-                                    )
-                                    Icon(
-                                        Lucide.X,
-                                        contentDescription = null,
-                                        tint = textMuted,
-                                        modifier = Modifier.size(12.dp)
+                                        text = "${idx + 1}",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
                                     )
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
 
-                // Add Custom Tag Row
+        // 3. Audio & Track for Flash Video
+        if (postType == PostType.FLASH) {
+            OneUiSettingsGroup(title = "Audio Track & Sound") {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    Icon(Lucide.Music, null, tint = Color(0xFF0381FE), modifier = Modifier.size(20.dp))
                     TextField(
-                        value = tagInput,
-                        onValueChange = onTagInputChange,
-                        placeholder = { Text("Add a tag (#digital, #photo...)", fontSize = 13.sp, color = textMuted) },
+                        value = audioTrackName,
+                        onValueChange = onAudioTrackChange,
+                        placeholder = { Text("Original Audio - @username", fontSize = 13.sp, color = textMuted) },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = {
-                            if (tagInput.isNotBlank()) {
-                                onAddTag(tagInput)
-                                onTagInputChange("")
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = textMain,
+                            unfocusedTextColor = textMain
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        // 4. Creative Discovery Tags Group (Except for Story)
+        if (postType != PostType.STORY) {
+            OneUiSettingsGroup(title = "Tags & Topics") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (tags.isNotEmpty()) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            tags.forEach { tag ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9))
+                                        .clickable { onRemoveTag(tag) }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "#$tag",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF0381FE)
+                                        )
+                                        Icon(Lucide.X, null, tint = textMuted, modifier = Modifier.size(12.dp))
+                                    }
+                                }
                             }
-                            focusManager.clearFocus()
-                        }),
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextField(
+                            value = tagInput,
+                            onValueChange = onTagInputChange,
+                            placeholder = { Text("Add tag (#cinematic, #motion...)", fontSize = 13.sp, color = textMuted) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                if (tagInput.isNotBlank()) {
+                                    onAddTag(tagInput)
+                                    onTagInputChange("")
+                                }
+                                focusManager.clearFocus()
+                            }),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                                unfocusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                focusedTextColor = textMain,
+                                unfocusedTextColor = textMain
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF0381FE))
+                                .clickable {
+                                    if (tagInput.isNotBlank()) {
+                                        onAddTag(tagInput)
+                                        onTagInputChange("")
+                                        focusManager.clearFocus()
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Lucide.Plus, contentDescription = "Add", tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Tag People & Mentions Group (Except for Story)
+        if (postType != PostType.STORY) {
+            OneUiSettingsGroup(title = "Tag People & Credits") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (mentions.isNotEmpty()) {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            mentions.forEach { mention ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9))
+                                        .clickable { onRemoveMention(mention) }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("@$mention", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF0381FE))
+                                        Icon(Lucide.X, null, tint = textMuted, modifier = Modifier.size(12.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    TextField(
+                        value = mentionInput,
+                        onValueChange = onMentionInputChange,
+                        placeholder = { Text("Search creator by @username...", fontSize = 13.sp, color = textMuted) },
+                        singleLine = true,
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
                             unfocusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
@@ -1300,165 +1952,25 @@ private fun PostDetailsInputView(
                             unfocusedTextColor = textMain
                         ),
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     )
 
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF0381FE))
-                            .clickable {
-                                if (tagInput.isNotBlank()) {
-                                    onAddTag(tagInput)
-                                    onTagInputChange("")
-                                    focusManager.clearFocus()
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Lucide.Plus, contentDescription = "Add", tint = Color.White, modifier = Modifier.size(18.dp))
-                    }
-                }
-
-                // Suggested Quick Tags
-                val popularSuggestions = listOf("art", "photography", "3d", "cinematic", "minimal", "vector")
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    popularSuggestions.filter { !tags.contains(it) }.forEach { pTag ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(999.dp))
-                                .background(if (isDark) Color(0xFF12141A) else Color.White)
-                                .clickable { onAddTag(pTag) }
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "+ #$pTag",
-                                fontSize = 11.5.sp,
-                                color = textMuted,
-                                fontFamily = InterFontFamily
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 4. Tag People & Mentions Group
-        OneUiSettingsGroup(title = "Tag People & Mentions") {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Active Mentions Chips Flow
-                if (mentions.isNotEmpty()) {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        mentions.forEach { mention ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .background(if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9))
-                                    .clickable { onRemoveMention(mention) }
-                                    .padding(horizontal = 10.dp, vertical = 5.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Text(
-                                        text = "@$mention",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF0381FE)
-                                    )
-                                    Icon(Lucide.X, contentDescription = null, tint = textMuted, modifier = Modifier.size(12.dp))
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Mention Search Input
-                TextField(
-                    value = mentionInput,
-                    onValueChange = onMentionInputChange,
-                    placeholder = { Text("Search creator by @username...", fontSize = 13.sp, color = textMuted) },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
-                        unfocusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        focusedTextColor = textMain,
-                        unfocusedTextColor = textMain
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Autocomplete Creator Dropdown
-                if (suggestedCreators.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(if (isDark) Color(0xFF12141A) else Color(0xFFF8FAFC))
-                            .padding(vertical = 4.dp)
-                    ) {
-                        suggestedCreators.take(4).forEach { creator ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        onAddMention(creator.username)
-                                        onMentionInputChange("")
-                                        focusManager.clearFocus()
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
+                    if (suggestedCreators.isNotEmpty()) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(suggestedCreators) { creator ->
                                 Box(
                                     modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF0381FE).copy(alpha = 0.2f)),
-                                    contentAlignment = Alignment.Center
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9))
+                                        .clickable {
+                                            onAddMention(creator.username)
+                                            onMentionInputChange("")
+                                            focusManager.clearFocus()
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
                                 ) {
-                                    Text(
-                                        text = (creator.displayName.firstOrNull() ?: creator.username.firstOrNull() ?: 'C').uppercase(),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF0381FE)
-                                    )
+                                    Text("@${creator.username}", fontSize = 11.5.sp, color = textMain, fontWeight = FontWeight.Medium)
                                 }
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = creator.displayName.ifBlank { creator.username },
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = textMain
-                                    )
-                                    Text(
-                                        text = "@${creator.username}",
-                                        fontSize = 11.5.sp,
-                                        color = textMuted
-                                    )
-                                }
-
-                                Icon(Lucide.Plus, contentDescription = null, tint = Color(0xFF0381FE), modifier = Modifier.size(16.dp))
                             }
                         }
                     }
@@ -1466,62 +1978,37 @@ private fun PostDetailsInputView(
             }
         }
 
-        // 5. Location Group
-        OneUiSettingsGroup(title = "Location") {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // 6. Location (Photo & Work)
+        if (postType == PostType.PHOTO || postType == PostType.WORK) {
+            OneUiSettingsGroup(title = "Location") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    OneUiIconBadge(icon = Lucide.MapPin, iconColor = Color(0xFFEF4444))
-
                     TextField(
                         value = location,
                         onValueChange = onLocationChange,
-                        placeholder = { Text("Add location...", fontSize = 13.sp, color = textMuted) },
+                        placeholder = { Text("Add location (e.g., Tokyo, Japan)", fontSize = 13.sp, color = textMuted) },
                         singleLine = true,
+                        leadingIcon = { Icon(Lucide.MapPin, null, tint = Color(0xFF0381FE), modifier = Modifier.size(16.dp)) },
                         colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
+                            focusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                            unfocusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent,
                             focusedTextColor = textMain,
                             unfocusedTextColor = textMain
                         ),
-                        modifier = Modifier.weight(1f)
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
                     )
-                }
-
-                // Quick Location Suggestions
-                val locationSuggestions = listOf("Chroma Studio", "Tokyo, Japan", "New York, NY", "London, UK")
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    locationSuggestions.forEach { loc ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(999.dp))
-                                .background(if (isDark) Color(0xFF12141A) else Color.White)
-                                .clickable { onLocationChange(loc) }
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(loc, fontSize = 11.5.sp, color = textMuted)
-                        }
-                    }
                 }
             }
         }
 
-        // 6. Audience & Privacy Group
+        // 7. Audience & Privacy Controls
         OneUiSettingsGroup(title = "Audience & Sharing") {
             Column(
                 modifier = Modifier
@@ -1529,7 +2016,6 @@ private fun PostDetailsInputView(
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Audience Segmented Pills
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1537,8 +2023,9 @@ private fun PostDetailsInputView(
                 ) {
                     Text("Who can view", fontSize = 13.5.sp, fontWeight = FontWeight.Medium, color = textMain)
 
+                    val options = if (postType == PostType.STORY) listOf("Public", "Only Friends") else listOf("Public", "Followers", "Only Friends")
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("Public", "Followers", "Only Friends").forEach { opt ->
+                        options.forEach { opt ->
                             val isSelected = audience == opt
                             Box(
                                 modifier = Modifier
@@ -1564,57 +2051,95 @@ private fun PostDetailsInputView(
                     }
                 }
 
-                HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                if (postType != PostType.STORY) {
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
 
-                // Allow Remix Switch
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onAllowRemixChange(!allowRemix) }
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Allow Remixing", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textMain)
-                        Text("Other creators can build upon this visual", fontSize = 11.5.sp, color = textMuted)
+                    // Allow Remix Switch
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onAllowRemixChange(!allowRemix) }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Allow Remixing", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textMain)
+                            Text("Other creators can build upon this visual", fontSize = 11.5.sp, color = textMuted)
+                        }
+                        AppleSwitch(
+                            checked = allowRemix,
+                            onCheckedChange = onAllowRemixChange,
+                            activeTrackColor = Color(0xFF0381FE)
+                        )
                     }
-                    AppleSwitch(
-                        checked = allowRemix,
-                        onCheckedChange = onAllowRemixChange,
-                        activeTrackColor = Color(0xFF0381FE)
-                    )
                 }
 
-                HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                if (postType == PostType.WORK) {
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
 
-                // High Quality Upload Switch
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onHighQualityChange(!highQuality) }
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("High Quality Upload", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textMain)
-                        Text("Uploads using studio color depth profile", fontSize = 11.5.sp, color = textMuted)
+                    // Allow Asset Download Switch
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onAllowDownloadChange(!allowDownload) }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Allow Free Download", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textMain)
+                            Text("Enable community to download full-res assets", fontSize = 11.5.sp, color = textMuted)
+                        }
+                        AppleSwitch(
+                            checked = allowDownload,
+                            onCheckedChange = onAllowDownloadChange,
+                            activeTrackColor = Color(0xFF10B981)
+                        )
                     }
-                    AppleSwitch(
-                        checked = highQuality,
-                        onCheckedChange = onHighQualityChange,
-                        activeTrackColor = Color(0xFF0381FE)
-                    )
+                }
+
+                if (postType == PostType.STORY) {
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+
+                    // Story 24h Expiration Card Notice
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFF59E0B).copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Lucide.Clock, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
+                        }
+                        Column {
+                            Text("24h Fleeting Moment", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = textMain)
+                            Text("This story disappears from your profile after 24 hours.", fontSize = 11.sp, color = textMuted)
+                        }
+                    }
                 }
             }
         }
 
         Spacer(Modifier.height(12.dp))
 
-        // 7. Bottom Share Action Button (One UI Galaxy Blue 52dp Pill)
+        // 8. Bottom Share Action Button tailored to PostType
+        val mainActionText = when (postType) {
+            PostType.PHOTO -> "Share Post"
+            PostType.FLASH -> "Post Flash Reel"
+            PostType.WORK -> "Publish Masterwork"
+            PostType.STORY -> "Share to Story"
+        }
+
         Button(
             onClick = onPublish,
             enabled = !isPublishing,
@@ -1622,7 +2147,14 @@ private fun PostDetailsInputView(
                 .fillMaxWidth()
                 .height(52.dp),
             shape = RoundedCornerShape(999.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE))
+            colors = ButtonDefaults.buttonColors(
+                containerColor = when (postType) {
+                    PostType.PHOTO -> Color(0xFF0381FE)
+                    PostType.FLASH -> Color(0xFF6366F1)
+                    PostType.WORK -> Color(0xFF10B981)
+                    PostType.STORY -> Color(0xFFF43F5E)
+                }
+            )
         ) {
             if (isPublishing) {
                 CircularProgressIndicator(
@@ -1631,11 +2163,11 @@ private fun PostDetailsInputView(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Publishing Post...", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("Publishing...", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             } else {
-                Icon(Lucide.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(postType.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Share Post", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(mainActionText, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 

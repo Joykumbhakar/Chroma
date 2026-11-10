@@ -1,5 +1,17 @@
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.chat.sound.SoundManager
+
+import com.chroma.studio.ui.theme.InterFontFamily
+
+import androidx.compose.ui.graphics.Brush
+
+import androidx.compose.ui.draw.shadow
+
+import androidx.compose.ui.text.TextStyle
+
+import androidx.compose.foundation.text.BasicTextField
+
 
 
 import com.chroma.studio.ui.components.VerifiedBadge
@@ -98,49 +110,48 @@ import com.chroma.studio.viewmodel.DiscoverViewModel
 
 
 
+data class FlashPostParams(
+    val flashVm: FlashViewModel,
+    val discoverViewModel: DiscoverViewModel? = null,
+    val videoUri: Uri,
+    val thumbnailBitmap: Bitmap?,
+    val trimStartMs: Long = 0L,
+    val trimEndMs: Long = 0L,
+    val filterName: String = "",
+    val brightness: Float = 0f,
+    val contrast: Float = 1f,
+    val saturation: Float = 1f,
+    val hue: Float = 0f,
+    val mediaType: com.chroma.studio.model.FlashMediaType = com.chroma.studio.model.FlashMediaType.VIDEO,
+    val photoUris: List<Uri> = emptyList(),
+    val durationPerSlideMs: Long = 3000L,
+    val remixedFromPostId: String? = null,
+    val remixedFromAuthorUsername: String? = null
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
-
 @Composable
-
 fun FlashPostScreen(
-
-    flashVm: FlashViewModel,
-
-    discoverViewModel: DiscoverViewModel? = null,
-
-    videoUri: Uri,
-
-    thumbnailBitmap: Bitmap?,
-
-    trimStartMs: Long,
-
-    trimEndMs: Long,
-
-    filterName: String,
-
-    brightness: Float = 0f,
-
-    contrast: Float = 1f,
-
-    saturation: Float = 1f,
-
-    hue: Float = 0f,
-
-    mediaType: com.chroma.studio.model.FlashMediaType,
-
-    photoUris: List<Uri> = emptyList(),
-
-    durationPerSlideMs: Long = 3000L,
-
-    remixedFromPostId: String? = null,
-
-    remixedFromAuthorUsername: String? = null,
-
+    params: FlashPostParams,
     onSuccess: () -> Unit,
-
     onBack: () -> Unit
-
 ) {
+    val flashVm = params.flashVm
+    val discoverViewModel = params.discoverViewModel
+    val videoUri = params.videoUri
+    val thumbnailBitmap = params.thumbnailBitmap
+    val trimStartMs = params.trimStartMs
+    val trimEndMs = params.trimEndMs
+    val filterName = params.filterName
+    val brightness = params.brightness
+    val contrast = params.contrast
+    val saturation = params.saturation
+    val hue = params.hue
+    val mediaType = params.mediaType
+    val photoUris = params.photoUris
+    val durationPerSlideMs = params.durationPerSlideMs
+    val remixedFromPostId = params.remixedFromPostId
+    val remixedFromAuthorUsername = params.remixedFromAuthorUsername
 
     val context = LocalContext.current
 
@@ -507,587 +518,479 @@ fun FlashPostScreen(
 
 
 
-    Column(
-
-        modifier = Modifier
-
-            .fillMaxSize()
-
-            .background(colors.bg)
-
-    ) {
-
-        // ── Top bar ──────────────────────────────────────────────────────────
-
-        ChromaScreenHeader(
-
-            title = "Oscellion",
-
-            badgeText = "New Flash",
-
-            showBackButton = true,
-
-            onBack = onBack,
-
-            actions = {
-
-                // Draft Button
-
-                OutlinedButton(
-
-                    onClick = { saveDraftLocally(showToast = true) },
-
-                    shape = RoundedCornerShape(8.dp),
-
-                    border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1)),
-
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.textMain),
-
-                    modifier = Modifier.padding(end = 6.dp)
-
-                ) {
-
-                    Text("Draft", fontSize = 12.sp, fontWeight = FontWeight.Medium)
-
-                }
-
-
-
-                ChromaHeaderActionButton(
-
-                    text = "Post",
-
-                    icon = Lucide.Send,
-
-                    enabled = true,
-
-                    isLoading = false,
-
-                    onClick = { executePostToCommunity() }
-
-                )
-
-            }
-
-        )
-
-
-
-        HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
-
-
-
         Column(
-
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.bg)
+    ) {
+        // ── Samsung One UI Top Navigation Bar ─────────────────────────────────
+        val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        Row(
             modifier = Modifier
-
-                .fillMaxSize()
-
-                .verticalScroll(rememberScrollState())
-
+                .fillMaxWidth()
+                .background(colors.bg)
+                .padding(top = statusBarTop + 6.dp, bottom = 10.dp, start = 12.dp, end = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-
-            Spacer(Modifier.height(14.dp))
-
-
-
-            // ── Thumbnail + Caption ──────────────────────────────────────────
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                IconButton(
+                    onClick = {
+                        SoundManager.playTap(context)
+                        onBack()
+                    },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.ArrowLeft,
+                        contentDescription = "Back",
+                        tint = colors.textMain,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = "New Flash",
+                        color = colors.textMain,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.3).sp
+                    )
+                    Text(
+                        text = "Video & Reels",
+                        color = colors.textMuted,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
 
             Row(
-
-                modifier = Modifier
-
-                    .fillMaxWidth()
-
-                    .padding(horizontal = 16.dp),
-
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-
-                // Thumbnail
-
+                // Draft Capsule
                 Box(
-
                     modifier = Modifier
-
-                        .size(100.dp, 140.dp)
-
-                        .clip(RoundedCornerShape(10.dp))
-
-                        .background(Color.White.copy(alpha = 0.08f))
-
-                        .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFE2E8F0), RoundedCornerShape(10.dp))
-
-                        .clickable { showThumbnailPicker = !showThumbnailPicker }
-
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(if (colors.isDark) Color(0xFF1E2028) else Color(0xFFF1F3F7))
+                        .clickable {
+                            SoundManager.playTap(context)
+                            saveDraftLocally(showToast = true)
+                        }
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
                 ) {
+                    Text(
+                        text = "Draft",
+                        color = colors.textMain,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
 
-                    if (currentThumbnail != null) {
+                // Post Capsule
+                Box(
+                    modifier = Modifier
+                        .shadow(
+                            elevation = 2.dp,
+                            shape = RoundedCornerShape(999.dp),
+                            spotColor = Color(0xFF0381FE).copy(alpha = 0.35f)
+                        )
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF0072DE), Color(0xFF0381FE))
+                            )
+                        )
+                        .clickable {
+                            SoundManager.playTap(context)
+                            executePostToCommunity()
+                        }
+                        .padding(horizontal = 16.dp, vertical = 7.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Send,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "Post",
+                            color = Color.White,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
 
-                        androidx.compose.foundation.Image(
+        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.35f), thickness = 0.5.dp)
 
-                            bitmap = currentThumbnail!!.asImageBitmap(),
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+        ) {
+            Spacer(Modifier.height(14.dp))
 
-                            contentDescription = "Thumbnail",
+            // ── One UI 22.dp Media Preview + Caption Input Card ─────────────────
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(if (colors.isDark) Color(0xFF1A1C23) else Color(0xFFF8FAFD))
+                    .border(
+                        width = 0.5.dp,
+                        color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
+                        shape = RoundedCornerShape(22.dp)
+                    )
+                    .padding(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // Thumbnail
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp, 136.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (colors.isDark) Color(0xFF12141A) else Color(0xFFE8EDF5))
+                            .clickable { showThumbnailPicker = !showThumbnailPicker }
+                    ) {
+                        if (currentThumbnail != null) {
+                            Image(
+                                bitmap = currentThumbnail!!.asImageBitmap(),
+                                contentDescription = "Thumbnail",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(Lucide.Film, null, tint = colors.textMuted, modifier = Modifier.size(28.dp))
+                            }
+                        }
 
-                            contentScale = ContentScale.Crop,
+                        // Duration overlay badge
+                        val durSec = ((trimEndMs - trimStartMs) / 1000L).coerceAtLeast(1L)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(6.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.Black.copy(alpha = 0.70f))
+                                .padding(horizontal = 5.dp, vertical = 2.dp)
+                        ) {
+                            Text("${durSec}s", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
 
-                            modifier = Modifier.fillMaxSize()
+                        // Edit pencil overlay
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(6.dp)
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.70f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Lucide.Pencil, null, tint = Color.White, modifier = Modifier.size(11.dp))
+                        }
+                    }
 
+                    // Caption Input Area
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(136.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        BasicTextField(
+                            value = caption,
+                            onValueChange = { if (it.length <= 2200) caption = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            textStyle = TextStyle(
+                                color = colors.textMain,
+                                fontSize = 14.sp,
+                                fontFamily = InterFontFamily
+                            ),
+                            decorationBox = { innerTextField ->
+                                if (caption.isEmpty()) {
+                                    Text(
+                                        text = "Write a caption, add #hashtags or @mention creators...",
+                                        color = colors.textMuted,
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp
+                                    )
+                                }
+                                innerTextField()
+                            }
                         )
 
-                    } else {
-
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-
-                            Icon(Lucide.Image, null, tint = colors.textMuted, modifier = Modifier.size(32.dp))
-
-                        }
-
-                    }
-
-
-
-                    // Edit overlay
-
-                    Box(
-
-                        modifier = Modifier
-
-                            .align(Alignment.TopEnd)
-
-                            .padding(6.dp)
-
-                            .size(24.dp)
-
-                            .clip(RoundedCornerShape(6.dp))
-
-                            .background(Color.Black.copy(alpha = 0.7f)),
-
-                        contentAlignment = Alignment.Center
-
-                    ) {
-
-                        Icon(Lucide.Pencil, null, tint = Color.White, modifier = Modifier.size(12.dp))
-
-                    }
-
-                }
-
-
-
-                // Caption field
-
-                Column(modifier = Modifier.weight(1f)) {
-
-                    OutlinedTextField(
-
-                        value = caption,
-
-                        onValueChange = { if (it.length <= 2200) caption = it },
-
-                        placeholder = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(Color(0xFF0381FE).copy(alpha = 0.12f))
+                                        .clickable {
+                                            caption = if (caption.endsWith(" ") || caption.isEmpty()) "${caption}#" else "$caption #"
+                                        }
+                                        .padding(horizontal = 7.dp, vertical = 3.dp)
+                                ) {
+                                    Text("#tag", color = Color(0xFF0381FE), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(Color(0xFF0381FE).copy(alpha = 0.12f))
+                                        .clickable {
+                                            caption = if (caption.endsWith(" ") || caption.isEmpty()) "${caption}@" else "$caption @"
+                                        }
+                                        .padding(horizontal = 7.dp, vertical = 3.dp)
+                                ) {
+                                    Text("@user", color = Color(0xFF0381FE), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
 
                             Text(
-
-                                "Write a caption, add #hashtags or @mention people...",
-
+                                text = "${caption.length}/2200",
                                 color = colors.textMuted,
-
-                                fontSize = 13.sp
-
+                                fontSize = 10.5.sp
                             )
-
-                        },
-
-                        modifier = Modifier
-
-                            .fillMaxWidth()
-
-                            .height(140.dp),
-
-                        colors = OutlinedTextFieldDefaults.colors(
-
-                            focusedTextColor = colors.textMain,
-
-                            unfocusedTextColor = colors.textMain,
-
-                            focusedBorderColor = Color(0xFF2563EB),
-
-                            unfocusedBorderColor = if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFCBD5E1),
-
-                            cursorColor = Color(0xFF2563EB)
-
-                        ),
-
-                        shape = RoundedCornerShape(10.dp),
-
-                        maxLines = 6,
-
-                        visualTransformation = { text ->
-
-                            val annotated = buildAnnotatedString {
-
-                                val raw = text.text
-
-                                var cursor = 0
-
-                                val regex = Regex("""([#@]\w+)""")
-
-                                regex.findAll(raw).forEach { match ->
-
-                                    if (match.range.first > cursor) {
-
-                                        append(raw.substring(cursor, match.range.first))
-
-                                    }
-
-                                    withStyle(SpanStyle(color = Color(0xFF2563EB), fontWeight = FontWeight.SemiBold)) {
-
-                                        append(match.value)
-
-                                    }
-
-                                    cursor = match.range.last + 1
-
-                                }
-
-                                if (cursor < raw.length) append(raw.substring(cursor))
-
-                            }
-
-                            androidx.compose.ui.text.input.TransformedText(
-
-                                annotated,
-
-                                androidx.compose.ui.text.input.OffsetMapping.Identity
-
-                            )
-
                         }
-
-                    )
-
-                    Text(
-
-                        "${caption.length}/2200",
-
-                        color = colors.textMuted,
-
-                        fontSize = 11.sp,
-
-                        modifier = Modifier.align(Alignment.End).padding(top = 4.dp)
-
-                    )
-
+                    }
                 }
-
             }
-
-
 
             // ── Mention suggestions ──────────────────────────────────────────
-
             if (mentionSuggestions.isNotEmpty()) {
-
                 Spacer(Modifier.height(10.dp))
-
                 LazyRow(
-
                     contentPadding = PaddingValues(horizontal = 16.dp),
-
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
-
                 ) {
-
                     items(mentionSuggestions) { user ->
-
                         Row(
-
                             modifier = Modifier
-
-                                .clip(RoundedCornerShape(8.dp))
-
-                                .background(if (colors.isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF))
-
-                                .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFBFDBFE), RoundedCornerShape(8.dp))
-
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(if (colors.isDark) Color(0xFF1E2028) else Color(0xFFF1F3F7))
+                                .border(
+                                    width = 0.5.dp,
+                                    color = if (colors.isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.08f),
+                                    shape = RoundedCornerShape(999.dp)
+                                )
                                 .clickable {
-
                                     val lastAt = caption.lastIndexOf('@')
-
                                     if (lastAt >= 0) {
-
                                         val before = caption.substring(0, lastAt)
-
                                         caption = "$before@${user.username} "
-
                                     }
-
                                     mentionSuggestions = emptyList()
-
                                 }
-
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-
+                                .padding(start = 4.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
-
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
-
                         ) {
-
-                            Box(modifier = Modifier.size(22.dp).clip(CircleShape).background(Color(0xFF2563EB))) {
-
+                            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color(0xFF0381FE))) {
                                 if (user.avatarUrl.isNotBlank()) {
-
                                     AsyncImage(
-
                                         model = user.avatarUrl,
-
                                         contentDescription = null,
-
                                         contentScale = ContentScale.Crop,
-
                                         modifier = Modifier.fillMaxSize()
-
                                     )
-
                                 }
-
                             }
-
                             Text("@${user.username}", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-
                             if (user.verified) {
-
                                 VerifiedBadge(size = 12.dp)
-
                             }
-
                         }
-
                     }
-
                 }
-
             }
-
-
-
-            Spacer(Modifier.height(16.dp))
-
-            HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
 
             Spacer(Modifier.height(14.dp))
 
-
-
             // ── Parsed tags preview ──────────────────────────────────────────
-
             if (hashtags.isNotEmpty() || mentions.isNotEmpty()) {
-
                 Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-
                     if (hashtags.isNotEmpty()) {
-
                         Text("Hashtags", color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-
                         Spacer(Modifier.height(6.dp))
-
                         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-
                             hashtags.forEach { tag ->
-
                                 Text(
-
                                     "#$tag",
-
-                                    color = Color(0xFF2563EB),
-
+                                    color = Color(0xFF0381FE),
                                     fontSize = 12.sp,
-
                                     fontWeight = FontWeight.SemiBold,
-
                                     modifier = Modifier
-
-                                        .clip(RoundedCornerShape(6.dp))
-
-                                        .background(Color(0xFF2563EB).copy(alpha = 0.12f))
-
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(Color(0xFF0381FE).copy(alpha = 0.12f))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
-
                             }
-
                         }
-
-                        Spacer(Modifier.height(12.dp))
-
+                        Spacer(Modifier.height(10.dp))
                     }
-
-
 
                     if (mentions.isNotEmpty()) {
-
                         Text("Tagged People", color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-
                         Spacer(Modifier.height(6.dp))
-
                         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-
                             mentions.forEach { username ->
-
                                 Text(
-
                                     "@$username",
-
-                                    color = Color(0xFF2563EB),
-
+                                    color = Color(0xFF0381FE),
                                     fontSize = 12.sp,
-
                                     fontWeight = FontWeight.SemiBold,
-
                                     modifier = Modifier
-
-                                        .clip(RoundedCornerShape(6.dp))
-
-                                        .background(Color(0xFF2563EB).copy(alpha = 0.12f))
-
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(Color(0xFF0381FE).copy(alpha = 0.12f))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
-
                             }
-
                         }
-
                     }
-
                 }
-
                 Spacer(Modifier.height(14.dp))
-
-                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
-
-                Spacer(Modifier.height(14.dp))
-
             }
 
-
-
-            // ── Clean Info rows (No double cards, separated by hr lines) ─────
-
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-
-                InfoRow(icon = Lucide.Film, title = "Flash Video", subtitle = "Visible on the Community & Flash Feed")
-
-                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 10.dp))
-
-                InfoRow(icon = Lucide.Clock, title = "Duration", subtitle = "${((trimEndMs - trimStartMs) / 1000L).coerceAtLeast(1L)}s")
-
-                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 10.dp))
-
-                InfoRow(icon = Lucide.Globe, title = "Audience", subtitle = "Public (Everyone)")
-
+            // ── One UI 22.dp Settings Group Card ────────────────────────────────
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(if (colors.isDark) Color(0xFF1A1C23) else Color(0xFFF8FAFD))
+                    .border(
+                        width = 0.5.dp,
+                        color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
+                        shape = RoundedCornerShape(22.dp)
+                    )
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    InfoRow(icon = Lucide.Film, title = "Flash Video", subtitle = "Visible on Community & Flash Feed", badge = "Shorts")
+                    HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.35f), thickness = 0.5.dp)
+                    InfoRow(icon = Lucide.Clock, title = "Duration", subtitle = "Video playtime", badge = "${((trimEndMs - trimStartMs) / 1000L).coerceAtLeast(1L)}s")
+                    HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.35f), thickness = 0.5.dp)
+                    InfoRow(icon = Lucide.Globe, title = "Audience", subtitle = "Visible to everyone", badge = "Public")
+                }
             }
-
-
 
             Spacer(Modifier.height(28.dp))
 
-
-
-            // Bottom Post Button
-
+            // One UI Signature Action Capsule
             Box(
-
                 modifier = Modifier
-
                     .fillMaxWidth()
-
                     .padding(horizontal = 16.dp)
-
             ) {
-
-                LiquidGlassPrimaryButton(
-                    text = "Post Flash Video",
-                    leadingIcon = Lucide.Send,
-                    onClick = { executePostToCommunity() },
-                    shape = RoundedCornerShape(14.dp),
+                Button(
+                    onClick = {
+                        SoundManager.playTap(context)
+                        executePostToCommunity()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF0381FE),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(999.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
-                )
-
+                        .height(52.dp)
+                        .shadow(
+                            elevation = 3.dp,
+                            shape = RoundedCornerShape(999.dp),
+                            spotColor = Color(0xFF0381FE).copy(alpha = 0.35f)
+                        )
+                ) {
+                    Icon(
+                        imageVector = Lucide.Send,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Post Flash Video",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
-
-
             Spacer(Modifier.height(40.dp))
-
         }
-
     }
-
 }
-
-
 
 @Composable
-
 private fun InfoRow(
-
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-
     title: String,
-
-    subtitle: String
-
+    subtitle: String,
+    badge: String? = null
 ) {
-
     val colors = LocalOscellionColors.current
-
     Row(
-
         modifier = Modifier.fillMaxWidth(),
-
         verticalAlignment = Alignment.CenterVertically,
-
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-
-        Box(
-
-            modifier = Modifier
-
-                .size(36.dp)
-
-                .clip(RoundedCornerShape(8.dp))
-
-                .background(Color(0xFF2563EB).copy(alpha = 0.12f)),
-
-            contentAlignment = Alignment.Center
-
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f, fill = false)
         ) {
-
-            Icon(icon, null, tint = Color(0xFF2563EB), modifier = Modifier.size(18.dp))
-
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF0381FE).copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = Color(0xFF0381FE), modifier = Modifier.size(18.dp))
+            }
+            Column {
+                Text(title, color = colors.textMain, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text(subtitle, color = colors.textMuted, fontSize = 12.sp)
+            }
         }
 
-        Column(modifier = Modifier.weight(1f)) {
-
-            Text(title, color = colors.textMain, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
-
-            Text(subtitle, color = colors.textMuted, fontSize = 11.5.sp)
-
+        if (badge != null) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(if (colors.isDark) Color(0xFF22242C) else Color(0xFFE8EDF5))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = badge,
+                    color = colors.textMain,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
-
     }
-
 }
-

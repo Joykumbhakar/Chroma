@@ -3,8 +3,10 @@ package com.chroma.studio.ui.screens
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.LinearGradient as AndroidLinearGradient
 import android.graphics.Paint as AndroidPaint
 import android.graphics.Path as AndroidPath
 import android.graphics.PorterDuff
@@ -63,6 +65,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEvent
@@ -119,6 +122,7 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -136,10 +140,167 @@ enum class PhotoEditorTool(val label: String) {
     EFFECTS("Effects"),
     TRANSFORM("Transform"),
     TEXT("Text"),
+    STICKERS("Stickers"),
     CHROMA_KEY("Chroma Key"),
     BLEND("Blend"),
     MARKUP("Markup"),
     FRAME("Frame")
+}
+
+enum class PhotoCropRatio(val label: String, val ratio: Float?, val w: Int, val h: Int) {
+    ORIGINAL("Original", null, 0, 0),
+    RATIO_1_1("1:1", 1f, 1, 1),
+    RATIO_4_5("4:5", 4f / 5f, 4, 5),
+    RATIO_9_16("9:16", 9f / 16f, 9, 16),
+    RATIO_16_9("16:9", 16f / 9f, 16, 9),
+    RATIO_4_3("4:3", 4f / 3f, 4, 3),
+    RATIO_3_2("3:2", 3f / 2f, 3, 2)
+}
+
+enum class StudioPhotoPreset(
+    val id: String,
+    val displayName: String,
+    val category: String,
+    val matrixValues: FloatArray?
+) {
+    ORIGINAL("ORIGINAL", "None", "Basic", null),
+    NORDIC_GLOW("NORDIC_GLOW", "Nordic", "Clean", floatArrayOf(
+        1.08f, 0f, 0f, 0f, 12f,
+        0f, 1.10f, 0f, 0f, 12f,
+        0f, 0f, 1.18f, 0f, 18f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    CINEMATIC("CINEMATIC", "Cinematic", "Film", floatArrayOf(
+        1.15f, 0f, 0f, 0f, 12f,
+        0f, 1.05f, 0f, 0f, 0f,
+        0f, 0f, 0.88f, 0f, -14f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    VIVID("VIVID", "Vivid Pop", "Pop", floatArrayOf(
+        1.25f, -0.05f, -0.05f, 0f, 5f,
+        -0.05f, 1.25f, -0.05f, 0f, 5f,
+        -0.05f, -0.05f, 1.25f, 0f, 5f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    PORTRA_400("PORTRA_400", "Portra 400", "Film", floatArrayOf(
+        1.12f, 0.04f, 0f, 0f, 10f,
+        0f, 1.04f, 0.02f, 0f, 4f,
+        -0.02f, 0f, 0.94f, 0f, -8f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    MONO_NOIR("MONO_NOIR", "Mono Noir", "B&W", floatArrayOf(
+        0.35f, 0.35f, 0.35f, 0f, -15f,
+        0.35f, 0.35f, 0.35f, 0f, -15f,
+        0.35f, 0.35f, 0.35f, 0f, -15f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    BW_CLASSIC("BW_CLASSIC", "B&W Classic", "B&W", floatArrayOf(
+        0.299f, 0.587f, 0.114f, 0f, 0f,
+        0.299f, 0.587f, 0.114f, 0f, 0f,
+        0.299f, 0.587f, 0.114f, 0f, 0f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    WARM_SUNSET("WARM_SUNSET", "Sunset", "Warm", floatArrayOf(
+        1.25f, 0f, 0f, 0f, 26f,
+        0f, 1.02f, 0f, 0f, 8f,
+        0f, 0f, 0.80f, 0f, -24f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    GOLDEN_HOUR("GOLDEN_HOUR", "Golden Hour", "Warm", floatArrayOf(
+        1.18f, 0.05f, 0f, 0f, 20f,
+        0f, 1.08f, 0f, 0f, 12f,
+        0f, 0f, 0.86f, 0f, -16f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    COOL_SLATE("COOL_SLATE", "Cool Slate", "Cool", floatArrayOf(
+        0.90f, 0f, 0f, 0f, -8f,
+        0f, 1.02f, 0f, 0f, 2f,
+        0f, 0f, 1.18f, 0f, 16f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    EMERALD("EMERALD", "Emerald", "Cool", floatArrayOf(
+        0.90f, 0f, 0f, 0f, -10f,
+        0f, 1.18f, 0f, 0f, 18f,
+        0f, 0f, 0.95f, 0f, 4f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    SOFT_FADE("SOFT_FADE", "Soft Fade", "Vintage", floatArrayOf(
+        0.88f, 0f, 0f, 0f, 28f,
+        0f, 0.88f, 0f, 0f, 24f,
+        0f, 0f, 0.88f, 0f, 24f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    SEPIA_VINTAGE("SEPIA_VINTAGE", "Antique Sepia", "Vintage", floatArrayOf(
+        0.393f, 0.769f, 0.189f, 0f, 0f,
+        0.349f, 0.686f, 0.168f, 0f, 0f,
+        0.272f, 0.534f, 0.131f, 0f, 0f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    PASTEL_MIST("PASTEL_MIST", "Pastel", "Pop", floatArrayOf(
+        0.95f, 0.05f, 0f, 0f, 22f,
+        0f, 0.95f, 0.05f, 0f, 20f,
+        0.05f, 0f, 0.95f, 0f, 24f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    CHROME("CHROME", "Chrome", "B&W", floatArrayOf(
+        0.45f, 0.45f, 0.45f, 0f, 24f,
+        0.45f, 0.45f, 0.45f, 0f, 24f,
+        0.45f, 0.45f, 0.45f, 0f, 24f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    CYBERPUNK("CYBERPUNK", "Cyberpunk", "Pop", floatArrayOf(
+        1.30f, 0f, 0f, 0f, 16f,
+        0f, 0.85f, 0f, 0f, -10f,
+        0f, 0f, 1.45f, 0f, 26f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    CLEAN_HDR("CLEAN_HDR", "Clean HDR", "Clean", floatArrayOf(
+        1.14f, 0f, 0f, 0f, 10f,
+        0f, 1.14f, 0f, 0f, 10f,
+        0f, 0f, 1.14f, 0f, 10f,
+        0f, 0f, 0f, 1f, 0f
+    )),
+    RETRO_80S("RETRO_80S", "Retro 80s", "Vintage", floatArrayOf(
+        1.22f, 0f, 0.12f, 0f, 18f,
+        0f, 1.05f, 0f, 0f, 4f,
+        0.1f, 0f, 1.25f, 0f, 22f,
+        0f, 0f, 0f, 1f, 0f
+    ));
+
+    val previewColors: List<Color>
+        get() = when (this) {
+            ORIGINAL -> listOf(Color(0xFF252525), Color(0xFF3D3D3D))
+            NORDIC_GLOW -> listOf(Color(0xFF2C3E50), Color(0xFF4CA1AF))
+            CINEMATIC -> listOf(Color(0xFF0D1B2A), Color(0xFF1B4332))
+            VIVID -> listOf(Color(0xFFE11D48), Color(0xFFF43F5E))
+            PORTRA_400 -> listOf(Color(0xFF8B5A2B), Color(0xFFD4A373))
+            MONO_NOIR -> listOf(Color(0xFF09090B), Color(0xFF27272A))
+            BW_CLASSIC -> listOf(Color(0xFF18181B), Color(0xFF71717A))
+            WARM_SUNSET -> listOf(Color(0xFFEA580C), Color(0xFFF97316))
+            GOLDEN_HOUR -> listOf(Color(0xFFD97706), Color(0xFFFBBF24))
+            COOL_SLATE -> listOf(Color(0xFF0284C7), Color(0xFF38BDF8))
+            EMERALD -> listOf(Color(0xFF047857), Color(0xFF10B981))
+            SOFT_FADE -> listOf(Color(0xFF8B5CF6), Color(0xFFA78BFA))
+            SEPIA_VINTAGE -> listOf(Color(0xFF78350F), Color(0xFFB45309))
+            PASTEL_MIST -> listOf(Color(0xFFF472B6), Color(0xFFFBCFE8))
+            CHROME -> listOf(Color(0xFF475569), Color(0xFF94A3B8))
+            CYBERPUNK -> listOf(Color(0xFF7C3AED), Color(0xFFEC4899))
+            CLEAN_HDR -> listOf(Color(0xFF1D4ED8), Color(0xFF60A5FA))
+            RETRO_80S -> listOf(Color(0xFF9333EA), Color(0xFFF43F5E))
+        }
+
+    val colorMatrix: FloatArray?
+        get() = matrixValues
+
+    companion object {
+        val ALL_PRESETS: List<StudioPhotoPreset>
+            get() = values().toList()
+
+        fun findById(id: String?): StudioPhotoPreset? {
+            if (id == null) return null
+            return values().find { it.id.equals(id, ignoreCase = true) || it.name.equals(id, ignoreCase = true) }
+        }
+    }
 }
 
 enum class LightLeakType(val label: String, val colors: List<Color>) {
@@ -209,11 +370,15 @@ data class PhotoProjectState(
     val trackLock: Map<Int, Boolean> = mapOf(1 to false, 2 to false, 3 to false, 4 to false, 5 to false),
     val videoFitMode: VideoFitMode = VideoFitMode.FIT,
     val projectRatio: ProjectRatio = ProjectRatio.RATIO_9_16,
+    val cropRatio: PhotoCropRatio = PhotoCropRatio.ORIGINAL,
+    val nativeAspectRatio: Float? = null,
+    val selectedPresetId: String = "ORIGINAL",
     val frameStyle: PhotoFrameStyle = PhotoFrameStyle.NONE,
     val framePadding: Float = 0f,
     val frameCornerRadius: Float = 0f,
     val frameColor: Color = Color.White,
     val filterIntensity: Float = 1.0f,
+    val blur: Float = 0f,
     val vignette: Float = 0f,
     val grain: Float = 0f,
     val sharpness: Float = 0f,
@@ -243,7 +408,13 @@ data class PhotoProjectState(
     val isSplitCompareMode: Boolean = false,
     val splitCompareFraction: Float = 0.5f,
     val exportSettings: PhotoExportSettings = PhotoExportSettings()
-)
+) {
+    val effectiveAspectRatio: Float
+        get() = when (cropRatio) {
+            PhotoCropRatio.ORIGINAL -> nativeAspectRatio ?: (projectRatio.w.toFloat() / projectRatio.h.toFloat())
+            else -> cropRatio.ratio ?: (projectRatio.w.toFloat() / projectRatio.h.toFloat())
+        }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LIVE PREVIEW COLOR PIPELINE (Matches ChromaVideoEditorScreen + Photo Optics)
@@ -261,7 +432,8 @@ private fun buildPhotoPreviewColorMatrix(
     redCurve: ToneCurvePoints = ToneCurvePoints(),
     greenCurve: ToneCurvePoints = ToneCurvePoints(),
     blueCurve: ToneCurvePoints = ToneCurvePoints(),
-    splitToning: SplitToningState = SplitToningState()
+    splitToning: SplitToningState = SplitToningState(),
+    customPresetMatrix: FloatArray? = null
 ): android.graphics.ColorMatrix {
     val result = android.graphics.ColorMatrix()
 
@@ -330,7 +502,7 @@ private fun buildPhotoPreviewColorMatrix(
     )
 
     // Preset filter look blended by filterIntensity
-    val presetValues = filter.matrixValues()
+    val presetValues = customPresetMatrix ?: filter.matrixValues()
     if (presetValues != null && filterIntensity > 0.01f) {
         val identity = floatArrayOf(
             1f, 0f, 0f, 0f, 0f,
@@ -362,8 +534,20 @@ class ChromaPhotoEditorViewModel : ViewModel() {
     private val redoStack = mutableListOf<PhotoProjectState>()
     private var dragSnapshot: PhotoProjectState? = null
 
-    fun initialize(uri: String) {
+    fun initialize(uri: String, context: Context? = null) {
         if (_state.value.clips.isNotEmpty()) return
+        var nativeAspect: Float? = null
+        if (context != null) {
+            try {
+                context.contentResolver.openInputStream(Uri.parse(uri))?.use { input ->
+                    val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeStream(input, null, opts)
+                    if (opts.outWidth > 0 && opts.outHeight > 0) {
+                        nativeAspect = opts.outWidth.toFloat() / opts.outHeight.toFloat()
+                    }
+                }
+            } catch (_: Exception) {}
+        }
         val baseClip = Clip(
             type = MediaType.IMAGE,
             name = "Main Photo",
@@ -375,7 +559,9 @@ class ChromaPhotoEditorViewModel : ViewModel() {
         _state.update {
             it.copy(
                 clips = listOf(baseClip),
-                selectedClipId = baseClip.id
+                selectedClipId = baseClip.id,
+                nativeAspectRatio = nativeAspect,
+                cropRatio = PhotoCropRatio.ORIGINAL
             )
         }
     }
@@ -426,6 +612,31 @@ class ChromaPhotoEditorViewModel : ViewModel() {
     fun setProjectRatio(ratio: ProjectRatio) {
         pushUndo()
         _state.update { it.copy(projectRatio = ratio) }
+    }
+
+    fun setCropRatio(ratio: PhotoCropRatio) {
+        pushUndo()
+        _state.update { s ->
+            val nextProjectRatio = when (ratio) {
+                PhotoCropRatio.ORIGINAL -> s.projectRatio
+                PhotoCropRatio.RATIO_1_1 -> ProjectRatio.RATIO_1_1
+                PhotoCropRatio.RATIO_4_5 -> ProjectRatio.RATIO_4_5
+                PhotoCropRatio.RATIO_9_16 -> ProjectRatio.RATIO_9_16
+                PhotoCropRatio.RATIO_16_9 -> ProjectRatio.RATIO_16_9
+                PhotoCropRatio.RATIO_4_3 -> ProjectRatio.RATIO_4_3
+                PhotoCropRatio.RATIO_3_2 -> ProjectRatio.RATIO_16_9
+            }
+            s.copy(cropRatio = ratio, projectRatio = nextProjectRatio)
+        }
+    }
+
+    fun setStudioPreset(preset: StudioPhotoPreset) {
+        pushUndo()
+        _state.update { it.copy(selectedPresetId = preset.id) }
+    }
+
+    fun setBlur(b: Float) {
+        _state.update { it.copy(blur = b.coerceIn(0f, 1f)) }
     }
 
     fun addClip(type: MediaType, name: String, trackId: Int, color: Color, uri: String? = null) {
@@ -495,6 +706,12 @@ class ChromaPhotoEditorViewModel : ViewModel() {
 
     fun setAdjustments(a: Adjustments) = updateSelected { it.copy(adjustments = a) }
     fun setTransform(t: TransformState) = updateSelected { it.copy(transform = t) }
+
+    fun resetTransform() {
+        pushUndo()
+        updateSelected { it.copy(transform = TransformState()) }
+    }
+
     fun setText(t: String) = updateSelected { it.copy(text = t) }
     fun setTextColor(c: Color) {
         pushUndo()
@@ -541,10 +758,12 @@ class ChromaPhotoEditorViewModel : ViewModel() {
         }
     }
 
-    fun rotate90Degrees() {
+    fun rotate90Degrees(clockwise: Boolean = true) {
         pushUndo()
         updateSelected {
-            it.copy(transform = it.transform.copy(rotation = (it.transform.rotation + 90f) % 360f))
+            val delta = if (clockwise) 90f else -90f
+            val nextRot = (it.transform.rotation + delta) % 360f
+            it.copy(transform = it.transform.copy(rotation = if (nextRot < 0f) nextRot + 360f else nextRot))
         }
     }
 
@@ -552,23 +771,24 @@ class ChromaPhotoEditorViewModel : ViewModel() {
         pushUndo()
         val main = _state.value.clips.find { it.trackId == 1 } ?: return
         val current = main.adjustments
-        val isAlreadyEnhanced = abs(current.contrast - 1.16f) < 0.02f && abs(current.saturation - 1.2f) < 0.02f
+        val isAlreadyEnhanced = abs(current.contrast - 1.15f) < 0.02f && abs(current.saturation - 1.2f) < 0.02f
         val nextAdj = if (isAlreadyEnhanced) {
             Adjustments()
         } else {
             Adjustments(
-                brightness = 0.03f,
-                contrast = 1.16f,
-                saturation = 1.2f,
-                exposure = 0.12f,
-                highlights = -0.1f,
+                brightness = 0.04f,
+                contrast = 1.15f,
+                saturation = 1.20f,
+                exposure = 0.10f,
+                highlights = -0.12f,
                 shadows = 0.16f
             )
         }
         _state.update { s ->
             s.copy(
                 clips = s.clips.map { if (it.id == main.id) it.copy(adjustments = nextAdj) else it },
-                sharpness = if (isAlreadyEnhanced) 0f else 0.25f
+                sharpness = if (isAlreadyEnhanced) 0f else 0.25f,
+                warmth = if (isAlreadyEnhanced) 0f else 0.04f
             )
         }
         ToastManager.showToast(if (isAlreadyEnhanced) "Auto-Enhance reset" else "Magic Auto-Enhance applied")
@@ -654,12 +874,48 @@ class ChromaPhotoEditorViewModel : ViewModel() {
         _state.update { it.copy(showHistogramHud = !it.showHistogramHud) }
     }
 
+    fun resetFilters() {
+        pushUndo()
+        updateSelected { it.copy(filter = FilterType.NONE) }
+        _state.update { it.copy(selectedPresetId = "ORIGINAL", filterIntensity = 1f) }
+        ToastManager.showToast("Filter reset to normal")
+    }
+
+    fun resetAdjustments() {
+        pushUndo()
+        updateSelected { it.copy(adjustments = Adjustments()) }
+        _state.update { it.copy(blur = 0f, warmth = 0f, tint = 0f, sharpness = 0f, vignette = 0f, grain = 0f) }
+        ToastManager.showToast("Adjustments reset to default")
+    }
+
+    fun resetOptics() {
+        pushUndo()
+        _state.update {
+            it.copy(
+                vignette = 0f,
+                grain = 0f,
+                sharpness = 0f,
+                warmth = 0f,
+                tint = 0f,
+                dehaze = 0f,
+                bloom = 0f,
+                chromaticAberration = 0f,
+                lightLeak = LightLeakType.NONE,
+                lightLeakIntensity = 0.65f,
+                splitToning = SplitToningState()
+            )
+        }
+        ToastManager.showToast("Optical FX reset")
+    }
+
     fun resetAllAdjustments() {
         pushUndo()
         updateSelected { it.copy(filter = FilterType.NONE, adjustments = Adjustments()) }
         _state.update {
             it.copy(
                 filterIntensity = 1.0f,
+                selectedPresetId = "ORIGINAL",
+                blur = 0f,
                 vignette = 0f,
                 grain = 0f,
                 sharpness = 0f,
@@ -720,6 +976,12 @@ class ChromaPhotoEditorViewModel : ViewModel() {
             isNeon = _state.value.activeBrushNeon
         )
         _state.update { it.copy(brushStrokes = it.brushStrokes + stroke) }
+    }
+
+    fun undoLastBrushStroke() {
+        if (_state.value.brushStrokes.isEmpty()) return
+        pushUndo()
+        _state.update { it.copy(brushStrokes = it.brushStrokes.dropLast(1)) }
     }
 
     fun clearBrushStrokes() {
@@ -799,7 +1061,7 @@ fun ChromaPhotoEditorScreen(
     }
 
     LaunchedEffect(photoUri) {
-        viewModel.initialize(photoUri.toString())
+        viewModel.initialize(photoUri.toString(), context)
     }
 
     // Suppress Dynamic Island while inside editor (same as ChromaVideoEditorScreen)
@@ -1066,13 +1328,13 @@ fun ChromaPhotoEditorScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ProjectRatio.values().forEach { ratio ->
-                    val selected = state.projectRatio == ratio
+                PhotoCropRatio.values().forEach { ratio ->
+                    val selected = state.cropRatio == ratio
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
                             .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
-                            .clickable { viewModel.setProjectRatio(ratio) }
+                            .clickable { viewModel.setCropRatio(ratio) }
                             .padding(horizontal = 12.dp, vertical = 5.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1170,7 +1432,8 @@ fun ChromaPhotoEditorScreen(
         }
     }
 
-    if (activeToolSheet != null && selectedClip != null) {
+    if (activeToolSheet != null) {
+        val targetClip = selectedClip ?: state.clips.firstOrNull()
         GlassBottomSheet(
             onDismissRequest = { activeToolSheet = null }
         ) {
@@ -1180,20 +1443,21 @@ fun ChromaPhotoEditorScreen(
                     .padding(bottom = 32.dp)
             ) {
                 when (activeToolSheet) {
-                    PhotoEditorTool.CROP -> PhotoCropPanel(
+                    PhotoEditorTool.CROP -> if (targetClip != null) PhotoCropPanel(
                         state = state,
-                        clip = selectedClip,
+                        clip = targetClip,
                         viewModel = viewModel
                     )
-                    PhotoEditorTool.FILTER -> PhotoFilterPanel(selectedClip, state, viewModel)
-                    PhotoEditorTool.ADJUST -> PhotoAdjustmentsPanel(selectedClip, state, viewModel)
+                    PhotoEditorTool.FILTER -> if (targetClip != null) PhotoFilterPanel(targetClip, state, viewModel)
+                    PhotoEditorTool.ADJUST -> if (targetClip != null) PhotoAdjustmentsPanel(targetClip, state, viewModel)
                     PhotoEditorTool.CURVES -> PhotoCurvesPanel(state, viewModel)
-                    PhotoEditorTool.COLOR_MIX -> PhotoColorMixPanel(selectedClip, state, viewModel)
+                    PhotoEditorTool.COLOR_MIX -> if (targetClip != null) PhotoColorMixPanel(targetClip, state, viewModel)
                     PhotoEditorTool.EFFECTS -> PhotoEffectsPanel(state, viewModel)
-                    PhotoEditorTool.TRANSFORM -> PhotoTransformPanel(selectedClip, state, viewModel)
-                    PhotoEditorTool.TEXT -> PhotoTextEditorPanel(selectedClip, viewModel)
-                    PhotoEditorTool.BLEND -> PhotoBlendPanel(selectedClip, viewModel)
-                    PhotoEditorTool.CHROMA_KEY -> PhotoChromaKeyPanel(selectedClip, viewModel)
+                    PhotoEditorTool.TRANSFORM -> if (targetClip != null) PhotoTransformPanel(targetClip, state, viewModel)
+                    PhotoEditorTool.TEXT -> if (targetClip != null) PhotoTextEditorPanel(targetClip, viewModel)
+                    PhotoEditorTool.STICKERS -> PhotoStickersPanel(state, viewModel)
+                    PhotoEditorTool.BLEND -> if (targetClip != null) PhotoBlendPanel(targetClip, viewModel)
+                    PhotoEditorTool.CHROMA_KEY -> if (targetClip != null) PhotoChromaKeyPanel(targetClip, viewModel)
                     PhotoEditorTool.MARKUP -> PhotoMarkupPanel(state, viewModel)
                     PhotoEditorTool.FRAME -> PhotoFramePanel(state, viewModel)
                     else -> {}
@@ -1251,10 +1515,8 @@ private fun PhotoPreviewArea(
     var currentStrokePoints by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var lastTapTimestamp by remember { mutableLongStateOf(0L) }
 
-    val projectAspect = remember(state.projectRatio) {
-        val w = state.projectRatio.w.toFloat()
-        val h = state.projectRatio.h.toFloat()
-        if (h > 0f) w / h else (9f / 16f)
+    val projectAspect = remember(state.cropRatio, state.nativeAspectRatio, state.projectRatio) {
+        state.effectiveAspectRatio
     }
 
     BoxWithConstraints(
@@ -1313,11 +1575,13 @@ private fun PhotoPreviewArea(
                     state.greenCurve,
                     state.blueCurve,
                     state.splitToning,
+                    state.selectedPresetId,
                     isComparing
                 ) {
                     if (isComparing) {
                         ColorMatrix()
                     } else {
+                        val preset = StudioPhotoPreset.findById(state.selectedPresetId)
                         buildPhotoPreviewColorMatrix(
                             filter = clip.filter,
                             filterIntensity = state.filterIntensity,
@@ -1330,7 +1594,8 @@ private fun PhotoPreviewArea(
                             redCurve = if (clip.trackId == 1) state.redCurve else ToneCurvePoints(),
                             greenCurve = if (clip.trackId == 1) state.greenCurve else ToneCurvePoints(),
                             blueCurve = if (clip.trackId == 1) state.blueCurve else ToneCurvePoints(),
-                            splitToning = if (clip.trackId == 1) state.splitToning else SplitToningState()
+                            splitToning = if (clip.trackId == 1) state.splitToning else SplitToningState(),
+                            customPresetMatrix = if (clip.trackId == 1) preset?.colorMatrix else null
                         ).toComposeColorMatrix()
                     }
                 }
@@ -1397,6 +1662,17 @@ private fun PhotoPreviewArea(
                                 )
                             }
 
+                            val blurModifier = if (clip.trackId == 1 && state.blur > 0.01f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                Modifier.graphicsLayer {
+                                    val blurPx = state.blur * 50f
+                                    renderEffect = android.graphics.RenderEffect.createBlurEffect(
+                                        blurPx,
+                                        blurPx,
+                                        android.graphics.Shader.TileMode.CLAMP
+                                    ).asComposeRenderEffect()
+                                }
+                            } else Modifier
+
                             AsyncImage(
                                 model = clip.uri,
                                 contentDescription = clip.name,
@@ -1407,6 +1683,7 @@ private fun PhotoPreviewArea(
                                         if (clip.trackId == 1) Modifier.fillMaxSize()
                                         else Modifier.widthIn(max = 220.dp)
                                     )
+                                    .then(blurModifier)
                                     .offset(x = ct.x.dp, y = ct.y.dp)
                                     .graphicsLayer(
                                         scaleX = ct.scale * flipH,
@@ -2175,399 +2452,8 @@ private fun LiveRgbHistogramCard(
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// QUICK ACTIONS PANEL (Exact 3-item glassmorphic panel as ChromaVideoEditorScreen)
-// ═══════════════════════════════════════════════════════════════════════════════
 
-@Composable
-private fun PhotoQuickActionsPanel(
-    onAddMedia: () -> Unit,
-    onLayers: () -> Unit,
-    onSettings: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .height(72.dp)
-            .shadow(2.dp, RoundedCornerShape(20.dp), spotColor = Color(0x1A000000), ambientColor = Color(0x1A000000))
-            .hazeChild(state = LocalHazeState.current, shape = RoundedCornerShape(20.dp))
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color.White.copy(alpha = 0.6f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(20.dp))
-            .padding(horizontal = 4.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        PhotoQuickActionButton(icon = Lucide.Plus, label = "Add Media", onClick = onAddMedia)
-        Box(modifier = Modifier.width(1.dp).height(32.dp).background(Color(0xFFF3F4F6)))
-        PhotoQuickActionButton(icon = Lucide.Layers, label = "Layers", onClick = onLayers)
-        Box(modifier = Modifier.width(1.dp).height(32.dp).background(Color(0xFFF3F4F6)))
-        PhotoQuickActionButton(icon = Lucide.Settings, label = "Settings", onClick = onSettings)
-    }
-}
 
-@Composable
-private fun RowScope.PhotoQuickActionButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .weight(1f)
-            .fillMaxHeight()
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(icon, contentDescription = label, tint = Color(0xFF374151), modifier = Modifier.size(22.dp))
-        Spacer(Modifier.height(4.dp))
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF4B5563))
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// PHOTO LAYER WORKSPACE (Same 5-Track Left Gutter + Track Bars as ChromaTimeline)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-@Composable
-private fun ChromaPhotoTrackWorkspace(
-    modifier: Modifier,
-    state: PhotoProjectState,
-    onSelectClip: (String) -> Unit,
-    onDeselectClip: () -> Unit,
-    onZoom: (Float) -> Unit,
-    onToggleVisibility: (Int) -> Unit,
-    onToggleLock: (Int) -> Unit,
-    onOpenTool: (PhotoEditorTool) -> Unit
-) {
-    val colors = LocalOscellionColors.current
-    val pps = state.pixelsPerSecond
-    val trackGutterDp = 110.dp
-    val trackHeightDp = 44.dp
-    val verticalScrollState = rememberScrollState()
-
-    val trackColors = listOf(
-        Color(0xFF3B82F6), // 1: Photo (Blue)
-        Color(0xFFA855F7), // 2: Overlay (Purple)
-        Color(0xFFFCD34D), // 3: Text (Yellow)
-        Color(0xFF22C55E), // 4: Markup (Green)
-        Color(0xFFEC4899)  // 5: Stickers (Pink)
-    )
-    val trackLabels = listOf("Photo", "Overlay", "Text", "Markup", "Stickers")
-    val trackIcons = listOf(Lucide.Image, Lucide.Layers, Lucide.Type, Lucide.Brush, Lucide.Sticker)
-
-    val hazeState = LocalHazeState.current
-
-    Column(
-        modifier = modifier
-            .hazeChild(state = hazeState, shape = RectangleShape)
-            .background(colors.bg.copy(alpha = 0.5f))
-    ) {
-        // Zoom / Scale row using AppleSlider (Matches ChromaTimeline)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Icon(Lucide.ZoomIn, contentDescription = "Zoom", tint = colors.textMuted, modifier = Modifier.size(12.dp))
-            AppleSlider(
-                value = pps,
-                onValueChange = onZoom,
-                valueRange = 20f..200f,
-                modifier = Modifier.weight(1f)
-            )
-            Text("${String.format("%.1f", pps / 60f)}×", color = colors.textMuted, fontSize = 9.sp)
-        }
-
-        // 5-Track Row Area
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .verticalScroll(verticalScrollState)
-        ) {
-            // Left Gutter (Exact 110.dp track headers with Eye & Lock icons)
-            Column(
-                modifier = Modifier
-                    .width(trackGutterDp)
-                    .background(colors.bg)
-                    .padding(top = 16.dp, start = 12.dp, end = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                (0..4).forEach { i ->
-                    val trackId = i + 1
-                    val isVisible = state.trackVisibility[trackId] ?: true
-                    val isLocked = state.trackLock[trackId] ?: false
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(trackHeightDp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White)
-                            .border(0.5.dp, Color(0xFFF3F4F6), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(trackColors[i]),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = trackIcons[i],
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                            Text(
-                                text = trackLabels[i],
-                                color = Color(0xFF1F2937),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = if (isVisible) Lucide.Eye else Lucide.EyeOff,
-                                contentDescription = "Toggle Visibility",
-                                tint = if (isVisible) Color(0xFF9CA3AF) else Color(0xFFD1D5DB),
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .clickable { onToggleVisibility(trackId) }
-                            )
-                            Icon(
-                                imageVector = if (isLocked) Lucide.Lock else Lucide.LockOpen,
-                                contentDescription = "Toggle Lock",
-                                tint = if (isLocked) Color(0xFF9CA3AF) else Color(0xFFD1D5DB),
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .clickable { onToggleLock(trackId) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Right Layer Bars Area
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 12.dp)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        onClick = onDeselectClip
-                    )
-            ) {
-                // Luminance / Tone Ruler Header (16.dp height matching TimeRuler)
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(16.dp)
-                        .background(colors.glassBg.copy(alpha = 0.3f))
-                ) {
-                    val steps = 20
-                    val stepW = size.width / steps
-                    for (i in 0..steps) {
-                        val x = i * stepW
-                        drawLine(
-                            color = colors.textMuted,
-                            start = Offset(x, if (i % 5 == 0) 2f else 8f),
-                            end = Offset(x, size.height),
-                            strokeWidth = 1f
-                        )
-                    }
-                }
-
-                // 5 Track Rows
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    (1..5).forEach { trackId ->
-                        PhotoTrackRow(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(trackHeightDp),
-                            trackId = trackId,
-                            trackColor = trackColors[trackId - 1],
-                            clips = state.clips.filter { it.trackId == trackId },
-                            selectedClipId = state.selectedClipId,
-                            brushStrokeCount = state.brushStrokes.size,
-                            onClipTap = onSelectClip,
-                            onOpenTool = onOpenTool
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PhotoTrackRow(
-    modifier: Modifier,
-    trackId: Int,
-    trackColor: Color,
-    clips: List<Clip>,
-    selectedClipId: String?,
-    brushStrokeCount: Int,
-    onClipTap: (String) -> Unit,
-    onOpenTool: (PhotoEditorTool) -> Unit
-) {
-    val colors = LocalOscellionColors.current
-
-    Box(
-        modifier = modifier
-            .background(colors.bg.copy(alpha = 0.2f))
-            .border(BorderStroke(0.5.dp, colors.glassBorder.copy(alpha = 0.2f)))
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        if (trackId == 4) {
-            // Track 4: Markup Brush Bar
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(if (brushStrokeCount > 0) trackColor else trackColor.copy(alpha = 0.25f))
-                    .border(0.5.dp, Color.Black.copy(alpha = 0.15f), RoundedCornerShape(5.dp))
-                    .clickable { onOpenTool(PhotoEditorTool.MARKUP) }
-                    .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Text(
-                    text = if (brushStrokeCount > 0) "Markup ($brushStrokeCount strokes)" else "Tap to draw markup",
-                    color = Color.White.copy(alpha = 0.92f),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        } else if (clips.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(Color.White.copy(alpha = 0.35f)),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Text(
-                    text = "Empty track",
-                    color = colors.textMuted.copy(alpha = 0.6f),
-                    fontSize = 9.sp,
-                    modifier = Modifier.padding(horizontal = 8.dp)
-                )
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                clips.forEach { clip ->
-                    val selected = clip.id == selectedClipId
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(trackColor)
-                            .then(
-                                if (selected) Modifier.border(1.5.dp, Color.White, RoundedCornerShape(5.dp))
-                                else Modifier.border(0.5.dp, Color.Black.copy(alpha = 0.2f), RoundedCornerShape(5.dp))
-                            )
-                            .clickable { onClipTap(clip.id) },
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        // Subtle histogram waveform overlay inside the bar (Matches WaveformOverlay)
-                        PhotoHistogramBarOverlay(
-                            clip = clip,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 4.dp)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = when (clip.type) {
-                                    MediaType.TEXT -> clip.text.take(16)
-                                    else -> clip.name
-                                },
-                                color = Color.White.copy(alpha = 0.92f),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            val badgeText = buildString {
-                                if (clip.filter != FilterType.NONE) append(clip.filter.label)
-                                if (clip.blendMode != BlendMode.NORMAL) {
-                                    if (isNotEmpty()) append(" • ")
-                                    append(clip.blendMode.name.lowercase())
-                                }
-                            }
-                            if (badgeText.isNotEmpty()) {
-                                Text(
-                                    text = badgeText,
-                                    color = Color.White.copy(alpha = 0.8f),
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PhotoHistogramBarOverlay(clip: Clip, modifier: Modifier) {
-    val colors = LocalOscellionColors.current
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val barWidth = 3.dp.toPx()
-        val spacing = 1.dp.toPx()
-        val totalBars = (w / (barWidth + spacing)).toInt().coerceAtLeast(1)
-
-        var seed = clip.id.hashCode()
-        for (i in 0 until totalBars) {
-            seed = seed * 31 + 17
-            val n = abs(seed % 100) / 100f
-            val contrastBoost = clip.adjustments.contrast.coerceIn(0.4f, 1.8f)
-            val barHeight = (h * 0.15f + (h * 0.55f * n * contrastBoost)).coerceAtMost(h * 0.9f)
-            val x = i * (barWidth + spacing)
-            val y = (h - barHeight) / 2f
-            drawRect(
-                color = colors.onPrimary.copy(alpha = 0.25f),
-                topLeft = Offset(x, y),
-                size = Size(barWidth, barHeight)
-            )
-        }
-    }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HORIZONTAL TOOLBAR (Exact same bottom bar style as ChromaVideoEditorScreen)
@@ -2595,12 +2481,16 @@ private fun PhotoHorizontalToolbar(
         ToolItem(Lucide.Crop, "Crop", Color(0xFF0381FE), { onOpenTool(PhotoEditorTool.CROP) }),
         ToolItem(Lucide.SlidersHorizontal, "Filter", Color(0xFFFF9500), { onOpenTool(PhotoEditorTool.FILTER) }),
         ToolItem(Lucide.Settings2, "Adjust", Color(0xFF34C759), { onOpenTool(PhotoEditorTool.ADJUST) }),
-        ToolItem(Lucide.Activity, "Curves", Color(0xFF5856D6), { onOpenTool(PhotoEditorTool.CURVES) }),
+        ToolItem(Lucide.Activity, "Curves", Color(0xFF5856D6), { onOpenTool(PhotoEditorTool.CURVES) }, requiresClip = false),
         ToolItem(Lucide.Palette, "Color Mix", Color(0xFFAF52DE), { onOpenTool(PhotoEditorTool.COLOR_MIX) }),
         ToolItem(Lucide.Sparkles, "Effects", Color(0xFFFF2D55), { onOpenTool(PhotoEditorTool.EFFECTS) }, requiresClip = false),
-        ToolItem(Lucide.Type, "Text", Color(0xFFFF3B30), { onOpenTool(PhotoEditorTool.TEXT) }),
+        ToolItem(Lucide.Type, "Text", Color(0xFFFF3B30), { onOpenTool(PhotoEditorTool.TEXT) }, requiresClip = false),
+        ToolItem(Lucide.Sticker, "Stickers", Color(0xFFEC4899), { onOpenTool(PhotoEditorTool.STICKERS) }, requiresClip = false),
         ToolItem(Lucide.Brush, "Markup", Color(0xFF30B0C7), { onOpenTool(PhotoEditorTool.MARKUP) }, requiresClip = false),
         ToolItem(Lucide.Frame, "Frame", Color(0xFF5856D6), { onOpenTool(PhotoEditorTool.FRAME) }, requiresClip = false),
+        ToolItem(Lucide.Move, "Transform", Color(0xFF007AFF), { onOpenTool(PhotoEditorTool.TRANSFORM) }),
+        ToolItem(Lucide.Layers, "Blend", Color(0xFF8E8E93), { onOpenTool(PhotoEditorTool.BLEND) }),
+        ToolItem(Lucide.Zap, "Chroma Key", Color(0xFF34C759), { onOpenTool(PhotoEditorTool.CHROMA_KEY) }),
         ToolItem(Lucide.RotateCw, "Rotate", Color(0xFF0381FE), { onRotate() }),
         ToolItem(Lucide.Copy, "Duplicate", Color(0xFF5856D6), { onDuplicate() }),
         ToolItem(Lucide.Trash2, "Delete", Color(0xFFFF3B30), { onDelete() })
@@ -2655,88 +2545,146 @@ private fun PhotoCropPanel(
     viewModel: ChromaPhotoEditorViewModel
 ) {
     val colors = LocalOscellionColors.current
+    val t = clip.transform
+    val baseRotation = ((t.rotation / 90f).roundToInt() * 90f)
+    val straighten = ((t.rotation - baseRotation + 180f) % 360f - 180f).coerceIn(-45f, 45f)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Crop & Ratio", color = colors.textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Crop & Orientation", color = colors.textMain, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Reset",
+                    color = Color(0xFFFF3B30),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clickable { viewModel.resetTransform() }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                )
                 GlassIconButton(
                     onClick = { viewModel.toggleFlipHorizontal(clip.id) },
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Lucide.FlipHorizontal,
                         contentDescription = "Flip H",
                         tint = colors.textMain,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
                 GlassIconButton(
                     onClick = { viewModel.toggleFlipVertical(clip.id) },
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Lucide.FlipVertical,
                         contentDescription = "Flip V",
                         tint = colors.textMain,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
                 GlassIconButton(
-                    onClick = { viewModel.rotate90Degrees() },
-                    modifier = Modifier.size(34.dp)
+                    onClick = { viewModel.rotate90Degrees(false) },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.RotateCcw,
+                        contentDescription = "Rotate CCW",
+                        tint = colors.textMain,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                GlassIconButton(
+                    onClick = { viewModel.rotate90Degrees(true) },
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         imageVector = Lucide.RotateCw,
-                        contentDescription = "Rotate",
+                        contentDescription = "Rotate CW",
                         tint = colors.textMain,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
         }
 
-        // Aspect Ratio Chips (Same ProjectRatio enum as ChromaVideoEditorScreen)
+        // Aspect Ratio Chips
+        Text("Aspect Ratio", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            ProjectRatio.values().forEach { ratio ->
-                val selected = state.projectRatio == ratio
+            PhotoCropRatio.values().forEach { ratio ->
+                val selected = state.cropRatio == ratio
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (selected) Color(0xFF3B82F6) else Color(0xFFF3F4F6))
-                        .border(1.dp, if (selected) Color(0xFF3B82F6) else Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
-                        .clickable { viewModel.setProjectRatio(ratio) }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
+                        .border(1.dp, if (selected) Color(0xFF0381FE) else Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
+                        .clickable { viewModel.setCropRatio(ratio) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = ratio.label,
                         color = if (selected) Color.White else Color(0xFF374151),
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                     )
                 }
             }
         }
 
-        val t = clip.transform
-        PropertySlider("Straighten", t.rotation, -45f, 45f) {
-            viewModel.setTransform(t.copy(rotation = it))
+        // Fit / Fill / Crop Mode Chips
+        Text("Scale Fit Mode", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                VideoFitMode.FIT to "Fit (Letterbox)",
+                VideoFitMode.FILL to "Fill (Stretch)",
+                VideoFitMode.CROP to "Crop (Fill Frame)"
+            ).forEach { (mode, label) ->
+                val selected = state.videoFitMode == mode
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(34.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
+                        .clickable { viewModel.setVideoFitMode(mode) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        color = if (selected) Color.White else Color(0xFF374151),
+                        fontSize = 11.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
         }
-        PropertySlider("Zoom Scale", t.scale, 0.5f, 4f) {
+
+        PropertySlider("Straighten (${straighten.roundToInt()}°)", straighten, -45f, 45f) {
+            viewModel.setTransform(t.copy(rotation = baseRotation + it))
+        }
+        PropertySlider("Zoom Scale (${String.format("%.1fx", t.scale)})", t.scale, 0.5f, 4f) {
             viewModel.setTransform(t.copy(scale = it))
         }
     }
@@ -2749,117 +2697,204 @@ private fun PhotoFilterPanel(
     viewModel: ChromaPhotoEditorViewModel
 ) {
     val colors = LocalOscellionColors.current
-    val filters = FilterType.values().toList()
+    var selectedCategory by remember { mutableStateOf("All") }
+    val categories = listOf("All", "Film", "Mood", "Portrait", "Color")
 
-    val filterGradients: Map<FilterType, List<Color>> = mapOf(
-        FilterType.NONE to listOf(Color(0xFF252525), Color(0xFF3D3D3D)),
-        FilterType.GRAYSCALE to listOf(Color(0xFF606060), Color(0xFF909090)),
-        FilterType.SEPIA to listOf(Color(0xFF704214), Color(0xFFB8884A)),
-        FilterType.INVERT to listOf(Color(0xFF001AFF), Color(0xFFFF1493)),
-        FilterType.WARM to listOf(Color(0xFFFF6B35), Color(0xFFFFD700)),
-        FilterType.COOL to listOf(Color(0xFF0066CC), Color(0xFF00CCFF)),
-        FilterType.CINEMATIC to listOf(Color(0xFF0D1B2A), Color(0xFF1B4332)),
-        FilterType.FADE to listOf(Color(0xFFB0998A), Color(0xFFD4BFB0)),
-        FilterType.VIVID to listOf(Color(0xFFFF0080), Color(0xFF00FFCC)),
-        FilterType.MATTE to listOf(Color(0xFF7A6855), Color(0xFF9B8B72)),
-        FilterType.NEON to listOf(Color(0xFF00FF41), Color(0xFF0066FF)),
-        FilterType.SUNSET to listOf(Color(0xFFFF4E00), Color(0xFF990000)),
-        FilterType.NOIR to listOf(colors.glassBg, colors.glassBorder)
-    )
+    val presets = remember(selectedCategory) {
+        if (selectedCategory == "All") StudioPhotoPreset.ALL_PRESETS
+        else StudioPhotoPreset.ALL_PRESETS.filter { it.category.equals(selectedCategory, ignoreCase = true) }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(
-            "  Filter",
-            color = colors.textMuted,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(bottom = 10.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Studio Looks & Presets",
+                color = colors.textMain,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            if (state.selectedPresetId != "ORIGINAL" || clip.filter != FilterType.NONE) {
+                Text(
+                    text = "Reset",
+                    color = Color(0xFFFF3B30),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable { viewModel.resetFilters() }
+                )
+            }
+        }
 
+        // Category Pills
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            categories.forEach { cat ->
+                val selected = selectedCategory == cat
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
+                        .clickable { selectedCategory = cat }
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = cat,
+                        color = if (selected) Color.White else Color(0xFF4B5563),
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        // Preset Thumbnails Horizontal Scroll
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            filters.forEach { filter ->
-                val selected = clip.filter == filter
-                val gradColors = filterGradients[filter] ?: listOf(Color.Gray, Color.DarkGray)
+            // "Normal" (Original) Card
+            val isNormalSelected = state.selectedPresetId == "ORIGINAL" && clip.filter == FilterType.NONE
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.clickable { viewModel.resetFilters() }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 64.dp, height = 82.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF262626))
+                        .border(
+                            width = if (isNormalSelected) 2.dp else 0.5.dp,
+                            color = if (isNormalSelected) Color(0xFF0381FE) else Color(0xFFE5E7EB),
+                            shape = RoundedCornerShape(12.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!clip.uri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = clip.uri,
+                            contentDescription = "Original",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text("Original", color = Color.White, fontSize = 10.sp)
+                    }
+                    if (isNormalSelected) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF0381FE).copy(alpha = 0.2f))
+                        )
+                        Icon(
+                            imageVector = Lucide.Check,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .size(14.dp)
+                                .background(Color(0xFF0381FE), CircleShape)
+                                .padding(2.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Original",
+                    color = if (isNormalSelected) Color(0xFF0381FE) else colors.textMuted,
+                    fontSize = 10.sp,
+                    fontWeight = if (isNormalSelected) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+
+            // 20 Studio Presets
+            for (preset in presets) {
+                val selected = state.selectedPresetId == preset.id
+                val presetColorMatrix = remember(preset.id) {
+                    preset.colorMatrix?.let { ColorMatrix(it) } ?: ColorMatrix()
+                }
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clickable { viewModel.setFilter(filter) }
+                    modifier = Modifier.clickable { viewModel.setStudioPreset(preset) }
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(width = 60.dp, height = 78.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Brush.linearGradient(gradColors))
-                            .then(
-                                if (selected) Modifier.border(2.dp, colors.primary, RoundedCornerShape(10.dp))
-                                else Modifier.border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
+                            .size(width = 64.dp, height = 82.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Brush.linearGradient(preset.previewColors))
+                            .border(
+                                width = if (selected) 2.dp else 0.5.dp,
+                                color = if (selected) Color(0xFF0381FE) else Color(0xFFE5E7EB),
+                                shape = RoundedCornerShape(12.dp)
                             )
                     ) {
                         if (!clip.uri.isNullOrBlank()) {
                             AsyncImage(
                                 model = clip.uri,
-                                contentDescription = filter.label,
+                                contentDescription = preset.name,
                                 contentScale = ContentScale.Crop,
-                                colorFilter = filter.toColorFilter(),
+                                colorFilter = ColorFilter.colorMatrix(presetColorMatrix),
                                 modifier = Modifier.fillMaxSize()
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(28.dp)
-                                    .align(Alignment.BottomCenter)
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(Color.Transparent, Color(0x99000000))
-                                        )
-                                    )
                             )
                         }
                         if (selected) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(colors.primary.copy(alpha = 0.15f))
+                                    .background(Color(0xFF0381FE).copy(alpha = 0.2f))
                             )
                             Icon(
-                                Lucide.Check,
+                                imageVector = Lucide.Check,
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(4.dp)
                                     .size(14.dp)
-                                    .background(colors.primary, CircleShape)
+                                    .background(Color(0xFF0381FE), CircleShape)
                                     .padding(2.dp)
                             )
                         }
                     }
-                    Spacer(Modifier.height(5.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = filter.label,
-                        color = if (selected) colors.primary else colors.textMuted,
-                        fontSize = 9.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                        text = preset.name,
+                        color = if (selected) Color(0xFF0381FE) else colors.textMuted,
+                        fontSize = 10.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
         }
 
-        if (clip.filter != FilterType.NONE) {
-            Spacer(Modifier.height(12.dp))
-            Box(modifier = Modifier.padding(horizontal = 14.dp)) {
+        // Intensity Slider
+        if (state.selectedPresetId != "ORIGINAL" || clip.filter != FilterType.NONE) {
+            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                 PropertySlider(
-                    label = "Intensity",
+                    label = "Preset Strength",
                     value = state.filterIntensity,
                     min = 0f,
                     max = 1f,
@@ -2876,26 +2911,84 @@ private fun PhotoAdjustmentsPanel(
     state: PhotoProjectState,
     viewModel: ChromaPhotoEditorViewModel
 ) {
+    val colors = LocalOscellionColors.current
     val adj = clip.adjustments
+    var activeTab by remember { mutableStateOf("Light") }
+    val tabs = listOf("Light", "Color", "Optics")
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 14.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        PropertySlider("Brightness", adj.brightness, -1f, 1f) { viewModel.setAdjustments(adj.copy(brightness = it)) }
-        PropertySlider("Contrast", adj.contrast, 0f, 2f) { viewModel.setAdjustments(adj.copy(contrast = it)) }
-        PropertySlider("Saturation", adj.saturation, 0f, 3f) { viewModel.setAdjustments(adj.copy(saturation = it)) }
-        PropertySlider("Hue", adj.hue, 0f, 360f) { viewModel.setAdjustments(adj.copy(hue = it)) }
-        PropertySlider("Exposure", adj.exposure, -2f, 2f) { viewModel.setAdjustments(adj.copy(exposure = it)) }
-        PropertySlider("Highlights", adj.highlights, -1f, 1f) { viewModel.setAdjustments(adj.copy(highlights = it)) }
-        PropertySlider("Shadows", adj.shadows, -1f, 1f) { viewModel.setAdjustments(adj.copy(shadows = it)) }
-        PropertySlider("Warmth", state.warmth, -1f, 1f) { viewModel.setOptics(warmth = it) }
-        PropertySlider("Tint", state.tint, -1f, 1f) { viewModel.setOptics(tint = it) }
-        PropertySlider("Clarity", state.sharpness, 0f, 1f) { viewModel.setOptics(sharpness = it) }
-        PropertySlider("Vignette", state.vignette, 0f, 1f) { viewModel.setOptics(vignette = it) }
-        PropertySlider("Film Grain", state.grain, 0f, 1f) { viewModel.setOptics(grain = it) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Adjustments", color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = "Reset All",
+                color = Color(0xFFFF3B30),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { viewModel.resetAdjustments() }
+            )
+        }
+
+        // Segmented Tabs
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFFF3F4F6))
+                .padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            tabs.forEach { tab ->
+                val sel = activeTab == tab
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (sel) Color.White else Color.Transparent)
+                        .clickable { activeTab = tab },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = tab,
+                        color = if (sel) Color(0xFF111827) else Color(0xFF6B7280),
+                        fontSize = 12.sp,
+                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        when (activeTab) {
+            "Light" -> {
+                PropertySlider("Exposure", adj.exposure, -2f, 2f) { viewModel.setAdjustments(adj.copy(exposure = it)) }
+                PropertySlider("Brightness", adj.brightness, -1f, 1f) { viewModel.setAdjustments(adj.copy(brightness = it)) }
+                PropertySlider("Contrast", adj.contrast, 0f, 2f) { viewModel.setAdjustments(adj.copy(contrast = it)) }
+                PropertySlider("Highlights", adj.highlights, -1f, 1f) { viewModel.setAdjustments(adj.copy(highlights = it)) }
+                PropertySlider("Shadows", adj.shadows, -1f, 1f) { viewModel.setAdjustments(adj.copy(shadows = it)) }
+            }
+            "Color" -> {
+                PropertySlider("Saturation", adj.saturation, 0f, 3f) { viewModel.setAdjustments(adj.copy(saturation = it)) }
+                PropertySlider("Warmth", state.warmth, -1f, 1f) { viewModel.setOptics(warmth = it) }
+                PropertySlider("Tint", state.tint, -1f, 1f) { viewModel.setOptics(tint = it) }
+                PropertySlider("Hue Shift", adj.hue, 0f, 360f) { viewModel.setAdjustments(adj.copy(hue = it)) }
+            }
+            "Optics" -> {
+                PropertySlider("Clarity", state.sharpness, 0f, 1f) { viewModel.setOptics(sharpness = it) }
+                PropertySlider("Studio Blur", state.blur, 0f, 1f) { viewModel.setBlur(it) }
+                PropertySlider("Vignette", state.vignette, 0f, 1f) { viewModel.setOptics(vignette = it) }
+                PropertySlider("Film Grain", state.grain, 0f, 1f) { viewModel.setOptics(grain = it) }
+            }
+        }
     }
 }
 
@@ -3072,12 +3165,56 @@ private fun PhotoColorMixPanel(
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Split Toning & Color Mix", color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Split Toning & Color Grade", color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = "Reset",
+                color = Color(0xFFFF3B30),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable {
+                    viewModel.updateSplitToning(SplitToningState())
+                    viewModel.setOptics(warmth = 0f, tint = 0f)
+                }
+            )
+        }
+
+        // Quick Cinematic Grade Presets
+        Text("Grade Presets", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val grades = listOf(
+                "Teal & Orange" to SplitToningState(highlightHue = 35f, highlightStrength = 0.45f, shadowHue = 195f, shadowStrength = 0.42f),
+                "Vintage Gold" to SplitToningState(highlightHue = 45f, highlightStrength = 0.5f, shadowHue = 30f, shadowStrength = 0.35f),
+                "Cyberpunk" to SplitToningState(highlightHue = 320f, highlightStrength = 0.5f, shadowHue = 180f, shadowStrength = 0.45f),
+                "Emerald" to SplitToningState(highlightHue = 50f, highlightStrength = 0.35f, shadowHue = 155f, shadowStrength = 0.4f),
+                "Clean Neutral" to SplitToningState()
+            )
+            grades.forEach { (label, preset) ->
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFF3F4F6))
+                        .clickable { viewModel.updateSplitToning(preset) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(label, color = Color(0xFF374151), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
 
         Text("Highlight Grade", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-        PropertySlider("Hi Hue", st.highlightHue, 0f, 360f) {
+        PropertySlider("Hi Hue (${st.highlightHue.toInt()}°)", st.highlightHue, 0f, 360f) {
             viewModel.updateSplitToning(st.copy(highlightHue = it))
         }
         PropertySlider("Hi Amount", st.highlightStrength, 0f, 1f) {
@@ -3085,7 +3222,7 @@ private fun PhotoColorMixPanel(
         }
 
         Text("Shadow Grade", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-        PropertySlider("Sh Hue", st.shadowHue, 0f, 360f) {
+        PropertySlider("Sh Hue (${st.shadowHue.toInt()}°)", st.shadowHue, 0f, 360f) {
             viewModel.updateSplitToning(st.copy(shadowHue = it))
         }
         PropertySlider("Sh Amount", st.shadowStrength, 0f, 1f) {
@@ -3095,7 +3232,7 @@ private fun PhotoColorMixPanel(
         Text("White Balance & Global Hue", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         PropertySlider("Warmth", state.warmth, -1f, 1f) { viewModel.setOptics(warmth = it) }
         PropertySlider("Tint", state.tint, -1f, 1f) { viewModel.setOptics(tint = it) }
-        PropertySlider("Hue Shift", adj.hue, 0f, 360f) { viewModel.setAdjustments(adj.copy(hue = it)) }
+        PropertySlider("Hue Shift (${adj.hue.toInt()}°)", adj.hue, 0f, 360f) { viewModel.setAdjustments(adj.copy(hue = it)) }
         PropertySlider("Vibrance", adj.saturation, 0f, 3f) { viewModel.setAdjustments(adj.copy(saturation = it)) }
     }
 }
@@ -3114,7 +3251,20 @@ private fun PhotoEffectsPanel(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Optical FX & Light Leaks", color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Optical FX & Atmospheric Overlays", color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = "Reset",
+                color = Color(0xFFFF3B30),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { viewModel.resetOptics() }
+            )
+        }
 
         // Studio Light Leak Presets
         Text("Light Leak Overlay", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
@@ -3153,19 +3303,19 @@ private fun PhotoEffectsPanel(
         PropertySlider("RGB Split", state.chromaticAberration, 0f, 1f) {
             viewModel.setOptics(chromaticAberration = it)
         }
-        PropertySlider("Halation", state.bloom, 0f, 1f) {
+        PropertySlider("Halation / Bloom", state.bloom, 0f, 1f) {
             viewModel.setOptics(bloom = it)
         }
-        PropertySlider("Dehaze", state.dehaze, -1f, 1f) {
+        PropertySlider("Atmospheric Dehaze", state.dehaze, -1f, 1f) {
             viewModel.setOptics(dehaze = it)
         }
-        PropertySlider("Clarity", state.sharpness, 0f, 1f) {
+        PropertySlider("Clarity Boost", state.sharpness, 0f, 1f) {
             viewModel.setOptics(sharpness = it)
         }
-        PropertySlider("Vignette", state.vignette, 0f, 1f) {
+        PropertySlider("Lens Vignette", state.vignette, 0f, 1f) {
             viewModel.setOptics(vignette = it)
         }
-        PropertySlider("Film Grain", state.grain, 0f, 1f) {
+        PropertySlider("35mm Film Grain", state.grain, 0f, 1f) {
             viewModel.setOptics(grain = it)
         }
     }
@@ -3177,6 +3327,7 @@ private fun PhotoTransformPanel(
     state: PhotoProjectState,
     viewModel: ChromaPhotoEditorViewModel
 ) {
+    val colors = LocalOscellionColors.current
     val t = clip.transform
     val isFlippedH = state.flipHorizontalMap[clip.id] == true
     val isFlippedV = state.flipVerticalMap[clip.id] == true
@@ -3185,12 +3336,41 @@ private fun PhotoTransformPanel(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 14.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Transform & Geometry", color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Center",
+                    color = Color(0xFF0381FE),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable {
+                        viewModel.setTransform(t.copy(x = 0f, y = 0f))
+                    }
+                )
+                Text(
+                    text = "Reset",
+                    color = Color(0xFFFF3B30),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable {
+                        viewModel.resetTransform()
+                    }
+                )
+            }
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp),
+                .padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             PhotoToggleChip(
@@ -3206,11 +3386,22 @@ private fun PhotoTransformPanel(
                 modifier = Modifier.weight(1f)
             )
         }
-        PropertySlider("Scale", t.scale, 0.1f, 3f) { viewModel.setTransform(t.copy(scale = it)) }
-        PropertySlider("X Pos", t.x, -500f, 500f) { viewModel.setTransform(t.copy(x = it)) }
-        PropertySlider("Y Pos", t.y, -500f, 500f) { viewModel.setTransform(t.copy(y = it)) }
-        PropertySlider("Rotate", t.rotation, -180f, 180f) { viewModel.setTransform(t.copy(rotation = it)) }
-        PropertySlider("Opacity", t.opacity, 0f, 1f) { viewModel.setTransform(t.copy(opacity = it)) }
+
+        PropertySlider("Scale (${String.format("%.1fx", t.scale)})", t.scale, 0.1f, 3.5f) {
+            viewModel.setTransform(t.copy(scale = it))
+        }
+        PropertySlider("X Position (${t.x.roundToInt()} px)", t.x, -500f, 500f) {
+            viewModel.setTransform(t.copy(x = it))
+        }
+        PropertySlider("Y Position (${t.y.roundToInt()} px)", t.y, -500f, 500f) {
+            viewModel.setTransform(t.copy(y = it))
+        }
+        PropertySlider("Rotation (${t.rotation.roundToInt()}°)", t.rotation, -180f, 180f) {
+            viewModel.setTransform(t.copy(rotation = it))
+        }
+        PropertySlider("Opacity (${(t.opacity * 100).roundToInt()}%)", t.opacity, 0f, 1f) {
+            viewModel.setTransform(t.copy(opacity = it))
+        }
     }
 }
 
@@ -3377,23 +3568,168 @@ private fun PhotoToggleChip(
 }
 
 @Composable
-private fun PhotoBlendPanel(clip: Clip, viewModel: ChromaPhotoEditorViewModel) {
+private fun PhotoStickersPanel(
+    state: PhotoProjectState,
+    viewModel: ChromaPhotoEditorViewModel
+) {
     val colors = LocalOscellionColors.current
-    val modes = BlendMode.values().toList()
+    var activeCategory by remember { mutableStateOf("Emoji") }
+
+    val emojis = listOf(
+        "✨", "🔥", "📸", "❤️", "🌟", "🌈", "⚡", "🎨",
+        "🌸", "🦋", "🕶️", "💫", "💎", "🍕", "🚀", "👑",
+        "🎉", "🥂", "☀️", "🌙", "🎵", "🕊️", "☕", "🌊"
+    )
+
+    val studioBadges = listOf(
+        "OSCELLION", "STUDIO 35MM", "PORTRA 400", "CINEMA 4K",
+        "GOLD 200", "ANALOG", "RAW EDIT", "RETRO LOOK"
+    )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Blend Mode", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Stickers & Overlays", color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = "${state.clips.count { it.trackId == 5 }} placed",
+                color = colors.textMuted,
+                fontSize = 12.sp
+            )
+        }
+
+        // Category pills
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf("Emoji", "Badges").forEach { cat ->
+                val sel = activeCategory == cat
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(34.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (sel) Color(0xFF0381FE) else Color(0xFFF3F4F6))
+                        .clickable { activeCategory = cat },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = cat,
+                        color = if (sel) Color.White else Color(0xFF374151),
+                        fontSize = 12.sp,
+                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        if (activeCategory == "Emoji") {
+            emojis.chunked(6).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    row.forEach { emoji ->
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFFF9FAFB))
+                                .border(0.5.dp, Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
+                                .clickable {
+                                    viewModel.addClip(
+                                        type = MediaType.TEXT,
+                                        name = emoji,
+                                        trackId = 5,
+                                        color = Color.Transparent,
+                                        uri = null
+                                    )
+                                    val newClip = viewModel.state.value.clips.lastOrNull()
+                                    if (newClip != null) {
+                                        viewModel.setText(emoji)
+                                        viewModel.setTextSize(54f)
+                                    }
+                                    ToastManager.showToast("Sticker added!")
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = emoji, fontSize = 22.sp)
+                        }
+                    }
+                }
+            }
+        } else {
+            studioBadges.chunked(2).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    row.forEach { badge ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF14161E))
+                                .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                .clickable {
+                                    viewModel.addClip(
+                                        type = MediaType.TEXT,
+                                        name = badge,
+                                        trackId = 5,
+                                        color = Color.Transparent,
+                                        uri = null
+                                    )
+                                    val newClip = viewModel.state.value.clips.lastOrNull()
+                                    if (newClip != null) {
+                                        viewModel.setText(badge)
+                                        viewModel.setTextSize(22f)
+                                        viewModel.setTextBold(true)
+                                    }
+                                    ToastManager.showToast("Badge added!")
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = badge,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhotoBlendPanel(clip: Clip, viewModel: ChromaPhotoEditorViewModel) {
+    val colors = LocalOscellionColors.current
+    val modes = BlendMode.values().toList()
+    val t = clip.transform
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Blend Mode & Compositing", color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
 
         modes.chunked(2).forEach { row ->
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 row.forEach { mode ->
@@ -3404,12 +3740,12 @@ private fun PhotoBlendPanel(clip: Clip, viewModel: ChromaPhotoEditorViewModel) {
                             .height(38.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(
-                                if (selected) Brush.linearGradient(listOf(colors.primary, colors.primaryHover))
-                                else Brush.linearGradient(listOf(colors.glassBg, colors.glassBg))
+                                if (selected) Color(0xFF0381FE)
+                                else Color(0xFFF3F4F6)
                             )
                             .border(
                                 0.5.dp,
-                                if (selected) Color.Transparent else colors.glassBorder,
+                                if (selected) Color.Transparent else Color(0xFFE5E7EB),
                                 RoundedCornerShape(8.dp)
                             )
                             .clickable { viewModel.setBlendMode(mode) },
@@ -3417,7 +3753,7 @@ private fun PhotoBlendPanel(clip: Clip, viewModel: ChromaPhotoEditorViewModel) {
                     ) {
                         Text(
                             text = mode.name.lowercase().replaceFirstChar { it.uppercase() },
-                            color = if (selected) colors.onPrimary else colors.textMuted,
+                            color = if (selected) Color.White else Color(0xFF374151),
                             fontSize = 12.sp,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                         )
@@ -3425,6 +3761,10 @@ private fun PhotoBlendPanel(clip: Clip, viewModel: ChromaPhotoEditorViewModel) {
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
+        }
+
+        PropertySlider("Layer Opacity (${(t.opacity * 100).roundToInt()}%)", t.opacity, 0f, 1f) {
+            viewModel.setTransform(t.copy(opacity = it))
         }
     }
 }
@@ -3444,7 +3784,7 @@ private fun PhotoChromaKeyPanel(clip: Clip, viewModel: ChromaPhotoEditorViewMode
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Chroma Key", color = colors.textMain, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text("Chroma Key (Green Screen)", color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             AppleSwitch(
                 checked = clip.chromaKeyEnabled,
                 onCheckedChange = { viewModel.updateClipChromaKeyEnabled(clip.id, it) }
@@ -3452,7 +3792,33 @@ private fun PhotoChromaKeyPanel(clip: Clip, viewModel: ChromaPhotoEditorViewMode
         }
 
         if (clip.chromaKeyEnabled) {
-            PropertySlider("Intensity", clip.chromaKeyIntensity, 0f, 1f) {
+            Text("Key Color", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                listOf(
+                    Color(0xFF00FF00) to "Green",
+                    Color(0xFF0000FF) to "Blue",
+                    Color(0xFFFF00FF) to "Magenta"
+                ).forEach { (color, label) ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(34.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(color)
+                            .clickable {
+                                // Preset color indicator
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(label, color = if (color == Color(0xFF00FF00)) Color.Black else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            PropertySlider("Key Sensitivity", clip.chromaKeyIntensity, 0f, 1f) {
                 viewModel.updateClipChromaKeyIntensity(clip.id, it)
             }
             PropertySlider("Spill Suppression", clip.chromaKeySpill, 0f, 1f) {
@@ -3470,7 +3836,9 @@ private fun PhotoMarkupPanel(
     val colors = LocalOscellionColors.current
     val swatches = listOf(
         Color(0xFF0381FE), Color(0xFFFF2D55), Color(0xFF34C759),
-        Color(0xFFFFCC00), Color(0xFFAF52DE), Color.White
+        Color(0xFFFFCC00), Color(0xFFAF52DE), Color.White,
+        Color.Black, Color(0xFF00E5FF), Color(0xFFFF9500),
+        Color(0xFFFF5252), Color(0xFF7C4DFF), Color(0xFF69F0AE)
     )
 
     Column(
@@ -3484,19 +3852,28 @@ private fun PhotoMarkupPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Markup Brush (Draw on Preview)", color = colors.textMain, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            if (state.brushStrokes.isNotEmpty()) {
-                Text(
-                    text = "Clear (${state.brushStrokes.size})",
-                    color = Color(0xFFFF3B30),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { viewModel.clearBrushStrokes() }
-                )
+            Text("Markup Brush (Draw on Canvas)", color = colors.textMain, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (state.brushStrokes.isNotEmpty()) {
+                    Text(
+                        text = "Undo",
+                        color = Color(0xFF0381FE),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { viewModel.undoLastBrushStroke() }
+                    )
+                    Text(
+                        text = "Clear (${state.brushStrokes.size})",
+                        color = Color(0xFFFF3B30),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { viewModel.clearBrushStrokes() }
+                    )
+                }
             }
         }
 
-        PropertySlider("Brush Size", state.activeBrushSize, 3f, 42f) {
+        PropertySlider("Brush Size (${state.activeBrushSize.roundToInt()} px)", state.activeBrushSize, 2f, 48f) {
             viewModel.setBrushStyle(state.activeBrushColor, it, state.activeBrushNeon)
         }
 
@@ -3505,27 +3882,34 @@ private fun PhotoMarkupPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Neon Glow Ink", color = colors.textMain, fontSize = 12.sp)
+            Column {
+                Text("Neon Glow Ink", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("Adds luminous outer glow aura", color = colors.textMuted, fontSize = 11.sp)
+            }
             AppleSwitch(
                 checked = state.activeBrushNeon,
                 onCheckedChange = { viewModel.setBrushStyle(state.activeBrushColor, state.activeBrushSize, it) }
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            swatches.forEach { c ->
-                val sel = state.activeBrushColor == c
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(c)
-                        .border(if (sel) 2.5.dp else 1.dp, if (sel) colors.primary else colors.glassBorder, CircleShape)
-                        .clickable { viewModel.setBrushStyle(c, state.activeBrushSize, state.activeBrushNeon) }
-                )
+        Text("Ink Color", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        swatches.chunked(6).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                row.forEach { c ->
+                    val sel = state.activeBrushColor == c
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .clip(CircleShape)
+                            .background(c)
+                            .border(if (sel) 2.5.dp else 1.dp, if (sel) Color(0xFF0381FE) else Color(0xFFD1D5DB), CircleShape)
+                            .clickable { viewModel.setBrushStyle(c, state.activeBrushSize, state.activeBrushNeon) }
+                    )
+                }
             }
         }
     }
@@ -3557,8 +3941,8 @@ private fun PhotoFramePanel(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (selected) Color(0xFF3B82F6) else Color(0xFFF3F4F6))
-                        .border(1.dp, if (selected) Color(0xFF3B82F6) else Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
+                        .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
+                        .border(1.dp, if (selected) Color(0xFF0381FE) else Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
                         .clickable {
                             val defaultPad = when (style) {
                                 PhotoFrameStyle.NONE -> 0f
@@ -3580,10 +3964,40 @@ private fun PhotoFramePanel(
             }
         }
 
-        PropertySlider("Padding", state.framePadding, 0f, 36f) {
+        Text("Matte Color", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                Color.White to "White",
+                Color(0xFFF7F5F0) to "Ivory",
+                Color.Black to "Black",
+                Color(0xFF1E1E24) to "Charcoal",
+                Color(0xFFD6C7B2) to "Warm"
+            ).forEach { (color, label) ->
+                val sel = state.frameColor == color
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(color)
+                        .border(if (sel) 2.dp else 1.dp, if (sel) Color(0xFF0381FE) else Color(0xFFD1D5DB), RoundedCornerShape(8.dp))
+                        .clickable { viewModel.setFrame(color = color) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (sel) {
+                        Icon(Lucide.Check, contentDescription = null, tint = if (color == Color.White || color == Color(0xFFF7F5F0)) Color.Black else Color.White, modifier = Modifier.size(14.dp))
+                    }
+                }
+            }
+        }
+
+        PropertySlider("Matte Padding (${state.framePadding.roundToInt()} dp)", state.framePadding, 0f, 48f) {
             viewModel.setFrame(padding = it)
         }
-        PropertySlider("Rounding", state.frameCornerRadius, 0f, 32f) {
+        PropertySlider("Corner Rounding (${state.frameCornerRadius.roundToInt()} dp)", state.frameCornerRadius, 0f, 36f) {
             viewModel.setFrame(cornerRadius = it)
         }
     }
@@ -4014,21 +4428,39 @@ private suspend fun exportEditedPhotoToGallery(
 ): Uri? = withContext(Dispatchers.IO) {
     try {
         val loader = ImageLoader(context)
-        val outWidth = state.exportSettings.resolution.coerceIn(720, 4096)
-        val outHeight = ((outWidth.toFloat() / state.projectRatio.w) * state.projectRatio.h).toInt().coerceIn(720, 4096)
+        val outAspect = state.effectiveAspectRatio
+        val outWidth = state.exportSettings.resolution.coerceIn(720, 4320)
+        val outHeight = (outWidth / outAspect).roundToInt().coerceIn(720, 4320)
 
         val outputBitmap = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
         val canvas = AndroidCanvas(outputBitmap)
 
-        // Frame background
+        // Draw outer frame background
         canvas.drawColor(
             if (state.frameStyle == PhotoFrameStyle.NONE) android.graphics.Color.BLACK
             else state.frameColor.toArgb()
         )
 
+        val padPx = (state.framePadding / 380f) * outWidth
+        val bottomPadPx = if (state.frameStyle == PhotoFrameStyle.POLAROID) padPx * 2.2f else padPx
+        val cornerRadiusPx = (state.frameCornerRadius / 380f) * outWidth
+        val photoBounds = RectF(padPx, padPx, outWidth - padPx, outHeight - bottomPadPx)
+
+        // Clip canvas to rounded photo rectangle for layer drawing
+        canvas.save()
+        if (padPx > 0f || cornerRadiusPx > 0f) {
+            val clipPath = AndroidPath().apply {
+                addRoundRect(photoBounds, cornerRadiusPx, cornerRadiusPx, AndroidPath.Direction.CW)
+            }
+            canvas.clipPath(clipPath)
+        }
+
         val visibleClips = state.clips
             .filter { state.trackVisibility[it.trackId] != false }
             .sortedBy { it.trackId }
+
+        val preset = StudioPhotoPreset.findById(state.selectedPresetId)
+        val customPresetMatrix = preset?.colorMatrix
 
         for (clip in visibleClips) {
             val t = clip.transform
@@ -4042,7 +4474,16 @@ private suspend fun exportEditedPhotoToGallery(
                         .allowHardware(false)
                         .build()
                     val result = loader.execute(req)
-                    val bmp = (result as? SuccessResult)?.drawable?.let { (it as? BitmapDrawable)?.bitmap } ?: continue
+                    val rawBmp = (result as? SuccessResult)?.drawable?.let { (it as? BitmapDrawable)?.bitmap } ?: continue
+
+                    // Apply studio blur if blur > 0.01f on main photo
+                    val bmp = if (clip.trackId == 1 && state.blur > 0.01f) {
+                        val blurScale = (1f - state.blur * 0.9f).coerceIn(0.04f, 1f)
+                        val bw = (rawBmp.width * blurScale).toInt().coerceAtLeast(8)
+                        val bh = (rawBmp.height * blurScale).toInt().coerceAtLeast(8)
+                        val small = Bitmap.createScaledBitmap(rawBmp, bw, bh, true)
+                        Bitmap.createScaledBitmap(small, rawBmp.width, rawBmp.height, true)
+                    } else rawBmp
 
                     val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG or AndroidPaint.FILTER_BITMAP_FLAG).apply {
                         alpha = (t.opacity * 255).toInt().coerceIn(0, 255)
@@ -4059,7 +4500,8 @@ private suspend fun exportEditedPhotoToGallery(
                                 redCurve = if (clip.trackId == 1) state.redCurve else ToneCurvePoints(),
                                 greenCurve = if (clip.trackId == 1) state.greenCurve else ToneCurvePoints(),
                                 blueCurve = if (clip.trackId == 1) state.blueCurve else ToneCurvePoints(),
-                                splitToning = if (clip.trackId == 1) state.splitToning else SplitToningState()
+                                splitToning = if (clip.trackId == 1) state.splitToning else SplitToningState(),
+                                customPresetMatrix = if (clip.trackId == 1) customPresetMatrix else null
                             )
                         )
                         if (clip.blendMode != BlendMode.NORMAL) {
@@ -4075,16 +4517,18 @@ private suspend fun exportEditedPhotoToGallery(
                     }
 
                     canvas.save()
-                    val cx = outWidth / 2f + (t.x / 300f) * outWidth
-                    val cy = outHeight / 2f + (t.y / 300f) * outHeight
+                    val targetW = photoBounds.width()
+                    val targetH = photoBounds.height()
+                    val cx = photoBounds.centerX() + (t.x / 300f) * targetW
+                    val cy = photoBounds.centerY() + (t.y / 300f) * targetH
                     canvas.translate(cx, cy)
                     canvas.rotate(t.rotation)
                     canvas.scale(t.scale * flipH, t.scale * flipV)
 
                     val fitScale = if (state.videoFitMode == VideoFitMode.FILL || state.videoFitMode == VideoFitMode.CROP) {
-                        max(outWidth.toFloat() / bmp.width, outHeight.toFloat() / bmp.height)
+                        max(targetW / bmp.width, targetH / bmp.height)
                     } else {
-                        min(outWidth.toFloat() / bmp.width, outHeight.toFloat() / bmp.height)
+                        min(targetW / bmp.width, targetH / bmp.height)
                     }
                     val scaleMult = if (clip.trackId == 1) 1f else 0.55f
                     val drawW = bmp.width * fitScale * scaleMult
@@ -4111,20 +4555,75 @@ private suspend fun exportEditedPhotoToGallery(
                         )
                     }
                     canvas.save()
-                    val cx = outWidth / 2f + (t.x / 300f) * outWidth
-                    val cy = outHeight / 2f + (t.y / 300f) * outHeight
+                    val targetW = photoBounds.width()
+                    val targetH = photoBounds.height()
+                    val cx = photoBounds.centerX() + (t.x / 300f) * targetW
+                    val cy = photoBounds.centerY() + (t.y / 300f) * targetH
                     canvas.translate(cx, cy)
                     canvas.rotate(t.rotation)
                     canvas.scale(t.scale * flipH, t.scale * flipV)
-                    canvas.drawText(clip.text, 0f, 0f, textPaint)
+
+                    val lines = clip.text.split("\n")
+                    val lineHeight = textPaint.fontSpacing
+                    val totalHeight = lines.size * lineHeight
+                    var yPos = -(totalHeight / 2f) + textPaint.textSize * 0.8f
+                    for (line in lines) {
+                        canvas.drawText(line, 0f, yPos, textPaint)
+                        yPos += lineHeight
+                    }
                     canvas.restore()
                 }
 
                 MediaType.AUDIO -> {}
             }
         }
+        canvas.restore() // restore photo clipping
 
-        // Optical Vignette
+        // Optical Effects & Overlays
+        if (state.bloom > 0.01f) {
+            val bloomPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                shader = AndroidRadialGradient(
+                    outWidth / 2f,
+                    outHeight / 2f,
+                    max(outWidth, outHeight) * 0.65f,
+                    intArrayOf(
+                        android.graphics.Color.argb((state.bloom * 64).toInt().coerceIn(0, 90), 255, 255, 255),
+                        android.graphics.Color.argb((state.bloom * 32).toInt().coerceIn(0, 50), 255, 229, 180),
+                        android.graphics.Color.TRANSPARENT
+                    ),
+                    floatArrayOf(0f, 0.45f, 1f),
+                    Shader.TileMode.CLAMP
+                )
+            }
+            canvas.drawRect(0f, 0f, outWidth.toFloat(), outHeight.toFloat(), bloomPaint)
+        }
+
+        // Light Leak Overlay
+        if (state.lightLeak != LightLeakType.NONE && state.lightLeakIntensity > 0.01f) {
+            val leakAlpha = state.lightLeakIntensity.coerceIn(0f, 1f)
+            val colors = state.lightLeak.colors.map {
+                android.graphics.Color.argb(
+                    (it.alpha * leakAlpha * 255).toInt().coerceIn(0, 255),
+                    (it.red * 255).toInt(),
+                    (it.green * 255).toInt(),
+                    (it.blue * 255).toInt()
+                )
+            }.toIntArray()
+            if (colors.size >= 2) {
+                val leakPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                    shader = AndroidLinearGradient(
+                        0f, 0f,
+                        outWidth * 0.85f, outHeight * 0.9f,
+                        colors,
+                        null,
+                        Shader.TileMode.CLAMP
+                    )
+                }
+                canvas.drawRect(0f, 0f, outWidth.toFloat(), outHeight.toFloat(), leakPaint)
+            }
+        }
+
+        // Lens Vignette
         if (state.vignette > 0.01f) {
             val vPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
                 shader = AndroidRadialGradient(
@@ -4142,21 +4641,101 @@ private suspend fun exportEditedPhotoToGallery(
             canvas.drawRect(0f, 0f, outWidth.toFloat(), outHeight.toFloat(), vPaint)
         }
 
+        // 35mm Film Grain
+        if (state.grain > 0.01f) {
+            val grainPaint = AndroidPaint().apply {
+                alpha = (state.grain * 38).toInt().coerceIn(0, 60)
+            }
+            val step = (outWidth / 180).coerceAtLeast(3)
+            var seed = 42
+            var gx = 0
+            while (gx < outWidth) {
+                var gy = 0
+                while (gy < outHeight) {
+                    seed = seed * 1103515245 + 12345
+                    val bright = (seed ushr 16) and 0xFF
+                    grainPaint.color = if (bright > 128) android.graphics.Color.WHITE else android.graphics.Color.BLACK
+                    grainPaint.alpha = (state.grain * 38).toInt().coerceIn(0, 60)
+                    canvas.drawRect(gx.toFloat(), gy.toFloat(), (gx + 2).toFloat(), (gy + 2).toFloat(), grainPaint)
+                    gy += step
+                }
+                gx += step
+            }
+        }
+
+        // Cinema Letterbox Frame
+        if (state.frameStyle == PhotoFrameStyle.CINEMA_LETTERBOX) {
+            val barH = outHeight * 0.12f
+            val barPaint = AndroidPaint().apply { color = android.graphics.Color.BLACK }
+            canvas.drawRect(0f, 0f, outWidth.toFloat(), barH, barPaint)
+            canvas.drawRect(0f, outHeight - barH, outWidth.toFloat(), outHeight.toFloat(), barPaint)
+        }
+
+        // Neon Glow Frame
+        if (state.frameStyle == PhotoFrameStyle.NEON_GLOW) {
+            val strokeW = (outWidth / 75f).coerceAtLeast(6f)
+            val neonPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                style = AndroidPaint.Style.STROKE
+                strokeWidth = strokeW
+                shader = AndroidLinearGradient(
+                    0f, 0f, outWidth.toFloat(), outHeight.toFloat(),
+                    intArrayOf(
+                        android.graphics.Color.rgb(3, 129, 254),
+                        android.graphics.Color.rgb(175, 82, 222),
+                        android.graphics.Color.rgb(255, 45, 85)
+                    ),
+                    null,
+                    Shader.TileMode.CLAMP
+                )
+            }
+            canvas.drawRoundRect(RectF(strokeW / 2f, strokeW / 2f, outWidth - strokeW / 2f, outHeight - strokeW / 2f), cornerRadiusPx, cornerRadiusPx, neonPaint)
+        }
+
+        // 35mm Film Strip Perforations
+        if (state.frameStyle == PhotoFrameStyle.FILM_BORDER) {
+            val stripH = outHeight * 0.055f
+            val barPaint = AndroidPaint().apply { color = android.graphics.Color.BLACK }
+            canvas.drawRect(0f, 0f, outWidth.toFloat(), stripH, barPaint)
+            canvas.drawRect(0f, outHeight - stripH, outWidth.toFloat(), outHeight.toFloat(), barPaint)
+            val holeW = stripH * 0.55f
+            val holeH = stripH * 0.42f
+            val holeStep = holeW * 2.2f
+            val holePaint = AndroidPaint().apply { color = android.graphics.Color.argb(200, 255, 255, 255) }
+            var hx = holeStep * 0.5f
+            while (hx + holeW < outWidth) {
+                canvas.drawRect(hx, (stripH - holeH) / 2f, hx + holeW, (stripH + holeH) / 2f, holePaint)
+                canvas.drawRect(hx, outHeight - stripH + (stripH - holeH) / 2f, hx + holeW, outHeight - stripH + (stripH + holeH) / 2f, holePaint)
+                hx += holeStep
+            }
+        }
+
         // Markup Brush Strokes (Track 4)
         if (state.trackVisibility[4] != false && state.brushStrokes.isNotEmpty()) {
-            val scaleFactor = outWidth / 380f
+            val scaleX = outWidth.toFloat() / 380f
+            val scaleY = outHeight.toFloat() / (380f / outAspect)
             for (stroke in state.brushStrokes) {
                 if (stroke.points.size < 2) continue
                 val path = AndroidPath().apply {
-                    moveTo(stroke.points.first().x * scaleFactor, stroke.points.first().y * scaleFactor)
+                    moveTo(stroke.points.first().x * scaleX, stroke.points.first().y * scaleY)
                     for (i in 1 until stroke.points.size) {
-                        lineTo(stroke.points[i].x * scaleFactor, stroke.points[i].y * scaleFactor)
+                        lineTo(stroke.points[i].x * scaleX, stroke.points[i].y * scaleY)
                     }
+                }
+                if (stroke.isNeon) {
+                    val glowPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                        color = stroke.color.toArgb()
+                        alpha = 90
+                        style = AndroidPaint.Style.STROKE
+                        strokeWidth = stroke.strokeWidth * scaleX * 2.4f
+                        strokeCap = AndroidPaint.Cap.ROUND
+                        strokeJoin = AndroidPaint.Join.ROUND
+                    }
+                    canvas.drawPath(path, glowPaint)
                 }
                 val sPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
                     color = stroke.color.toArgb()
                     style = AndroidPaint.Style.STROKE
-                    strokeWidth = stroke.strokeWidth * scaleFactor
+                    strokeWidth = stroke.strokeWidth * scaleX
                     strokeCap = AndroidPaint.Cap.ROUND
                     strokeJoin = AndroidPaint.Join.ROUND
                 }

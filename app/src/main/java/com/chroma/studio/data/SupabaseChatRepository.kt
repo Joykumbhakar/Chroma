@@ -261,7 +261,18 @@ class SupabaseChatRepository {
                 val roomSnapshot = transaction.get(roomRef)
                 val room = roomSnapshot.toObject(ChatRoom::class.java)
                 if (room != null) {
-                    val updatedUnreadCount = room.unreadCount.toMutableMap()
+                    val updatedUnreadCount = mutableMapOf<String, Int>()
+                    try {
+                        val rawMap = roomSnapshot.get("unreadCount") as? Map<*, *>
+                        if (rawMap != null) {
+                            for ((k, v) in rawMap) {
+                                val keyStr = k?.toString() ?: continue
+                                val countVal = (v as? Number)?.toInt() ?: 0
+                                updatedUnreadCount[keyStr] = countVal
+                            }
+                        }
+                    } catch (_: Exception) {}
+
                     for (participantId in room.participants) {
                         if (participantId != currentUser.uid) {
                             updatedUnreadCount[participantId] = (updatedUnreadCount[participantId] ?: 0) + 1

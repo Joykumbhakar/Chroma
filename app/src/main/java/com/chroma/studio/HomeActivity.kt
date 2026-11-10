@@ -37,6 +37,7 @@ import com.chroma.studio.ui.screens.HomeScreen
 import com.chroma.studio.ui.screens.FlashFeedScreen
 import com.chroma.studio.ui.screens.FlashPickerScreen
 import com.chroma.studio.ui.screens.FlashPostScreen
+import com.chroma.studio.ui.screens.FlashPostParams
 import com.chroma.studio.ui.screens.ChromaPhotoEditorScreen
 import com.chroma.studio.ui.theme.OscellionTheme
 import com.chroma.studio.viewmodel.HomeViewModel
@@ -1400,38 +1401,51 @@ private fun AuthenticatedRoute(
 
                     composable("create_post") {
                         AuthenticatedRoute(navController, "Post Creation") {
-                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull()
+                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull() ?: flashPickerVideoUri
                             com.chroma.studio.ui.screens.PostCreationFlowScreen(
-                                initialPhotoUri = importedUri,
+                                initialPostType = com.chroma.studio.ui.screens.PostType.PHOTO,
+                                initialMediaUri = importedUri,
                                 onFinish = {
                                     flashImportedMediaUris = emptyList()
                                     flashPickerPhotoUris = emptyList()
+                                    flashPickerVideoUri = null
                                     navController.popBackStack()
                                     navigateToTab(2)
                                 },
                                 onClose = {
                                     flashImportedMediaUris = emptyList()
                                     flashPickerPhotoUris = emptyList()
+                                    flashPickerVideoUri = null
                                     navController.popBackStack()
                                 }
                             )
                         }
                     }
 
-                    composable("create_post/{mode}") {
+                    composable("create_post/{mode}") { backStackEntry ->
                         AuthenticatedRoute(navController, "Post Creation") {
-                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull()
+                            val modeStr = backStackEntry.arguments?.getString("mode") ?: "photo"
+                            val postType = when (modeStr.lowercase()) {
+                                "flash", "video" -> com.chroma.studio.ui.screens.PostType.FLASH
+                                "work", "project" -> com.chroma.studio.ui.screens.PostType.WORK
+                                "story" -> com.chroma.studio.ui.screens.PostType.STORY
+                                else -> com.chroma.studio.ui.screens.PostType.PHOTO
+                            }
+                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull() ?: flashPickerVideoUri
                             com.chroma.studio.ui.screens.PostCreationFlowScreen(
-                                initialPhotoUri = importedUri,
+                                initialPostType = postType,
+                                initialMediaUri = importedUri,
                                 onFinish = {
                                     flashImportedMediaUris = emptyList()
                                     flashPickerPhotoUris = emptyList()
+                                    flashPickerVideoUri = null
                                     navController.popBackStack()
                                     navigateToTab(2)
                                 },
                                 onClose = {
                                     flashImportedMediaUris = emptyList()
                                     flashPickerPhotoUris = emptyList()
+                                    flashPickerVideoUri = null
                                     navController.popBackStack()
                                 }
                             )
@@ -1451,14 +1465,23 @@ private fun AuthenticatedRoute(
                                 defaultValue = null
                             }
                         )
-                    ) {
+                    ) { backStackEntry ->
                         AuthenticatedRoute(navController, "Creator Studio") {
-                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull()
+                            val modeStr = backStackEntry.arguments?.getString("mode") ?: "post"
+                            val postType = when (modeStr.lowercase()) {
+                                "flash", "video" -> com.chroma.studio.ui.screens.PostType.FLASH
+                                "work", "project" -> com.chroma.studio.ui.screens.PostType.WORK
+                                "story" -> com.chroma.studio.ui.screens.PostType.STORY
+                                else -> com.chroma.studio.ui.screens.PostType.PHOTO
+                            }
+                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull() ?: flashPickerVideoUri
                             com.chroma.studio.ui.screens.PostCreationFlowScreen(
-                                initialPhotoUri = importedUri,
+                                initialPostType = postType,
+                                initialMediaUri = importedUri,
                                 onFinish = {
                                     flashImportedMediaUris = emptyList()
                                     flashPickerPhotoUris = emptyList()
+                                    flashPickerVideoUri = null
                                     navController.popBackStack()
                                     coroutineScope.launch {
                                         pagerState.animateScrollToPage(2)
@@ -1467,6 +1490,7 @@ private fun AuthenticatedRoute(
                                 onClose = {
                                     flashImportedMediaUris = emptyList()
                                     flashPickerPhotoUris = emptyList()
+                                    flashPickerVideoUri = null
                                     navController.popBackStack()
                                 }
                             )
@@ -2001,7 +2025,9 @@ private fun AuthenticatedRoute(
                         ChromaPhotoEditorScreen(
                             photoUri = photoUri,
                             exportButtonLabel = "Done",
-                            onExportSuccess = {
+                            onExportSuccess = { savedUri ->
+                                flashPickerPhotoUris = listOf(savedUri)
+                                flashImportedMediaUris = listOf(savedUri)
                                 navController.popBackStack()
                             },
                             onBack = {
@@ -2032,7 +2058,9 @@ private fun AuthenticatedRoute(
                         ChromaPhotoEditorScreen(
                             photoUri = photoUri,
                             exportButtonLabel = "Done",
-                            onExportSuccess = {
+                            onExportSuccess = { savedUri ->
+                                flashPickerPhotoUris = listOf(savedUri)
+                                flashImportedMediaUris = listOf(savedUri)
                                 navController.popBackStack()
                             },
                             onBack = {
@@ -2048,22 +2076,24 @@ private fun AuthenticatedRoute(
                         }
 
                         FlashPostScreen(
-                            flashVm = flashVm,
-                            discoverViewModel = discoverVm,
-                            videoUri = uri,
-                            thumbnailBitmap = flashThumbnail,
-                            trimStartMs = flashTrimStart,
-                            trimEndMs = flashTrimEnd,
-                            filterName = flashFilterName,
-                            brightness = flashBrightness,
-                            contrast = flashContrast,
-                            saturation = flashSaturation,
-                            hue = flashHue,
-                            mediaType = flashMediaType,
-                            photoUris = flashPickerPhotoUris,
-                            durationPerSlideMs = flashDurationPerSlide,
-                            remixedFromPostId = flashRemixPostId,
-                            remixedFromAuthorUsername = flashRemixAuthorUsername,
+                            params = FlashPostParams(
+                                flashVm = flashVm,
+                                discoverViewModel = discoverVm,
+                                videoUri = uri,
+                                thumbnailBitmap = flashThumbnail,
+                                trimStartMs = flashTrimStart,
+                                trimEndMs = flashTrimEnd,
+                                filterName = flashFilterName,
+                                brightness = flashBrightness,
+                                contrast = flashContrast,
+                                saturation = flashSaturation,
+                                hue = flashHue,
+                                mediaType = flashMediaType,
+                                photoUris = flashPickerPhotoUris,
+                                durationPerSlideMs = flashDurationPerSlide,
+                                remixedFromPostId = flashRemixPostId,
+                                remixedFromAuthorUsername = flashRemixAuthorUsername
+                            ),
                             onSuccess = {
                                 flashImportedMediaUris = emptyList()
                                 flashPickerPhotoUris = emptyList()

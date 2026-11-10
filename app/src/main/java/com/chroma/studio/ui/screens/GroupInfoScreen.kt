@@ -60,8 +60,19 @@ fun GroupInfoScreen(
     val context = LocalContext.current
     val hazeState = remember { HazeState() }
 
+    LaunchedEffect(room) {
+        if (room != null && !room.isGroup) {
+            onBack()
+        }
+    }
+
     if (room == null || !room.isGroup) {
-        onBack()
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color(0xFFF2F3F8)),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = colors.primary, modifier = Modifier.size(36.dp))
+        }
         return
     }
 

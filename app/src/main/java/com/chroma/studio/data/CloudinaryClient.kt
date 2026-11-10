@@ -135,6 +135,8 @@ object CloudinaryClient {
 
     // ── Video Upload (Flash Feed) ─────────────────────────────────────────
 
+    var lastErrorMessage: String? = null
+
     private val videoUploadPreset: String get() = BuildConfig.CLOUDINARY_VIDEO_UPLOAD_PRESET
 
     /**
@@ -157,11 +159,13 @@ object CloudinaryClient {
                 }
             }
             if (!file.exists() || file.length() == 0L) {
-                Log.e("CloudinaryClient", "Video file does not exist or is empty: ${file.absolutePath}")
+                lastErrorMessage = "Video file is missing or 0 bytes (${file.absolutePath})"
+                Log.e("CloudinaryClient", lastErrorMessage!!)
                 return@withContext null
             }
             if (cloudName.isBlank()) {
-                Log.e("CloudinaryClient", "CLOUDINARY_CLOUD_NAME not set")
+                lastErrorMessage = "CLOUDINARY_CLOUD_NAME is not configured"
+                Log.e("CloudinaryClient", lastErrorMessage!!)
                 return@withContext null
             }
 
@@ -233,6 +237,12 @@ object CloudinaryClient {
             val responseBody = response.body?.string()
 
             if (!response.isSuccessful || responseBody == null) {
+                val errorMsg = try {
+                    JSONObject(responseBody ?: "").optJSONObject("error")?.optString("message") ?: "HTTP ${response.code}"
+                } catch (_: Throwable) {
+                    "HTTP ${response.code}"
+                }
+                lastErrorMessage = "Cloudinary ($preset): $errorMsg"
                 Log.e("CloudinaryClient", "Video upload failed (preset $preset): HTTP ${response.code} — $responseBody")
                 return null
             }
@@ -247,6 +257,7 @@ object CloudinaryClient {
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
+            lastErrorMessage = "Network error: ${e.message}"
             Log.e("CloudinaryClient", "performVideoUpload exception with preset $preset", e)
             null
         }

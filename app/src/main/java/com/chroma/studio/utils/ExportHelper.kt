@@ -201,7 +201,7 @@ object ExportHelper {
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 // DCIM/ChromaStudio/ indexes both in the main camera roll and its own album
-                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/ChromaStudio/")
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/ChromaStudio")
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
         }
@@ -215,7 +215,7 @@ object ExportHelper {
         } catch (e: Exception) {
             Log.w(TAG, "Failed to insert into DCIM/ChromaStudio/, falling back to Movies/ChromaStudio/", e)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                contentValues.put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/ChromaStudio/")
+                contentValues.put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/ChromaStudio")
                 try {
                     uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
                 } catch (e2: Exception) {
@@ -337,7 +337,7 @@ object ExportHelper {
                 put(MediaStore.Video.Media.HEIGHT, height)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/ChromaStudio/")
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/ChromaStudio")
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
         }
@@ -350,7 +350,7 @@ object ExportHelper {
         } catch (e: Exception) {
             Log.w(TAG, "Failed insert into DCIM/ChromaStudio/, falling back to Movies/ChromaStudio/", e)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                contentValues.put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/ChromaStudio/")
+                contentValues.put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/ChromaStudio")
                 try {
                     uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
                 } catch (e2: Exception) {
@@ -415,19 +415,52 @@ object ExportHelper {
         title: String = "Share Video"
     ) {
         try {
+            // Convert file:// or raw paths to FileProvider content:// URI
+            val shareableUri: Uri = if (uri.scheme == "file" || uri.scheme == null) {
+                val f = File(uri.path ?: "")
+                if (f.exists()) {
+                    try {
+                        androidx.core.content.FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.provider",
+                            f
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "FileProvider conversion failed for $f", e)
+                        uri
+                    }
+                } else uri
+            } else uri
+
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "video/mp4"
-                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_STREAM, shareableUri)
+                clipData = android.content.ClipData.newUri(context.contentResolver, "Video", shareableUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 if (context !is android.app.Activity) {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
             }
             val chooser = Intent.createChooser(shareIntent, title).apply {
+                clipData = android.content.ClipData.newUri(context.contentResolver, "Video", shareableUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 if (context !is android.app.Activity) {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
+            }
+
+            // Grant read URI permission to all potential receiving activities
+            try {
+                val resInfoList = context.packageManager.queryIntentActivities(
+                    chooser,
+                    android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+                )
+                for (resolveInfo in resInfoList) {
+                    val packageName = resolveInfo.activityInfo.packageName
+                    context.grantUriPermission(packageName, shareableUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not grant explicit URI permission", e)
             }
             context.startActivity(chooser)
         } catch (e: Exception) {

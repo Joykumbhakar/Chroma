@@ -536,7 +536,6 @@ fun AccountCenterScreen(
                                 subtitle = "Name, avatar, bio, and social handles",
                                 icon = LucideFilled.User,
                                 iconTint = Color(0xFF0055FF),
-                                valueText = profile?.displayName?.takeIf { it.isNotBlank() },
                                 textDark = textDark,
                                 textMuted = textMuted,
                                 onClick = { profile?.let { onNavigateToProfileIdentity(it) } }
@@ -833,27 +832,35 @@ private fun OneUiSettingsRow(
                 iconColor = iconTint
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Column(
+                modifier = Modifier.weight(1f, fill = false),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
                 Text(
                     text = title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isDestructive) Color(0xFFEF4444) else textDark,
-                    fontFamily = InterFontFamily
+                    fontFamily = InterFontFamily,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitle,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Normal,
                     color = textMuted,
-                    fontFamily = InterFontFamily
+                    fontFamily = InterFontFamily,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(start = 8.dp)
         ) {
             if (valueText != null) {
                 Text(
@@ -861,7 +868,10 @@ private fun OneUiSettingsRow(
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.Medium,
                     color = textMuted,
-                    fontFamily = InterFontFamily
+                    fontFamily = InterFontFamily,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 110.dp)
                 )
             }
             if (!isDestructive) {

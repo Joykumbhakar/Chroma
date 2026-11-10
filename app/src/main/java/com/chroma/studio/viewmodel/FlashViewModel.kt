@@ -317,7 +317,8 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                         _uploadProgress.value = 0.15f
                         com.chroma.studio.data.FlashUploadManager.updateProgress(0.15f, "Preparing video…")
                         val videoDur = VideoProcessor.getVideoDurationMs(context, mediaUri)
-                        val shouldTrim = trimStartMs > 100L || (trimEndMs > 0L && videoDur > 0L && trimEndMs < videoDur - 100L)
+                        val isAlreadyExported = mediaUri.scheme == "file" && (mediaUri.path?.contains("pro_export_") == true || mediaUri.path?.contains("fcp_export_") == true)
+                        val shouldTrim = !isAlreadyExported && (trimStartMs > 100L || (trimEndMs > 0L && videoDur > 0L && trimEndMs < videoDur - 100L))
                         val trimmed = if (shouldTrim) {
                             com.chroma.studio.data.FlashUploadManager.updateProgress(0.25f, "Trimming video clip…")
                             val res = try {
@@ -326,9 +327,13 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                                 Log.w("FlashViewModel", "Trimming failed, falling back to source video", e)
                                 null
                             }
-                            res ?: if (mediaUri.scheme == "file") {
-                                java.io.File(mediaUri.path ?: "")
-                            } else {
+                            if (res != null && res.exists() && res.length() > 1024L) res else null
+                        } else null
+
+                        val finalSource = trimmed ?: if (mediaUri.scheme == "file" && !mediaUri.path.isNullOrBlank()) {
+                            val f = java.io.File(mediaUri.path!!)
+                            if (f.exists() && f.length() > 0L) f
+                            else {
                                 val tempFile = java.io.File(context.cacheDir, "ready_flash_${System.currentTimeMillis()}.mp4")
                                 context.contentResolver.openInputStream(mediaUri)?.use { input ->
                                     java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
@@ -336,19 +341,20 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                                 tempFile
                             }
                         } else {
-                            if (mediaUri.scheme == "file") {
-                                java.io.File(mediaUri.path ?: "")
-                            } else {
-                                val tempFile = java.io.File(context.cacheDir, "ready_flash_${System.currentTimeMillis()}.mp4")
-                                context.contentResolver.openInputStream(mediaUri)?.use { input ->
-                                    java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
-                                }
-                                tempFile
+                            val tempFile = java.io.File(context.cacheDir, "ready_flash_${System.currentTimeMillis()}.mp4")
+                            context.contentResolver.openInputStream(mediaUri)?.use { input ->
+                                java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
                             }
+                            tempFile
                         }
+
+                        if (!finalSource.exists() || finalSource.length() == 0L) {
+                            throw Exception("Video file is missing or 0 bytes (${finalSource.absolutePath})")
+                        }
+
                         _uploadProgress.value = 0.45f
                         com.chroma.studio.data.FlashUploadManager.updateProgress(0.45f, "Video ready for upload")
-                        trimmed
+                        finalSource
                     }
                     FlashMediaType.SLIDESHOW -> {
                         _uploadProgress.value = 0.2f
@@ -376,7 +382,7 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                         _uploadProgress.value = prog
                         com.chroma.studio.data.FlashUploadManager.updateProgress(prog, "Uploading video… ${(p * 100).toInt()}%")
                     }
-                ) ?: throw Exception("Video upload to Cloudinary failed. Please check your network or Cloudinary preset.")
+                ) ?: throw Exception(CloudinaryClient.lastErrorMessage ?: "Video upload to Cloudinary failed. Please check your network or Cloudinary preset.")
                 
                 // Apply filter transformation to delivery URL
                 videoUrl = CloudinaryClient.applyTransformation(videoUrl, filterName, brightness, contrast, saturation, hue)

@@ -1901,31 +1901,38 @@ fun SearchScreen(
                     item(span = StaggeredGridItemSpan.FullLine) {
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(bottom = 4.dp)
+                            modifier = Modifier.padding(bottom = 6.dp)
                         ) {
                             items(EXPLORE_CATEGORIES) { filter ->
                                 val isSelected = filter == selectedCategory
                                 Box(
                                     modifier = Modifier
                                         .shadow(
-                                            elevation = if (isSelected) 4.dp else 0.dp,
+                                            elevation = if (isSelected) 3.dp else 0.dp,
                                             shape = CircleShape,
-                                            spotColor = activeAccent.copy(alpha = 0.25f)
+                                            spotColor = activeAccent.copy(alpha = 0.35f)
                                         )
                                         .clip(CircleShape)
                                         .background(
                                             if (isSelected) activeAccent
                                             else cardBgColor
                                         )
+                                        .border(
+                                            width = 0.5.dp,
+                                            color = if (isSelected) Color.Transparent
+                                                    else if (isDark) Color.White.copy(alpha = 0.12f)
+                                                    else Color.Black.copy(alpha = 0.08f),
+                                            shape = CircleShape
+                                        )
                                         .clickable {
                                             selectedCategory = filter
                                             SoundManager.playTap(context)
                                         }
-                                        .padding(horizontal = 15.dp, vertical = 7.5.dp)
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         if (filter == "Trending") {
                                             AppleTrendingFireIcon(modifier = Modifier.size(15.dp))

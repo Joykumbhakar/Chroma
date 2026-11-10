@@ -542,9 +542,9 @@ class ChatViewModel : ViewModel() {
         observeMessages(roomId)
     }
 
-    fun createGroup(groupName: String, groupDescription: String? = null, participantIds: List<String>, imageUrl: String? = null, onRoomReady: (String) -> Unit) {
+    fun createGroup(groupName: String, groupDescription: String? = null, participantIds: List<String>, imageUrl: String? = null, preGeneratedRoomId: String? = null, onRoomReady: (String) -> Unit) {
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
-        val roomId = "group_${java.util.UUID.randomUUID()}"
+        val roomId = preGeneratedRoomId ?: "group_${java.util.UUID.randomUUID()}"
 
         // Optimistic UI update
         val allUsers = participantIds.toMutableList()

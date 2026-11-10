@@ -12,11 +12,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * Handles notification background actions:
- *  - Inline Reply: transmits message and updates notification with "You: <reply>"
- *  - Mark as read: marks conversation read in Supabase and clears notification
- *  - Dismissed: clears the stacked conversation cache for that chat
- * goAsync() keeps the receiver process alive while asynchronous network operations complete.
+ * Handles the notification actions: inline Reply, Mark as read, and swipe-dismiss.
+ * goAsync() keeps the process alive (~10s) while the network work finishes.
  */
 class ChatActionReceiver : BroadcastReceiver() {
 
@@ -27,9 +24,7 @@ class ChatActionReceiver : BroadcastReceiver() {
         val key = roomId.ifBlank { senderId }
 
         when (intent.action) {
-            ChatNotificationBuilder.ACTION_DISMISSED -> {
-                ChatNotificationBuilder.clearHistory(app, key)
-            }
+            ChatNotificationBuilder.ACTION_DISMISSED -> ChatNotificationBuilder.clearHistory(app, key)
 
             ChatNotificationBuilder.ACTION_MARK_READ -> {
                 ChatNotificationBuilder.cancelForRoom(app, roomId, senderId)
@@ -63,7 +58,7 @@ class ChatActionReceiver : BroadcastReceiver() {
                     } catch (e: Exception) {
                         Log.w("ChatActionReceiver", "Reply failed: ${e.message}")
                     } finally {
-                        // Always update the notification so the reply spinner goes away and shows "You: ..."
+                        // Always update the notification so the reply spinner goes away.
                         ChatNotificationBuilder.appendOwnReply(app, roomId, senderId, reply, failed = !ok)
                         pending.finish()
                     }

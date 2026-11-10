@@ -18,7 +18,6 @@ import android.graphics.Paint
 import android.graphics.Shader
 import android.media.AudioAttributes
 import android.media.RingtoneManager
-import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.util.Log
@@ -38,22 +37,21 @@ import java.net.URL
 
 /**
  * WhatsApp-style chat notifications:
- *  - Heads-up popup (IMPORTANCE_HIGH channel) that also displays cleanly on the lock screen
- *  - Screen illumination (PowerManager wake lock) when the device is locked/sleeping
- *  - MessagingStyle: multiple messages from the same chat STACK in one clean thread
- *  - Circular sender avatar (falls back to a coloured initial)
- *  - Reply (inline RemoteInput) + Mark as read actions
- *  - Dynamic conversation shortcut -> displays in system "Conversations" section & bubbles on Android 11+
- *  - Bundle summary when several chats are active
- *  - Respects biometric locked chats ("New message" only, no preview and no Reply)
- *  - Sent replies update the notification in-place ("You: <reply>") without hanging spinners
- *  - Respects user-customized notification tone preferences
+ *  - heads-up popup (IMPORTANCE_HIGH channel) that also shows on the lock screen
+ *  - screen wakeup when the device is locked/sleeping so popup is immediately visible
+ *  - MessagingStyle: messages from the same chat STACK in one notification
+ *  - circular sender avatar (falls back to a coloured initial)
+ *  - Reply (inline, RemoteInput) + Mark as read actions
+ *  - conversation shortcut -> shows in the "Conversations" section on Android 11+
+ *  - bundle summary when several chats are active
+ *  - locked chats show "New message" only, no preview and no Reply
+ *  - sent replies update the notification in place (no endless spinner)
  */
 object ChatNotificationBuilder {
     private const val TAG = "ChatNotificationBuilder"
 
-    const val CHANNEL_ID = "chat_notifications_heads_up"
-    const val CHANNEL_NAME = "Chat Messages"
+    // Bump the version if you ever change channel importance/sound: channels are immutable.
+    const val CHANNEL_ID = "chat_messages_v2"
     private const val GROUP_KEY = "com.chroma.studio.CHAT_MESSAGES"
     private const val SUMMARY_ID = 0x7001
     private const val MAX_STACKED = 10
@@ -64,7 +62,7 @@ object ChatNotificationBuilder {
     const val ACTION_REPLY = "com.chroma.studio.action.CHAT_REPLY"
     const val ACTION_MARK_READ = "com.chroma.studio.action.CHAT_MARK_READ"
     const val ACTION_DISMISSED = "com.chroma.studio.action.CHAT_DISMISSED"
-    const val ACTION_QUICK_REPLY = "ACTION_QUICK_REPLY"
+    const val ACTION_QUICK_REPLY = "com.chroma.studio.action.ACTION_QUICK_REPLY"
     const val EXTRA_QUICK_REPLY_TEXT = "EXTRA_QUICK_REPLY_TEXT"
 
     private data class Entry(val sender: String, val senderId: String, val text: String, val ts: Long, val self: Boolean)
@@ -76,9 +74,35 @@ object ChatNotificationBuilder {
     // Public API
     // ------------------------------------------------------------------------------------------
 
+    fun ensureChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = context.getSystemService(NotificationManager::class.java) ?: return
+        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
+        val channel = NotificationChannel(CHANNEL_ID, "Messages", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "New chat messages"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 250, 150, 250)
+            enableLights(true)
+            lightColor = Color.parseColor("#7C4DFF")
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setSound(
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+        }
+        nm.createNotificationChannel(channel)
+    }
+
+    /** Compatibility alias for ChromaApp lifecycle calls */
+    fun ensureNotificationChannel(context: Context) = ensureChannel(context)
+
     /**
      * Wakes up the screen when the device is locked/asleep so that incoming notifications
-     * are immediately visible on the lock screen.
+     * are immediately visible on the lock screen as a heads-up popup.
      */
     fun wakeUpScreen(context: Context) {
         try {
@@ -89,70 +113,23 @@ object ChatNotificationBuilder {
                     PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
                     PowerManager.ACQUIRE_CAUSES_WAKEUP or
                     PowerManager.ON_AFTER_RELEASE,
-                    "oscellion:chat_lockscreen_wake"
+                    "oscellion:chat_notification_wake"
                 )
-                wakeLock.acquire(4000L) // 4-second timeout to illuminate lock screen
+                wakeLock.acquire(3000)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Screen wakeup failed", e)
+            Log.w(TAG, "Screen wakeup failed: ${e.message}")
         }
     }
 
-    /**
-     * Resolves the active notification channel ID and sound URI based on user preferences.
-     */
-    fun getActiveChannelId(context: Context): String {
-        val notifPrefs = context.getSharedPreferences("notification_settings", Context.MODE_PRIVATE)
-        val selectedToneId = notifPrefs.getString("selected_notification_sound", "default") ?: "default"
-        return "${CHANNEL_ID}_$selectedToneId"
-    }
-
-    fun ensureChannel(context: Context) {
-        ensureNotificationChannel(context)
-    }
-
-    fun ensureNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val nm = context.getSystemService(NotificationManager::class.java) ?: return
-
-        val notifPrefs = context.getSharedPreferences("notification_settings", Context.MODE_PRIVATE)
-        val selectedToneId = notifPrefs.getString("selected_notification_sound", "default") ?: "default"
-        val toneObj = com.chroma.studio.chat.sound.AVAILABLE_NOTIFICATION_TONES.find { it.id == selectedToneId }
-            ?: com.chroma.studio.chat.sound.AVAILABLE_NOTIFICATION_TONES.first()
-        val customSoundUri = Uri.parse("android.resource://" + context.packageName + "/" + toneObj.resId)
-
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-
-        val activeChannelId = "${CHANNEL_ID}_$selectedToneId"
-
-        // Ensure customized tone channel exists
-        if (nm.getNotificationChannel(activeChannelId) == null) {
-            val channel = NotificationChannel(activeChannelId, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "High-priority heads-up chat alerts with direct reply and lockscreen display"
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 250, 150, 250)
-                enableLights(true)
-                lightColor = Color.parseColor("#0381FE")
-                setShowBadge(true)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                setSound(customSoundUri, audioAttributes)
-                setBypassDnd(true)
-            }
-            nm.createNotificationChannel(channel)
-        }
-    }
-
-    /** Call from onMessageReceived when the app is in background / killed. */
+    /** Call from onMessageReceived when the app is in background / killed / screen locked. */
     fun showHeadsUpNotification(
         context: Context,
         roomId: String,
         senderId: String,
         senderName: String,
         messageText: String,
-        avatarUrl: String = "",
+        avatarUrl: String,
         isLocked: Boolean = false,
         groupName: String = "",
         messageType: String = "text"
@@ -160,9 +137,8 @@ object ChatNotificationBuilder {
         val app = context.applicationContext
         val key = roomId.ifBlank { senderId }
         if (key.isBlank()) return
-
+        ensureChannel(app)
         wakeUpScreen(app)
-        ensureNotificationChannel(app)
 
         val meta = Meta(senderName, senderId, groupName, avatarUrl, isLocked)
         val text = if (isLocked) "New message" else messageText
@@ -212,7 +188,6 @@ object ChatNotificationBuilder {
         if (!nm.areNotificationsEnabled()) return
 
         val notifId = key.hashCode()
-        val channelId = getActiveChannelId(context)
         val avatar = if (meta.locked) null else loadAvatar(meta.avatarUrl, meta.senderName)
         val isGroup = meta.groupName.isNotBlank()
 
@@ -259,22 +234,23 @@ object ChatNotificationBuilder {
         val dismissPi = receiverPi(context, ACTION_DISMISSED, key, roomId, meta.senderId, mutable = false)
         val markReadPi = receiverPi(context, ACTION_MARK_READ, key, roomId, meta.senderId, mutable = false)
 
-        val publicVersion = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_oscellion_notification)
+        val publicVersion = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(smallIcon(context))
             .setContentTitle(meta.senderName)
-            .setContentText("New message")
-            .setColor(Color.parseColor("#0381FE"))
+            .setContentText(if (meta.locked) "New message" else entries.lastOrNull()?.text ?: "New message")
+            .setColor(Color.parseColor("#7C4DFF"))
             .build()
 
-        val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_oscellion_notification)
-            .setColor(Color.parseColor("#0381FE"))
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(smallIcon(context))
+            .setColor(Color.parseColor("#7C4DFF"))
             .setStyle(style)
             .setContentTitle(if (isGroup) meta.groupName else meta.senderName)
             .setContentText(entries.lastOrNull()?.text ?: "")
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVisibility(if (meta.locked) NotificationCompat.VISIBILITY_PRIVATE else NotificationCompat.VISIBILITY_PUBLIC)
             .setPublicVersion(publicVersion)
             .setShortcutId(shortcutId)
             .setWhen(entries.lastOrNull()?.ts ?: System.currentTimeMillis())
@@ -283,7 +259,6 @@ object ChatNotificationBuilder {
             .setOnlyAlertOnce(silent)
             .setGroup(GROUP_KEY)
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
-            .setFullScreenIntent(contentPi, false)
             .setContentIntent(contentPi)
             .setDeleteIntent(dismissPi)
             .apply { avatar?.let { setLargeIcon(it) } }
@@ -309,10 +284,10 @@ object ChatNotificationBuilder {
 
         nm.notify(notifId, builder.build())
 
-        // Summary so multiple chats bundle neatly
-        val summary = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_oscellion_notification)
-            .setColor(Color.parseColor("#0381FE"))
+        // Summary so multiple chats bundle neatly (required for grouping below Android 7 / some OEMs)
+        val summary = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(smallIcon(context))
+            .setColor(Color.parseColor("#7C4DFF"))
             .setStyle(NotificationCompat.InboxStyle().setSummaryText("New messages"))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setGroup(GROUP_KEY)
@@ -336,6 +311,18 @@ object ChatNotificationBuilder {
     // Helpers
     // ------------------------------------------------------------------------------------------
 
+    /**
+     * Sharp monochrome notification icon designed specifically for notifications.
+     */
+    private fun smallIcon(context: Context): Int {
+        return try {
+            val resId = context.resources.getIdentifier("ic_oscellion_notification", "drawable", context.packageName)
+            if (resId != 0) resId else context.applicationInfo.icon
+        } catch (_: Exception) {
+            context.applicationInfo.icon
+        }
+    }
+
     private fun launchIntent(context: Context, roomId: String, senderId: String): Intent {
         val base = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()
         return base.apply {
@@ -354,6 +341,7 @@ object ChatNotificationBuilder {
             putExtra(EXTRA_ROOM_ID, roomId)
             putExtra(EXTRA_SENDER_ID, senderId)
         }
+        // RemoteInput PendingIntents MUST be mutable on Android 12+.
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or when {
             mutable && Build.VERSION.SDK_INT >= 31 -> PendingIntent.FLAG_MUTABLE
             !mutable -> PendingIntent.FLAG_IMMUTABLE
@@ -402,7 +390,7 @@ object ChatNotificationBuilder {
 
     private fun initialAvatar(name: String, size: Int): Bitmap {
         val palette = intArrayOf(
-            0xFF0381FE.toInt(), 0xFF00B8D4.toInt(), 0xFFFF6D00.toInt(),
+            0xFF7C4DFF.toInt(), 0xFF00B8D4.toInt(), 0xFFFF6D00.toInt(),
             0xFF00C853.toInt(), 0xFFD500F9.toInt(), 0xFFFF4081.toInt()
         )
         val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -418,7 +406,7 @@ object ChatNotificationBuilder {
         return out
     }
 
-    // ---- Persistent stack of recent messages per chat ------------------------------------------
+    // ---- Persistent stack of recent messages per chat (survives process death) ---------------------
 
     private object Store {
         private const val PREFS = "chat_notif_store"

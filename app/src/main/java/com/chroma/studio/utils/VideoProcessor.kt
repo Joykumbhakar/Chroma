@@ -180,12 +180,24 @@ object VideoProcessor {
                 extractor.advance()
             }
 
-            try { muxer.stop() } catch (_: Exception) {}
-            outputFile
+            var stopSuccess = false
+            try {
+                muxer.stop()
+                stopSuccess = true
+            } catch (e: Exception) {
+                Log.e(TAG, "MediaMuxer stop failed", e)
+            }
+
+            if (stopSuccess && outputFile.exists() && outputFile.length() > 1024L) {
+                outputFile
+            } else {
+                try { outputFile.delete() } catch (_: Throwable) {}
+                null
+            }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e(TAG, "trimVideo failed", e)
-            outputFile.delete()
+            try { outputFile.delete() } catch (_: Throwable) {}
             null
         } finally {
             extractor?.release()

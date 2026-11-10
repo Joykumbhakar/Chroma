@@ -140,29 +140,21 @@
             </intent-filter>
         </service>
 
-        <service
-            android:name=".ChromaMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="chat_notifications_heads_up" />
-
-        <receiver android:name=".ChatNotificationReceiver" android:exported="false">
-            <intent-filter>
-                <action android:name="com.chroma.studio.TEST_HEADS_UP" />
-            </intent-filter>
-        </receiver>
+            android:value="chat_messages_v2" />
 
         <receiver android:name=".ChatActionReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="com.chroma.studio.action.CHAT_REPLY" />
                 <action android:name="com.chroma.studio.action.CHAT_MARK_READ" />
                 <action android:name="com.chroma.studio.action.CHAT_DISMISSED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name=".ChatNotificationReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.chroma.studio.TEST_HEADS_UP" />
             </intent-filter>
         </receiver>
 
