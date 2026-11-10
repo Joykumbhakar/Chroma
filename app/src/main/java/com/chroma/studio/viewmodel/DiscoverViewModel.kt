@@ -97,13 +97,9 @@ class DiscoverViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val cached = getCachedLikedWorkIds(userId)
-                if (cached.isNotEmpty()) {
-                    _likedWorkIds.value = _likedWorkIds.value + cached
-                }
-
                 val currentWorks = _works.value
                 val instantLiked = currentWorks.filter { it.likedBy.contains(userId) }.map { it.id }.toSet()
-                _likedWorkIds.value = _likedWorkIds.value + instantLiked
+                _likedWorkIds.value = cached + instantLiked
 
                 coroutineScope {
                     val serverLikedAsync = async {
@@ -250,7 +246,8 @@ class DiscoverViewModel : ViewModel() {
         val uid = if (!currentUserId.isNullOrBlank()) currentUserId else com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
         if (uid.isNullOrBlank()) return
 
-        val isLikedNow = _likedWorkIds.value.contains(workId)
+        val workInState = _works.value.firstOrNull { it.id == workId }
+        val isLikedNow = _likedWorkIds.value.contains(workId) || (workInState?.likedBy?.contains(uid) == true)
 
         if (forceLike && isLikedNow) {
             return // Already liked, skip toggle
@@ -269,8 +266,14 @@ class DiscoverViewModel : ViewModel() {
                 _works.value = _works.value.map {
                     if (it.id == workId) {
                         val newLikedBy = if (nextLiked) (it.likedBy + uid).distinct() else (it.likedBy - uid)
+                        val baseLikes = maxOf(it.likesCount, it.likedBy.size)
+                        val newLikesCount = if (nextLiked) {
+                            maxOf(baseLikes + 1, newLikedBy.size)
+                        } else {
+                            maxOf(0, baseLikes - 1)
+                        }
                         it.copy(
-                            likesCount = maxOf(0, it.likesCount + if (nextLiked) 1 else -1),
+                            likesCount = newLikesCount,
                             likedBy = newLikedBy
                         )
                     } else it
@@ -296,7 +299,7 @@ class DiscoverViewModel : ViewModel() {
                     if (it.id == workId) {
                         val restoredLikedBy = if (targetLiked) (it.likedBy - uid) else (it.likedBy + uid).distinct()
                         it.copy(
-                            likesCount = maxOf(0, it.likesCount + if (targetLiked) -1 else 1),
+                            likesCount = maxOf(0, maxOf(it.likesCount + if (targetLiked) -1 else 1, restoredLikedBy.size)),
                             likedBy = restoredLikedBy
                         )
                     } else it

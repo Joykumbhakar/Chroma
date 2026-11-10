@@ -77,6 +77,7 @@ import com.chroma.studio.ui.components.OscellionGalleryLayout
 import com.chroma.studio.ui.components.GalleryMediaTypeFilter
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.chroma.studio.utils.VideoProcessor
 import com.chroma.studio.utils.compressImageToUnder50KB
 import com.chroma.studio.viewmodel.FlashViewModel
 import com.chroma.studio.viewmodel.StoryViewModel
@@ -205,6 +206,8 @@ fun PostCreationFlowScreen(
     val workRepo = remember { WorkRepository(context) }
     val storyVm: StoryViewModel = viewModel()
     val flashVm: FlashViewModel = viewModel()
+    val flashIsUploading by flashVm.isUploading.collectAsState()
+    val flashUploadProgress by flashVm.uploadProgress.collectAsState()
 
     // Active Post Type
     var currentPostType by remember { mutableStateOf(initialPostType) }
@@ -391,26 +394,42 @@ fun PostCreationFlowScreen(
                     PostType.FLASH -> {
                         val videoUri = editedPhotoUri ?: selectedPhotoUris.firstOrNull() ?: throw Exception("No video selected")
                         val finalCaption = caption.ifBlank { "Untitled Flash Reel" }
+
+                        val thumbBitmap = try {
+                            VideoProcessor.extractThumbnail(context, videoUri, 100L)
+                        } catch (_: Throwable) { null }
+
+                        com.chroma.studio.data.FlashUploadManager.startUpload(
+                            thumbnailBitmap = thumbBitmap,
+                            title = finalCaption,
+                            statusText = "Posting Flash Reel to Community…",
+                            draftId = null,
+                            retryAction = { executePublish() }
+                        )
+
                         flashVm.publishFlash(
                             context = context,
                             mediaUri = videoUri,
                             mediaType = FlashMediaType.VIDEO,
                             trimStartMs = flashTrimStartMs,
                             trimEndMs = flashTrimEndMs,
-                            thumbnailBitmap = null,
+                            thumbnailBitmap = thumbBitmap,
                             caption = finalCaption,
                             hashtags = tags,
                             mentions = mentions,
                             filterName = "Normal",
                             onSuccess = {
+                                isPublishing = false
                                 SoundManager.playSend()
                                 Toast.makeText(context, "Flash Reel published successfully! ⚡", Toast.LENGTH_SHORT).show()
                                 onFinish()
                             },
                             onError = { err ->
+                                isPublishing = false
                                 Toast.makeText(context, "Flash post error: $err", Toast.LENGTH_SHORT).show()
                             }
                         )
+                        return@launch
                     }
 
                     PostType.WORK -> {
@@ -485,9 +504,12 @@ fun PostCreationFlowScreen(
                     }
                 }
             } catch (e: Exception) {
+                isPublishing = false
                 Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             } finally {
-                isPublishing = false
+                if (currentPostType != PostType.FLASH) {
+                    isPublishing = false
+                }
             }
         }
     }
@@ -530,14 +552,13 @@ fun PostCreationFlowScreen(
 
             PostType.FLASH -> {
                 if (rawPhotoUri != null) {
+                    val activeOriginalRaw = rawPhotoUri!!
                     FinalCutProVideoEditorScreen(
-                        initialUri = rawPhotoUri,
+                        initialUri = activeOriginalRaw,
                         onDone = { startMs, endMs, clips ->
-                            val renderedUri = clips.firstOrNull() ?: rawPhotoUri
-                            if (renderedUri != null) {
-                                selectedPhotoUris = listOf(renderedUri)
-                                editedPhotoUris = editedPhotoUris + (rawPhotoUri!! to renderedUri)
-                            }
+                            val renderedUri = clips.firstOrNull() ?: activeOriginalRaw
+                            selectedPhotoUris = listOf(renderedUri)
+                            editedPhotoUris = editedPhotoUris + (activeOriginalRaw to renderedUri)
                             flashTrimStartMs = 0L
                             flashTrimEndMs = endMs
                             SoundManager.playReaction()
@@ -640,9 +661,9 @@ fun PostCreationFlowScreen(
                 isNextEnabled = when (currentStep) {
                     PostCreationStep.MEDIA_PICKER -> selectedPhotoUris.isNotEmpty() || selectedLocalWork != null || useGradientCanvas
                     PostCreationStep.IMAGE_EDITOR -> true
-                    PostCreationStep.POST_DETAILS -> !isPublishing
+                    PostCreationStep.POST_DETAILS -> !isPublishing && !(currentPostType == PostType.FLASH && flashIsUploading)
                 },
-                isPublishing = isPublishing,
+                isPublishing = isPublishing || (currentPostType == PostType.FLASH && flashIsUploading),
                 isDark = isDark
             )
         }
@@ -794,7 +815,8 @@ fun PostCreationFlowScreen(
                         onWorkCategoryChange = { workCategory = it },
                         allowDownload = allowDownload,
                         onAllowDownloadChange = { allowDownload = it },
-                        isPublishing = isPublishing,
+                        isPublishing = isPublishing || (currentPostType == PostType.FLASH && flashIsUploading),
+                        uploadProgress = if (currentPostType == PostType.FLASH) flashUploadProgress else 0f,
                         onPublish = { executePublish() },
                         isDark = isDark
                     )
@@ -1540,6 +1562,7 @@ private fun UniversalPostDetailsInputView(
     allowDownload: Boolean,
     onAllowDownloadChange: (Boolean) -> Unit,
     isPublishing: Boolean,
+    uploadProgress: Float = 0f,
     onPublish: () -> Unit,
     isDark: Boolean
 ) {
@@ -2163,7 +2186,12 @@ private fun UniversalPostDetailsInputView(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Publishing...", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                val progressText = if (postType == PostType.FLASH && uploadProgress > 0f) {
+                    "Publishing ${(uploadProgress * 100).toInt()}%..."
+                } else {
+                    "Publishing..."
+                }
+                Text(progressText, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             } else {
                 Icon(postType.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))

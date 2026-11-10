@@ -90,7 +90,7 @@ class FlashRepository {
             caption = caption,
             hashtags = hashtags,
             mentions = mentions,
-            duration = duration.coerceAtMost(30_000L),
+            duration = duration.coerceAtMost(60_000L),
             remixedFromPostId = remixedFromPostId,
             remixedFromAuthorUsername = remixedFromAuthorUsername,
             timestamp = System.currentTimeMillis(),
@@ -153,13 +153,13 @@ class FlashRepository {
                         docRef,
                         "likedBy", FieldValue.arrayUnion(userId),
                         "dislikedBy", FieldValue.arrayRemove(userId),
-                        "likesCount", currentLikes + 1
+                        "likesCount", FieldValue.increment(1)
                     )
                 } else {
                     transaction.update(
                         docRef,
                         "likedBy", FieldValue.arrayRemove(userId),
-                        "likesCount", maxOf(0, currentLikes - 1)
+                        "likesCount", if (currentLikes <= 1L) 0L else FieldValue.increment(-1)
                     )
                 }
                 true
@@ -514,13 +514,13 @@ class FlashRepository {
                     transaction.update(
                         docRef,
                         "likedBy", FieldValue.arrayUnion(userId),
-                        "likesCount", currentLikes + 1
+                        "likesCount", FieldValue.increment(1)
                     )
                 } else {
                     transaction.update(
                         docRef,
                         "likedBy", FieldValue.arrayRemove(userId),
-                        "likesCount", maxOf(0, currentLikes - 1)
+                        "likesCount", if (currentLikes <= 1L) 0L else FieldValue.increment(-1)
                     )
                 }
                 true

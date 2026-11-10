@@ -395,7 +395,7 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                     thumbnailBitmap.compress(Bitmap.CompressFormat.JPEG, 85, baos)
                     CloudinaryClient.uploadFlashThumbnail(baos.toByteArray()) ?: ""
                 } else {
-                    val extracted = VideoProcessor.extractThumbnail(context, Uri.fromFile(processedFile), trimStartMs.coerceAtLeast(0L))
+                    val extracted = VideoProcessor.extractThumbnail(context, Uri.fromFile(processedFile), 100L)
                     if (extracted != null) {
                         val baos = ByteArrayOutputStream()
                         extracted.compress(Bitmap.CompressFormat.JPEG, 85, baos)
@@ -413,7 +413,7 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                     caption = caption,
                     hashtags = hashtags,
                     mentions = mentions,
-                    duration = duration.coerceIn(1_000L, 30_000L),
+                    duration = duration.coerceIn(1_000L, 60_000L),
                     remixedFromPostId = remixedFromPostId,
                     remixedFromAuthorUsername = remixedFromAuthorUsername,
                     hideLikesCount = hideLikesCount,
@@ -421,8 +421,11 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                     turnOffRemix = turnOffRemix
                 )
 
-                // Cleanup temp files
-                withContext(Dispatchers.IO) { processedFile.delete() }
+                // Cleanup temporary working files only; never delete user's rendered editor output
+                val originalPath = if (mediaUri.scheme == "file") mediaUri.path else null
+                if (processedFile.exists() && processedFile.absolutePath != originalPath && !processedFile.name.startsWith("pro_export_")) {
+                    withContext(Dispatchers.IO) { try { processedFile.delete() } catch (_: Throwable) {} }
+                }
 
                 _uploadProgress.value = 1f
                 com.chroma.studio.data.FlashUploadManager.setSuccess("Posted! 🎉")

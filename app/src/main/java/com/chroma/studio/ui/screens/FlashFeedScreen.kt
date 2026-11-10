@@ -698,7 +698,7 @@ private fun FlashVideoItem(
             ReelsActionButton(
                 icon = ChromaIcons.HeartFilled,
                 tint = if (isLiked) Color(0xFFFF3B30) else Color.White,
-                label = if (video.hideLikesCount) "" else formatCount(video.likesCount),
+                label = if (video.hideLikesCount) "" else formatCount(maxOf(video.likesCount, video.likedBy.size)),
                 scale = likeScale,
                 onClick = onLike
             )

@@ -2621,7 +2621,7 @@ fun ProfileFlashCard(
             Icon(ChromaIcons.HeartFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
             Spacer(Modifier.width(3.dp))
             Text(
-                text = formatCount(flash.likesCount),
+                text = formatCount(maxOf(flash.likesCount, flash.likedBy.size)),
                 color = Color.White,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
@@ -2675,7 +2675,7 @@ fun ProfileWorkCard(
             )
         }
 
-        val effectiveLikes = if (isLiked && work.likesCount == 0) 1 else work.likesCount
+        val effectiveLikes = maxOf(work.likesCount, work.likedBy.size)
         if (effectiveLikes > 0 || isLiked) {
             Row(
                 modifier = Modifier

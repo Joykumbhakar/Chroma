@@ -627,6 +627,7 @@ class DiscoverRepository {
         if (workId.isBlank() || userId.isBlank()) return false
         return try {
             val workRef = collection.document(workId)
+            val flashRef = db.collection("flash_videos").document(workId)
             val likeRef = collection.document(workId).collection("likes").document(userId)
             val userLikeRef = usersCollection.document(userId).collection("liked_posts").document(workId)
             val now = System.currentTimeMillis()
@@ -635,79 +636,100 @@ class DiscoverRepository {
             var postTitle: String? = null
             var postThumb: String? = null
 
-            if (targetLiked) {
-                // 1. Update community_works post: add to likedBy array and increment likesCount
-                try {
-                    val postDoc = workRef.get().await()
+            // 1. Transactional atomic update for community_works
+            try {
+                db.runTransaction { transaction ->
+                    val postDoc = transaction.get(workRef)
                     if (postDoc.exists()) {
                         postAuthorId = postDoc.getString("creatorId")
                         postTitle = postDoc.getString("title") ?: "post"
                         postThumb = postDoc.getString("thumbnailUrl") ?: postDoc.getString("imageUrl")
-                        val currentLikes = postDoc.getLong("likesCount") ?: 0L
                         val likedBy = postDoc.get("likedBy") as? List<String> ?: emptyList()
-                        if (!likedBy.contains(userId)) {
-                            workRef.update(
+                        val alreadyLiked = likedBy.contains(userId)
+
+                        if (targetLiked && !alreadyLiked) {
+                            transaction.update(
+                                workRef,
                                 mapOf(
                                     "likedBy" to FieldValue.arrayUnion(userId),
-                                    "likesCount" to currentLikes + 1
+                                    "likesCount" to FieldValue.increment(1)
                                 )
-                            ).await()
+                            )
+                        } else if (!targetLiked && alreadyLiked) {
+                            val currentLikes = postDoc.getLong("likesCount") ?: 0L
+                            transaction.update(
+                                workRef,
+                                mapOf(
+                                    "likedBy" to FieldValue.arrayRemove(userId),
+                                    "likesCount" to if (currentLikes <= 1L) 0L else FieldValue.increment(-1)
+                                )
+                            )
                         }
                     }
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    Log.w("DiscoverRepository", "community_works like update warning", e)
-                }
+                    null
+                }.await()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.w("DiscoverRepository", "community_works like update transaction warning", e)
+            }
 
-                // Also check and update flash_videos if applicable
-                try {
-                    val flashRef = db.collection("flash_videos").document(workId)
-                    val flashDoc = flashRef.get().await()
+            // 2. Transactional atomic update for flash_videos (if applicable)
+            try {
+                db.runTransaction { transaction ->
+                    val flashDoc = transaction.get(flashRef)
                     if (flashDoc.exists()) {
                         if (postAuthorId.isNullOrBlank()) {
                             postAuthorId = flashDoc.getString("creatorId")
                             postTitle = flashDoc.getString("caption") ?: flashDoc.getString("title") ?: "video"
                             postThumb = flashDoc.getString("thumbnailUrl")
                         }
-                        val currentLikes = flashDoc.getLong("likesCount") ?: 0L
                         val likedBy = flashDoc.get("likedBy") as? List<String> ?: emptyList()
-                        if (!likedBy.contains(userId)) {
-                            flashRef.update(
+                        val alreadyLiked = likedBy.contains(userId)
+
+                        if (targetLiked && !alreadyLiked) {
+                            transaction.update(
+                                flashRef,
                                 mapOf(
                                     "likedBy" to FieldValue.arrayUnion(userId),
                                     "dislikedBy" to FieldValue.arrayRemove(userId),
-                                    "likesCount" to currentLikes + 1
+                                    "likesCount" to FieldValue.increment(1)
                                 )
-                            ).await()
+                            )
+                        } else if (!targetLiked && alreadyLiked) {
+                            val currentLikes = flashDoc.getLong("likesCount") ?: 0L
+                            transaction.update(
+                                flashRef,
+                                mapOf(
+                                    "likedBy" to FieldValue.arrayRemove(userId),
+                                    "likesCount" to if (currentLikes <= 1L) 0L else FieldValue.increment(-1)
+                                )
+                            )
                         }
-                        try {
-                            flashRef.collection("likes").document(userId).set(mapOf("timestamp" to now)).await()
-                        } catch (_: Exception) {}
                     }
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    Log.w("DiscoverRepository", "flash_videos like update warning", e)
-                }
+                    null
+                }.await()
 
-                // 2. Resilient subcollection updates
-                try {
-                    likeRef.set(mapOf("timestamp" to now)).await()
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    Log.w("DiscoverRepository", "likeRef set warning", e)
+                if (targetLiked) {
+                    try { flashRef.collection("likes").document(userId).set(mapOf("timestamp" to now)).await() } catch (_: Exception) {}
+                } else {
+                    try { flashRef.collection("likes").document(userId).delete().await() } catch (_: Exception) {}
                 }
-                try {
-                    userLikeRef.set(mapOf("likedAt" to now)).await()
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    Log.w("DiscoverRepository", "userLikeRef set warning", e)
-                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.w("DiscoverRepository", "flash_videos like update transaction warning", e)
+            }
 
-                // 3. Dispatch real notification to post author
+            // 3. Subcollection updates
+            if (targetLiked) {
+                try { likeRef.set(mapOf("timestamp" to now)).await() } catch (_: Exception) {}
+                try { userLikeRef.set(mapOf("likedAt" to now)).await() } catch (_: Exception) {}
+
+                // 4. Dispatch real notification to post author
                 try {
-                    if (!postAuthorId.isNullOrBlank() && postAuthorId != userId) {
+                    val targetAuthor = postAuthorId
+                    if (!targetAuthor.isNullOrBlank() && targetAuthor != userId) {
                         NotificationDispatcher.sendNotification(
-                            targetUserId = postAuthorId,
+                            targetUserId = targetAuthor,
                             type = com.chroma.studio.model.NotificationActionType.LIKE,
                             actionText = "liked your post",
                             detailText = postTitle ?: "post",
@@ -717,64 +739,10 @@ class DiscoverRepository {
                     }
                 } catch (_: Exception) {}
             } else {
-                // 1. Unlike in community_works
-                try {
-                    val postDoc = workRef.get().await()
-                    if (postDoc.exists()) {
-                        val currentLikes = postDoc.getLong("likesCount") ?: 0L
-                        val likedBy = postDoc.get("likedBy") as? List<String> ?: emptyList()
-                        if (likedBy.contains(userId)) {
-                            workRef.update(
-                                mapOf(
-                                    "likedBy" to FieldValue.arrayRemove(userId),
-                                    "likesCount" to maxOf(0L, currentLikes - 1)
-                                )
-                            ).await()
-                        }
-                    }
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    Log.w("DiscoverRepository", "workRef unlike update warning", e)
-                }
-
-                // Also unlike in flash_videos if applicable
-                try {
-                    val flashRef = db.collection("flash_videos").document(workId)
-                    val flashDoc = flashRef.get().await()
-                    if (flashDoc.exists()) {
-                        val currentLikes = flashDoc.getLong("likesCount") ?: 0L
-                        val likedBy = flashDoc.get("likedBy") as? List<String> ?: emptyList()
-                        if (likedBy.contains(userId)) {
-                            flashRef.update(
-                                mapOf(
-                                    "likedBy" to FieldValue.arrayRemove(userId),
-                                    "likesCount" to maxOf(0L, currentLikes - 1)
-                                )
-                            ).await()
-                        }
-                        try {
-                            flashRef.collection("likes").document(userId).delete().await()
-                        } catch (_: Exception) {}
-                    }
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    Log.w("DiscoverRepository", "flashRef unlike update warning", e)
-                }
-
-                // 2. Remove from subcollections
-                try {
-                    likeRef.delete().await()
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    Log.w("DiscoverRepository", "likeRef delete warning", e)
-                }
-                try {
-                    userLikeRef.delete().await()
-                } catch (e: Exception) {
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    Log.w("DiscoverRepository", "userLikeRef delete warning", e)
-                }
+                try { likeRef.delete().await() } catch (_: Exception) {}
+                try { userLikeRef.delete().await() } catch (_: Exception) {}
             }
+
             true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

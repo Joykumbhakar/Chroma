@@ -434,7 +434,7 @@ private fun AuthenticatedRoute(
                                 navController.navigate("create_post")
                             }
                             com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_VIDEO_EDITOR -> {
-                                navController.navigate("flash_projects_hub")
+                                navController.navigate("create_post/flash")
                             }
                             com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_MUSIC_PLAYER -> {
                                 showDeviceMusicTrimmer = true
@@ -1126,7 +1126,9 @@ private fun AuthenticatedRoute(
                                         onNavigateToFlashPicker = {
                                             flashRemixPostId = null
                                             flashRemixAuthorUsername = null
-                                            navController.navigate("flash_picker")
+                                            flashPickerVideoUri = null
+                                            flashImportedMediaUris = emptyList()
+                                            navController.navigate("create_post/flash")
                                         },
                                         onNavigateToCreateTextStatus = {
                                             navController.navigate("create_text_status")
@@ -1279,7 +1281,13 @@ private fun AuthenticatedRoute(
                              onDeleteWork = { workId -> discoverVm.deleteWork(workId) },
                              onEditWork = { workId, newTitle, newDesc -> discoverVm.updateWork(workId, newTitle, newDesc) },
                              onCreatePost = { navController.navigate("create_post") },
-                             onCreateFlash = { navController.navigate("flash_projects_hub") },
+                             onCreateFlash = {
+                                 flashRemixPostId = null
+                                 flashRemixAuthorUsername = null
+                                 flashPickerVideoUri = null
+                                 flashImportedMediaUris = emptyList()
+                                 navController.navigate("create_post/flash")
+                             },
                              onPublishWork = { navController.navigate("creator_studio/work") },
                              onNavigateToNotifications = { navController.navigate("notifications_feed") },
                              onStoryViewerChange = { isDiscoverStoryViewerActive = it },
@@ -1561,7 +1569,9 @@ private fun AuthenticatedRoute(
                             onNavigateToFlashPicker = {
                                 flashRemixPostId = null
                                 flashRemixAuthorUsername = null
-                                navController.navigate("flash_picker")
+                                flashPickerVideoUri = null
+                                flashImportedMediaUris = emptyList()
+                                navController.navigate("create_post/flash")
                             },
                             onRemixRequested = { uri: android.net.Uri, postId: String, authorUsername: String ->
                                 flashPickerVideoUri = uri
@@ -1940,23 +1950,11 @@ private fun AuthenticatedRoute(
                     // ── Flash Upload Flow Routes ──────────────────────────────────────
                     composable("flash_picker") {
                         AuthenticatedRoute(navController, "Flash Video") {
-                            FlashPickerScreen(
-                                onVideoSelected = { uri ->
-                                    flashPickerVideoUri = uri
-                                    flashMediaType = FlashMediaType.VIDEO
-                                    navController.navigate("flash_video_editor")
-                                },
-                                onPhotosSelected = { uris ->
-                                    flashImportedMediaUris = uris
-                                    val firstUri = uris.firstOrNull()
-                                    if (firstUri != null) {
-                                        navController.navigate("image_editor?uri=${android.net.Uri.encode(firstUri.toString())}")
-                                    } else {
-                                        navController.popBackStack()
-                                    }
-                                },
-                                onBack = { navController.popBackStack() }
-                            )
+                            androidx.compose.runtime.LaunchedEffect(Unit) {
+                                navController.navigate("create_post/flash") {
+                                    popUpTo("flash_picker") { inclusive = true }
+                                }
+                            }
                         }
                     }
 
@@ -2008,7 +2006,9 @@ private fun AuthenticatedRoute(
                                 flashSaturation = 1f
                                 flashHue = 0f
                                 flashThumbnail = null
-                                navController.navigate("flash_post")
+                                navController.navigate("create_post/flash") {
+                                    popUpTo("flash_video_editor") { inclusive = true }
+                                }
                             },
                             onBack = {
                                 flashImportedMediaUris = emptyList()
@@ -2070,54 +2070,11 @@ private fun AuthenticatedRoute(
                     }
 
                     composable("flash_post") {
-                        val uri = flashPickerVideoUri ?: flashPickerPhotoUris.firstOrNull() ?: flashImportedMediaUris.firstOrNull() ?: run {
-                            navController.popBackStack()
-                            return@composable
-                        }
-
-                        FlashPostScreen(
-                            params = FlashPostParams(
-                                flashVm = flashVm,
-                                discoverViewModel = discoverVm,
-                                videoUri = uri,
-                                thumbnailBitmap = flashThumbnail,
-                                trimStartMs = flashTrimStart,
-                                trimEndMs = flashTrimEnd,
-                                filterName = flashFilterName,
-                                brightness = flashBrightness,
-                                contrast = flashContrast,
-                                saturation = flashSaturation,
-                                hue = flashHue,
-                                mediaType = flashMediaType,
-                                photoUris = flashPickerPhotoUris,
-                                durationPerSlideMs = flashDurationPerSlide,
-                                remixedFromPostId = flashRemixPostId,
-                                remixedFromAuthorUsername = flashRemixAuthorUsername
-                            ),
-                            onSuccess = {
-                                flashImportedMediaUris = emptyList()
-                                flashPickerPhotoUris = emptyList()
-                                flashPickerVideoUri = null
-                                flashThumbnail = null
-                                try {
-                                    navController.navigate("main") {
-                                        popUpTo("main") { inclusive = false }
-                                        launchSingleTop = true
-                                    }
-                                } catch (e: Exception) {
-                                    try {
-                                        navController.popBackStack("main", inclusive = false)
-                                    } catch (e2: Exception) {}
-                                }
-                                flashRemixPostId = null
-                                flashRemixAuthorUsername = null
-                                navigateToTab(2)
-                            },
-                            onBack = {
-                                flashImportedMediaUris = emptyList()
-                                navController.popBackStack()
+                        androidx.compose.runtime.LaunchedEffect(Unit) {
+                            navController.navigate("create_post/flash") {
+                                popUpTo("flash_post") { inclusive = true }
                             }
-                        )
+                        }
                     }
 
                     composable("trash") {

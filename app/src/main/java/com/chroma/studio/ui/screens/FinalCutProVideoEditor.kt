@@ -12404,13 +12404,19 @@ fun FcpExportSheet(
                                             text = "Duration",
                                             fontSize = 11.sp,
                                             color = colors.textMuted,
-                                            fontWeight = FontWeight.Medium
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             text = timeFormatted,
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = colors.textMain
+                                            color = colors.textMain,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -12449,13 +12455,19 @@ fun FcpExportSheet(
                                             text = "Dimensions",
                                             fontSize = 11.sp,
                                             color = colors.textMuted,
-                                            fontWeight = FontWeight.Medium
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             text = resDimensionStr,
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = colors.primary
+                                            color = colors.primary,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -12500,13 +12512,19 @@ fun FcpExportSheet(
                                             text = "Timeline",
                                             fontSize = 11.sp,
                                             color = colors.textMuted,
-                                            fontWeight = FontWeight.Medium
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             text = "$clipCount clip" + (if (clipCount != 1) "s" else "") + (if (textLayerCount > 0) " · $textLayerCount text" else ""),
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = colors.textMain
+                                            color = colors.textMain,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -12545,13 +12563,19 @@ fun FcpExportSheet(
                                             text = "Est. Size",
                                             fontSize = 11.sp,
                                             color = colors.textMuted,
-                                            fontWeight = FontWeight.Medium
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             text = "~$estimatedSizeStr",
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF10B981)
+                                            color = Color(0xFF10B981),
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -13930,7 +13954,8 @@ private fun FcpTopHeaderBar(
             // Left: Back button + Branding & Clip count
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f, fill = false)
             ) {
                 IconGhostButton(
                     icon = Lucide.ArrowLeft,
@@ -13939,25 +13964,29 @@ private fun FcpTopHeaderBar(
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    OscellionWebLogo(size = 22.dp)
+                    OscellionWebLogo(size = 20.dp)
                     Column(verticalArrangement = Arrangement.Center) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "Oscellion",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                letterSpacing = (-0.3).sp
+                                fontSize = 14.sp,
+                                letterSpacing = (-0.3).sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = "Studio",
                                 color = Color(0xFF0381FE),
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                letterSpacing = (-0.3).sp
+                                fontSize = 14.sp,
+                                letterSpacing = (-0.3).sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     if (clipsCount > 0) {
@@ -13965,7 +13994,9 @@ private fun FcpTopHeaderBar(
                             text = "$clipsCount ${if (clipsCount == 1) "clip" else "clips"}",
                             color = Color(0xFF8E98A8),
                             fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -13974,7 +14005,7 @@ private fun FcpTopHeaderBar(
             // Right: Undo, Redo, Divider, Export Button
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 IconGhostButton(
                     icon = Lucide.Undo,
@@ -13991,7 +14022,7 @@ private fun FcpTopHeaderBar(
                 // Divider
                 Box(
                     modifier = Modifier
-                        .padding(horizontal = 4.dp)
+                        .padding(horizontal = 2.dp)
                         .width(1.dp)
                         .height(18.dp)
                         .background(colors.glassBorder)
@@ -14003,12 +14034,12 @@ private fun FcpTopHeaderBar(
                             .background(Color(0xFFFF9500).copy(alpha = 0.18f))
                             .border(0.5.dp, Color(0xFFFF9500).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
                             .clickable(onClick = onDurationWarningClick)
-                            .padding(horizontal = 7.dp, vertical = 4.dp),
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
                             Icon(
                                 imageVector = Lucide.TriangleAlert,
@@ -14019,8 +14050,10 @@ private fun FcpTopHeaderBar(
                             Text(
                                 text = ">1m",
                                 color = Color(0xFFFF9500),
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -14029,14 +14062,17 @@ private fun FcpTopHeaderBar(
                 PrimaryGradientButton(
                     onClick = onExportClick,
                     height = 34.dp,
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    contentPadding = PaddingValues(horizontal = 11.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "Export",
                         color = Color.White,
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
                     )
+                    Spacer(modifier = Modifier.width(2.dp))
                     Icon(
                         imageVector = Lucide.ChevronRight,
                         contentDescription = "Next",

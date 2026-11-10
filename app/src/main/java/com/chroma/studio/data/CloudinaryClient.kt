@@ -153,8 +153,12 @@ object CloudinaryClient {
         return withContext(Dispatchers.IO) {
             // Circuit Breaker Check
             if (failureCount.get() >= MAX_FAILURES) {
-                if (System.currentTimeMillis() - circuitOpenTime.get() < COOLDOWN_MS) {
-                    Log.e("CloudinaryClient", "Circuit breaker OPEN — video upload fast-failed.")
+                if (System.currentTimeMillis() - circuitOpenTime.get() >= COOLDOWN_MS) {
+                    resetCircuitBreaker()
+                } else {
+                    val waitSec = ((COOLDOWN_MS - (System.currentTimeMillis() - circuitOpenTime.get())) / 1000).coerceAtLeast(1)
+                    lastErrorMessage = "Upload circuit breaker active. Please wait ${waitSec}s or retry."
+                    Log.e("CloudinaryClient", lastErrorMessage!!)
                     return@withContext null
                 }
             }
@@ -225,7 +229,6 @@ object CloudinaryClient {
                 .addFormDataPart("file", fileName, countingBody)
                 .addFormDataPart("upload_preset", preset)
                 .addFormDataPart("folder", folderPath)
-                .addFormDataPart("resource_type", "video")
                 .build()
 
             val request = Request.Builder()

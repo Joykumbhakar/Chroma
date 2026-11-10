@@ -580,6 +580,20 @@ fun HomeScreen(
 
             }
 
+            ActionMenuType.FLASH -> {
+
+                if (!com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+
+                    onNavigateToFlashPicker?.invoke()
+
+                } else {
+
+                    onRequireLogin()
+
+                }
+
+            }
+
             ActionMenuType.IMAGE_EDITOR -> {
 
                 if (!com.chroma.studio.data.SavedAccountManager.isGuest(context)) {

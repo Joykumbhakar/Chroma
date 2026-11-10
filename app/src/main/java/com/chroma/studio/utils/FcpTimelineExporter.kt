@@ -1192,7 +1192,7 @@ object FcpTimelineExporter {
 
             cmdArgs.add("-y")
 
-            val numCores = Runtime.getRuntime().availableProcessors().coerceIn(4, 16)
+            val numCores = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
 
             cmdArgs.add("-threads")
 
@@ -2428,9 +2428,7 @@ object FcpTimelineExporter {
 
                         lastLoggedProgress = progress
 
-                        val normalized = (0.40f + (progress.coerceIn(0, 100) / 100f) * 0.50f).coerceIn(0.40f, 0.90f)
-
-                        val sec = progressTime / 1000
+                        val normalized = (0.20f + (progress.coerceIn(0, 100) / 100f) * 0.70f).coerceIn(0.20f, 0.90f)
 
                         onProgress(normalized, "Rendering video (${(normalized * 100).toInt()}%)...")
 
@@ -2462,14 +2460,13 @@ object FcpTimelineExporter {
 
 
 
-            fun buildEncodingArgs(preset: String = "ultrafast", crf: String = "23"): Array<String> {
+            fun buildEncodingArgs(preset: String = "veryfast", crf: String = "23"): Array<String> {
 
                 val args = mutableListOf<String>()
 
                 args.addAll(cmdArgs)
 
-                // Multi-threaded CPU libx264 optimized for mobile ARM (zero latency, high throughput)
-
+                // High-efficiency ARM H.264 video encoding with standard VBV rate control
                 args.add("-c:v")
 
                 args.add("libx264")
@@ -2478,13 +2475,13 @@ object FcpTimelineExporter {
 
                 args.add(preset)
 
-                args.add("-tune")
-
-                args.add("zerolatency")
-
                 args.add("-crf")
 
                 args.add(crf)
+
+                args.add("-b:v")
+
+                args.add(targetBitrate)
 
                 args.add("-maxrate")
 
@@ -2493,10 +2490,6 @@ object FcpTimelineExporter {
                 args.add("-bufsize")
 
                 args.add(bufSize)
-
-                args.add("-threads")
-
-                args.add(numCores.toString())
 
                 args.add("-pix_fmt")
 
@@ -2534,7 +2527,7 @@ object FcpTimelineExporter {
 
             try { outputFile.delete() } catch (_: Throwable) {}
 
-            onProgress(0.40f, "⚡ Rendering video timeline...")
+            onProgress(0.20f, "⚡ Rendering video timeline (20%)...")
 
             val primaryCmd = buildEncodingArgs(preset = "ultrafast", crf = "23")
 

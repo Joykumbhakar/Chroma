@@ -27,12 +27,18 @@ object VideoProcessor {
     suspend fun getVideoDurationMs(context: Context, uri: Uri): Long = withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
         try {
-            if (uri.scheme == "file") {
+            if (uri.scheme == "file" && !uri.path.isNullOrBlank()) {
                 retriever.setDataSource(uri.path)
             } else if (uri.scheme == "http" || uri.scheme == "https") {
                 retriever.setDataSource(uri.toString(), HashMap<String, String>())
             } else {
-                retriever.setDataSource(context, uri)
+                try {
+                    context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                        retriever.setDataSource(pfd.fileDescriptor)
+                    } ?: retriever.setDataSource(context, uri)
+                } catch (_: Throwable) {
+                    retriever.setDataSource(context, uri)
+                }
             }
             val dur = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
             dur
@@ -49,18 +55,25 @@ object VideoProcessor {
     suspend fun extractThumbnail(context: Context, uri: Uri, positionMs: Long = 0L): Bitmap? = withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
         try {
-            if (uri.scheme == "file") {
+            if (uri.scheme == "file" && !uri.path.isNullOrBlank()) {
                 retriever.setDataSource(uri.path)
             } else if (uri.scheme == "http" || uri.scheme == "https") {
                 retriever.setDataSource(uri.toString(), HashMap<String, String>())
             } else {
-                retriever.setDataSource(context, uri)
+                try {
+                    context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                        retriever.setDataSource(pfd.fileDescriptor)
+                    } ?: retriever.setDataSource(context, uri)
+                } catch (_: Throwable) {
+                    retriever.setDataSource(context, uri)
+                }
             }
+            val targetUs = if (positionMs > 0L) positionMs * 1000L else 100_000L
             val bitmap = retriever.getFrameAtTime(
-                positionMs * 1000L,
+                targetUs,
                 MediaMetadataRetriever.OPTION_CLOSEST_SYNC
             ) ?: retriever.getFrameAtTime(
-                positionMs * 1000L,
+                targetUs,
                 MediaMetadataRetriever.OPTION_CLOSEST
             )
             bitmap
@@ -103,10 +116,16 @@ object VideoProcessor {
         var muxer: MediaMuxer? = null
         try {
             extractor = MediaExtractor()
-            if (inputUri.scheme == "file") {
-                extractor.setDataSource(inputUri.path ?: "")
+            if (inputUri.scheme == "file" && !inputUri.path.isNullOrBlank()) {
+                extractor.setDataSource(inputUri.path!!)
             } else {
-                extractor.setDataSource(context, inputUri, null)
+                try {
+                    context.contentResolver.openFileDescriptor(inputUri, "r")?.use { pfd ->
+                        extractor.setDataSource(pfd.fileDescriptor)
+                    } ?: extractor.setDataSource(context, inputUri, null)
+                } catch (_: Throwable) {
+                    extractor.setDataSource(context, inputUri, null)
+                }
             }
 
             muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
@@ -224,10 +243,16 @@ object VideoProcessor {
 
         try {
             extractor = MediaExtractor()
-            if (inputUri.scheme == "file") {
-                extractor.setDataSource(inputUri.path ?: "")
+            if (inputUri.scheme == "file" && !inputUri.path.isNullOrBlank()) {
+                extractor.setDataSource(inputUri.path!!)
             } else {
-                extractor.setDataSource(context, inputUri, null)
+                try {
+                    context.contentResolver.openFileDescriptor(inputUri, "r")?.use { pfd ->
+                        extractor.setDataSource(pfd.fileDescriptor)
+                    } ?: extractor.setDataSource(context, inputUri, null)
+                } catch (_: Throwable) {
+                    extractor.setDataSource(context, inputUri, null)
+                }
             }
 
             // Find video track
@@ -498,7 +523,17 @@ object VideoProcessor {
             for (clip in clips) {
                 val extractor = MediaExtractor()
                 try {
-                    extractor.setDataSource(context, clip.uri, null)
+                    if (clip.uri.scheme == "file" && !clip.uri.path.isNullOrBlank()) {
+                        extractor.setDataSource(clip.uri.path!!)
+                    } else {
+                        try {
+                            context.contentResolver.openFileDescriptor(clip.uri, "r")?.use { pfd ->
+                                extractor.setDataSource(pfd.fileDescriptor)
+                            } ?: extractor.setDataSource(context, clip.uri, null)
+                        } catch (_: Throwable) {
+                            extractor.setDataSource(context, clip.uri, null)
+                        }
+                    }
                     for (i in 0 until extractor.trackCount) {
                         val fmt = extractor.getTrackFormat(i)
                         val mime = fmt.getString(MediaFormat.KEY_MIME) ?: continue
@@ -532,7 +567,17 @@ object VideoProcessor {
             for (clip in clips) {
                 val extractor = MediaExtractor()
                 try {
-                    extractor.setDataSource(context, clip.uri, null)
+                    if (clip.uri.scheme == "file" && !clip.uri.path.isNullOrBlank()) {
+                        extractor.setDataSource(clip.uri.path!!)
+                    } else {
+                        try {
+                            context.contentResolver.openFileDescriptor(clip.uri, "r")?.use { pfd ->
+                                extractor.setDataSource(pfd.fileDescriptor)
+                            } ?: extractor.setDataSource(context, clip.uri, null)
+                        } catch (_: Throwable) {
+                            extractor.setDataSource(context, clip.uri, null)
+                        }
+                    }
                     var videoTrackIdx = -1
                     var audioTrackIdx = -1
                     for (i in 0 until extractor.trackCount) {

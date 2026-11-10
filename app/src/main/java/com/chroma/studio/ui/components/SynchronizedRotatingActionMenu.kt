@@ -94,6 +94,7 @@ private val PressFeedbackEasing = CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)
 enum class ActionMenuType(val label: String) {
     GRADIENTS("Gradients"),
     POST("Post"),
+    FLASH("Flash Video"),
     IMAGE_EDITOR("Image Editor"),
     STORY("Story"),
     AI_GENERATOR("Smart Generator")
@@ -129,6 +130,23 @@ private fun getThemeForAction(type: ActionMenuType): GlassOptionTheme {
             iconGradientStops = arrayOf(
                 0.00f to Color(0xFF6366F1),
                 1.00f to Color(0xFF4338CA)
+            )
+        )
+
+        ActionMenuType.FLASH -> GlassOptionTheme(
+            fillStops = arrayOf(
+                0.00f to Color(0xFAFFFFFF),
+                0.52f to Color(0xEBEEF2FF),
+                1.00f to Color(0xE0E0E7FF)
+            ),
+            borderStops = arrayOf(
+                0.00f to Color(0xFFFFFFFF),
+                0.52f to Color(0x8CA5B4FC),
+                1.00f to Color(0x526366F1)
+            ),
+            iconGradientStops = arrayOf(
+                0.00f to Color(0xFF2563EB),
+                1.00f to Color(0xFF7C3AED)
             )
         )
 
@@ -685,7 +703,7 @@ private fun ActionNodeIcon(
     actionType: ActionMenuType,
     iconGradientStops: Array<Pair<Float, Color>>
 ) {
-    val iconSizeDp: Dp = if (actionType == ActionMenuType.POST) 18.dp else 19.dp
+    val iconSizeDp: Dp = if (actionType == ActionMenuType.POST || actionType == ActionMenuType.FLASH) 18.dp else 19.dp
 
     Canvas(modifier = Modifier.size(iconSizeDp)) {
         val sx = size.width / 24f
@@ -751,6 +769,16 @@ private fun ActionNodeIcon(
             }
 
             // 3. Video (Customized Lucide Video Icon)
+            ActionMenuType.FLASH -> {
+                val filmPath = parseScaledSvgPath(
+                    pathData = "M 19.8 4 H 4.2 C 3 4 2 5 2 6.2 v 11.6 C 2 19 3 20 4.2 20 h 15.6 c 1.2 0 2.2 -1 2.2 -2.2 V 6.2 C 22 5 21 4 19.8 4 Z M 7 4 v 16 M 17 4 v 16 M 2 12 h 20 M 2 8 h 5 M 2 16 h 5 M 17 8 h 5 M 17 16 h 5",
+                    sx = sx,
+                    sy = sy
+                )
+                drawPath(path = filmPath, brush = fillBrushWithAlpha(0.12f), style = Fill)
+                drawPath(path = filmPath, brush = strokeBrush, style = strokeStyle)
+            }
+
             // 3. Image Editor (Dedicated Apple-style Image Editor)
             ActionMenuType.IMAGE_EDITOR -> {
                 val rectTopLeft = Offset(3f * sx, 4.5f * sy)
