@@ -142,11 +142,21 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
             }
             try {
                 val items = repository.getFlashFeed(limit = 12, lastTimestamp = if (isRefresh) null else lastTimestamp)
+                val uid = FirebaseAuth.getInstance().currentUser?.uid
+                val reconciledItems = if (!uid.isNullOrBlank()) {
+                    items.map { v ->
+                        val key = "flash_like:${v.id}"
+                        if (mutationCoordinator.isInFlight(key)) {
+                            val desired = mutationCoordinator.getDesiredState<Boolean>(key)
+                            if (desired != null) applyFlashLikeToVideo(v, uid, desired) else v
+                        } else v
+                    }
+                } else items
                 val pendingOptimistic = _flashFeed.value.filter { it.id.startsWith("temp_") }
                 if (isRefresh || lastTimestamp == null) {
-                    _flashFeed.value = (pendingOptimistic + items).distinctBy { it.id }
+                    _flashFeed.value = (pendingOptimistic + reconciledItems).distinctBy { it.id }
                 } else {
-                    _flashFeed.value = (_flashFeed.value + items).distinctBy { it.id }
+                    _flashFeed.value = (_flashFeed.value + reconciledItems).distinctBy { it.id }
                 }
                 lastTimestamp = items.lastOrNull()?.timestamp
                 syncLikedIds()
@@ -165,7 +175,17 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
             _isLoadingMore.value = true
             try {
                 val items = repository.getFlashFeed(limit = 12, lastTimestamp = lastTimestamp)
-                _flashFeed.value = _flashFeed.value + items
+                val uid = FirebaseAuth.getInstance().currentUser?.uid
+                val reconciledItems = if (!uid.isNullOrBlank()) {
+                    items.map { v ->
+                        val key = "flash_like:${v.id}"
+                        if (mutationCoordinator.isInFlight(key)) {
+                            val desired = mutationCoordinator.getDesiredState<Boolean>(key)
+                            if (desired != null) applyFlashLikeToVideo(v, uid, desired) else v
+                        } else v
+                    }
+                } else items
+                _flashFeed.value = (_flashFeed.value + reconciledItems).distinctBy { it.id }
                 lastTimestamp = items.lastOrNull()?.timestamp ?: lastTimestamp
                 syncLikedIds()
             } catch (e: Exception) {
@@ -180,39 +200,48 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
 
     private val mutationCoordinator = com.chroma.studio.data.mutation.OptimisticMutationCoordinator(viewModelScope)
 
+    private fun applyFlashLikeToVideo(video: FlashVideo, uid: String, liked: Boolean): FlashVideo {
+        val wasLikedInVideo = video.likedBy.contains(uid)
+        val newLikedBy = if (liked) (video.likedBy + uid).distinct() else (video.likedBy - uid)
+        val baseLikes = maxOf(video.likesCount, video.likedBy.size)
+        val newLikesCount = when {
+            liked && !wasLikedInVideo -> maxOf(baseLikes + 1, newLikedBy.size)
+            !liked && wasLikedInVideo -> maxOf(0, baseLikes - 1)
+            else -> maxOf(baseLikes, newLikedBy.size)
+        }
+        return video.copy(
+            likesCount = newLikesCount,
+            likedBy = newLikedBy
+        )
+    }
+
     fun toggleLike(videoId: String, forceLike: Boolean = false) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val isLikedNow = _likedVideoIds.value.contains(videoId)
         if (forceLike && isLikedNow) return
 
         val targetLiked = if (forceLike) true else !isLikedNow
-        val prevLikedSet = _likedVideoIds.value
-        val prevFeed = _flashFeed.value
 
         mutationCoordinator.mutate(
             key = "flash_like:$videoId",
             desiredState = targetLiked,
             onOptimisticApply = { nextLiked ->
-                val newLiked = _likedVideoIds.value.toMutableSet()
-                if (nextLiked) newLiked.add(videoId) else newLiked.remove(videoId)
-                _likedVideoIds.value = newLiked
+                _likedVideoIds.value = if (nextLiked) _likedVideoIds.value + videoId else _likedVideoIds.value - videoId
 
                 _flashFeed.value = _flashFeed.value.map { v ->
-                    if (v.id == videoId) {
-                        val newLikedBy = if (nextLiked) v.likedBy + uid else v.likedBy - uid
-                        v.copy(
-                            likesCount = maxOf(0, v.likesCount + if (nextLiked) 1 else -1),
-                            likedBy = newLikedBy.distinct()
-                        )
-                    } else v
+                    if (v.id == videoId) applyFlashLikeToVideo(v, uid, nextLiked) else v
                 }
             },
             performServerSync = { nextLiked ->
                 repository.setFlashLike(videoId, uid, nextLiked)
             },
             onRollback = {
-                _likedVideoIds.value = prevLikedSet
-                _flashFeed.value = prevFeed
+                // Isolated per-videoId rollback: never wipes out concurrent likes on other videos
+                val restoredLiked = !targetLiked
+                _likedVideoIds.value = if (restoredLiked) _likedVideoIds.value + videoId else _likedVideoIds.value - videoId
+                _flashFeed.value = _flashFeed.value.map { v ->
+                    if (v.id == videoId) applyFlashLikeToVideo(v, uid, restoredLiked) else v
+                }
             },
             onError = {
                 com.chroma.studio.ui.components.ToastManager.showToast("Could not update like. Please try again.")
@@ -272,7 +301,16 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
         val liked = _flashFeed.value
             .filter { uid in it.likedBy }
             .map { it.id }
-            .toSet()
+            .toMutableSet()
+        val allKnownIds = liked + _likedVideoIds.value + _flashFeed.value.map { it.id }
+        for (id in allKnownIds) {
+            val key = "flash_like:$id"
+            if (mutationCoordinator.isInFlight(key)) {
+                val desired = mutationCoordinator.getDesiredState<Boolean>(key)
+                if (desired == true) liked.add(id)
+                else if (desired == false) liked.remove(id)
+            }
+        }
         _likedVideoIds.value = liked
     }
 

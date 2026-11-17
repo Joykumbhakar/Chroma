@@ -72,7 +72,7 @@ class DiscoverViewModel : ViewModel() {
         return try {
             val ctx = com.chroma.studio.ChromaApp.instance
             val prefs = ctx.getSharedPreferences("chroma_community_likes_cache", android.content.Context.MODE_PRIVATE)
-            prefs.getStringSet("cached_liked_works_$userId", emptySet()) ?: emptySet()
+            (prefs.getStringSet("cached_liked_works_$userId", emptySet()) ?: emptySet()).toSet()
         } catch (_: Exception) {
             emptySet()
         }
@@ -82,8 +82,41 @@ class DiscoverViewModel : ViewModel() {
         try {
             val ctx = com.chroma.studio.ChromaApp.instance
             val prefs = ctx.getSharedPreferences("chroma_community_likes_cache", android.content.Context.MODE_PRIVATE)
-            prefs.edit().putStringSet("cached_liked_works_$userId", likedIds).apply()
+            prefs.edit().putStringSet("cached_liked_works_$userId", HashSet(likedIds)).apply()
         } catch (_: Exception) {}
+    }
+
+    /**
+     * Reconciles authoritative server likes with any currently in-flight local optimistic like mutations.
+     * Ensures stale cached likes are properly removed when unliked, while never clobbering active user taps.
+     */
+    private fun reconcileLikedIdsWithInFlight(serverTruth: Set<String>): Set<String> {
+        val result = serverTruth.toMutableSet()
+        val allKnownIds = result + _likedWorkIds.value + _works.value.map { it.id }
+        for (id in allKnownIds) {
+            val key = "like:$id"
+            if (mutationCoordinator.isInFlight(key)) {
+                val desired = mutationCoordinator.getDesiredState<Boolean>(key)
+                if (desired == true) result.add(id)
+                else if (desired == false) result.remove(id)
+            }
+        }
+        return result
+    }
+
+    private fun applyLikeStateToPost(post: DiscoverPost, uid: String, liked: Boolean): DiscoverPost {
+        val wasLikedInPost = post.likedBy.contains(uid)
+        val newLikedBy = if (liked) (post.likedBy + uid).distinct() else (post.likedBy - uid)
+        val baseLikes = maxOf(post.likesCount, post.likedBy.size)
+        val newLikesCount = when {
+            liked && !wasLikedInPost -> maxOf(baseLikes + 1, newLikedBy.size)
+            !liked && wasLikedInPost -> maxOf(0, baseLikes - 1)
+            else -> maxOf(baseLikes, newLikedBy.size)
+        }
+        return post.copy(
+            likesCount = newLikesCount,
+            likedBy = newLikedBy
+        )
     }
 
     fun resetUserInteractions() {
@@ -120,7 +153,8 @@ class DiscoverViewModel : ViewModel() {
                         }
                     }
                     val remoteLiked = serverLikedAsync.await()
-                    val totalLiked = _likedWorkIds.value + instantLiked + remoteLiked
+                    val latestInstantLiked = _works.value.filter { it.likedBy.contains(userId) }.map { it.id }.toSet()
+                    val totalLiked = reconcileLikedIdsWithInFlight(remoteLiked + latestInstantLiked)
                     _likedWorkIds.value = totalLiked
                     saveCachedLikedWorkIds(userId, totalLiked)
                     _savedWorkIds.value = savedAsync.await()
@@ -155,15 +189,27 @@ class DiscoverViewModel : ViewModel() {
             try {
                 val recentWorks = repository.getRecentWorks()
                 if (recentWorks.size < 10) hasMoreWorks = false
+                val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                // Preserve any in-flight optimistic like mutations on freshly fetched works
+                val reconciledRecent = if (!currentUid.isNullOrBlank()) {
+                    recentWorks.map { w ->
+                        val key = "like:${w.id}"
+                        if (mutationCoordinator.isInFlight(key)) {
+                            val desired = mutationCoordinator.getDesiredState<Boolean>(key)
+                            if (desired != null) applyLikeStateToPost(w, currentUid, desired) else w
+                        } else w
+                    }
+                } else recentWorks
                 val pendingOptimistic = _works.value.filter { it.id.startsWith("temp_") }
-                val combined = (pendingOptimistic + recentWorks).distinctBy { it.id }
+                val combined = (pendingOptimistic + reconciledRecent).distinctBy { it.id }
                 _works.value = combined
 
-                val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                val currentUid = currentUser?.uid
                 if (!currentUid.isNullOrBlank()) {
-                    val instantLiked = recentWorks.filter { it.likedBy.contains(currentUid) }.map { it.id }.toSet()
-                    val mergedLikes = _likedWorkIds.value + instantLiked
+                    val instantLiked = reconciledRecent.filter { it.likedBy.contains(currentUid) }.map { it.id }.toSet()
+                    val loadedIds = reconciledRecent.map { it.id }.toSet()
+                    // Reconcile loaded items immediately without resurrecting unliked posts
+                    val preRemoteTruth = (_likedWorkIds.value - loadedIds) + instantLiked
+                    val mergedLikes = reconcileLikedIdsWithInFlight(preRemoteTruth)
                     _likedWorkIds.value = mergedLikes
                     saveCachedLikedWorkIds(currentUid, mergedLikes)
 
@@ -175,7 +221,7 @@ class DiscoverViewModel : ViewModel() {
                             repository.getSavedWorkIds(currentUid)
                         }
                         val remoteLiked = serverLikedAsync.await()
-                        val totalLiked = _likedWorkIds.value + remoteLiked
+                        val totalLiked = reconcileLikedIdsWithInFlight(remoteLiked + instantLiked)
                         _likedWorkIds.value = totalLiked
                         saveCachedLikedWorkIds(currentUid, totalLiked)
                         _savedWorkIds.value = savedAsync.await()
@@ -219,12 +265,21 @@ class DiscoverViewModel : ViewModel() {
                     hasMoreWorks = false
                 } else {
                     if (newWorks.size < 10) hasMoreWorks = false
-                    _works.value = _works.value + newWorks
-                    val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                    val currentUid = currentUser?.uid
+                    val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                    val reconciledNew = if (!currentUid.isNullOrBlank()) {
+                        newWorks.map { w ->
+                            val key = "like:${w.id}"
+                            if (mutationCoordinator.isInFlight(key)) {
+                                val desired = mutationCoordinator.getDesiredState<Boolean>(key)
+                                if (desired != null) applyLikeStateToPost(w, currentUid, desired) else w
+                            } else w
+                        }
+                    } else newWorks
+                    _works.value = (_works.value + reconciledNew).distinctBy { it.id }
                     if (!currentUid.isNullOrBlank()) {
-                        val instantLiked = newWorks.filter { it.likedBy.contains(currentUid) }.map { it.id }.toSet()
-                        val updated = _likedWorkIds.value + instantLiked
+                        val instantLiked = reconciledNew.filter { it.likedBy.contains(currentUid) }.map { it.id }.toSet()
+                        val newIds = reconciledNew.map { it.id }.toSet()
+                        val updated = reconcileLikedIdsWithInFlight((_likedWorkIds.value - newIds) + instantLiked)
                         _likedWorkIds.value = updated
                         saveCachedLikedWorkIds(currentUid, updated)
                     }
@@ -246,8 +301,7 @@ class DiscoverViewModel : ViewModel() {
         val uid = if (!currentUserId.isNullOrBlank()) currentUserId else com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
         if (uid.isNullOrBlank()) return
 
-        val workInState = _works.value.firstOrNull { it.id == workId }
-        val isLikedNow = _likedWorkIds.value.contains(workId) || (workInState?.likedBy?.contains(uid) == true)
+        val isLikedNow = _likedWorkIds.value.contains(workId)
 
         if (forceLike && isLikedNow) {
             return // Already liked, skip toggle
@@ -264,26 +318,23 @@ class DiscoverViewModel : ViewModel() {
                 saveCachedLikedWorkIds(uid, newLikedIds)
 
                 _works.value = _works.value.map {
-                    if (it.id == workId) {
-                        val newLikedBy = if (nextLiked) (it.likedBy + uid).distinct() else (it.likedBy - uid)
-                        val baseLikes = maxOf(it.likesCount, it.likedBy.size)
-                        val newLikesCount = if (nextLiked) {
-                            maxOf(baseLikes + 1, newLikedBy.size)
-                        } else {
-                            maxOf(0, baseLikes - 1)
-                        }
-                        it.copy(
-                            likesCount = newLikesCount,
-                            likedBy = newLikedBy
-                        )
-                    } else it
+                    if (it.id == workId) applyLikeStateToPost(it, uid, nextLiked) else it
                 }
-                val updatedTrending = (_trendingWorks.value + _works.value).distinctBy { it.id }
+                _archivedWorks.value = _archivedWorks.value.map {
+                    if (it.id == workId) applyLikeStateToPost(it, uid, nextLiked) else it
+                }
+                val updatedTrending = (_trendingWorks.value.map {
+                    if (it.id == workId) applyLikeStateToPost(it, uid, nextLiked) else it
+                } + _works.value).distinctBy { it.id }
                     .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
                     .sortedByDescending { it.likesCount }
                 _trendingWorks.value = updatedTrending
-                if (!nextLiked) {
-                    _likedWorks.value = _likedWorks.value.filter { it.id != workId }
+                _likedWorks.value = if (!nextLiked) {
+                    _likedWorks.value.filter { it.id != workId }
+                } else {
+                    _likedWorks.value.map {
+                        if (it.id == workId) applyLikeStateToPost(it, uid, true) else it
+                    }
                 }
             },
             performServerSync = { nextLiked ->
@@ -291,20 +342,20 @@ class DiscoverViewModel : ViewModel() {
             },
             onRollback = {
                 // Isolated, safe per-workId rollback! Never wipes out other concurrent likes!
-                val restoredLikedIds = if (targetLiked) _likedWorkIds.value - workId else _likedWorkIds.value + workId
+                val restoredLiked = !targetLiked
+                val restoredLikedIds = if (restoredLiked) _likedWorkIds.value + workId else _likedWorkIds.value - workId
                 _likedWorkIds.value = restoredLikedIds
                 saveCachedLikedWorkIds(uid, restoredLikedIds)
 
                 _works.value = _works.value.map {
-                    if (it.id == workId) {
-                        val restoredLikedBy = if (targetLiked) (it.likedBy - uid) else (it.likedBy + uid).distinct()
-                        it.copy(
-                            likesCount = maxOf(0, maxOf(it.likesCount + if (targetLiked) -1 else 1, restoredLikedBy.size)),
-                            likedBy = restoredLikedBy
-                        )
-                    } else it
+                    if (it.id == workId) applyLikeStateToPost(it, uid, restoredLiked) else it
                 }
-                val updatedTrending = (_trendingWorks.value + _works.value).distinctBy { it.id }
+                _archivedWorks.value = _archivedWorks.value.map {
+                    if (it.id == workId) applyLikeStateToPost(it, uid, restoredLiked) else it
+                }
+                val updatedTrending = (_trendingWorks.value.map {
+                    if (it.id == workId) applyLikeStateToPost(it, uid, restoredLiked) else it
+                } + _works.value).distinctBy { it.id }
                     .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
                     .sortedByDescending { it.likesCount }
                 _trendingWorks.value = updatedTrending

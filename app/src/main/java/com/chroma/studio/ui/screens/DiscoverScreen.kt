@@ -1342,7 +1342,7 @@ fun DiscoverScreen(
 
                                 work = work,
 
-                                isLiked = likedWorkIds.contains(work.id) || (currentUserId.isNotBlank() && work.likedBy.contains(currentUserId)),
+                                isLiked = likedWorkIds.contains(work.id),
 
                                 isSaved = savedWorkIds.contains(work.id),
 
@@ -5664,7 +5664,23 @@ private fun FeedPostActionRow(
 
 
 
-    val effectiveLiked = isLiked || (!currentUserId.isNullOrBlank() && work.likedBy.contains(currentUserId))
+    val effectiveLiked = isLiked
+    val likeHaptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var heartBounceTrigger by remember(work.id) { mutableIntStateOf(0) }
+    val heartScale = remember(work.id) { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(heartBounceTrigger) {
+        if (heartBounceTrigger > 0) {
+            heartScale.snapTo(0.80f)
+            heartScale.animateTo(
+                targetValue = 1.24f,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.42f, stiffness = 700f)
+            )
+            heartScale.animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 500f)
+            )
+        }
+    }
 
 
 
@@ -5770,72 +5786,57 @@ private fun FeedPostActionRow(
 
         ) {
 
-            val displayLikesCount = maxOf(0, maxOf(work.likesCount, work.likedBy.size))
-
-
+            val rawBaseLikes = maxOf(0, maxOf(work.likesCount, work.likedBy.size))
+            val workSaysLiked = !currentUserId.isNullOrBlank() && work.likedBy.contains(currentUserId)
+            val displayLikesCount = when {
+                effectiveLiked && !workSaysLiked -> rawBaseLikes + 1
+                !effectiveLiked && workSaysLiked -> maxOf(0, rawBaseLikes - 1)
+                else -> rawBaseLikes
+            }
 
             Row(
-
                 verticalAlignment = Alignment.CenterVertically,
-
                 modifier = Modifier
-
-                    .height(30.dp)
-
-                    .clip(RoundedCornerShape(6.dp))
-
-                    .clickable {
-
+                    .height(34.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
-
                         if (uid.isNullOrBlank() || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
-
                             onRequireLogin()
-
                         } else {
-
+                            likeHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            if (!effectiveLiked) {
+                                heartBounceTrigger++
+                            }
                             onLikeClick()
-
                         }
-
                     }
-
-                    .padding(horizontal = 3.dp, vertical = 4.dp)
-
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
             ) {
-
                 Icon(
-
-                    imageVector = ChromaIcons.HeartFilled,
-
-                    contentDescription = if (effectiveLiked) "Liked" else "Like",
-
+                    imageVector = if (effectiveLiked) ChromaIcons.HeartFilled else Lucide.Heart,
+                    contentDescription = if (effectiveLiked) "Unlike" else "Like",
                     tint = if (effectiveLiked) Color(0xFFFF2D55) else colors.textMain,
-
-                    modifier = Modifier.size(20.dp)
-
+                    modifier = Modifier
+                        .size(21.dp)
+                        .graphicsLayer {
+                            scaleX = heartScale.value
+                            scaleY = heartScale.value
+                        }
                 )
-
                 if (!work.hideLikesCount && displayLikesCount > 0) {
-
                     Spacer(Modifier.width(4.dp))
-
                     Text(
-
                         text = "$displayLikesCount",
-
                         color = if (effectiveLiked) Color(0xFFFF2D55) else colors.textMain,
-
-                        fontSize = 12.sp,
-
+                        fontSize = 12.5.sp,
                         lineHeight = 14.sp,
-
                         fontWeight = FontWeight.SemiBold
-
                     )
-
                 }
-
             }
 
 

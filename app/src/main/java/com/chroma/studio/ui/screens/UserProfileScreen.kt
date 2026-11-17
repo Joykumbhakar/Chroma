@@ -1054,9 +1054,16 @@ fun UserProfileScreen(
                                     discoverVm.toggleLike(work.id, currentUserId)
                                     works = works.map {
                                         if (it.id == work.id) {
+                                            val wasLikedInPost = it.likedBy.contains(currentUserId)
                                             val newLikedBy = if (willBeLiked) (it.likedBy + currentUserId).distinct() else (it.likedBy - currentUserId)
+                                            val baseLikes = maxOf(it.likesCount, it.likedBy.size)
+                                            val nextCount = when {
+                                                willBeLiked && !wasLikedInPost -> maxOf(baseLikes + 1, newLikedBy.size)
+                                                !willBeLiked && wasLikedInPost -> maxOf(0, baseLikes - 1)
+                                                else -> maxOf(baseLikes, newLikedBy.size)
+                                            }
                                             it.copy(
-                                                likesCount = maxOf(0, it.likesCount + if (willBeLiked) 1 else -1),
+                                                likesCount = nextCount,
                                                 likedBy = newLikedBy
                                             )
                                         } else it
@@ -1069,11 +1076,11 @@ fun UserProfileScreen(
                                 if (currentUserId != null) {
                                     discoverVm.toggleLike(work.id, currentUserId, forceLike = true)
                                     works = works.map {
-                                        if (it.id == work.id) {
+                                        if (it.id == work.id && !it.likedBy.contains(currentUserId)) {
                                             val newLikedBy = (it.likedBy + currentUserId).distinct()
-                                            val delta = if (it.likedBy.contains(currentUserId)) 0 else 1
+                                            val baseLikes = maxOf(it.likesCount, it.likedBy.size)
                                             it.copy(
-                                                likesCount = it.likesCount + delta,
+                                                likesCount = maxOf(baseLikes + 1, newLikedBy.size),
                                                 likedBy = newLikedBy
                                             )
                                         } else it

@@ -135,6 +135,15 @@ class OptimisticMutationCoordinator(
     @Suppress("UNCHECKED_CAST")
     fun <T> getDesiredState(key: String): T? = pendingMutations[key]?.desiredState as? T
 
+    /**
+     * Returns true if [key] has an optimistic mutation that has not finished syncing with the server yet.
+     */
+    fun isInFlight(key: String): Boolean = synchronized(this) {
+        val pending = pendingMutations[key] ?: return false
+        val lastSynced = lastSyncedVersions[key] ?: 0L
+        pending.version > lastSynced
+    }
+
     fun clear(key: String) {
         pendingMutations.remove(key)
         lastSyncedVersions.remove(key)

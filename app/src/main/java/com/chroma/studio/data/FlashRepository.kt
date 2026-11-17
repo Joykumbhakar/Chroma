@@ -152,8 +152,9 @@ class FlashRepository {
             val docRef = collection.document(videoId)
             db.runTransaction { transaction ->
                 val snapshot = transaction.get(docRef)
+                @Suppress("UNCHECKED_CAST")
                 val likedBy = snapshot.get("likedBy") as? List<String> ?: emptyList()
-                val currentLikes = snapshot.getLong("likesCount") ?: 0L
+                val currentLikes = maxOf(snapshot.getLong("likesCount") ?: 0L, likedBy.size.toLong())
                 val alreadyLiked = likedBy.contains(userId)
 
                 if (alreadyLiked == targetLiked) {
@@ -161,44 +162,58 @@ class FlashRepository {
                 }
 
                 if (targetLiked) {
+                    val newCount = maxOf(currentLikes + 1L, (likedBy.size + 1).toLong())
                     transaction.update(
                         docRef,
                         "likedBy", FieldValue.arrayUnion(userId),
                         "dislikedBy", FieldValue.arrayRemove(userId),
-                        "likesCount", FieldValue.increment(1)
+                        "likesCount", newCount
                     )
                 } else {
+                    val newCount = maxOf(0L, currentLikes - 1L)
                     transaction.update(
                         docRef,
                         "likedBy", FieldValue.arrayRemove(userId),
-                        "likesCount", if (currentLikes <= 1L) 0L else FieldValue.increment(-1)
+                        "likesCount", newCount
                     )
                 }
                 true
             }.await()
 
-            // Synchronize with community_works and user liked_posts records
+            // Synchronize with community_works (clamped atomically so likesCount never goes negative) and user liked_posts records
             val now = System.currentTimeMillis()
             val userLikeRef = usersCollection.document(userId).collection("liked_posts").document(videoId)
             val flashLikeSubRef = collection.document(videoId).collection("likes").document(userId)
 
             try {
                 val commRef = db.collection("community_works").document(videoId)
-                if (targetLiked) {
-                    commRef.update(
-                        mapOf(
-                            "likedBy" to FieldValue.arrayUnion(userId),
-                            "likesCount" to FieldValue.increment(1)
-                        )
-                    ).await()
-                } else {
-                    commRef.update(
-                        mapOf(
-                            "likedBy" to FieldValue.arrayRemove(userId),
-                            "likesCount" to FieldValue.increment(-1)
-                        )
-                    ).await()
-                }
+                db.runTransaction { tx ->
+                    val commDoc = tx.get(commRef)
+                    if (commDoc.exists()) {
+                        @Suppress("UNCHECKED_CAST")
+                        val commLikedBy = commDoc.get("likedBy") as? List<String> ?: emptyList()
+                        val commLikes = maxOf(commDoc.getLong("likesCount") ?: 0L, commLikedBy.size.toLong())
+                        val commAlreadyLiked = commLikedBy.contains(userId)
+                        if (targetLiked && !commAlreadyLiked) {
+                            tx.update(
+                                commRef,
+                                mapOf(
+                                    "likedBy" to FieldValue.arrayUnion(userId),
+                                    "likesCount" to maxOf(commLikes + 1L, (commLikedBy.size + 1).toLong())
+                                )
+                            )
+                        } else if (!targetLiked && commAlreadyLiked) {
+                            tx.update(
+                                commRef,
+                                mapOf(
+                                    "likedBy" to FieldValue.arrayRemove(userId),
+                                    "likesCount" to maxOf(0L, commLikes - 1L)
+                                )
+                            )
+                        }
+                    }
+                    null
+                }.await()
             } catch (_: Exception) {}
 
             try {

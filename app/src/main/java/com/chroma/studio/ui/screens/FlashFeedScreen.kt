@@ -719,9 +719,9 @@ private fun FlashVideoItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Like (Heart icon)
+            // Like (Heart icon: outline when unliked, filled red when liked)
             ReelsActionButton(
-                icon = ChromaIcons.HeartFilled,
+                icon = if (isLiked) ChromaIcons.HeartFilled else Lucide.Heart,
                 tint = if (isLiked) Color(0xFFFF3B30) else Color.White,
                 label = if (video.hideLikesCount) "" else formatCount(maxOf(video.likesCount, video.likedBy.size)),
                 scale = likeScale,

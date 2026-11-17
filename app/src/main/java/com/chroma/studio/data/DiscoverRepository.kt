@@ -636,46 +636,56 @@ class DiscoverRepository {
             var postTitle: String? = null
             var postThumb: String? = null
 
+            var updatedAnyTarget = false
+            var hadTransactionError = false
+
             // 1. Transactional atomic update for community_works
             try {
-                db.runTransaction { transaction ->
+                val commUpdated = db.runTransaction { transaction ->
                     val postDoc = transaction.get(workRef)
                     if (postDoc.exists()) {
                         postAuthorId = postDoc.getString("creatorId")
                         postTitle = postDoc.getString("title") ?: "post"
                         postThumb = postDoc.getString("thumbnailUrl") ?: postDoc.getString("imageUrl")
+                        @Suppress("UNCHECKED_CAST")
                         val likedBy = postDoc.get("likedBy") as? List<String> ?: emptyList()
+                        val currentLikes = maxOf(postDoc.getLong("likesCount") ?: 0L, likedBy.size.toLong())
                         val alreadyLiked = likedBy.contains(userId)
 
                         if (targetLiked && !alreadyLiked) {
+                            val newCount = maxOf(currentLikes + 1L, (likedBy.size + 1).toLong())
                             transaction.update(
                                 workRef,
                                 mapOf(
                                     "likedBy" to FieldValue.arrayUnion(userId),
-                                    "likesCount" to FieldValue.increment(1)
+                                    "likesCount" to newCount
                                 )
                             )
                         } else if (!targetLiked && alreadyLiked) {
-                            val currentLikes = postDoc.getLong("likesCount") ?: 0L
+                            val newCount = maxOf(0L, currentLikes - 1L)
                             transaction.update(
                                 workRef,
                                 mapOf(
                                     "likedBy" to FieldValue.arrayRemove(userId),
-                                    "likesCount" to if (currentLikes <= 1L) 0L else FieldValue.increment(-1)
+                                    "likesCount" to newCount
                                 )
                             )
                         }
+                        true
+                    } else {
+                        false
                     }
-                    null
                 }.await()
+                if (commUpdated) updatedAnyTarget = true
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                hadTransactionError = true
                 Log.w("DiscoverRepository", "community_works like update transaction warning", e)
             }
 
             // 2. Transactional atomic update for flash_videos (if applicable)
             try {
-                db.runTransaction { transaction ->
+                val flashUpdated = db.runTransaction { transaction ->
                     val flashDoc = transaction.get(flashRef)
                     if (flashDoc.exists()) {
                         if (postAuthorId.isNullOrBlank()) {
@@ -683,40 +693,53 @@ class DiscoverRepository {
                             postTitle = flashDoc.getString("caption") ?: flashDoc.getString("title") ?: "video"
                             postThumb = flashDoc.getString("thumbnailUrl")
                         }
+                        @Suppress("UNCHECKED_CAST")
                         val likedBy = flashDoc.get("likedBy") as? List<String> ?: emptyList()
+                        val currentLikes = maxOf(flashDoc.getLong("likesCount") ?: 0L, likedBy.size.toLong())
                         val alreadyLiked = likedBy.contains(userId)
 
                         if (targetLiked && !alreadyLiked) {
+                            val newCount = maxOf(currentLikes + 1L, (likedBy.size + 1).toLong())
                             transaction.update(
                                 flashRef,
                                 mapOf(
                                     "likedBy" to FieldValue.arrayUnion(userId),
                                     "dislikedBy" to FieldValue.arrayRemove(userId),
-                                    "likesCount" to FieldValue.increment(1)
+                                    "likesCount" to newCount
                                 )
                             )
                         } else if (!targetLiked && alreadyLiked) {
-                            val currentLikes = flashDoc.getLong("likesCount") ?: 0L
+                            val newCount = maxOf(0L, currentLikes - 1L)
                             transaction.update(
                                 flashRef,
                                 mapOf(
                                     "likedBy" to FieldValue.arrayRemove(userId),
-                                    "likesCount" to if (currentLikes <= 1L) 0L else FieldValue.increment(-1)
+                                    "likesCount" to newCount
                                 )
                             )
                         }
+                        true
+                    } else {
+                        false
                     }
-                    null
                 }.await()
-
-                if (targetLiked) {
-                    try { flashRef.collection("likes").document(userId).set(mapOf("timestamp" to now)).await() } catch (_: Exception) {}
-                } else {
-                    try { flashRef.collection("likes").document(userId).delete().await() } catch (_: Exception) {}
+                if (flashUpdated) {
+                    updatedAnyTarget = true
+                    if (targetLiked) {
+                        try { flashRef.collection("likes").document(userId).set(mapOf("timestamp" to now)).await() } catch (_: Exception) {}
+                    } else {
+                        try { flashRef.collection("likes").document(userId).delete().await() } catch (_: Exception) {}
+                    }
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                hadTransactionError = true
                 Log.w("DiscoverRepository", "flash_videos like update transaction warning", e)
+            }
+
+            // If both target collections failed to update due to an error, signal failure so UI rolls back honestly
+            if (!updatedAnyTarget && hadTransactionError) {
+                return false
             }
 
             // 3. Subcollection updates
