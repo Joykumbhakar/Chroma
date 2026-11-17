@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.tasks.await
 
 class DiscoverViewModel : ViewModel() {
     val repository = DiscoverRepository()
@@ -129,6 +130,12 @@ class DiscoverViewModel : ViewModel() {
     fun refreshUserInteractions(userId: String) {
         viewModelScope.launch {
             try {
+                // Force Firebase Auth token refresh so Firestore security rules have a valid token
+                try {
+                    com.google.firebase.auth.FirebaseAuth.getInstance()
+                        .currentUser?.getIdToken(true)?.await()
+                } catch (_: Exception) {}
+
                 val cached = getCachedLikedWorkIds(userId)
                 val currentWorks = _works.value
                 val instantLiked = currentWorks.filter { it.likedBy.contains(userId) }.map { it.id }.toSet()

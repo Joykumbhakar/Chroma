@@ -148,6 +148,9 @@ class FlashRepository {
     // ── Interactions ────────────────────────────────────────────────────────
 
     suspend fun setFlashLike(videoId: String, userId: String, targetLiked: Boolean): Boolean {
+        if (videoId.isBlank() || userId.isBlank()) return false
+        // Ensure Firebase Auth token is fresh before Firestore writes
+        try { auth.currentUser?.getIdToken(false)?.await() } catch (_: Exception) {}
         return try {
             val docRef = collection.document(videoId)
             db.runTransaction { transaction ->

@@ -625,6 +625,8 @@ class DiscoverRepository {
 
     suspend fun setLike(workId: String, userId: String, targetLiked: Boolean): Boolean {
         if (workId.isBlank() || userId.isBlank()) return false
+        // Ensure Firebase Auth token is fresh before Firestore writes
+        try { auth.currentUser?.getIdToken(false)?.await() } catch (_: Exception) {}
         return try {
             val workRef = collection.document(workId)
             val flashRef = db.collection("flash_videos").document(workId)
@@ -1071,13 +1073,26 @@ class DiscoverRepository {
     
     suspend fun getLikedWorkIds(userId: String): Set<String> {
         if (userId.isBlank()) return emptySet()
+        // Ensure Firebase Auth token is fresh before reading protected subcollection
+        try { auth.currentUser?.getIdToken(false)?.await() } catch (_: Exception) {}
         return try {
             val snapshot = usersCollection.document(userId).collection("liked_posts").get().await()
             snapshot.documents.map { it.id }.toSet()
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            Log.e("DiscoverRepository", "Error fetching liked work IDs", e)
-            emptySet()
+            Log.w("DiscoverRepository", "liked_posts fetch failed (may be auth timing), falling back to likedBy scan", e)
+            // Fallback: scan community_works for posts where likedBy contains userId
+            try {
+                val fallbackSnap = collection
+                    .whereArrayContains("likedBy", userId)
+                    .limit(100)
+                    .get().await()
+                fallbackSnap.documents.map { it.id }.toSet()
+            } catch (fe: Exception) {
+                if (fe is kotlinx.coroutines.CancellationException) throw fe
+                Log.e("DiscoverRepository", "Error fetching liked work IDs (fallback also failed)", fe)
+                emptySet()
+            }
         }
     }
 
@@ -1835,12 +1850,25 @@ class DiscoverRepository {
 
     // ── Save / Bookmark ────────────────────────────────────────────────────────
     suspend fun getSavedWorkIds(userId: String): Set<String> {
+        if (userId.isBlank()) return emptySet()
+        // Ensure Firebase Auth token is fresh before reading protected subcollection
+        try { auth.currentUser?.getIdToken(false)?.await() } catch (_: Exception) {}
         return try {
             val snapshot = usersCollection.document(userId).collection("saved_posts").get().await()
             snapshot.documents.map { it.id }.toSet()
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            emptySet()
+            Log.w("DiscoverRepository", "saved_posts fetch failed (may be auth timing), falling back to savedBy scan", e)
+            try {
+                val fallbackSnap = collection
+                    .whereArrayContains("savedBy", userId)
+                    .limit(100)
+                    .get().await()
+                fallbackSnap.documents.map { it.id }.toSet()
+            } catch (fe: Exception) {
+                if (fe is kotlinx.coroutines.CancellationException) throw fe
+                emptySet()
+            }
         }
     }
 
