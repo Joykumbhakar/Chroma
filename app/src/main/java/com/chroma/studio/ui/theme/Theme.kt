@@ -5,6 +5,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.remember
+import com.chroma.studio.ui.components.LocalSliderScrubbingState
+import com.chroma.studio.ui.components.SliderScrubbingState
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -77,7 +80,11 @@ fun OscellionTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
         }
     }
 
-    CompositionLocalProvider(LocalOscellionColors provides animated) {
+    val sliderScrubbingState = remember { SliderScrubbingState() }
+    CompositionLocalProvider(
+        LocalOscellionColors provides animated,
+        LocalSliderScrubbingState provides sliderScrubbingState
+    ) {
         androidx.compose.material3.MaterialTheme(
             colorScheme = materialColorScheme,
             shapes = androidx.compose.material3.MaterialTheme.shapes.copy(

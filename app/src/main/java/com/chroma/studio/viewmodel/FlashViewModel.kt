@@ -120,6 +120,14 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
             )
             _flashFeed.value = listOf(video) + current
             syncLikedIds()
+        } else {
+            viewModelScope.launch {
+                val fetched = repository.getFlashById(videoId)
+                if (fetched != null && !_flashFeed.value.any { it.id == videoId }) {
+                    _flashFeed.value = listOf(fetched) + _flashFeed.value
+                    syncLikedIds()
+                }
+            }
         }
     }
 

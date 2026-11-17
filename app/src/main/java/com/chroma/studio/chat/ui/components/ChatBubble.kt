@@ -488,7 +488,8 @@ data class MessageRowCallbacks(
     val onToggleSelect: () -> Unit = {},
     val onQuoteClick: ((String) -> Unit)? = null,
     val onRetry: (() -> Unit)? = null,
-    val onStoryClick: ((storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null
+    val onStoryClick: ((storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null,
+    val onFlashVideoClick: ((String) -> Unit)? = null
 )
 
 @Immutable
@@ -891,7 +892,8 @@ private fun MessageBubbleCard(
     val animationStyle = config.animationStyle
 
     val isVoiceOnly = message.mediaType == "voice" && message.text.isNullOrEmpty()
-    val isMediaOnly = (message.mediaType in listOf("image", "image_stack", "sticker")) && message.text.isNullOrEmpty() && message.replyTo == null && message.storyThumbnailUrl == null && message.storyId == null
+    val isFlashVideo = message.mediaType == "flash_video" || message.flashVideoId != null
+    val isMediaOnly = !isFlashVideo && (message.mediaType in listOf("image", "image_stack", "sticker")) && message.text.isNullOrEmpty() && message.replyTo == null && message.storyThumbnailUrl == null && message.storyId == null
     val isPoll = message.mediaType == "poll"
 
     val highlightAnim = remember { Animatable(0f) }
@@ -905,6 +907,7 @@ private fun MessageBubbleCard(
     Column(
         horizontalAlignment = if (isOutgoing) Alignment.End else Alignment.Start,
         modifier = when {
+            isFlashVideo -> Modifier.width(224.dp)
             isMediaOnly -> Modifier.width(280.dp)
             isVoiceOnly -> Modifier.widthIn(max = 245.dp)
             isPoll -> Modifier.widthIn(min = 280.dp, max = 320.dp)
@@ -928,10 +931,10 @@ private fun MessageBubbleCard(
         Box(
             contentAlignment = if (isOutgoing) Alignment.BottomEnd else Alignment.BottomStart
         ) {
-            val bubbleBackground = if (isMediaOnly) SolidColor(Color.Transparent) else visual.background
-            val bubbleBorderWidth = if (isMediaOnly) 0.5.dp else visual.borderWidth
-            val bubbleBorderColor = if (isMediaOnly) (if (colors.isLight) Color(0x18000000) else Color(0x2EFFFFFF)) else visual.borderColor
-            val effectiveShape = if (isMediaOnly) RoundedCornerShape(18.dp) else visual.shape
+            val bubbleBackground = if (isMediaOnly || isFlashVideo) SolidColor(Color.Transparent) else visual.background
+            val bubbleBorderWidth = if (isMediaOnly) 0.5.dp else if (isFlashVideo) 0.dp else visual.borderWidth
+            val bubbleBorderColor = if (isMediaOnly) (if (colors.isLight) Color(0x18000000) else Color(0x2EFFFFFF)) else if (isFlashVideo) Color.Transparent else visual.borderColor
+            val effectiveShape = if (isMediaOnly || isFlashVideo) RoundedCornerShape(18.dp) else visual.shape
 
             Box(
                 modifier = Modifier
@@ -941,7 +944,7 @@ private fun MessageBubbleCard(
                         isOutgoing = isOutgoing
                     )
                     .then(
-                        if (visual.elevation > 0.dp && !isMediaOnly) {
+                        if (visual.elevation > 0.dp && !isMediaOnly && !isFlashVideo) {
                             Modifier.shadow(
                                 elevation = visual.elevation,
                                 shape = effectiveShape,
@@ -954,7 +957,7 @@ private fun MessageBubbleCard(
                     .clip(effectiveShape)
                     .background(brush = bubbleBackground, shape = effectiveShape)
                     .then(
-                        if (visual.borderBrush != null && !isMediaOnly) {
+                        if (visual.borderBrush != null && !isMediaOnly && !isFlashVideo) {
                             Modifier.border(bubbleBorderWidth, visual.borderBrush, effectiveShape)
                         } else {
                             Modifier.border(bubbleBorderWidth, bubbleBorderColor, effectiveShape)
@@ -991,7 +994,7 @@ private fun MessageBubbleCard(
                     )
                 }
 
-                if (visual.hasTopSpecular && !isMediaOnly) {
+                if (visual.hasTopSpecular && !isMediaOnly && !isFlashVideo) {
                     Box(
                         modifier = Modifier
                             .matchParentSize()
@@ -1009,7 +1012,7 @@ private fun MessageBubbleCard(
                     )
                 }
 
-                val hasTail = !isNextSame && !isMediaOnly && (bubbleStyle == BubbleStyleType.CLASSIC_IOS || bubbleStyle == BubbleStyleType.ROUNDED)
+                val hasTail = !isNextSame && !isMediaOnly && !isFlashVideo && (bubbleStyle == BubbleStyleType.CLASSIC_IOS || bubbleStyle == BubbleStyleType.ROUNDED)
                 MessageBubbleInnerContent(
                     message = message,
                     isOutgoing = isOutgoing,
@@ -1033,7 +1036,8 @@ private fun MessageBubbleCard(
                     onViewPollVotes = callbacks.onViewPollVotes,
                     onQuoteClick = callbacks.onQuoteClick,
                     onRetry = callbacks.onRetry,
-                    onStoryClick = callbacks.onStoryClick
+                    onStoryClick = callbacks.onStoryClick,
+                    onFlashVideoClick = callbacks.onFlashVideoClick
                 )
             }
 
@@ -1257,17 +1261,18 @@ private fun MessageBubbleInnerContent(
     onViewPollVotes: ((PollData) -> Unit)?,
     onQuoteClick: ((String) -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
-    onStoryClick: ((storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null
+    onStoryClick: ((storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null,
+    onFlashVideoClick: ((String) -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
     val context = androidx.compose.ui.platform.LocalContext.current
 
     Column(
         modifier = Modifier.padding(
-            start = if (isMediaOnly) 0.dp else if (isVoiceOnly) 8.dp else (if (!isOutgoing && hasTail) 16.dp else 11.dp),
-            end = if (isMediaOnly) 0.dp else if (isVoiceOnly) 8.dp else (if (isOutgoing && hasTail) 16.dp else 11.dp),
-            top = if (isMediaOnly) 0.dp else if (isVoiceOnly) 5.dp else 7.dp,
-            bottom = if (isMediaOnly) 0.dp else if (isVoiceOnly) 5.dp else 7.dp
+            start = if (isMediaOnly || message.mediaType == "flash_video") 0.dp else if (isVoiceOnly) 8.dp else (if (!isOutgoing && hasTail) 16.dp else 11.dp),
+            end = if (isMediaOnly || message.mediaType == "flash_video") 0.dp else if (isVoiceOnly) 8.dp else (if (isOutgoing && hasTail) 16.dp else 11.dp),
+            top = if (isMediaOnly || message.mediaType == "flash_video") 0.dp else if (isVoiceOnly) 5.dp else 7.dp,
+            bottom = if (isMediaOnly || message.mediaType == "flash_video") 0.dp else if (isVoiceOnly) 5.dp else 7.dp
         )
     ) {
         // Forwarded Header
@@ -1703,10 +1708,17 @@ private fun MessageBubbleInnerContent(
                     }
                 }
             }
+            "flash_video" -> {
+                FlashVideoChatCard(
+                    message = message,
+                    isOutgoing = isOutgoing,
+                    onFlashVideoClick = onFlashVideoClick
+                )
+            }
         }
 
         // 3. Message Text with Markdown, Links, Formatted Text, Spoilers & Mentions
-        if (!message.text.isNullOrEmpty()) {
+        if (!message.text.isNullOrEmpty() && message.mediaType != "flash_video") {
             val uriHandler = LocalUriHandler.current
             var isExpanded by remember(message.id) { mutableStateOf(false) }
             var isLongMessage by remember(message.id) { mutableStateOf(false) }
@@ -1781,11 +1793,13 @@ private fun MessageBubbleInnerContent(
                 )
             }
 
-            val isShortSingleLine = remember(message.text, message.replyTo, message.mediaType, message.storyThumbnailUrl) {
+            val isShortSingleLine = remember(message.text, message.replyTo, message.mediaType, message.storyThumbnailUrl, message.flashVideoId) {
                 message.replyTo == null &&
                 message.storyThumbnailUrl == null &&
                 message.storyId == null &&
+                message.flashVideoId == null &&
                 message.mediaType != "story_reply" &&
+                message.mediaType != "flash_video" &&
                 (message.mediaType.isNullOrEmpty() || message.mediaType == "text") &&
                 !message.text.contains('\n') &&
                 message.text.length <= 26 &&

@@ -412,6 +412,7 @@ fun ProfileMediaEditorModal(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
+                        .editorChromeFadeOnScrub()
                         .statusBarsPadding()
                         .height(64.dp)
                         .padding(horizontal = 16.dp),
@@ -548,12 +549,18 @@ fun ProfileMediaEditorModal(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Zoom Slider Bar
+                    val profileScrub = LocalSliderScrubbingState.current
+                    val zoomPillBg by androidx.compose.animation.animateColorAsState(
+                        targetValue = if (profileScrub.isScrubbing) Color.Transparent else Color(0xFF1C1C1E).copy(alpha = 0.85f),
+                        animationSpec = tween(180),
+                        label = "profileZoomPillBg"
+                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth(0.92f)
                             .clip(CircleShape)
-                            .background(Color(0xFF1C1C1E).copy(alpha = 0.85f))
-                            .padding(horizontal = 14.dp, vertical = 2.dp),
+                            .background(zoomPillBg)
+                            .padding(horizontal = 10.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -562,6 +569,7 @@ fun ProfileMediaEditorModal(
                             contentDescription = "Zoom Out",
                             tint = Color.White.copy(alpha = 0.6f),
                             modifier = Modifier
+                                .editorChromeFadeOnScrub()
                                 .size(16.dp)
                                 .clickable {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -569,23 +577,32 @@ fun ProfileMediaEditorModal(
                                 }
                         )
 
-                        Slider(
-                            value = zoomScale,
-                            onValueChange = { zoomScale = it },
-                            valueRange = 1.0f..4.0f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color.White,
-                                activeTrackColor = Color(0xFF0381FE),
-                                inactiveTrackColor = Color.White.copy(alpha = 0.18f)
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusSliderContainer(
+                                    sliderId = "ProfileMediaZoom",
+                                    isDark = true,
+                                    cornerRadius = 14.dp,
+                                    horizontalPadding = 8.dp,
+                                    verticalPadding = 4.dp
+                                )
+                        ) {
+                            AppleSlider(
+                                value = zoomScale,
+                                sliderId = "ProfileMediaZoom",
+                                onValueChange = { zoomScale = it },
+                                valueRange = 1.0f..4.0f,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
                         Icon(
                             imageVector = Lucide.ZoomIn,
                             contentDescription = "Zoom In",
                             tint = Color.White.copy(alpha = 0.6f),
                             modifier = Modifier
+                                .editorChromeFadeOnScrub()
                                 .size(16.dp)
                                 .clickable {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -598,6 +615,7 @@ fun ProfileMediaEditorModal(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .editorChromeFadeOnScrub()
                             .clip(RoundedCornerShape(20.dp))
                             .background(Color(0xFF1C1C1E).copy(alpha = 0.90f))
                             .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))

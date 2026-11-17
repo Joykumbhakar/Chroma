@@ -31,6 +31,8 @@ data class PendingStoryUpload(
     val audienceType: String = "public",
     val customAudienceIds: List<String> = emptyList(),
     val isTextStory: Boolean = false,
+    val isHighlight: Boolean = false,
+    val highlightTitle: String = "",
     val failedAt: Long = System.currentTimeMillis()
 )
 
@@ -46,9 +48,12 @@ class StoryViewModel : ViewModel() {
     private val _myStories = MutableStateFlow<List<Story>>(emptyList())
     val myStories: StateFlow<List<Story>> = _myStories.asStateFlow()
 
-    // Upload state
+    // Upload state (WhatsApp-style real-time optimistic tracking)
     private val _isUploading = MutableStateFlow(false)
     val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
+
+    private val _uploadProgress = MutableStateFlow(0f)
+    val uploadProgress: StateFlow<Float> = _uploadProgress.asStateFlow()
 
     private val _uploadError = MutableStateFlow<String?>(null)
     val uploadError: StateFlow<String?> = _uploadError.asStateFlow()
@@ -100,7 +105,9 @@ class StoryViewModel : ViewModel() {
         _myStories.value = emptyList()
         _onlyFriendsIds.value = emptyList()
         _isUploading.value = false
+        _uploadProgress.value = 0f
         _uploadError.value = null
+        _failedStoryUpload.value = null
     }
 
     override fun onCleared() {
@@ -234,7 +241,9 @@ class StoryViewModel : ViewModel() {
         customAudienceIds: List<String> = emptyList(),
         textContent: String = "",
         textFormat: String = "",
-        backgroundColor: String = ""
+        backgroundColor: String = "",
+        isHighlight: Boolean = false,
+        highlightTitle: String = ""
     ) {
         val currentUid = auth.currentUser?.uid ?: ""
         val tempId = "temp_story_${System.currentTimeMillis()}"
@@ -252,52 +261,78 @@ class StoryViewModel : ViewModel() {
             backgroundColor = backgroundColor,
             audienceType = audienceType,
             customAudienceIds = targetAudienceIds,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
+            isHighlight = isHighlight,
+            highlightTitle = highlightTitle,
+            expiresAt = if (isHighlight) Long.MAX_VALUE else System.currentTimeMillis() + 86400000,
+            isUploading = true,
+            uploadProgress = 0.15f,
+            isFailed = false
         )
-        _myStories.value = listOf(optimisticStory) + _myStories.value.filter { it.id != tempId }
+        // Optimistically show story immediately in myStories tray & profile (WhatsApp-style)
+        _myStories.value = listOf(optimisticStory) + _myStories.value.filter { !it.id.startsWith("temp_") }
         _failedStoryUpload.value = null
         _uploadError.value = null
+        _uploadProgress.value = 0.15f
+        _isUploading.value = true
 
         viewModelScope.launch {
-            _isUploading.value = true
             try {
+                // Phase 1: Pre-process & compress image (15% -> 40%)
+                updateStoryProgress(tempId, 0.35f)
                 val bytes = com.chroma.studio.utils.ImageUtils.compressChatImage(context, uri)
                 if (bytes == null || bytes.isEmpty()) {
-                    _failedStoryUpload.value = PendingStoryUpload(
+                    markStoryFailed(
+                        tempId = tempId,
                         uri = uri,
                         textContent = textContent,
                         textFormat = textFormat,
                         backgroundColor = backgroundColor,
                         audienceType = audienceType,
-                        customAudienceIds = targetAudienceIds,
-                        isTextStory = false
+                        targetAudienceIds = targetAudienceIds,
+                        isTextStory = false,
+                        isHighlight = isHighlight,
+                        highlightTitle = highlightTitle,
+                        errorMessage = "Failed to process image. Tap to retry."
                     )
-                    _uploadError.value = "Failed to process image. Tap to retry."
                     return@launch
                 }
 
+                // Phase 2: Upload to Cloudinary CDN (40% -> 80%)
+                updateStoryProgress(tempId, 0.70f)
                 val url = CloudinaryClient.uploadImage(bytes, folder = "stories")
                 if (url == null) {
-                    _failedStoryUpload.value = PendingStoryUpload(
+                    markStoryFailed(
+                        tempId = tempId,
                         uri = uri,
                         textContent = textContent,
                         textFormat = textFormat,
                         backgroundColor = backgroundColor,
                         audienceType = audienceType,
-                        customAudienceIds = targetAudienceIds,
-                        isTextStory = false
+                        targetAudienceIds = targetAudienceIds,
+                        isTextStory = false,
+                        isHighlight = isHighlight,
+                        highlightTitle = highlightTitle,
+                        errorMessage = "Upload failed. Tap to retry."
                     )
-                    _uploadError.value = "Upload failed. Tap to retry."
                     return@launch
                 }
+
+                // Phase 3: Publish to database (80% -> 95%)
+                updateStoryProgress(tempId, 0.90f)
                 repository.publishStory(
                     mediaUrl = url,
                     audienceType = audienceType,
                     customAudienceIds = targetAudienceIds,
                     textContent = textContent,
                     textFormat = textFormat,
-                    backgroundColor = backgroundColor
+                    backgroundColor = backgroundColor,
+                    isHighlight = isHighlight,
+                    highlightTitle = highlightTitle
                 )
+
+                // Phase 4: Succeeded! Smoothly reconcile optimistic story with server record
+                _uploadProgress.value = 1.0f
                 _failedStoryUpload.value = null
                 _uploadError.value = null
                 _myStories.value = _myStories.value.filter { it.id != tempId }
@@ -305,16 +340,19 @@ class StoryViewModel : ViewModel() {
                 loadStories()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                _failedStoryUpload.value = PendingStoryUpload(
+                markStoryFailed(
+                    tempId = tempId,
                     uri = uri,
                     textContent = textContent,
                     textFormat = textFormat,
                     backgroundColor = backgroundColor,
                     audienceType = audienceType,
-                    customAudienceIds = targetAudienceIds,
-                    isTextStory = false
+                    targetAudienceIds = targetAudienceIds,
+                    isTextStory = false,
+                    isHighlight = isHighlight,
+                    highlightTitle = highlightTitle,
+                    errorMessage = "Upload failed: ${e.localizedMessage ?: "Network error"}. Tap to retry."
                 )
-                _uploadError.value = "Upload failed: ${e.localizedMessage ?: "Network error"}. Tap to retry."
                 Log.e("StoryViewModel", "uploadStory error", e)
             } finally {
                 _isUploading.value = false
@@ -327,7 +365,9 @@ class StoryViewModel : ViewModel() {
         textFormat: String,
         backgroundColor: String,
         audienceType: String,
-        customAudienceIds: List<String>
+        customAudienceIds: List<String>,
+        isHighlight: Boolean = false,
+        highlightTitle: String = ""
     ) {
         val currentUid = auth.currentUser?.uid ?: ""
         val tempId = "temp_story_${System.currentTimeMillis()}"
@@ -340,16 +380,33 @@ class StoryViewModel : ViewModel() {
             backgroundColor = backgroundColor,
             audienceType = audienceType,
             customAudienceIds = customAudienceIds,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
+            isHighlight = isHighlight,
+            highlightTitle = highlightTitle,
+            expiresAt = if (isHighlight) Long.MAX_VALUE else System.currentTimeMillis() + 86400000,
+            isUploading = true,
+            uploadProgress = 0.30f,
+            isFailed = false
         )
-        _myStories.value = listOf(optimisticStory) + _myStories.value.filter { it.id != tempId }
+        _myStories.value = listOf(optimisticStory) + _myStories.value.filter { !it.id.startsWith("temp_") }
         _failedStoryUpload.value = null
         _uploadError.value = null
+        _uploadProgress.value = 0.30f
+        _isUploading.value = true
 
         viewModelScope.launch {
-            _isUploading.value = true
             try {
-                repository.publishTextStory(textContent, textFormat, backgroundColor, audienceType, customAudienceIds)
+                updateStoryProgress(tempId, 0.75f)
+                repository.publishTextStory(
+                    textContent = textContent,
+                    textFormat = textFormat,
+                    backgroundColor = backgroundColor,
+                    audienceType = audienceType,
+                    customAudienceIds = customAudienceIds,
+                    isHighlight = isHighlight,
+                    highlightTitle = highlightTitle
+                )
+                _uploadProgress.value = 1.0f
                 _failedStoryUpload.value = null
                 _uploadError.value = null
                 _myStories.value = _myStories.value.filter { it.id != tempId }
@@ -357,18 +414,101 @@ class StoryViewModel : ViewModel() {
                 loadStories()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                _failedStoryUpload.value = PendingStoryUpload(
+                markStoryFailed(
+                    tempId = tempId,
+                    uri = null,
                     textContent = textContent,
                     textFormat = textFormat,
                     backgroundColor = backgroundColor,
                     audienceType = audienceType,
-                    customAudienceIds = customAudienceIds,
-                    isTextStory = true
+                    targetAudienceIds = customAudienceIds,
+                    isTextStory = true,
+                    isHighlight = isHighlight,
+                    highlightTitle = highlightTitle,
+                    errorMessage = "Upload failed: ${e.localizedMessage ?: "Network error"}. Tap to retry."
                 )
-                _uploadError.value = "Upload failed: ${e.localizedMessage ?: "Network error"}. Tap to retry."
                 Log.e("StoryViewModel", "publishTextStory error", e)
             } finally {
                 _isUploading.value = false
+            }
+        }
+    }
+
+    private fun updateStoryProgress(tempId: String, progress: Float) {
+        _uploadProgress.value = progress
+        _myStories.value = _myStories.value.map { story ->
+            if (story.id == tempId) story.copy(uploadProgress = progress) else story
+        }
+    }
+
+    private fun markStoryFailed(
+        tempId: String,
+        uri: Uri?,
+        textContent: String,
+        textFormat: String,
+        backgroundColor: String,
+        audienceType: String,
+        targetAudienceIds: List<String>,
+        isTextStory: Boolean,
+        isHighlight: Boolean,
+        highlightTitle: String,
+        errorMessage: String
+    ) {
+        _failedStoryUpload.value = PendingStoryUpload(
+            uri = uri,
+            textContent = textContent,
+            textFormat = textFormat,
+            backgroundColor = backgroundColor,
+            audienceType = audienceType,
+            customAudienceIds = targetAudienceIds,
+            isTextStory = isTextStory,
+            isHighlight = isHighlight,
+            highlightTitle = highlightTitle
+        )
+        _uploadError.value = errorMessage
+        _uploadProgress.value = 0f
+        _myStories.value = _myStories.value.map { story ->
+            if (story.id == tempId) story.copy(isUploading = false, isFailed = true) else story
+        }
+    }
+
+    /** Save an existing story to highlights so it lives forever (never expires) */
+    fun saveStoryToHighlight(
+        storyId: String,
+        highlightTitle: String,
+        emoji: String = "✨",
+        coverUrl: String? = null,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                val success = repository.saveStoryToHighlight(storyId, highlightTitle, emoji, coverUrl)
+                if (success) {
+                    loadMyStories()
+                }
+                onComplete(success)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("StoryViewModel", "saveStoryToHighlight error", e)
+                onComplete(false)
+            }
+        }
+    }
+
+    /** Load immortal highlighted stories for viewing in highlight reel */
+    fun loadHighlightStories(
+        userId: String,
+        highlightTitle: String? = null,
+        onResult: (List<Story>) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val list = repository.fetchHighlightStories(userId, highlightTitle)
+                onResult(list)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("StoryViewModel", "loadHighlightStories error", e)
+                onResult(emptyList())
             }
         }
     }
@@ -387,7 +527,9 @@ class StoryViewModel : ViewModel() {
                 textFormat = pending.textFormat,
                 backgroundColor = pending.backgroundColor,
                 audienceType = pending.audienceType,
-                customAudienceIds = pending.customAudienceIds
+                customAudienceIds = pending.customAudienceIds,
+                isHighlight = pending.isHighlight,
+                highlightTitle = pending.highlightTitle
             )
         } else if (pending.uri != null) {
             uploadStory(
@@ -397,7 +539,9 @@ class StoryViewModel : ViewModel() {
                 customAudienceIds = pending.customAudienceIds,
                 textContent = pending.textContent,
                 textFormat = pending.textFormat,
-                backgroundColor = pending.backgroundColor
+                backgroundColor = pending.backgroundColor,
+                isHighlight = pending.isHighlight,
+                highlightTitle = pending.highlightTitle
             )
         }
     }
@@ -409,6 +553,19 @@ class StoryViewModel : ViewModel() {
         _failedStoryUpload.value = null
         _uploadError.value = null
         _myStories.value = _myStories.value.filter { !it.id.startsWith("temp_") }
+    }
+
+    /**
+     * Discards a specific pending or failed story upload.
+     */
+    fun discardFailedUpload(tempId: String = "") {
+        _failedStoryUpload.value = null
+        _uploadError.value = null
+        _myStories.value = if (tempId.isNotBlank()) {
+            _myStories.value.filter { it.id != tempId }
+        } else {
+            _myStories.value.filter { !it.id.startsWith("temp_") }
+        }
     }
 
     fun markViewed(storyId: String) {

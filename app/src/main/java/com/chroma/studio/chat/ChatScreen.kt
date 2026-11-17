@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import com.chroma.studio.ui.components.AppleChatGraphic
 
 import com.chroma.studio.ui.components.AppleEmptyStateView
+import com.chroma.studio.ui.components.studioBevel
 
 import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 
@@ -42,6 +43,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.blur
@@ -151,6 +153,8 @@ fun ChatScreen(
 
     onNavigateToGroupInfo: ((String) -> Unit)? = null,
 
+    onNavigateToFlashFeed: ((String) -> Unit)? = null,
+
     onInsideChatChange: ((Boolean) -> Unit)? = null
 
 ) {
@@ -206,6 +210,16 @@ fun ChatScreen(
 
             },
 
+            onSelectAccent = { newAccent ->
+
+                currentAccent = newAccent
+
+                settingsManager.accentColor = newAccent
+
+                onAccentCycle()
+
+            },
+
             accentColor = currentAccent,
 
             chatViewModel = chatViewModel,
@@ -248,6 +262,8 @@ private fun ChatScreenContent(
 
     onAccentCycle: () -> Unit = {},
 
+    onSelectAccent: (AccentColorType) -> Unit = {},
+
     accentColor: AccentColorType = AccentColorType.BLUE,
 
     chatViewModel: com.chroma.studio.viewmodel.ChatViewModel? = null,
@@ -269,6 +285,8 @@ private fun ChatScreenContent(
     onNavigateToCreateStory: ((android.net.Uri?) -> Unit)? = null,
 
     onNavigateToGroupInfo: ((String) -> Unit)? = null,
+
+    onNavigateToFlashFeed: ((String) -> Unit)? = null,
 
     onInsideChatChange: ((Boolean) -> Unit)? = null
 
@@ -369,6 +387,7 @@ private fun ChatScreenContent(
     var showOnlyFriendsManagementSheet by remember { mutableStateOf(false) }
     var isStickerPickerOpen by remember { mutableStateOf(false) }
     var isStickerStudioOpen by remember { mutableStateOf(false) }
+    var isFlashVideoPickerOpen by remember { mutableStateOf(false) }
 
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
     var storyViewerInitialStoryId by remember { mutableStateOf<String?>(null) }
@@ -820,6 +839,7 @@ private fun ChatScreenContent(
     var currentAnimationStyle by remember { mutableStateOf(settingsManager.animationStyle) }
 
     var isAppearanceModalOpen by remember { mutableStateOf(false) }
+    var appearanceInitialSubScreen by remember { mutableStateOf(AppearanceSubScreen.MAIN) }
 
 
 
@@ -1640,6 +1660,7 @@ private fun ChatScreenContent(
         showOnlyFriendsManagementSheet ||
         isStickerPickerOpen ||
         isStickerStudioOpen ||
+        isFlashVideoPickerOpen ||
         showStoryViewer ||
         isGalleryPickerOpen ||
         previewLightboxImage != null
@@ -1694,7 +1715,17 @@ private fun ChatScreenContent(
 
         if (trimmed.isEmpty()) return
 
-
+        if (activeChat.type == "group") {
+            if (activeChat.participantUids.isNotEmpty() && !activeChat.participantUids.contains(currentUser.id)) {
+                showToast("You are no longer a participant in this group")
+                return
+            }
+            val isUserAdmin = activeChat.admins.contains(currentUser.id) || activeChat.members?.any { it.id == currentUser.id && it.role.contains("Admin", ignoreCase = true) } == true
+            if (activeChat.onlyAdminsCanPost && !isUserAdmin) {
+                showToast("Only admins can send messages to this group")
+                return
+            }
+        }
 
         if (activeChat.isBlocked) {
 
@@ -1871,6 +1902,7 @@ private fun ChatScreenContent(
             showOnlyFriendsManagementSheet -> showOnlyFriendsManagementSheet = false
             isStickerStudioOpen -> isStickerStudioOpen = false
             isStickerPickerOpen -> isStickerPickerOpen = false
+            isFlashVideoPickerOpen -> isFlashVideoPickerOpen = false
             showShareStoryAudienceSheet -> showShareStoryAudienceSheet = false
             editingStoryImageUri != null -> editingStoryImageUri = null
             showStoryGalleryPicker -> showStoryGalleryPicker = false
@@ -2064,7 +2096,10 @@ private fun ChatScreenContent(
                     },
                     onNewMessageClick = { isNewMessageModalOpen = true },
                     onCreateGroupClick = { isCreateGroupModalOpen = true },
-                    onOpenAppearanceSettings = { isAppearanceModalOpen = true },
+                    onOpenAppearanceSettings = {
+                        appearanceInitialSubScreen = AppearanceSubScreen.MAIN
+                        isAppearanceModalOpen = true
+                    },
                     onUserProfileClick = {
                         if (onNavigateToUserProfile != null) {
                             onNavigateToUserProfile.invoke(currentUser.id)
@@ -2276,7 +2311,10 @@ private fun ChatScreenContent(
 
             onNewMessageClick = { isNewMessageModalOpen = true },
 
-            onOpenAppearanceSettings = { isAppearanceModalOpen = true },
+            onOpenAppearanceSettings = {
+                appearanceInitialSubScreen = AppearanceSubScreen.MAIN
+                isAppearanceModalOpen = true
+            },
 
             onUserProfileClick = {
 
@@ -2624,107 +2662,14 @@ private fun ChatScreenContent(
 
                 onOpenWallpaperPicker = { isWallpaperPickerOpen = true },
 
-                onOpenAppearanceSettings = { isAppearanceModalOpen = true },
+                onOpenAppearanceSettings = {
+                    appearanceInitialSubScreen = AppearanceSubScreen.MAIN
+                    isAppearanceModalOpen = true
+                },
 
                 onClose = { isProfileSettingsOpen = false },
 
                 onShowToast = { showToast(it) }
-
-            )
-
-        }
-
-
-
-        // 1.6 Fullscreen Apple iOS Appearance & Styles Screen (Native iOS Slide Transition)
-
-        AnimatedVisibility(
-
-            visible = isAppearanceModalOpen,
-
-            enter = slideInHorizontally(
-
-                initialOffsetX = { it },
-
-                animationSpec = spring(dampingRatio = 0.88f, stiffness = Spring.StiffnessMediumLow)
-
-            ) + fadeIn(animationSpec = tween(180)),
-
-            exit = slideOutHorizontally(
-
-                targetOffsetX = { it },
-
-                animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)
-
-            ) + fadeOut(animationSpec = tween(150)),
-
-            modifier = Modifier.fillMaxSize()
-
-        ) {
-
-            AppearanceSettingsScreen(
-
-                currentBubbleStyle = currentBubbleStyle,
-
-                currentGlobeStyle = currentGlobeStyle,
-
-                accentColor = accentColor,
-
-                currentCustomCorners = currentCustomCorners,
-
-                onUpdateCustomCorners = {
-
-                    currentCustomCorners = it
-
-                    settingsManager.customCorners = it
-
-                },
-
-                currentAnimationStyle = currentAnimationStyle,
-
-                onSelectAnimationStyle = { anim ->
-
-                    currentAnimationStyle = anim
-
-                    settingsManager.animationStyle = anim
-
-                    SoundManager.playReaction()
-
-                    showToast("Animation set to ${anim.title}")
-
-                },
-
-                onSelectBubbleStyle = { style ->
-
-                    currentBubbleStyle = style
-
-                    settingsManager.bubbleStyle = style
-
-                    SoundManager.playReaction()
-
-                    showToast("Bubble style set to ${style.title}")
-
-                },
-
-                onSelectGlobeStyle = { gStyle ->
-
-                    currentGlobeStyle = gStyle
-
-                    settingsManager.globeStyle = gStyle
-
-                    SoundManager.playReaction()
-
-                    showToast("Voice Globe set to ${gStyle.title}")
-
-                },
-
-                onToggleAppearance = onAppearanceToggle,
-
-                onAccentCycle = onAccentCycle,
-
-                onOpenWallpaperPicker = { isWallpaperPickerOpen = true },
-
-                onClose = { isAppearanceModalOpen = false }
 
             )
 
@@ -3056,7 +3001,13 @@ private fun ChatScreenContent(
 
                                 },
 
-                                onProfileClick = { isContactDrawerOpen = true },
+                                onProfileClick = {
+                                    if (activeChat.type == "group" && onNavigateToGroupInfo != null) {
+                                        onNavigateToGroupInfo.invoke(activeChatId)
+                                    } else {
+                                        isContactDrawerOpen = true
+                                    }
+                                },
 
                                 onSearchToggle = {
 
@@ -3101,6 +3052,8 @@ private fun ChatScreenContent(
                                 },
 
                                 onOpenAppearanceSettings = {
+
+                                    appearanceInitialSubScreen = AppearanceSubScreen.THEME_WALLPAPERS
 
                                     isAppearanceModalOpen = true
 
@@ -3346,7 +3299,8 @@ private fun ChatScreenContent(
                                     }
                                 }
                             }
-                        }
+                        },
+                        onFlashVideoClick = onNavigateToFlashFeed
                     )
                     }
 
@@ -3502,51 +3456,107 @@ private fun ChatScreenContent(
                             }
 
                         } else {
+                            val isLeftGroup = activeChat.type == "group" && activeChat.participantUids.isNotEmpty() && !activeChat.participantUids.contains(currentUser.id)
+                            val isUserAdmin = activeChat.admins.contains(currentUser.id) || activeChat.members?.any { it.id == currentUser.id && it.role.contains("Admin", ignoreCase = true) } == true
+                            val isRestrictedToAdmins = activeChat.type == "group" && activeChat.onlyAdminsCanPost && !isUserAdmin
 
-                            ChatInputBar(
-
-                                inputText = inputText,
-
-                                onInputTextChange = {
-
-                                    inputText = it
-
-                                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
-
-                                        chatViewModel.onTextInputChanged(it, roomIdOverride = activeChatId)
-
+                            if (isLeftGroup) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                        .studioBevel(cornerRadius = 14.dp, borderWidth = 0.5.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(colors.cardBg)
+                                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                                        .padding(14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        LucideLock(tint = colors.textMuted, size = 16.dp)
+                                        Text(
+                                            text = "You can't send messages because you're no longer in this group",
+                                            color = colors.textMuted,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     }
+                                }
+                            } else if (isRestrictedToAdmins) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                        .studioBevel(cornerRadius = 14.dp, borderWidth = 0.5.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(colors.cardBg)
+                                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                                        .padding(14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        LucideShieldCheck(tint = colors.iosBlue, size = 16.dp)
+                                        Text(
+                                            text = "Only group admins can send messages to this conversation",
+                                            color = colors.textMuted,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            } else {
+                                ChatInputBar(
 
-                                },
+                                    inputText = inputText,
 
-                                replyQuote = activeReplyQuote,
+                                    onInputTextChange = {
 
-                                onCancelReply = { activeReplyQuote = null },
+                                        inputText = it
 
-                                isBlocked = activeChat.isBlocked,
+                                        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
-                                onCameraClick = { launchCamera() },
+                                            chatViewModel.onTextInputChanged(it, roomIdOverride = activeChatId)
 
-                                onPhotoClick = { launchGallery() },                                onFileClick = {
+                                        }
 
-                                    isFileManagerOpen = true
+                                    },
 
-                                },
+                                    replyQuote = activeReplyQuote,
 
-                                onPollClick = { isPollCreatorOpen = true },
-                                onStickerClick = { isStickerPickerOpen = true },
+                                    onCancelReply = { activeReplyQuote = null },
 
-                                onVoiceClick = { startVoiceRecording() },
+                                    isBlocked = activeChat.isBlocked,
 
-                                onSendClick = { handleSendMessage() },
+                                    onCameraClick = { launchCamera() },
 
-                                onDictateClick = { toggleDictation() },
+                                    onPhotoClick = { launchGallery() },                                onFileClick = {
 
-                                isDictating = isDictating,
+                                        isFileManagerOpen = true
 
-                                dictationRms = dictationRms
+                                    },
 
-                            )
+                                    onPollClick = { isPollCreatorOpen = true },
+                                    onStickerClick = { isStickerPickerOpen = true },
+                                    onFlashVideoClick = { isFlashVideoPickerOpen = true },
+
+                                    onVoiceClick = { startVoiceRecording() },
+
+                                    onSendClick = { handleSendMessage() },
+
+                                    onDictateClick = { toggleDictation() },
+
+                                    isDictating = isDictating,
+
+                                    dictationRms = dictationRms
+
+                                )
+                            }
 
                         }
 
@@ -4190,6 +4200,106 @@ private fun ChatScreenContent(
 
 
 
+        // 1.6 Fullscreen Apple iOS Appearance & Styles Screen (Instant / Snappy Transition, Top Z-Index)
+
+        AnimatedVisibility(
+
+            visible = isAppearanceModalOpen,
+
+            enter = slideInHorizontally(
+
+                initialOffsetX = { it },
+
+                animationSpec = spring(dampingRatio = 0.90f, stiffness = Spring.StiffnessMedium)
+
+            ) + fadeIn(animationSpec = tween(140)),
+
+            exit = slideOutHorizontally(
+
+                targetOffsetX = { it },
+
+                animationSpec = spring(dampingRatio = 0.92f, stiffness = Spring.StiffnessMedium)
+
+            ) + fadeOut(animationSpec = tween(120)),
+
+            modifier = Modifier.fillMaxSize().zIndex(15f)
+
+        ) {
+
+            AppearanceSettingsScreen(
+
+                currentBubbleStyle = currentBubbleStyle,
+
+                currentGlobeStyle = currentGlobeStyle,
+
+                accentColor = accentColor,
+
+                currentCustomCorners = currentCustomCorners,
+
+                onUpdateCustomCorners = {
+
+                    currentCustomCorners = it
+
+                    settingsManager.customCorners = it
+
+                },
+
+                currentAnimationStyle = currentAnimationStyle,
+
+                onSelectAnimationStyle = { anim ->
+
+                    currentAnimationStyle = anim
+
+                    settingsManager.animationStyle = anim
+
+                    SoundManager.playReaction()
+
+                    showToast("Animation set to ${anim.title}")
+
+                },
+
+                onSelectBubbleStyle = { style ->
+
+                    currentBubbleStyle = style
+
+                    settingsManager.bubbleStyle = style
+
+                    SoundManager.playReaction()
+
+                    showToast("Bubble style set to ${style.title}")
+
+                },
+
+                onSelectGlobeStyle = { gStyle ->
+
+                    currentGlobeStyle = gStyle
+
+                    settingsManager.globeStyle = gStyle
+
+                    SoundManager.playReaction()
+
+                    showToast("Voice Globe set to ${gStyle.title}")
+
+                },
+
+                onToggleAppearance = onAppearanceToggle,
+
+                onAccentCycle = onAccentCycle,
+
+                onSelectAccent = onSelectAccent,
+
+                onOpenWallpaperPicker = { isWallpaperPickerOpen = true },
+
+                onClose = { isAppearanceModalOpen = false },
+
+                initialSubScreen = appearanceInitialSubScreen
+
+            )
+
+        }
+
+
+
         // Fullscreen Story Editor Modal
 
         AnimatedVisibility(
@@ -4630,6 +4740,43 @@ private fun ChatScreenContent(
                     effectiveStoryVm.uploadStory(context, uri, audienceType = "only_friends", customAudienceIds = onlyFriends)
                     com.chroma.studio.ui.components.ToastManager.showToast("Shared with Only Friend! ⭐")
                 },
+                onSharePublicWithHighlight = { saveAsHighlight, highlightTitle ->
+                    showShareStoryAudienceSheet = false
+                    val uri = pendingUploadStoryUri ?: return@ShareStoryAudienceSheet
+                    pendingUploadStoryUri = null
+                    editingStoryImageUri = null
+                    effectiveStoryVm.uploadStory(
+                        context = context,
+                        uri = uri,
+                        audienceType = "public",
+                        isHighlight = saveAsHighlight,
+                        highlightTitle = highlightTitle
+                    )
+                    if (saveAsHighlight) {
+                        com.chroma.studio.ui.components.ToastManager.showToast("Story saved as Highlight! Lives forever ✨")
+                    } else {
+                        com.chroma.studio.ui.components.ToastManager.showToast("Sharing your story... 🌟")
+                    }
+                },
+                onShareOnlyFriendsWithHighlight = { saveAsHighlight, highlightTitle ->
+                    showShareStoryAudienceSheet = false
+                    val uri = pendingUploadStoryUri ?: return@ShareStoryAudienceSheet
+                    pendingUploadStoryUri = null
+                    editingStoryImageUri = null
+                    effectiveStoryVm.uploadStory(
+                        context = context,
+                        uri = uri,
+                        audienceType = "only_friends",
+                        customAudienceIds = onlyFriends,
+                        isHighlight = saveAsHighlight,
+                        highlightTitle = highlightTitle
+                    )
+                    if (saveAsHighlight) {
+                        com.chroma.studio.ui.components.ToastManager.showToast("Shared & saved to Highlights! ⭐✨")
+                    } else {
+                        com.chroma.studio.ui.components.ToastManager.showToast("Shared with Only Friend! ⭐")
+                    }
+                },
                 onEditOnlyFriends = { showOnlyFriendsManagementSheet = true },
                 onlyFriendsCount = onlyFriends.size
             )
@@ -4654,6 +4801,17 @@ private fun ChatScreenContent(
                 onDismiss = { isStickerStudioOpen = false },
                 onStickerCreated = { sticker ->
                     sendStickerMessage(sticker)
+                }
+            )
+        }
+
+        if (isFlashVideoPickerOpen) {
+            FlashVideoPickerSheet(
+                onDismissRequest = { isFlashVideoPickerOpen = false },
+                onFlashVideoSelected = { selectedFlash ->
+                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                        chatViewModel.sendFlashVideo(activeChatId, selectedFlash)
+                    }
                 }
             )
         }
@@ -5166,7 +5324,7 @@ private fun ChatScreenContent(
 
                 },
 
-                onCreateGroup = { groupName, groupAvatar, members ->
+                onCreateGroup = { groupName, groupAvatar, members, groupDescription, onlyAdminsCanPost ->
 
                     val newGroupId = "group_${System.currentTimeMillis()}"
 
@@ -5188,7 +5346,7 @@ private fun ChatScreenContent(
 
                         phone = "Group Chat",
 
-                        bio = "created",
+                        bio = groupDescription.ifBlank { "Group created" },
 
                         unreadCount = 0,
 
@@ -5199,6 +5357,12 @@ private fun ChatScreenContent(
                         isBlocked = false,
 
                         members = members,
+
+                        participantUids = members.map { it.id },
+
+                        admins = listOf(currentUser.id),
+
+                        onlyAdminsCanPost = onlyAdminsCanPost,
 
                         messages = listOf(
 
@@ -5240,7 +5404,7 @@ private fun ChatScreenContent(
 
                         val realParticipantIds = members.mapNotNull { it.id.takeIf { id -> id.isNotBlank() && id != currentUser.id } }
 
-                        chatViewModel.createGroup(groupName, "Group created", realParticipantIds, groupAvatar, newGroupId) { generatedRoomId ->
+                        chatViewModel.createGroup(groupName, groupDescription.ifBlank { null }, realParticipantIds, groupAvatar, newGroupId, onlyAdminsCanPost) { generatedRoomId ->
 
                             activeChatId = generatedRoomId
 

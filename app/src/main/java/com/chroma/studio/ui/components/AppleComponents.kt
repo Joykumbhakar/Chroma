@@ -241,6 +241,20 @@ fun AppleSwitch(
  * - Thumb: 24px x 18px horizontal pill capsule with Liquid Jelly optics
  * - Active state: width: 28px, transform: scale(1.15)
  */
+/**
+ * Global reactive state tracking whether a user is currently clicking, tapping, or dragging
+ * a slider knob in any photo, video, or editor screen.
+ *
+ * When active, allows surrounding background chrome, cards, divs, and unrelated components
+ * to fade to transparent or dim, keeping ONLY the active slider and the media canvas clearly visible.
+ */
+class SliderScrubbingState {
+    var isScrubbing by mutableStateOf(false)
+    var activeId by mutableStateOf<String?>(null)
+}
+
+val LocalSliderScrubbingState = compositionLocalOf { SliderScrubbingState() }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppleSlider(
@@ -253,7 +267,8 @@ fun AppleSlider(
     gradientColors: List<Color>? = null,
     trackHeight: Dp = 6.dp,
     onValueChangeFinished: (() -> Unit)? = null,
-    onInteractingChange: ((Boolean) -> Unit)? = null
+    onInteractingChange: ((Boolean) -> Unit)? = null,
+    sliderId: String? = null
 ) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -261,11 +276,34 @@ fun AppleSlider(
     val isInteracting = isPressed || isDragged
 
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val scrubbingState = LocalSliderScrubbingState.current
+    val actualId = remember(sliderId) { sliderId ?: java.util.UUID.randomUUID().toString() }
 
     LaunchedEffect(isInteracting) {
         onInteractingChange?.invoke(isInteracting)
         if (isInteracting) {
-            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+            val wasAlreadyActive = scrubbingState.isScrubbing && scrubbingState.activeId == actualId
+            scrubbingState.activeId = actualId
+            scrubbingState.isScrubbing = true
+            if (!wasAlreadyActive) {
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+            }
+        } else {
+            // Brief debounce avoids 1-frame flicker during PressInteraction -> DragInteraction handoff
+            kotlinx.coroutines.delay(45L)
+            if (scrubbingState.activeId == actualId) {
+                scrubbingState.isScrubbing = false
+                scrubbingState.activeId = null
+            }
+        }
+    }
+
+    DisposableEffect(actualId) {
+        onDispose {
+            if (scrubbingState.activeId == actualId) {
+                scrubbingState.isScrubbing = false
+                scrubbingState.activeId = null
+            }
         }
     }
 
@@ -379,6 +417,7 @@ fun AppleJellySlider(
     AppleSlider(
         value = value,
         onValueChange = onValueChange,
+        onValueChangeFinished = onValueChangeFinished,
         valueRange = valueRange,
         gradientColors = listOf(activeColor, activeColor),
         trackHeight = 6.dp,
@@ -1273,7 +1312,6 @@ fun IosDynamicIslandHost(
                 is DynamicIslandEvent.Like -> 2000L
                 is DynamicIslandEvent.Follow -> 2200L
                 is DynamicIslandEvent.RemixOrDownload -> 2000L
-                else -> 2200L
             }
             delay(duration)
             if (currentEvent == event && !isExpanded) {

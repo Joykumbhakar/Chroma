@@ -37,6 +37,7 @@ import coil.compose.AsyncImage
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.chat.data.AccentColorType
 import com.chroma.studio.chat.data.ChatConversation
+import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.ui.components.AiWaveSphereIcon
 
@@ -397,7 +398,11 @@ fun ChatHeader(
                                 trailingContent = {
                                     AiWaveSphereIcon(modifier = Modifier.size(15.dp))
                                 },
-                                onClick = { showMenu = false; onOpenAppearanceSettings() }
+                                onClick = {
+                                    showMenu = false
+                                    SoundManager.playReaction()
+                                    onOpenAppearanceSettings()
+                                }
                             )
                             AppleMenuItem(
                                 title = "Color Mode",

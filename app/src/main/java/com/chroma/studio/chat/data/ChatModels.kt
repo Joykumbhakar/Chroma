@@ -135,7 +135,14 @@ data class ChatMessage(
     val isEdited: Boolean = false,
     val isForwarded: Boolean = false,
     val storyId: String? = null,
-    val storyThumbnailUrl: String? = null
+    val storyThumbnailUrl: String? = null,
+    val flashVideoId: String? = null,
+    val flashVideoThumbnailUrl: String? = null,
+    val flashVideoUrl: String? = null,
+    val flashVideoCaption: String? = null,
+    val flashVideoAuthorUsername: String? = null,
+    val flashVideoAuthorAvatarUrl: String? = null,
+    val flashVideoDurationMs: Long? = null
 )
 
 @Immutable
@@ -158,7 +165,9 @@ data class ChatConversation(
     val members: List<GroupMember>? = null,
     val messages: List<ChatMessage> = emptyList(),
     val otherUserId: String? = null,
-    val participantUids: List<String> = emptyList()
+    val participantUids: List<String> = emptyList(),
+    val admins: List<String> = emptyList(),
+    val onlyAdminsCanPost: Boolean = false
 )
 
 enum class AccentColorType(val title: String, val color: Color, val hoverColor: Color, val subtleColor: Color) {

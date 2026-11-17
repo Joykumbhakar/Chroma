@@ -46,7 +46,9 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.composables.icons.lucide.ShieldAlert
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -106,7 +108,9 @@ fun UserProfileHeroSection(
     onAvatarClick: () -> Unit,
     onAvatarLongClick: (() -> Unit)? = null,
     onNavigateToUserList: ((String, String) -> Unit)?,
-    onPostsClick: (() -> Unit)? = null
+    onPostsClick: (() -> Unit)? = null,
+    isUploading: Boolean = false,
+    isUploadFailed: Boolean = false
 ) {
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
@@ -213,14 +217,43 @@ fun UserProfileHeroSection(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (hasActiveStories) {
-                        // Instagram-style Story Ring with inner theme gap
+                    val shouldShowRing = hasActiveStories || isUploading || isUploadFailed
+                    val ringBrush = when {
+                        isUploadFailed -> Brush.linearGradient(listOf(Color(0xFFFF3B30), Color(0xFFFF453A)))
+                        isUploading -> Brush.sweepGradient(
+                            listOf(
+                                Color(0xFF0381FE),
+                                Color(0xFFAF52DE),
+                                Color(0xFFFF2D55),
+                                Color(0xFFFF9500),
+                                Color(0xFF0381FE)
+                            )
+                        )
+                        hasActiveStories -> Brush.sweepGradient(AppleStatusVibrantGradient)
+                        else -> null
+                    }
+                    val infiniteTransition = rememberInfiniteTransition(label = "profile_upload_ring")
+                    val uploadRingRotation by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 360f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1200, easing = LinearEasing),
+                            repeatMode = RepeatMode.Restart
+                        ),
+                        label = "profile_ring_rot"
+                    )
+
+                    if (shouldShowRing && ringBrush != null) {
+                        // Instagram-style Story Ring with inner theme gap and real-time upload animation
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .graphicsLayer {
+                                    if (isUploading) rotationZ = uploadRingRotation
+                                }
                                 .border(
                                     width = 2.8.dp,
-                                    brush = Brush.sweepGradient(AppleStatusVibrantGradient),
+                                    brush = ringBrush,
                                     shape = CircleShape
                                 )
                                 .padding(4.5.dp) // Gap separator in theme background color
@@ -235,6 +268,36 @@ fun UserProfileHeroSection(
                                 isOnline = false,
                                 modifier = Modifier.fillMaxSize()
                             )
+
+                            // Optimistic Uploading / Failed Overlay on Avatar
+                            if (isUploading) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.45f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        strokeWidth = 2.2.dp,
+                                        color = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            } else if (isUploadFailed) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color(0xFFFF3B30).copy(alpha = 0.35f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.ShieldAlert,
+                                        contentDescription = "Failed",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
                         }
                     } else {
                         // Standard Profile Avatar with crisp theme border
@@ -1103,7 +1166,8 @@ fun UserProfileActionsStoriesSection(
     onAddStoryClick: () -> Unit = {},
     onStoryClick: ((groupIndex: Int) -> Unit)? = null,
     storyVm: StoryViewModel,
-    isFollowRequested: Boolean = false
+    isFollowRequested: Boolean = false,
+    onHighlightClick: ((com.chroma.studio.ui.components.ProfileHighlightItem) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
 
@@ -1306,7 +1370,9 @@ fun UserProfileActionsStoriesSection(
             userId = userId,
             isCurrentUser = isCurrentUser,
             onHighlightClick = { hl ->
-                if (onMyStoryClick != null && isCurrentUser) {
+                if (onHighlightClick != null) {
+                    onHighlightClick(hl)
+                } else if (onMyStoryClick != null && isCurrentUser) {
                     onMyStoryClick()
                 } else if (onStoryClick != null && filteredStories.isNotEmpty()) {
                     onStoryClick(0)

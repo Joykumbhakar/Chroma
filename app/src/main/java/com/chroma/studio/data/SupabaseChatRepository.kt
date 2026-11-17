@@ -112,7 +112,14 @@ class SupabaseChatRepository {
         }
     }
 
-    suspend fun createGroup(groupName: String, groupDescription: String? = null, participantIds: List<String>, imageUrl: String? = null, preGeneratedId: String? = null): ChatRoom? = withContext(Dispatchers.IO) {
+    suspend fun createGroup(
+        groupName: String,
+        groupDescription: String? = null,
+        participantIds: List<String>,
+        imageUrl: String? = null,
+        preGeneratedId: String? = null,
+        onlyAdminsCanPost: Boolean = false
+    ): ChatRoom? = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext null
         val roomId = preGeneratedId ?: "group_${java.util.UUID.randomUUID()}"
 
@@ -133,7 +140,8 @@ class SupabaseChatRepository {
                 createdBy = currentUser.uid,
                 lastMessage = "Group created",
                 lastMessageTime = System.currentTimeMillis(),
-                unreadCount = unreadMap
+                unreadCount = unreadMap,
+                onlyAdminsCanPost = onlyAdminsCanPost
             )
             chatsCollection.document(roomId).set(newRoom).await()
             roomParticipantsCache[newRoom.id] = newRoom.participants
@@ -223,13 +231,20 @@ class SupabaseChatRepository {
         durationSeconds: Int? = null,
         replyToMessageId: String? = null,
         storyId: String? = null,
-        storyThumbnailUrl: String? = null
+        storyThumbnailUrl: String? = null,
+        flashVideoId: String? = null,
+        flashVideoThumbnailUrl: String? = null,
+        flashVideoUrl: String? = null,
+        flashVideoCaption: String? = null,
+        flashVideoAuthorUsername: String? = null,
+        flashVideoAuthorAvatarUrl: String? = null,
+        flashVideoDurationMs: Long? = null
     ): Boolean = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext false
         try {
             val messageId = preGeneratedId ?: java.util.UUID.randomUUID().toString()
             val timestamp = System.currentTimeMillis()
-            val (finalMessageText, finalIv, finalEncryptedKeys) = if (messageType != "system" && text.isNotBlank()) {
+            val (finalMessageText, finalIv, finalEncryptedKeys) = if (messageType != "system" && messageType != "flash_video" && text.isNotBlank()) {
                 encryptPayload(roomId, text, currentUser.uid)
             } else {
                 Triple(text, "", emptyMap<String, String>())
@@ -249,7 +264,14 @@ class SupabaseChatRepository {
                 durationSeconds = durationSeconds,
                 replyToMessageId = replyToMessageId,
                 storyId = storyId,
-                storyThumbnailUrl = storyThumbnailUrl
+                storyThumbnailUrl = storyThumbnailUrl,
+                flashVideoId = flashVideoId,
+                flashVideoThumbnailUrl = flashVideoThumbnailUrl,
+                flashVideoUrl = flashVideoUrl,
+                flashVideoCaption = flashVideoCaption,
+                flashVideoAuthorUsername = flashVideoAuthorUsername,
+                flashVideoAuthorAvatarUrl = flashVideoAuthorAvatarUrl,
+                flashVideoDurationMs = flashVideoDurationMs
             )
 
             // 1. Save directly to Firestore subcollection for 100% reliable persistence & realtime listeners
@@ -278,7 +300,9 @@ class SupabaseChatRepository {
                             updatedUnreadCount[participantId] = (updatedUnreadCount[participantId] ?: 0) + 1
                         }
                     }
-                    val displayMessage = if (storyThumbnailUrl != null || storyId != null) {
+                    val displayMessage = if (messageType == "flash_video" || flashVideoId != null) {
+                        "⚡ Shared a Flash video"
+                    } else if (storyThumbnailUrl != null || storyId != null) {
                         "Replied to story: $text"
                     } else if (imageUrl != null) {
                         if (messageType == "video") "Sent a video" else if (messageType == "audio") "Voice message" else "Sent an image"
@@ -313,6 +337,7 @@ class SupabaseChatRepository {
                 if (room != null) {
                     // Build a human-readable notification body based on message type
                     val displaySnippet = when {
+                        messageType == "flash_video" || flashVideoId != null -> "⚡ Shared a Flash video"
                         messageType == "audio" || messageType == "voice" -> "🎤 Voice message"
                         messageType == "video" -> "🎥 Sent a video"
                         messageType == "image" || (imageUrl != null && messageType == "text") -> "📷 Sent a photo"
@@ -351,6 +376,26 @@ class SupabaseChatRepository {
             Log.e("SupabaseChatRepository", "Error sending message", e)
             false
         }
+    }
+
+    suspend fun sendFlashVideoMessage(
+        roomId: String,
+        flashVideo: com.chroma.studio.model.FlashVideo,
+        captionText: String? = null
+    ): Boolean {
+        return sendMessage(
+            roomId = roomId,
+            text = captionText ?: flashVideo.caption,
+            messageType = "flash_video",
+            imageUrl = flashVideo.thumbnailUrl,
+            flashVideoId = flashVideo.id,
+            flashVideoThumbnailUrl = flashVideo.thumbnailUrl,
+            flashVideoUrl = flashVideo.videoUrl,
+            flashVideoCaption = flashVideo.caption,
+            flashVideoAuthorUsername = flashVideo.authorUsername,
+            flashVideoAuthorAvatarUrl = flashVideo.authorAvatarUrl,
+            flashVideoDurationMs = flashVideo.duration
+        )
     }
 
     suspend fun markAsRead(roomId: String) = withContext(Dispatchers.IO) {
@@ -660,29 +705,82 @@ class SupabaseChatRepository {
     }
 
     suspend fun demoteAdmin(roomId: String, userId: String) = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext
         try {
-            chatsCollection.document(roomId).update("admins", FieldValue.arrayRemove(userId)).await()
+            val roomRef = chatsCollection.document(roomId)
+            var demotedName = "Someone"
+
+            firestore.runTransaction { transaction ->
+                val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
+                if (room != null) {
+                    if (!room.admins.contains(currentUser.uid)) {
+                        throw Exception("Only admins can change admin permissions")
+                    }
+                    val newAdmins = room.admins.filter { it != userId }
+                    if (newAdmins.isEmpty() && room.participants.isNotEmpty()) {
+                        throw Exception("Cannot demote the sole group admin")
+                    }
+                    transaction.update(roomRef, "admins", newAdmins)
+                }
+            }.await()
+
+            demotedName = try {
+                usersCollection.document(userId).get().await().getString("displayName")?.takeIf { it.isNotBlank() }
+                    ?: usersCollection.document(userId).get().await().getString("username")?.takeIf { it.isNotBlank() }
+                    ?: "Someone"
+            } catch (_: Exception) { "Someone" }
+
+            sendMessage(roomId, "$demotedName is no longer an admin", messageType = "system")
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error demoting admin", e)
         }
     }
 
     suspend fun addParticipants(roomId: String, userIds: List<String>) = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext
+        if (userIds.isEmpty()) return@withContext
         try {
             val roomRef = chatsCollection.document(roomId)
+            var updatedParticipants = emptyList<String>()
+
             firestore.runTransaction { transaction ->
                 val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
                 if (room != null) {
+                    if (!room.admins.contains(currentUser.uid)) {
+                        throw Exception("Only admins can add participants")
+                    }
                     val newParticipants = (room.participants + userIds).distinct()
+                    updatedParticipants = newParticipants
+                    val updatedUnread = room.unreadCount.toMutableMap()
+                    userIds.forEach { uid ->
+                        if (!updatedUnread.containsKey(uid)) {
+                            updatedUnread[uid] = 0
+                        }
+                    }
+
                     transaction.update(roomRef, "participants", newParticipants)
+                    transaction.update(roomRef, "unreadCount", updatedUnread)
                 }
             }.await()
 
-            // Add system messages
-            for (userId in userIds) {
-                val userName = usersCollection.document(userId).get().await().getString("displayName") ?: "Someone"
-                sendMessage(roomId, "$userName was added to the group", messageType = "system")
+            if (updatedParticipants.isNotEmpty()) {
+                roomParticipantsCache[roomId] = updatedParticipants
             }
+
+            // Construct system message
+            val names = userIds.map { uid ->
+                try {
+                    usersCollection.document(uid).get().await().getString("displayName")?.takeIf { it.isNotBlank() }
+                        ?: usersCollection.document(uid).get().await().getString("username")?.takeIf { it.isNotBlank() }
+                        ?: "Someone"
+                } catch (_: Exception) { "Someone" }
+            }
+            val systemMsg = if (names.size == 1) {
+                "${names[0]} was added to the group"
+            } else {
+                "${names.joinToString(", ")} were added to the group"
+            }
+            sendMessage(roomId, systemMsg, messageType = "system")
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error adding participants", e)
         }
@@ -694,25 +792,38 @@ class SupabaseChatRepository {
             val roomRef = chatsCollection.document(roomId)
             var removedName = "Someone"
             var wasRemoved = false
+            var updatedParticipants = emptyList<String>()
 
             firestore.runTransaction { transaction ->
                 val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
                 if (room != null) {
-                    // Check if current user is admin
                     if (!room.admins.contains(currentUser.uid)) {
                         throw Exception("Only admins can remove participants")
                     }
                     val newParticipants = room.participants.filter { it != userId }
+                    updatedParticipants = newParticipants
                     val newAdmins = room.admins.filter { it != userId }
+                    val finalAdmins = if (newAdmins.isEmpty() && newParticipants.isNotEmpty()) {
+                        listOf(currentUser.uid.takeIf { newParticipants.contains(it) } ?: newParticipants.first())
+                    } else {
+                        newAdmins
+                    }
+                    val updatedUnread = room.unreadCount.toMutableMap().apply { remove(userId) }
 
                     transaction.update(roomRef, "participants", newParticipants)
-                    transaction.update(roomRef, "admins", newAdmins)
+                    transaction.update(roomRef, "admins", finalAdmins)
+                    transaction.update(roomRef, "unreadCount", updatedUnread)
                     wasRemoved = true
                 }
             }.await()
 
             if (wasRemoved) {
-                removedName = usersCollection.document(userId).get().await().getString("displayName") ?: "Someone"
+                roomParticipantsCache[roomId] = updatedParticipants
+                removedName = try {
+                    usersCollection.document(userId).get().await().getString("displayName")?.takeIf { it.isNotBlank() }
+                        ?: usersCollection.document(userId).get().await().getString("username")?.takeIf { it.isNotBlank() }
+                        ?: "Someone"
+                } catch (_: Exception) { "Someone" }
                 sendMessage(roomId, "$removedName was removed from the group", messageType = "system")
             }
         } catch (e: Exception) {
@@ -732,12 +843,19 @@ class SupabaseChatRepository {
                     if (!room.admins.contains(currentUser.uid)) {
                         throw Exception("Only admins can make other users admin")
                     }
+                    if (!room.participants.contains(userId)) {
+                        throw Exception("User is not a participant in this group")
+                    }
                     val newAdmins = (room.admins + userId).distinct()
                     transaction.update(roomRef, "admins", newAdmins)
                 }
             }.await()
 
-            adminName = usersCollection.document(userId).get().await().getString("displayName") ?: "Someone"
+            adminName = try {
+                usersCollection.document(userId).get().await().getString("displayName")?.takeIf { it.isNotBlank() }
+                    ?: usersCollection.document(userId).get().await().getString("username")?.takeIf { it.isNotBlank() }
+                    ?: "Someone"
+            } catch (_: Exception) { "Someone" }
             sendMessage(roomId, "$adminName is now an admin", messageType = "system")
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error making admin", e)
@@ -749,22 +867,85 @@ class SupabaseChatRepository {
         try {
             val roomRef = chatsCollection.document(roomId)
             var leftName = "Someone"
+            var updatedParticipants = emptyList<String>()
 
             firestore.runTransaction { transaction ->
                 val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
                 if (room != null) {
                     val newParticipants = room.participants.filter { it != currentUser.uid }
+                    updatedParticipants = newParticipants
                     val newAdmins = room.admins.filter { it != currentUser.uid }
+                    val finalAdmins = if (newAdmins.isEmpty() && newParticipants.isNotEmpty()) {
+                        listOf(newParticipants.first())
+                    } else {
+                        newAdmins
+                    }
+                    val updatedUnread = room.unreadCount.toMutableMap().apply { remove(currentUser.uid) }
 
                     transaction.update(roomRef, "participants", newParticipants)
-                    transaction.update(roomRef, "admins", newAdmins)
+                    transaction.update(roomRef, "admins", finalAdmins)
+                    transaction.update(roomRef, "unreadCount", updatedUnread)
                 }
             }.await()
 
-            leftName = usersCollection.document(currentUser.uid).get().await().getString("displayName") ?: "Someone"
+            roomParticipantsCache[roomId] = updatedParticipants
+
+            leftName = try {
+                usersCollection.document(currentUser.uid).get().await().getString("displayName")?.takeIf { it.isNotBlank() }
+                    ?: usersCollection.document(currentUser.uid).get().await().getString("username")?.takeIf { it.isNotBlank() }
+                    ?: "Someone"
+            } catch (_: Exception) { "Someone" }
             sendMessage(roomId, "$leftName left the group", messageType = "system")
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error leaving group", e)
+        }
+    }
+
+    suspend fun updateOnlyAdminsCanPost(roomId: String, onlyAdminsCanPost: Boolean) = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext
+        try {
+            val roomRef = chatsCollection.document(roomId)
+            var adminName = "Admin"
+            firestore.runTransaction { transaction ->
+                val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
+                if (room != null) {
+                    if (!room.admins.contains(currentUser.uid)) {
+                        throw Exception("Only admins can modify group posting permissions")
+                    }
+                    transaction.update(roomRef, "onlyAdminsCanPost", onlyAdminsCanPost)
+                }
+            }.await()
+
+            adminName = try {
+                usersCollection.document(currentUser.uid).get().await().getString("displayName")?.takeIf { it.isNotBlank() }
+                    ?: usersCollection.document(currentUser.uid).get().await().getString("username")?.takeIf { it.isNotBlank() }
+                    ?: "Admin"
+            } catch (_: Exception) { "Admin" }
+
+            val notice = if (onlyAdminsCanPost) {
+                "$adminName changed group settings: Only admins can send messages"
+            } else {
+                "$adminName changed group settings: All members can send messages"
+            }
+            sendMessage(roomId, notice, messageType = "system")
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error updating onlyAdminsCanPost", e)
+        }
+    }
+
+    suspend fun getRoom(roomId: String): ChatRoom? = withContext(Dispatchers.IO) {
+        try {
+            val doc = chatsCollection.document(roomId).get().await()
+            if (doc.exists()) {
+                val room = doc.toObject(ChatRoom::class.java)
+                if (room != null) {
+                    roomParticipantsCache[room.id] = room.participants
+                }
+                room
+            } else null
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error getting room $roomId", e)
+            null
         }
     }
 

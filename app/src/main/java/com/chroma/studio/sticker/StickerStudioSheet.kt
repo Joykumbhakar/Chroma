@@ -30,6 +30,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chroma.studio.ui.components.AppleSlider
 import com.chroma.studio.ui.components.GlassButton
+import com.chroma.studio.ui.components.LocalSliderScrubbingState
+import com.chroma.studio.ui.components.editorChromeFadeOnScrub
+import com.chroma.studio.ui.components.focusSliderContainer
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.Dispatchers
@@ -131,7 +134,9 @@ fun StickerStudioModal(
             ) {
                 // Top Navigation Bar
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .editorChromeFadeOnScrub(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -322,16 +327,24 @@ fun StickerStudioModal(
 
                 // Bottom Editing Toolbar
                 if (cutoutBitmap != null) {
+                    val stickerScrub = LocalSliderScrubbingState.current
+                    val toolbarBg by animateColorAsState(
+                        targetValue = if (stickerScrub.isScrubbing) Color.Transparent else colors.glassBg,
+                        animationSpec = androidx.compose.animation.core.tween(180),
+                        label = "stickerToolbarBg"
+                    )
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
-                            .background(colors.glassBg)
+                            .background(toolbarBg)
                             .padding(12.dp)
                     ) {
                         // Tool Switcher Tabs
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .editorChromeFadeOnScrub(),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -381,20 +394,25 @@ fun StickerStudioModal(
                         if (activeMode == StickerStudioMode.MANUAL_ERASE) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusSliderContainer(
+                                        sliderId = "StickerEraserSize",
+                                        isDark = colors.isDark,
+                                        cornerRadius = 14.dp,
+                                        horizontalPadding = 10.dp,
+                                        verticalPadding = 4.dp
+                                    ),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text("Brush Size", color = colors.textMuted, fontSize = 11.sp)
-                                Slider(
+                                AppleSlider(
                                     value = eraserBrushRadius,
+                                    sliderId = "StickerEraserSize",
                                     onValueChange = { eraserBrushRadius = it },
                                     valueRange = 8f..64f,
-                                    modifier = Modifier.weight(1f),
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = colors.primary,
-                                        activeTrackColor = colors.primary
-                                    )
+                                    modifier = Modifier.weight(1f)
                                 )
                                 if (eraserHistory.size > 1) {
                                     IconButton(
@@ -406,7 +424,9 @@ fun StickerStudioModal(
                                                 updateBorderPreview()
                                             }
                                         },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier
+                                            .editorChromeFadeOnScrub()
+                                            .size(32.dp)
                                     ) {
                                         Icon(Lucide.Undo2, contentDescription = "Undo", tint = colors.textMain, modifier = Modifier.size(16.dp))
                                     }
@@ -417,7 +437,9 @@ fun StickerStudioModal(
                         // Change Photo Button
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .editorChromeFadeOnScrub(),
                             horizontalArrangement = Arrangement.Center
                         ) {
                             TextButton(

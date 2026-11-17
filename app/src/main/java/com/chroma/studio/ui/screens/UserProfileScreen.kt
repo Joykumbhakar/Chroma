@@ -6,6 +6,8 @@
 
 package com.chroma.studio.ui.screens
 import android.graphics.Bitmap
+import com.chroma.studio.model.Story
+import com.chroma.studio.model.UserStoryGroup
 import com.chroma.studio.ui.components.OneUiSettingsGroup
 import com.chroma.studio.ui.components.OneUiSettingsNavRow
 import com.chroma.studio.ui.components.OneUiIconBadge
@@ -198,6 +200,7 @@ fun UserProfileScreen(
     val myStories by storyVm.myStories.collectAsState()
     val likedStoryIds by storyVm.likedStoryIds.collectAsState()
     val isUploadingStory by storyVm.isUploading.collectAsState()
+    val failedStoryUpload by storyVm.failedStoryUpload.collectAsState()
     var showStoryViewer by remember { mutableStateOf(false) }
     var showStoryCreationSheet by remember { mutableStateOf(false) }
     var showStoryGalleryPicker by remember { mutableStateOf(false) }
@@ -209,6 +212,7 @@ fun UserProfileScreen(
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
     var showAvatarOverlay by remember { mutableStateOf(false) }
     var showAvatarActionSheet by remember { mutableStateOf(false) }
+    var highlightStoriesViewerGroup by remember { mutableStateOf<UserStoryGroup?>(null) }
 
     val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker || showStoryCamera || (editingStoryImageUri != null) || showShareStoryAudienceSheet || showOnlyFriendsManagementSheet || showAvatarOverlay || showAvatarActionSheet
     LaunchedEffect(shouldHideBottomNav) {
@@ -481,18 +485,22 @@ fun UserProfileScreen(
         ) {
             // Header Content spans all 3 columns
             item(span = { GridItemSpan(maxLineSpan) }) {
+                val isMyStoryUploading = isCurrentUser && (isUploadingStory || effectiveMyStories.any { it.isUploading })
+                val isMyStoryFailed = isCurrentUser && (failedStoryUpload != null || effectiveMyStories.any { it.isFailed })
                 UserProfileHeroSection(
                     profile = profile,
                     hasActiveStories = hasActiveStories,
                     worksCount = works.size + flashPosts.size,
                     isRestricted = isRestricted,
                     userId = userId,
+                    isUploading = isMyStoryUploading,
+                    isUploadFailed = isMyStoryFailed,
                     onPostsClick = {
                         selectedTabIndex = 0
                         scope.launch { gridState.animateScrollToItem(0) }
                     },
                     onAvatarClick = {
-                        if (hasActiveStories) {
+                        if (hasActiveStories || isMyStoryUploading || isMyStoryFailed) {
                             launchStoryViewer()
                         } else {
                             showAvatarOverlay = true
@@ -567,7 +575,31 @@ fun UserProfileScreen(
                         showStoryViewer = true
                     },
                     storyVm = storyVm,
-                    isFollowRequested = isFollowRequested
+                    isFollowRequested = isFollowRequested,
+                    onHighlightClick = { hl ->
+                        storyVm.loadHighlightStories(userId, hl.title) { stories ->
+                            val permanentStories = if (stories.isNotEmpty()) stories else {
+                                listOf(
+                                    Story(
+                                        id = hl.id,
+                                        userId = userId,
+                                        mediaUrl = hl.coverUrl ?: "",
+                                        textContent = hl.title,
+                                        isHighlight = true,
+                                        highlightTitle = hl.title,
+                                        expiresAt = Long.MAX_VALUE
+                                    )
+                                )
+                            }
+                            highlightStoriesViewerGroup = UserStoryGroup(
+                                userId = userId,
+                                userProfile = effectiveProfile ?: UserProfile(uid = userId),
+                                stories = permanentStories
+                            )
+                            storyViewerInitialIndex = 0
+                            showStoryViewer = true
+                        }
+                    }
                 )
             }
 
@@ -1260,19 +1292,25 @@ fun UserProfileScreen(
         }
     }
 
-    // Story Viewer Overlay
-    if (showStoryViewer && (allStoryGroups.isNotEmpty() || filteredStories.isNotEmpty() || myStories.isNotEmpty() || effectiveMyStories.isNotEmpty())) {
+    // Story Viewer Overlay (Supports standard 24h stories & immortal saved highlights)
+    val activeHighlightGroup = highlightStoriesViewerGroup
+    if (showStoryViewer && (activeHighlightGroup != null || allStoryGroups.isNotEmpty() || filteredStories.isNotEmpty() || myStories.isNotEmpty() || effectiveMyStories.isNotEmpty())) {
+        val currentViewerGroups = if (activeHighlightGroup != null) listOf(activeHighlightGroup) else viewerGroups
         StoryViewerScreen(
-            storyGroups = viewerGroups,
+            storyGroups = currentViewerGroups,
             initialGroupIndex = storyViewerInitialIndex,
             currentUserId = currentUserId ?: "",
             storyViewModel = storyVm,
             likedStoryIds = likedStoryIds,
-            myStories = effectiveMyStories,
+            myStories = if (activeHighlightGroup != null) activeHighlightGroup.stories else effectiveMyStories,
             currentUserProfile = if (isCurrentUser) profile else null,
-            onClose = { showStoryViewer = false },
+            onClose = {
+                showStoryViewer = false
+                highlightStoriesViewerGroup = null
+            },
             onAuthorClick = { clickedUid ->
                 showStoryViewer = false
+                highlightStoriesViewerGroup = null
                 if (clickedUid != userId) {
                     onNavigateToUserList?.invoke(clickedUid, "followers")
                 }
@@ -1391,6 +1429,43 @@ fun UserProfileScreen(
                 editingStoryImageUri = null
                 storyVm.uploadStory(context, uri, audienceType = "only_friends", customAudienceIds = onlyFriends)
                 com.chroma.studio.ui.components.ToastManager.showToast("Shared with Only Friend! ⭐")
+            },
+            onSharePublicWithHighlight = { saveAsHighlight, highlightTitle ->
+                showShareStoryAudienceSheet = false
+                val uri = pendingUploadStoryUri ?: return@ShareStoryAudienceSheet
+                pendingUploadStoryUri = null
+                editingStoryImageUri = null
+                storyVm.uploadStory(
+                    context = context,
+                    uri = uri,
+                    audienceType = "public",
+                    isHighlight = saveAsHighlight,
+                    highlightTitle = highlightTitle
+                )
+                if (saveAsHighlight) {
+                    com.chroma.studio.ui.components.ToastManager.showToast("Story saved as Highlight! Lives forever ✨")
+                } else {
+                    com.chroma.studio.ui.components.ToastManager.showToast("Sharing your story... 🌟")
+                }
+            },
+            onShareOnlyFriendsWithHighlight = { saveAsHighlight, highlightTitle ->
+                showShareStoryAudienceSheet = false
+                val uri = pendingUploadStoryUri ?: return@ShareStoryAudienceSheet
+                pendingUploadStoryUri = null
+                editingStoryImageUri = null
+                storyVm.uploadStory(
+                    context = context,
+                    uri = uri,
+                    audienceType = "only_friends",
+                    customAudienceIds = onlyFriends,
+                    isHighlight = saveAsHighlight,
+                    highlightTitle = highlightTitle
+                )
+                if (saveAsHighlight) {
+                    com.chroma.studio.ui.components.ToastManager.showToast("Shared & saved to Highlights! ⭐✨")
+                } else {
+                    com.chroma.studio.ui.components.ToastManager.showToast("Shared with Only Friend! ⭐")
+                }
             },
             onEditOnlyFriends = {
                 showOnlyFriendsManagementSheet = true

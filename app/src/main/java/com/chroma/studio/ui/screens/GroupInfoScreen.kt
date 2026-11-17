@@ -55,10 +55,25 @@ fun GroupInfoScreen(
     val colors = LocalOscellionColors.current
     val recentChats by chatViewModel.recentChats.collectAsState()
     val userProfiles by chatViewModel.userProfiles.collectAsState()
-    val room = recentChats.find { it.id == roomId }
+    var standaloneRoom by remember { mutableStateOf<com.chroma.studio.model.ChatRoom?>(null) }
+
+    LaunchedEffect(roomId) {
+        if (recentChats.none { it.id == roomId }) {
+            val fetched = chatViewModel.fetchRoom(roomId)
+            if (fetched != null) standaloneRoom = fetched
+        }
+    }
+
+    val room = recentChats.find { it.id == roomId } ?: standaloneRoom
     val currentUser = FirebaseAuth.getInstance().currentUser ?: return
     val context = LocalContext.current
     val hazeState = remember { HazeState() }
+
+    LaunchedEffect(room?.participants) {
+        if (room != null && room.participants.isNotEmpty()) {
+            chatViewModel.fetchProfilesForUsers(room.participants)
+        }
+    }
 
     LaunchedEffect(room) {
         if (room != null && !room.isGroup) {
@@ -90,6 +105,13 @@ fun GroupInfoScreen(
     var showWallpaperPicker by remember { mutableStateOf(false) }
     var newGroupName by remember { mutableStateOf(room.name ?: "") }
     var newGroupDesc by remember { mutableStateOf(room.groupDescription ?: "") }
+
+    LaunchedEffect(room.name) {
+        newGroupName = room.name ?: ""
+    }
+    LaunchedEffect(room.groupDescription) {
+        newGroupDesc = room.groupDescription ?: ""
+    }
 
     val settingsManager = remember { ChatSettingsManager(context) }
 
@@ -302,6 +324,58 @@ fun GroupInfoScreen(
                                 Spacer(Modifier.height(4.dp))
                                 Text("Wallpaper", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
+                        }
+                    }
+                }
+            }
+
+            // Announcement Channel Setting (Admin only)
+            if (isAdmin && !isLeft && !isClosed) {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .studioBevel(cornerRadius = 14.dp, borderWidth = 0.5.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White)
+                            .border(0.5.dp, if (colors.isDark) Color(0x2EFFFFFF) else Color(0x1F000000), RoundedCornerShape(14.dp))
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Icon(
+                                    Lucide.ShieldCheck,
+                                    contentDescription = null,
+                                    tint = Color(0xFF0381FE),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "Announcement Channel",
+                                        color = colors.textMain,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = if (room.onlyAdminsCanPost) "Only admins can send messages" else "All members can send messages",
+                                        color = Color(0xFF8E8E93),
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                            AppleSwitch(
+                                checked = room.onlyAdminsCanPost,
+                                onCheckedChange = { nextVal ->
+                                    chatViewModel.updateOnlyAdminsCanPost(room.id, nextVal)
+                                }
+                            )
                         }
                     }
                 }
@@ -600,6 +674,20 @@ fun GroupInfoScreen(
             users.values.toList()
         }
 
+        var suggestedUsers by remember { mutableStateOf<List<com.chroma.studio.model.UserProfile>>(emptyList()) }
+        LaunchedEffect(Unit) {
+            try {
+                suggestedUsers = discoverRepo.getSuggestedCreators(limit = 40)
+                    .filter { it.uid != currentUser.uid && !room.participants.contains(it.uid) }
+            } catch (_: Exception) {}
+        }
+
+        val baseUsers = remember(availableUsers, suggestedUsers, userProfiles, room.participants) {
+            val allCandidates = (availableUsers + suggestedUsers + userProfiles.values.filter { it.uid.isNotBlank() })
+                .filter { it.uid != currentUser.uid && !room.participants.contains(it.uid) }
+            allCandidates.distinctBy { it.uid }
+        }
+
         LaunchedEffect(addMemberSearch) {
             if (addMemberSearch.length >= 2) {
                 isSearching = true
@@ -612,7 +700,7 @@ fun GroupInfoScreen(
             }
         }
 
-        val displayUsers = if (addMemberSearch.length >= 2) searchResults else availableUsers
+        val displayUsers = if (addMemberSearch.length >= 2) searchResults else baseUsers
 
         IosAlertDialog(
             title = "Add to Group",

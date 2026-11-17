@@ -20,13 +20,13 @@ fun FlashPickerScreen(
 ) {
     OscellionGalleryLayout(
         layoutMode = GalleryLayoutMode.FULL_SCREEN,
-        title = "Gallery",
-        badgeText = "Oscellion",
-        maxSelection = 10,
+        title = "Select Media",
+        badgeText = "Flash Editor",
+        maxSelection = 20,
         allowedMediaFilter = GalleryMediaTypeFilter.ALL,
         showCameraTile = true,
         showCaptionInput = false,
-        onVideoSelected = onVideoSelected,
+        onVideoSelected = { uri -> onPhotosSelected(listOf(uri)) },
         onPhotosSelected = onPhotosSelected,
         onClose = onBack
     )

@@ -32,7 +32,7 @@ data class PasswordRules(
 }
 
 fun evaluatePassword(pw: String) = PasswordRules(
-    length = pw.length in 8..24,
+    length = pw.length >= 8,
     upper = pw.any { it.isUpperCase() },
     lower = pw.any { it.isLowerCase() },
     digit = pw.any { it.isDigit() },

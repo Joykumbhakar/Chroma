@@ -377,9 +377,10 @@ fun UserProfileHighlightsSection(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(54.dp)
+                                .size(56.dp)
                                 .clip(CircleShape)
-                                .background(if (isDark) Color(0xFF1E222A) else Color(0xFFEFF2F6)),
+                                .background(if (isDark) Color(0xFF141724) else Color(0xFFEFF2F6))
+                                .studioBevel(cornerRadius = 28.dp, borderWidth = 1.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -404,7 +405,7 @@ fun UserProfileHighlightsSection(
                 }
             }
 
-            // Saved Highlight Bubbles
+            // Saved Highlight Bubbles (Lives Forever)
             items(highlightsList, key = { it.id }) { hl ->
                 val interactionSource = remember { MutableInteractionSource() }
                 val isPressed by interactionSource.collectIsPressedAsState()
@@ -421,21 +422,22 @@ fun UserProfileHighlightsSection(
                             onHighlightClick(hl)
                         }
                 ) {
-                    // Border-less Highlight Circle
+                    // Beveled Professional Gradient Highlight Circle
                     val titleLower = hl.title.lowercase()
                     Box(
                         modifier = Modifier
-                            .size(54.dp)
+                            .size(56.dp)
                             .clip(CircleShape)
                             .background(
                                 when (titleLower) {
-                                    "projects" -> Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF0056C6)))
-                                    "studio" -> Brush.linearGradient(listOf(Color(0xFF0B1930), Color(0xFF040E1E)))
-                                    "artworks" -> Brush.sweepGradient(listOf(Color(0xFFFF9500), Color(0xFFFF2D55), Color(0xFFAF52DE), Color(0xFF0381FE), Color(0xFFFF9500)))
-                                    "travel" -> Brush.linearGradient(listOf(Color(0xFF34C759), Color(0xFF0381FE)))
+                                    "projects" -> Brush.linearGradient(StudioDesignTokens.CobaltGradient)
+                                    "studio" -> Brush.linearGradient(listOf(Color(0xFF0F172A), Color(0xFF1E293B)))
+                                    "artworks" -> Brush.linearGradient(StudioDesignTokens.ElectricVioletGradient)
+                                    "travel" -> Brush.linearGradient(StudioDesignTokens.EmeraldMintGradient)
                                     else -> Brush.linearGradient(gradientColors)
                                 }
-                            ),
+                            )
+                            .studioBevel(cornerRadius = 28.dp, borderWidth = 1.2.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         if (!hl.coverUrl.isNullOrBlank()) {

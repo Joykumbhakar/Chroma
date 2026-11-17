@@ -84,7 +84,7 @@ fun CreateGroupModal(
     availableContacts: List<GroupContact> = emptyList(),
     onDismiss: () -> Unit,
     onDirectMessage: ((GroupContact) -> Unit)? = null,
-    onCreateGroup: (groupName: String, groupAvatar: String, members: List<GroupMember>) -> Unit
+    onCreateGroup: (groupName: String, groupAvatar: String, members: List<GroupMember>, groupDescription: String, onlyAdminsCanPost: Boolean) -> Unit
 ) {
     val colors = LocalChatColors.current
 
@@ -93,6 +93,7 @@ fun CreateGroupModal(
     val selectedContacts = remember { mutableStateListOf<GroupContact>() }
 
     var groupName by remember { mutableStateOf("") }
+    var groupDescription by remember { mutableStateOf("") }
     var selectedAvatar by remember { mutableStateOf(defaultGroupAvatarPresets.first()) }
     var disappearingMessagesEnabled by remember { mutableStateOf(false) }
     var onlyAdminsCanPost by remember { mutableStateOf(false) }
@@ -280,7 +281,7 @@ fun CreateGroupModal(
                                                 avatar = it.avatar
                                             )
                                         }
-                                        onCreateGroup(groupName.trim(), selectedAvatar, groupMembers)
+                                        onCreateGroup(groupName.trim(), selectedAvatar, groupMembers, groupDescription.trim(), onlyAdminsCanPost)
                                     }
                                 }
                                 .padding(vertical = 4.dp)
@@ -327,6 +328,8 @@ fun CreateGroupModal(
                                 currentUser = currentUser,
                                 groupName = groupName,
                                 onGroupNameChanged = { if (it.length <= 35) groupName = it },
+                                groupDescription = groupDescription,
+                                onGroupDescriptionChanged = { if (it.length <= 150) groupDescription = it },
                                 selectedAvatar = selectedAvatar,
                                 onAvatarSelected = { selectedAvatar = it },
                                 selectedContacts = selectedContacts,
@@ -567,6 +570,8 @@ private fun StepGroupDetails(
     currentUser: User,
     groupName: String,
     onGroupNameChanged: (String) -> Unit,
+    groupDescription: String,
+    onGroupDescriptionChanged: (String) -> Unit,
     selectedAvatar: String,
     onAvatarSelected: (String) -> Unit,
     selectedContacts: List<GroupContact>,
@@ -727,6 +732,46 @@ private fun StepGroupDetails(
 
                     Text(
                         text = "${groupName.length}/35",
+                        fontSize = 12.sp,
+                        color = colors.textMuted
+                    )
+                }
+
+                // Inset Group Description TextField
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surfaceSecondary)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BasicTextField(
+                        value = groupDescription,
+                        onValueChange = onGroupDescriptionChanged,
+                        modifier = Modifier.weight(1f),
+                        singleLine = false,
+                        maxLines = 3,
+                        textStyle = TextStyle(
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = colors.textDark
+                        ),
+                        cursorBrush = SolidColor(colors.iosBlue),
+                        decorationBox = { innerTextField ->
+                            if (groupDescription.isEmpty()) {
+                                Text(
+                                    "Group Description (Optional)",
+                                    fontSize = 14.sp,
+                                    color = colors.textMuted
+                                )
+                            }
+                            innerTextField()
+                        }
+                    )
+
+                    Text(
+                        text = "${groupDescription.length}/150",
                         fontSize = 12.sp,
                         color = colors.textMuted
                     )

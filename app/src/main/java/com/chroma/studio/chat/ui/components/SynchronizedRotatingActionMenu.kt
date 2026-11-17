@@ -127,6 +127,20 @@ enum class ActionMenuOption(
             Color(0x57F97316)
         ),
         shadowColor = Color(0x29EA580C)
+    ),
+    FLASH_VIDEO(
+        label = "Flash Video",
+        bgStops = listOf(
+            Color(0xFAFFFFFF),
+            Color(0xFFFFF1F2),
+            Color(0xFFFFE4E6)
+        ),
+        borderStops = listOf(
+            Color(0xFFFFFFFF),
+            Color(0xFFFDA4AF),
+            Color(0xFFF43F5E)
+        ),
+        shadowColor = Color(0x29E11D48)
     )
 }
 
@@ -335,6 +349,7 @@ private fun StaggeredActionNodeItem(
                 ActionMenuOption.FILES -> drawFiles3DGraphic()
                 ActionMenuOption.POLL -> drawPoll3DGraphic()
                 ActionMenuOption.STICKER -> drawSticker3DGraphic()
+                ActionMenuOption.FLASH_VIDEO -> drawFlash3DGraphic()
             }
         }
     }
@@ -876,4 +891,33 @@ private fun DrawScope.drawSticker3DGraphic() {
         close()
     }
     drawPath(foldPath, Color(0xFFFDBA74))
+}
+
+private fun DrawScope.drawFlash3DGraphic() {
+    val s = size.width / 24f
+    drawOval(
+        color = Color(0x38BE123C),
+        topLeft = Offset((12f - 7.5f) * s, (20.5f - 1.2f) * s),
+        size = Size(15.0f * s, 2.4f * s)
+    )
+    drawRoundRect(
+        brush = Brush.linearGradient(
+            colors = listOf(Color(0xFFFF007A), Color(0xFFFF5E00)),
+            start = Offset(4.0f * s, 4.0f * s),
+            end = Offset(20.0f * s, 20.0f * s)
+        ),
+        topLeft = Offset(4.0f * s, 4.0f * s),
+        size = Size(16.0f * s, 16.0f * s),
+        cornerRadius = CornerRadius(4.5f * s, 4.5f * s)
+    )
+    val zapPath = Path().apply {
+        moveTo(13.5f * s, 5.5f * s)
+        lineTo(8.5f * s, 12.5f * s)
+        lineTo(12.0f * s, 12.5f * s)
+        lineTo(10.5f * s, 18.5f * s)
+        lineTo(16.5f * s, 11.5f * s)
+        lineTo(13.0f * s, 11.5f * s)
+        close()
+    }
+    drawPath(zapPath, Color.White)
 }

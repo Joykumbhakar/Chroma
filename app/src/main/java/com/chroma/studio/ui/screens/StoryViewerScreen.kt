@@ -72,7 +72,9 @@ import com.chroma.studio.ui.components.MarkdownText
 import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
 import com.chroma.studio.ui.components.ToastManager
 import com.chroma.studio.ui.theme.ChromaIcons
+import com.chroma.studio.ui.components.studioBevel
 import com.chroma.studio.viewmodel.StoryViewModel
+import com.composables.icons.lucide.ShieldAlert
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -415,6 +417,7 @@ fun StoryViewerScreen(
     onReplySend: ((authorId: String, text: String, storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null,
     initialStoryId: String? = null
 ) {
+    val context = LocalContext.current
     val liveStoryGroups by storyViewModel.storyGroups.collectAsState()
     val liveMyStories by storyViewModel.myStories.collectAsState()
     val effectiveStoryGroups = if (liveStoryGroups.isNotEmpty()) liveStoryGroups else storyGroups
@@ -517,12 +520,15 @@ fun StoryViewerScreen(
     val vmLikedStoryIds by storyViewModel.likedStoryIds.collectAsState()
     val isLiked = currentStory != null && (vmLikedStoryIds.contains(currentStory.id) || currentStory.likedBy.contains(currentUserId))
 
+    val isCurrentStoryUploading = currentStory != null && (currentStory.isUploading || (currentStory.id.startsWith("temp_") && !currentStory.isFailed))
+    val isCurrentStoryFailed = currentStory != null && currentStory.isFailed
+
     var doubleTapHeartVisible by remember { mutableStateOf(false) }
     val doubleTapHeartScale = remember { Animatable(0.2f) }
     val doubleTapHeartAlpha = remember { Animatable(0f) }
 
     val isScrollInProgress = pagerState.isScrollInProgress
-    val effectivePaused = isPaused || isScrollInProgress || showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog || isReplying
+    val effectivePaused = isPaused || isScrollInProgress || showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog || isReplying || isCurrentStoryUploading || isCurrentStoryFailed
 
     val progress = remember(pagerState.currentPage) { Animatable(0f) }
 
@@ -709,6 +715,138 @@ fun StoryViewerScreen(
                 ) {
                     StorySlideContent(story = storyItem.story)
 
+                    // WhatsApp-style Floating In-Story Status Card with Micro-Bevel Edge
+                    val isSlideUploading = storyItem.story.isUploading || (storyItem.story.id.startsWith("temp_") && !storyItem.story.isFailed)
+                    val isSlideFailed = storyItem.story.isFailed
+
+                    if (isSlideUploading) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(horizontal = 24.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color.Black.copy(alpha = 0.78f))
+                                .studioBevel(cornerRadius = 20.dp, borderWidth = 1.dp)
+                                .padding(horizontal = 20.dp, vertical = 14.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    strokeWidth = 2.4.dp,
+                                    color = Color(0xFF0381FE),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Sending story...",
+                                        color = Color.White,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    val percent = (storyItem.story.uploadProgress.coerceIn(0.1f, 1f) * 100).toInt()
+                                    Text(
+                                        text = if (percent > 15) "Uploading image • $percent%" else "Optimizing image...",
+                                        color = Color.White.copy(alpha = 0.75f),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                    } else if (isSlideFailed) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(horizontal = 24.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xFF241416).copy(alpha = 0.88f))
+                                .border(1.dp, Color(0xFFFF453A).copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                                .studioBevel(cornerRadius = 20.dp, borderWidth = 1.dp)
+                                .padding(horizontal = 20.dp, vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.ShieldAlert,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF453A),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "Upload failed",
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "Couldn't send story. Check connection.",
+                                    color = Color.White.copy(alpha = 0.75f),
+                                    fontSize = 11.5.sp
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .height(36.dp)
+                                            .clip(RoundedCornerShape(18.dp))
+                                            .background(Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF0051D5))))
+                                            .studioBevel(cornerRadius = 18.dp, borderWidth = 1.dp)
+                                            .clickable {
+                                                storyViewModel.retryFailedUpload(context)
+                                            }
+                                            .padding(horizontal = 16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Lucide.RotateCw,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Text(
+                                                text = "Retry",
+                                                color = Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .height(36.dp)
+                                            .clip(RoundedCornerShape(18.dp))
+                                            .background(Color.White.copy(alpha = 0.12f))
+                                            .clickable {
+                                                storyViewModel.discardFailedUpload(storyItem.story.id)
+                                            }
+                                            .padding(horizontal = 14.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Discard",
+                                            color = Color.White.copy(alpha = 0.85f),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Floating Bursting Heart on Double-Tap
                     if (doubleTapHeartVisible && pagerState.currentPage == page) {
                         Box(
@@ -790,10 +928,17 @@ fun StoryViewerScreen(
                         .padding(horizontal = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    storiesForCurrentGroup.forEachIndexed { index, _ ->
+                    storiesForCurrentGroup.forEachIndexed { index, storyAtIdx ->
+                        val isItemUploading = storyAtIdx.isUploading || (storyAtIdx.id.startsWith("temp_") && !storyAtIdx.isFailed)
                         val segmentProgress = when {
                             index < currentStoryIndexInGroup -> 1f
-                            index == currentStoryIndexInGroup -> progress.value
+                            index == currentStoryIndexInGroup -> {
+                                if (isItemUploading) {
+                                    maxOf(progress.value, storyAtIdx.uploadProgress.coerceIn(0.15f, 0.95f))
+                                } else {
+                                    progress.value
+                                }
+                            }
                             else -> 0f
                         }
                         Box(
@@ -858,11 +1003,40 @@ fun StoryViewerScreen(
                             }
                             currentStory?.let { story ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = storyFormatTimeAgo(story.timestamp),
-                                        color = topBarTextColor.copy(alpha = 0.75f),
-                                        fontSize = 11.5.sp
-                                    )
+                                    if (story.isUploading || (story.id.startsWith("temp_") && !story.isFailed)) {
+                                        androidx.compose.material3.CircularProgressIndicator(
+                                            strokeWidth = 1.6.dp,
+                                            color = Color(0xFF0381FE),
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = "Sending...",
+                                            color = Color(0xFF0381FE),
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    } else if (story.isFailed) {
+                                        Icon(
+                                            imageVector = Lucide.ShieldAlert,
+                                            contentDescription = null,
+                                            tint = Color(0xFFFF453A),
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = "Not sent",
+                                            color = Color(0xFFFF453A),
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    } else {
+                                        Text(
+                                            text = storyFormatTimeAgo(story.timestamp),
+                                            color = topBarTextColor.copy(alpha = 0.75f),
+                                            fontSize = 11.5.sp
+                                        )
+                                    }
                                     if (story.audienceType == "only_friends") {
                                         Spacer(Modifier.width(6.dp))
                                         Box(
@@ -938,36 +1112,187 @@ fun StoryViewerScreen(
                         .padding(horizontal = 16.dp, vertical = 18.dp)
                 ) {
                     if (isOwner) {
-                        // Admin: Viewers & Likes pill button
+                        var showHighlightSaveDialog by remember { mutableStateOf(false) }
+                        var targetHighlightName by remember { mutableStateOf(currentStory.highlightTitle.ifBlank { "Highlights" }) }
+                        var isCurrentStoryHighlighted by remember(currentStory.id, currentStory.isHighlight) { mutableStateOf(currentStory.isHighlight) }
+
+                        // Admin Action Row: Viewers & Instagram-style Highlight Button
                         Row(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(Color.Black.copy(alpha = 0.6f))
-                                                                .clickable { showViewers = true }
-                                .padding(horizontal = 18.dp, vertical = 10.dp),
+                                .fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Icon(Lucide.Eye, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                Text(
-                                    text = "${maxOf(currentStory.views, currentStory.viewedBy.size)} views",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                            if (isCurrentStoryUploading) {
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .background(Color.Black.copy(alpha = 0.65f))
+                                        .studioBevel(cornerRadius = 24.dp, borderWidth = 1.dp)
+                                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        strokeWidth = 2.dp,
+                                        color = Color(0xFF0381FE),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "Uploading to stories...",
+                                        color = Color.White,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            } else if (isCurrentStoryFailed) {
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .background(Color(0xFF2E1719).copy(alpha = 0.85f))
+                                        .border(1.dp, Color(0xFFFF453A).copy(alpha = 0.4f), RoundedCornerShape(24.dp))
+                                        .studioBevel(cornerRadius = 24.dp, borderWidth = 1.dp)
+                                        .clickable { storyViewModel.retryFailedUpload(context) }
+                                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(Lucide.RotateCw, contentDescription = null, tint = Color(0xFFFF453A), modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Upload failed • Tap to retry",
+                                        color = Color(0xFFFF453A),
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            } else {
+                                // Viewers & Likes pill button
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .background(Color.Black.copy(alpha = 0.65f))
+                                        .clickable { showViewers = true }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceAround
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Icon(Lucide.Eye, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                                        Text(
+                                            text = "${maxOf(currentStory.views, currentStory.viewedBy.size)} views",
+                                            color = Color.White,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                        Icon(ChromaIcons.HeartFilled, contentDescription = null, tint = Color(0xFFFF2D55), modifier = Modifier.size(15.dp))
+                                        Text(
+                                            text = "${maxOf(currentStory.likes, currentStory.likedBy.size)}",
+                                            color = Color.White,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    Icon(Lucide.ChevronUp, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+                                }
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Icon(ChromaIcons.HeartFilled, contentDescription = null, tint = Color(0xFFFF2D55), modifier = Modifier.size(16.dp))
-                                Text(
-                                    text = "${maxOf(currentStory.likes, currentStory.likedBy.size)}",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+
+                            // Instagram Highlight Button (Save to Highlights - Lives Forever)
+                            Box(
+                                modifier = Modifier
+                                    .height(44.dp)
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(
+                                        if (isCurrentStoryHighlighted) Brush.linearGradient(listOf(Color(0xFF059669), Color(0xFF10B981)))
+                                        else SolidColor(Color.Black.copy(alpha = 0.65f))
+                                    )
+                                    .clickable {
+                                        if (isCurrentStoryHighlighted) {
+                                            ToastManager.showToast("Story is already saved in Highlights ✨")
+                                        } else {
+                                            showHighlightSaveDialog = true
+                                        }
+                                    }
+                                    .padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isCurrentStoryHighlighted) Lucide.BookmarkCheck else Lucide.Bookmark,
+                                        contentDescription = "Save to Highlights",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = if (isCurrentStoryHighlighted) "Highlighted" else "Highlight",
+                                        color = Color.White,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
-                            Icon(Lucide.ChevronUp, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+                        }
+
+                        if (showHighlightSaveDialog) {
+                            IosAlertDialog(
+                                title = "Save to Story Highlights",
+                                message = "Add this story to your profile highlights. Highlighted stories live forever on your profile (unlike 24h stories)!",
+                                confirmText = "Save to Profile",
+                                onConfirm = {
+                                    val name = targetHighlightName.trim().ifBlank { "Highlights" }
+                                    storyViewModel?.saveStoryToHighlight(
+                                        storyId = currentStory.id,
+                                        highlightTitle = name,
+                                        coverUrl = currentStory.mediaUrl
+                                    ) { success ->
+                                        if (success) {
+                                            isCurrentStoryHighlighted = true
+                                            ToastManager.showToast("Saved to Highlights! Lives forever ✨")
+                                        } else {
+                                            ToastManager.showToast("Failed to save highlight")
+                                        }
+                                    }
+                                    showHighlightSaveDialog = false
+                                },
+                                dismissText = "Cancel",
+                                onDismiss = { showHighlightSaveDialog = false },
+                                customContent = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = "Highlight Name",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF8E8E93)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(Color(0xFF2C2C2E))
+                                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                                        ) {
+                                            BasicTextField(
+                                                value = targetHighlightName,
+                                                onValueChange = { targetHighlightName = it.take(24) },
+                                                singleLine = true,
+                                                textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                                                cursorBrush = SolidColor(Color(0xFF0381FE)),
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+                                }
+                            )
                         }
                     } else {
                         // Viewer: Quick Message & Like Bar
@@ -1149,15 +1474,20 @@ fun StoryViewerScreen(
 
             // ── Delete Confirmation Dialog (Apple HIG Style) ──────────────────────────
             if (showDeleteConfirm && currentStory != null) {
+                val isUnfinishedStory = isCurrentStoryFailed || isCurrentStoryUploading
                 IosAlertDialog(
-                    title = "Delete Story?",
-                    message = "This will permanently remove this story for all viewers.",
-                    confirmText = "Delete",
+                    title = if (isUnfinishedStory) "Discard Story?" else "Delete Story?",
+                    message = if (isUnfinishedStory) "This will cancel and remove this story upload." else "This will permanently remove this story for all viewers.",
+                    confirmText = if (isUnfinishedStory) "Discard" else "Delete",
                     isDestructive = true,
                     onConfirm = {
-                        storyViewModel.deleteStory(currentStory.id)
+                        if (currentStory.id.startsWith("temp_")) {
+                            storyViewModel.discardFailedUpload(currentStory.id)
+                        } else {
+                            storyViewModel.deleteStory(currentStory.id)
+                        }
                         showDeleteConfirm = false
-                        ToastManager.showToast("Story deleted")
+                        ToastManager.showToast(if (isUnfinishedStory) "Story discarded" else "Story deleted")
                         onClose()
                     },
                     dismissText = "Cancel",

@@ -20,6 +20,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.ui.components.AppleSlider
+import com.chroma.studio.ui.components.focusSliderContainer
+import com.chroma.studio.ui.components.studioBevel
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import java.util.UUID
 
@@ -374,22 +376,36 @@ fun EditorSlider(
     onValueChange: (Float) -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val scrubbingState = com.chroma.studio.ui.components.LocalSliderScrubbingState.current
+    val sliderKey = remember { java.util.UUID.randomUUID().toString() }
     var pos by remember(value) { mutableStateOf(value) }
+    val isThisActive = scrubbingState.isScrubbing && scrubbingState.activeId == sliderKey
 
     Row(
-        modifier              = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusSliderContainer(
+                sliderId = sliderKey,
+                isDark = colors.isDark,
+                cornerRadius = 14.dp,
+                horizontalPadding = 8.dp,
+                verticalPadding = 4.dp
+            ),
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text     = label,
-            color    = colors.textMuted,
-            fontSize = 10.sp,
-            modifier = Modifier.width(68.dp),
-            maxLines = 1
+            color    = if (isThisActive) colors.primary else colors.textMuted,
+            fontSize = 10.5.sp,
+            fontWeight = if (isThisActive) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.width(82.dp),
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
         )
         AppleSlider(
             value          = pos,
+            sliderId       = sliderKey,
             onValueChange  = { pos = it; onValueChange(it) },
             valueRange     = min..max,
             modifier       = Modifier.weight(1f)
@@ -397,7 +413,8 @@ fun EditorSlider(
         Text(
             text      = String.format("%.2f", pos),
             color     = colors.primary,
-            fontSize  = 9.sp,
+            fontSize  = 9.5.sp,
+            fontWeight = FontWeight.SemiBold,
             modifier  = Modifier.width(36.dp),
             textAlign = TextAlign.End
         )

@@ -411,45 +411,13 @@ fun AccountScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DobPickerDialog(initial: Long?, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
-    val maxMillis = remember { latestAllowedBirthMillis() }
-    val maxYear = remember { Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = maxMillis }.get(Calendar.YEAR) }
-    val picker = rememberDatePickerState(
-        initialSelectedDateMillis = initial,
-        yearRange = 1920..maxYear,
-        selectableDates = object : SelectableDates {
-            override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= maxMillis
-            override fun isSelectableYear(year: Int) = year <= maxYear
-        }
-    )
-    val colors = DatePickerDefaults.colors(
-        containerColor = ObColors.Night,
-        titleContentColor = ObColors.TextMuted,
-        headlineContentColor = Color.White,
-        weekdayContentColor = ObColors.TextMuted,
-        subheadContentColor = ObColors.TextMuted,
-        navigationContentColor = Color.White,
-        yearContentColor = Color.White,
-        currentYearContentColor = ObColors.Lime,
-        selectedYearContentColor = ObColors.OnLime,
-        selectedYearContainerColor = ObColors.Lime,
-        dayContentColor = Color.White,
-        disabledDayContentColor = Color(0x55FFFFFF),
-        selectedDayContentColor = ObColors.OnLime,
-        selectedDayContainerColor = ObColors.Lime,
-        todayContentColor = ObColors.Lime,
-        todayDateBorderColor = ObColors.Lime
-    )
-    DatePickerDialog(
+    com.chroma.studio.ui.components.StudioCustomCalendarDialog(
+        initialDateMillis = initial ?: latestAllowedBirthMillis(),
+        maxDateMillis = latestAllowedBirthMillis(),
         onDismissRequest = onDismiss,
-        colors = colors,
-        confirmButton = {
-            TextButton({ picker.selectedDateMillis?.let(onPick) }, enabled = picker.selectedDateMillis != null) {
-                Text("OK", color = ObColors.Lime, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = { TextButton(onDismiss) { Text("Cancel", color = Color.White) } }
-    ) { DatePicker(picker, colors = colors) }
+        onDateConfirmed = onPick,
+        title = "Date of Birth"
+    )
 }

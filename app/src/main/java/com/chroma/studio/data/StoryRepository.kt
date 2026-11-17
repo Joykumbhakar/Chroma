@@ -24,11 +24,17 @@ class StoryRepository {
         customAudienceIds: List<String> = emptyList(),
         textContent: String = "",
         textFormat: String = "",
-        backgroundColor: String = ""
+        backgroundColor: String = "",
+        isHighlight: Boolean = false,
+        highlightTitle: String = "",
+        highlightCoverUrl: String = ""
     ): String {
         val user = auth.currentUser ?: throw Exception("Not authenticated")
         val docRef = storiesCol.document()
         val now = System.currentTimeMillis()
+        // Highlighted stories live forever (Long.MAX_VALUE), regular stories expire after 24 hrs
+        val expiryTime = if (isHighlight) Long.MAX_VALUE else now + 86_400_000L
+
         val story = Story(
             id = docRef.id,
             userId = user.uid,
@@ -39,9 +45,34 @@ class StoryRepository {
             audienceType = audienceType,
             customAudienceIds = customAudienceIds,
             timestamp = now,
-            expiresAt = now + 86_400_000L
+            expiresAt = expiryTime,
+            isHighlight = isHighlight,
+            highlightTitle = highlightTitle,
+            highlightCoverUrl = if (highlightCoverUrl.isNotBlank()) highlightCoverUrl else mediaUrl
         )
         docRef.set(story).await()
+
+        if (isHighlight && highlightTitle.isNotBlank()) {
+            try {
+                val cleanTitle = highlightTitle.trim()
+                val hlDocId = "hl_${cleanTitle.lowercase().replace("\\s+".toRegex(), "_")}"
+                usersCol.document(user.uid).collection("highlights").document(hlDocId).set(
+                    mapOf(
+                        "id" to hlDocId,
+                        "title" to cleanTitle,
+                        "emoji" to "✨",
+                        "coverUrl" to (if (highlightCoverUrl.isNotBlank()) highlightCoverUrl else mediaUrl),
+                        "gradientIndex" to 0,
+                        "storyIds" to FieldValue.arrayUnion(docRef.id),
+                        "createdAt" to now
+                    ),
+                    SetOptions.merge()
+                ).await()
+            } catch (e: Exception) {
+                Log.w("StoryRepository", "Failed to register story to highlights collection", e)
+            }
+        }
+
         return docRef.id
     }
 
@@ -50,11 +81,16 @@ class StoryRepository {
         textFormat: String,
         backgroundColor: String,
         audienceType: String,
-        customAudienceIds: List<String>
+        customAudienceIds: List<String>,
+        isHighlight: Boolean = false,
+        highlightTitle: String = ""
     ): String {
         val user = auth.currentUser ?: throw Exception("Not authenticated")
         val docRef = storiesCol.document()
         val now = System.currentTimeMillis()
+        // Highlighted stories live forever (Long.MAX_VALUE), regular stories expire after 24 hrs
+        val expiryTime = if (isHighlight) Long.MAX_VALUE else now + 86_400_000L
+
         val story = Story(
             id = docRef.id,
             userId = user.uid,
@@ -65,9 +101,33 @@ class StoryRepository {
             audienceType = audienceType,
             customAudienceIds = customAudienceIds,
             timestamp = now,
-            expiresAt = now + 86_400_000L
+            expiresAt = expiryTime,
+            isHighlight = isHighlight,
+            highlightTitle = highlightTitle
         )
         docRef.set(story).await()
+
+        if (isHighlight && highlightTitle.isNotBlank()) {
+            try {
+                val cleanTitle = highlightTitle.trim()
+                val hlDocId = "hl_${cleanTitle.lowercase().replace("\\s+".toRegex(), "_")}"
+                usersCol.document(user.uid).collection("highlights").document(hlDocId).set(
+                    mapOf(
+                        "id" to hlDocId,
+                        "title" to cleanTitle,
+                        "emoji" to "✨",
+                        "coverUrl" to "",
+                        "gradientIndex" to 0,
+                        "storyIds" to FieldValue.arrayUnion(docRef.id),
+                        "createdAt" to now
+                    ),
+                    SetOptions.merge()
+                ).await()
+            } catch (e: Exception) {
+                Log.w("StoryRepository", "Failed to register text story to highlights", e)
+            }
+        }
+
         return docRef.id
     }
 
@@ -303,7 +363,7 @@ class StoryRepository {
 
             val story = storyDoc.toObject(Story::class.java)?.copy(id = storyDoc.id) ?: return null
             val now = System.currentTimeMillis()
-            val isAlive = if (story.expiresAt > 0L) story.expiresAt > now else (now - story.timestamp) < 86_400_000L
+            val isAlive = story.isHighlight || (if (story.expiresAt > 0L) story.expiresAt > now else (now - story.timestamp) < 86_400_000L)
             if (!isAlive) return null
 
             val userDoc = usersCol.document(story.userId).get().await()
@@ -336,6 +396,71 @@ class StoryRepository {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("StoryRepository", "Error fetching story for $storyId", e)
             null
+        }
+    }
+
+    /** Save an existing story to user highlights so it lives forever (never expires). */
+    suspend fun saveStoryToHighlight(
+        storyId: String,
+        highlightTitle: String,
+        emoji: String = "✨",
+        coverUrl: String? = null
+    ): Boolean {
+        val user = auth.currentUser ?: return false
+        val now = System.currentTimeMillis()
+        return try {
+            val storyDoc = storiesCol.document(storyId).get().await()
+            if (!storyDoc.exists()) return false
+
+            val media = storyDoc.getString("mediaUrl") ?: ""
+            val chosenCover = if (!coverUrl.isNullOrBlank()) coverUrl else media
+            val cleanTitle = highlightTitle.trim().ifBlank { "Highlights" }
+
+            // Make the story immortal by setting expiresAt to Long.MAX_VALUE
+            storiesCol.document(storyId).update(
+                mapOf(
+                    "isHighlight" to true,
+                    "highlightTitle" to cleanTitle,
+                    "highlightCoverUrl" to chosenCover,
+                    "expiresAt" to Long.MAX_VALUE
+                )
+            ).await()
+
+            // Save or append to user's highlights subcollection
+            val highlightDocId = "hl_${cleanTitle.lowercase().replace("\\s+".toRegex(), "_")}"
+            usersCol.document(user.uid).collection("highlights").document(highlightDocId).set(
+                mapOf(
+                    "id" to highlightDocId,
+                    "title" to cleanTitle,
+                    "emoji" to emoji,
+                    "coverUrl" to chosenCover,
+                    "storyIds" to FieldValue.arrayUnion(storyId),
+                    "createdAt" to now
+                ),
+                SetOptions.merge()
+            ).await()
+
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error saving story to highlight", e)
+            false
+        }
+    }
+
+    /** Fetch all permanent stories belonging to a user's highlight reel (live forever). */
+    suspend fun fetchHighlightStories(userId: String, highlightTitle: String? = null): List<Story> {
+        return try {
+            var query: Query = storiesCol.whereEqualTo("userId", userId).whereEqualTo("isHighlight", true)
+            if (!highlightTitle.isNullOrBlank()) {
+                query = query.whereEqualTo("highlightTitle", highlightTitle)
+            }
+            val snap = query.get().await()
+            snap.toObjects(Story::class.java).sortedBy { it.timestamp }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error fetching highlight stories", e)
+            emptyList()
         }
     }
 }

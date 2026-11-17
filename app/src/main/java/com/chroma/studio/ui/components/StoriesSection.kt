@@ -143,9 +143,15 @@ fun StoriesSection(
                             }
                     ) {
                         val hasOnlyFriendStory = myStoriesList.any { it.audienceType == "only_friends" }
+                        val optimisticStory = myStoriesList.firstOrNull()
+                        val effectiveAvatar = if (optimisticStory != null && optimisticStory.mediaUrl.isNotBlank() && !optimisticStory.mediaUrl.startsWith("text:") && !optimisticStory.mediaUrl.startsWith("markdown://")) {
+                            optimisticStory.mediaUrl
+                        } else {
+                            myStoryAvatarUrl
+                        }
                         AppleStatusAvatar(
                             name = "You",
-                            avatarUrl = myStoryAvatarUrl,
+                            avatarUrl = effectiveAvatar,
                             size = 68.dp,
                             avatarSize = 56.dp,
                             hasStatus = hasMyStory,
@@ -168,24 +174,37 @@ fun StoriesSection(
                         )
 
                         Spacer(modifier = Modifier.height(5.dp))
-                        Text(
-                            text = when {
-                                isUploading -> "Uploading..."
-                                isUploadFailed -> "Failed • Retry"
-                                else -> "Your story"
-                            },
-                            color = when {
-                                isUploading -> Color(0xFF0381FE)
-                                isUploadFailed -> Color(0xFFFF3B30)
-                                hasMyStory -> colors.textMain
-                                else -> colors.textMain.copy(alpha = 0.82f)
-                            },
-                            fontSize = 11.5.sp,
-                            fontWeight = if (isUploading || isUploadFailed || hasMyStory) FontWeight.SemiBold else FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            if (isUploading) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    strokeWidth = 1.6.dp,
+                                    color = Color(0xFF0381FE),
+                                    modifier = Modifier.size(9.dp)
+                                )
+                                Spacer(Modifier.width(3.dp))
+                            }
+                            Text(
+                                text = when {
+                                    isUploading -> "Sending..."
+                                    isUploadFailed -> "Failed • Retry"
+                                    else -> "Your story"
+                                },
+                                color = when {
+                                    isUploading -> Color(0xFF0381FE)
+                                    isUploadFailed -> Color(0xFFFF3B30)
+                                    hasMyStory -> colors.textMain
+                                    else -> colors.textMain.copy(alpha = 0.82f)
+                                },
+                                fontSize = 11.5.sp,
+                                fontWeight = if (isUploading || isUploadFailed || hasMyStory) FontWeight.SemiBold else FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }

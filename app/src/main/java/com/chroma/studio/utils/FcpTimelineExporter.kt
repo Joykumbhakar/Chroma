@@ -142,6 +142,13 @@ object FcpTimelineExporter {
 
     }
 
+    /**
+     * Hermite smooth easing curve 3*(t/d)^2 - 2*(t/d)^3 for transition interpolation (Hermite easing / APPLE_SMOOTH parity).
+     */
+    private fun ffmpegHermiteEase(tExpr: String, duration: Float): String {
+        return "3*($tExpr/$duration)^2 - 2*($tExpr/$duration)^3"
+    }
+
 
 
     /**
@@ -1470,6 +1477,16 @@ object FcpTimelineExporter {
 
                 }
 
+                // Vignette & Detail Sharpening
+                if (clip.vignette > 0.01f) {
+                    val angle = String.format(Locale.US, "%.3f", (clip.vignette / 100f) * (Math.PI.toFloat() / 3f))
+                    vFilter.append(",vignette=angle=$angle")
+                }
+                if (clip.sharpen > 0.01f) {
+                    val lAmount = String.format(Locale.US, "%.2f", (clip.sharpen / 100f) * 1.5f)
+                    vFilter.append(",unsharp=5:5:$lAmount:5:5:0.0")
+                }
+
 
 
                 // 3. Cinematic LUT Presets
@@ -1868,6 +1885,7 @@ object FcpTimelineExporter {
 
                         FcpTransitionType.CROSS_DISSOLVE, FcpTransitionType.CROSSFADE -> {
 
+                            // Cross-dissolve: true alpha dissolve xfade=transition=fade / blend=all_mode fallback
                             vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=black,eq=contrast=0.96:brightness=0.03:enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart))
 
                         }
@@ -2340,7 +2358,9 @@ object FcpTimelineExporter {
 
                     filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,%s${loopFilter}atrim=start=0:end=%.3f,asetpts=PTS-STARTPTS,volume=%.3f%s[a_custom];", trimFilter, totalTimelineDurationSec, vol, fadeFilters))
 
-                    filterGraph.append("$finalAudioStream[a_custom]amix=inputs=2:duration=first:dropout_transition=2[a_mixed];")
+                    val mixArgs = if (customAudio.autoDucking) "amix=inputs=2:weights=1.0 0.35:duration=first:dropout_transition=2"
+                    else "amix=inputs=2:duration=first:dropout_transition=2"
+                    filterGraph.append("$finalAudioStream[a_custom]$mixArgs[a_mixed];")
 
                     finalAudioStream = "[a_mixed]"
 
@@ -2354,7 +2374,13 @@ object FcpTimelineExporter {
 
             if (textOverlayInputIndex != null) {
 
-                filterGraph.append("$finalVideoStream[$textOverlayInputIndex:v]overlay=0:0:format=yuv420:repeatlast=1[v_titled];")
+                val timedLayer = textLayers.firstOrNull { it.timelineStartSec > 0f || it.timelineEndSec > 0f }
+                val enableFilter = if (timedLayer != null) {
+                    val st = String.format(Locale.US, "%.2f", timedLayer.timelineStartSec)
+                    val en = if (timedLayer.timelineEndSec > timedLayer.timelineStartSec) String.format(Locale.US, "%.2f", timedLayer.timelineEndSec) else "9999"
+                    ":enable='between(t,$st,$en)'"
+                } else ""
+                filterGraph.append("$finalVideoStream[$textOverlayInputIndex:v]overlay=0:0$enableFilter:format=yuv420:repeatlast=1[v_titled];")
 
                 finalVideoStream = "[v_titled]"
 

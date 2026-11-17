@@ -59,6 +59,9 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.chroma.studio.ai.AIGenerator
 import com.chroma.studio.ui.components.AppleSlider
+import com.chroma.studio.ui.components.studioBevel
+import com.chroma.studio.ui.components.editorChromeFadeOnScrub
+import com.chroma.studio.ui.components.focusSliderContainer
 import com.chroma.studio.ui.components.AppleSwitch
 import com.chroma.studio.ui.components.ChromaScreenHeader
 import com.chroma.studio.ui.components.GlassButton
@@ -743,6 +746,7 @@ fun FlashPhotoEditorScreen(
                 .navigationBarsPadding()
         ) {
             // ── 1. STUDIO HEADER (Simple & Clean) ───────────────────────────
+            Box(modifier = Modifier.fillMaxWidth().editorChromeFadeOnScrub()) {
             ChromaScreenHeader(
                 title = title,
                 badgeText = if (isSlideshow) "${previewIndex + 1}/${photoUris.size}" else null,
@@ -843,12 +847,14 @@ fun FlashPhotoEditorScreen(
                     }
                 }
             )
+            }
 
             // ── 2. MULTI-PHOTO FILMSTRIP (If Multiple Images) ────────────────
             if (isSlideshow) {
                 LazyRow(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .editorChromeFadeOnScrub()
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -1150,6 +1156,27 @@ fun FlashPhotoEditorScreen(
             }
 
             // ── 4. CHROMA BOTTOM DOCK (Unified Tool Console & Category Bar) ─────────
+            val scrubbingState = com.chroma.studio.ui.components.LocalSliderScrubbingState.current
+            val dockBg by animateColorAsState(
+                targetValue = if (scrubbingState.isScrubbing) Color.Transparent else colors.glassBg,
+                animationSpec = tween(180),
+                label = "dockBg"
+            )
+            val dockBorder by animateColorAsState(
+                targetValue = if (scrubbingState.isScrubbing) Color.Transparent else colors.glassBorder,
+                animationSpec = tween(180),
+                label = "dockBorder"
+            )
+            val dockElevation by animateDpAsState(
+                targetValue = if (scrubbingState.isScrubbing) 0.dp else 6.dp,
+                animationSpec = tween(180),
+                label = "dockElevation"
+            )
+            val dockChromeAlpha by animateFloatAsState(
+                targetValue = if (scrubbingState.isScrubbing) 0f else 1f,
+                animationSpec = tween(180),
+                label = "dockChromeAlpha"
+            )
             val dockShadowColor = if (colors.isDark) Color.Black.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.05f)
             Box(
                 modifier = Modifier
@@ -1158,14 +1185,14 @@ fun FlashPhotoEditorScreen(
                     .imePadding()
                     .navigationBarsPadding()
                     .shadow(
-                        elevation = 6.dp,
+                        elevation = dockElevation,
                         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                         ambientColor = dockShadowColor,
                         spotColor = dockShadowColor
                     )
                     .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-                    .background(colors.glassBg)
-                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                    .background(dockBg)
+                    .border(0.5.dp, dockBorder, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
             ) {
                 Column(
                     modifier = Modifier.fillMaxSize()
@@ -1258,7 +1285,7 @@ fun FlashPhotoEditorScreen(
 
                     // Hairline Divider
                     HorizontalDivider(
-                        color = colors.glassBorder.copy(alpha = 0.5f),
+                        color = if (scrubbingState.isScrubbing) Color.Transparent else colors.glassBorder.copy(alpha = 0.5f),
                         thickness = 0.5.dp
                     )
 
@@ -1267,6 +1294,7 @@ fun FlashPhotoEditorScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(54.dp)
+                            .graphicsLayer { alpha = dockChromeAlpha }
                             .padding(horizontal = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
@@ -1551,9 +1579,17 @@ private fun StudioLooksToolPanel(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Slider or Filter Name row
+        // Slider or Filter Name row (zero-layout-shift Live Peek pill)
         Row(
-            modifier = Modifier.fillMaxWidth().height(28.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusSliderContainer(
+                    sliderId = "FilterIntensity",
+                    isDark = colors.isDark,
+                    cornerRadius = 14.dp,
+                    horizontalPadding = 10.dp,
+                    verticalPadding = 3.dp
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1571,6 +1607,7 @@ private fun StudioLooksToolPanel(
                 ) {
                     AppleSlider(
                         value = intensity,
+                        sliderId = "FilterIntensity",
                         onValueChange = onIntensityChange,
                         valueRange = 0f..1f,
                         modifier = Modifier.weight(1f)
@@ -1589,7 +1626,7 @@ private fun StudioLooksToolPanel(
 
         // Filter cards carousel
         LazyRow(
-            modifier = Modifier.fillMaxWidth().height(72.dp),
+            modifier = Modifier.fillMaxWidth().height(72.dp).editorChromeFadeOnScrub(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1734,75 +1771,91 @@ private fun StudioAdjustToolPanel(
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // 1. Header Row: Title + Readout + Reset Button
-        Row(
-            modifier = Modifier.fillMaxWidth().height(26.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // 1 + 2. Unified Header & Active Precision Slider (zero-layout-shift Live Peek pill)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusSliderContainer(
+                    sliderId = activeNode.name,
+                    isDark = colors.isDark,
+                    cornerRadius = 14.dp,
+                    horizontalPadding = 10.dp,
+                    verticalPadding = 4.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier.fillMaxWidth().height(24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = activeNode.title,
-                    color = colors.textMain,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                if (isNodeModified) {
-                    Box(
-                        modifier = Modifier
-                            .size(5.dp)
-                            .clip(CircleShape)
-                            .background(colors.primary)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = activeNode.title,
+                        color = colors.textMain,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = formatVal(currentVal),
-                    color = if (isNodeModified) colors.primary else colors.textMuted,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                if (isNodeModified) {
-                    IconButton(
-                        onClick = {
-                            onResetNode()
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        },
-                        modifier = Modifier.size(24.dp).minimumInteractiveComponentSize()
-                    ) {
-                        Icon(
-                            imageVector = Lucide.RotateCcw,
-                            contentDescription = "Reset ${activeNode.title}",
-                            tint = colors.textMuted,
-                            modifier = Modifier.size(13.dp)
+                    if (isNodeModified) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(colors.primary)
                         )
                     }
                 }
-            }
-        }
 
-        // 2. Active Precision Slider
-        AppleSlider(
-            value = currentVal,
-            onValueChange = onValueChange,
-            valueRange = activeNode.range,
-            modifier = Modifier.fillMaxWidth().height(28.dp)
-        )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = formatVal(currentVal),
+                        color = if (isNodeModified) colors.primary else colors.textMuted,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (isNodeModified) {
+                        IconButton(
+                            onClick = {
+                                onResetNode()
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            modifier = Modifier
+                                .editorChromeFadeOnScrub()
+                                .size(24.dp)
+                                .minimumInteractiveComponentSize()
+                        ) {
+                            Icon(
+                                imageVector = Lucide.RotateCcw,
+                                contentDescription = "Reset ${activeNode.title}",
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            AppleSlider(
+                value = currentVal,
+                sliderId = activeNode.name,
+                onValueChange = onValueChange,
+                valueRange = activeNode.range,
+                modifier = Modifier.fillMaxWidth().height(28.dp)
+            )
+        }
 
         // 3. Node Carousel
         LazyRow(
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier.fillMaxWidth().height(52.dp).editorChromeFadeOnScrub(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

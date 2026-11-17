@@ -48,6 +48,7 @@ fun ChatInputBar(
     onFileClick: () -> Unit,
     onPollClick: () -> Unit,
     onStickerClick: () -> Unit = {},
+    onFlashVideoClick: () -> Unit = {},
     onVoiceClick: () -> Unit,
     onSendClick: () -> Unit,
     onDictateClick: () -> Unit = {},
@@ -102,6 +103,7 @@ fun ChatInputBar(
                             ActionMenuOption.FILES -> onFileClick()
                             ActionMenuOption.POLL -> onPollClick()
                             ActionMenuOption.STICKER -> onStickerClick()
+                            ActionMenuOption.FLASH_VIDEO -> onFlashVideoClick()
                         }
                     }
                 )

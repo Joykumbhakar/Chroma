@@ -43,6 +43,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -1173,10 +1174,32 @@ fun TransitionTimeRangeSlider(
     val isInteracting = isPressed || isDragged
 
     val haptic = LocalHapticFeedback.current
+    val scrubbingState = LocalSliderScrubbingState.current
+    val sliderKey = remember { "TransitionDuration_" + java.util.UUID.randomUUID().toString() }
 
     LaunchedEffect(isInteracting) {
         if (isInteracting) {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            val wasAlreadyActive = scrubbingState.isScrubbing && scrubbingState.activeId == sliderKey
+            scrubbingState.activeId = sliderKey
+            scrubbingState.isScrubbing = true
+            if (!wasAlreadyActive) {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+        } else {
+            kotlinx.coroutines.delay(45L)
+            if (scrubbingState.activeId == sliderKey) {
+                scrubbingState.isScrubbing = false
+                scrubbingState.activeId = null
+            }
+        }
+    }
+
+    DisposableEffect(sliderKey) {
+        onDispose {
+            if (scrubbingState.activeId == sliderKey) {
+                scrubbingState.isScrubbing = false
+                scrubbingState.activeId = null
+            }
         }
     }
 
@@ -1194,7 +1217,15 @@ fun TransitionTimeRangeSlider(
     val currentSeconds = durationMs / 1000f
 
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .focusSliderContainer(
+                sliderId = sliderKey,
+                isDark = isDark,
+                cornerRadius = 14.dp,
+                horizontalPadding = 8.dp,
+                verticalPadding = 5.dp
+            ),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
@@ -1339,7 +1370,9 @@ fun AppleVideoTransitionStudio(
         ) {
             // Live Preview Header (Name and Percentage in clean typography)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .editorChromeFadeOnScrub(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1400,7 +1433,9 @@ fun AppleVideoTransitionStudio(
 
         // 3. EASING CURVE SELECTOR (Capsule/Pill free, Clean Rectangular Tabs)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1446,6 +1481,7 @@ fun AppleVideoTransitionStudio(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .editorChromeFadeOnScrub()
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1497,6 +1533,7 @@ fun AppleVideoTransitionStudio(
             columns = GridCells.Fixed(3),
             modifier = Modifier
                 .fillMaxWidth()
+                .editorChromeFadeOnScrub()
                 .height(260.dp),
             contentPadding = PaddingValues(vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

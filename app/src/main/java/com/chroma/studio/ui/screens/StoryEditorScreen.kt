@@ -58,6 +58,8 @@ import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.ui.theme.StoryFonts
 import com.chroma.studio.ui.theme.StoryFontItem
 import com.chroma.studio.ui.theme.ChromaIcons
+import com.chroma.studio.ui.components.studioBevel
+import com.chroma.studio.ui.components.StudioDesignTokens
 import com.chroma.studio.viewmodel.StoryViewModel
 import com.composables.icons.lucide.*
 import com.google.firebase.auth.FirebaseAuth
@@ -231,6 +233,8 @@ fun StoryEditorScreen(
     var selectedMood by remember { mutableStateOf("") }
     var audienceType by remember { mutableStateOf("public") } // "public", "followers", "only_friends"
     var showOnlyFriendsSheet by remember { mutableStateOf(false) }
+    var saveAsProfileHighlight by remember { mutableStateOf(false) }
+    var highlightFolderTitle by remember { mutableStateOf("Highlights") }
 
     // Formatting State
     var isBold by remember { mutableStateOf(false) }
@@ -386,7 +390,9 @@ fun StoryEditorScreen(
                     customAudienceIds = targetAudienceIds,
                     textContent = fullContent,
                     textFormat = jsonFormat,
-                    backgroundColor = formatState.backgroundColorHex
+                    backgroundColor = formatState.backgroundColorHex,
+                    isHighlight = saveAsProfileHighlight,
+                    highlightTitle = highlightFolderTitle
                 )
             } else {
                 storyViewModel.publishTextStory(
@@ -394,12 +400,18 @@ fun StoryEditorScreen(
                     textFormat = jsonFormat,
                     backgroundColor = formatState.backgroundColorHex,
                     audienceType = audienceType,
-                    customAudienceIds = targetAudienceIds
+                    customAudienceIds = targetAudienceIds,
+                    isHighlight = saveAsProfileHighlight,
+                    highlightTitle = highlightFolderTitle
                 )
             }
 
             isPublishing = false
-            ToastManager.showToast("Story published! ✨")
+            if (saveAsProfileHighlight) {
+                ToastManager.showToast("Published & saved to Highlights! Lives forever ✨")
+            } else {
+                ToastManager.showToast("Story published! ✨")
+            }
             onStoryPosted()
         }
     }
@@ -509,7 +521,7 @@ fun StoryEditorScreen(
                 .navigationBarsPadding()
                 .imePadding()
         ) {
-            // Category & Mood Selector Bar (Compact, clean outline chips, no secondary cards)
+            // Category & Mood Selector Bar with Highlight Toggle
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -518,6 +530,43 @@ fun StoryEditorScreen(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // ── Highlight Toggle Chip (Lives Forever on Profile) ──
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (saveAsProfileHighlight) Brush.linearGradient(StudioDesignTokens.EmeraldMintGradient)
+                            else SolidColor(themeColors.primary.copy(alpha = 0.08f))
+                        )
+                        .studioBevel(cornerRadius = 8.dp, borderWidth = 0.6.dp)
+                        .clickable {
+                            saveAsProfileHighlight = !saveAsProfileHighlight
+                        }
+                        .padding(horizontal = 9.dp, vertical = 4.5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = if (saveAsProfileHighlight) Lucide.BookmarkCheck else Lucide.Bookmark,
+                        contentDescription = "Save to Highlights",
+                        tint = if (saveAsProfileHighlight) Color.White else Color(0xFF10B981),
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Text(
+                        text = if (saveAsProfileHighlight) "Highlight: Forever ✨" else "+ Highlight",
+                        fontSize = 11.5.sp,
+                        fontWeight = if (saveAsProfileHighlight) FontWeight.Bold else FontWeight.Medium,
+                        color = if (saveAsProfileHighlight) Color.White else Color(0xFF10B981)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(16.dp)
+                        .background(themeColors.glassBorder)
+                )
+
                 // Topic Chips with clean outline style
                 StoryCategories.forEach { cat ->
                     val isSelected = selectedCategory == cat.name

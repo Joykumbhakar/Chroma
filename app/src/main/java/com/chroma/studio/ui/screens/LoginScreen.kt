@@ -1516,53 +1516,16 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                     }
 
                                     if (showDobPicker) {
-                                        val dpState = rememberDatePickerState(
-                                            initialSelectedDateMillis = selectedDobMillis ?: maxDobMillis,
-                                            selectableDates = object : SelectableDates {
-                                                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= maxDobMillis
-                                                override fun isSelectableYear(year: Int): Boolean {
-                                                    val minYear = Calendar.getInstance().apply { add(Calendar.YEAR, -13) }.get(Calendar.YEAR)
-                                                    return year <= minYear
-                                                }
-                                            }
-                                        )
-                                        DatePickerDialog(
+                                        com.chroma.studio.ui.components.StudioCustomCalendarDialog(
+                                            initialDateMillis = selectedDobMillis ?: maxDobMillis,
+                                            maxDateMillis = maxDobMillis,
                                             onDismissRequest = { showDobPicker = false },
-                                            confirmButton = {
-                                                TextButton(
-                                                    onClick = {
-                                                        selectedDobMillis = dpState.selectedDateMillis
-                                                        showDobPicker = false
-                                                    },
-                                                    enabled = dpState.selectedDateMillis != null
-                                                ) {
-                                                    Text(
-                                                        text = "Done",
-                                                        color = Color(0xFF0381FE),
-                                                        fontWeight = FontWeight.Bold,
-                                                        fontSize = 16.sp,
-                                                        fontFamily = InterFontFamily
-                                                    )
-                                                }
+                                            onDateConfirmed = {
+                                                selectedDobMillis = it
+                                                showDobPicker = false
                                             },
-                                            dismissButton = {
-                                                TextButton(onClick = { showDobPicker = false }) {
-                                                    Text("Cancel", color = textMuted, fontSize = 16.sp, fontFamily = InterFontFamily)
-                                                }
-                                            }
-                                        ) {
-                                            DatePicker(
-                                                state = dpState,
-                                                title = {
-                                                    Text(
-                                                        text = "Select Date of Birth",
-                                                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        fontFamily = InterFontFamily
-                                                    )
-                                                }
-                                            )
-                                        }
+                                            title = "Date of Birth"
+                                        )
                                     }
                                 }
 

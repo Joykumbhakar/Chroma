@@ -18,6 +18,7 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import com.chroma.studio.ui.components.BeveledCheckMark
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,7 +75,7 @@ fun SetPasswordScreen(state: OnboardingState, onBack: () -> Unit, onNext: () -> 
                 // ── Box 1: create with Uiverse floating label ───────────────
                 ObTextField(
                     value = state.password,
-                    onValueChange = { state.password = it.take(24) },
+                    onValueChange = { state.password = it.take(64) },
                     placeholder = "Create password",
                     leading = Icons.Rounded.Lock,
                     visualTransformation = if (showPw) VisualTransformation.None else PasswordVisualTransformation(),
@@ -87,13 +88,13 @@ fun SetPasswordScreen(state: OnboardingState, onBack: () -> Unit, onNext: () -> 
                 )
                 StrengthMeter(rules.metCount, state.password.isNotEmpty())
                 Spacer(Modifier.height(2.dp))
-                // Clean rules list without secondary background card
+                // Clean rules list with checkmark feedback
                 Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RuleRow(rules.length, "8 to 24 characters")
-                    RuleRow(rules.upper, "One uppercase letter (A–Z)")
-                    RuleRow(rules.lower, "One lowercase letter (a–z)")
-                    RuleRow(rules.digit, "One number (0–9)")
-                    RuleRow(rules.special, "One symbol (#, !, @…)")
+                    RuleRow(rules.length, "Minimum 8 characters")
+                    RuleRow(rules.upper, "Capital letters (A–Z)")
+                    RuleRow(rules.lower, "Small letters (a–z)")
+                    RuleRow(rules.digit, "Numbers (0–9)")
+                    RuleRow(rules.special, "Symbols / special characters (!@#$%^&*...)")
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -101,7 +102,7 @@ fun SetPasswordScreen(state: OnboardingState, onBack: () -> Unit, onNext: () -> 
                 // ── Box 2: confirm with Uiverse floating label ──────────────
                 ObTextField(
                     value = state.confirm,
-                    onValueChange = { state.confirm = it.take(24) },
+                    onValueChange = { state.confirm = it.take(64) },
                     placeholder = "Confirm password",
                     leading = if (matches) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
                     isError = mismatch,
@@ -156,7 +157,7 @@ private fun EyeToggle(visible: Boolean, onToggle: () -> Unit) {
 private fun RuleRow(met: Boolean, text: String) {
     val color by animateColorAsState(if (met) Color.White else ObColors.TextFaint, label = "rule")
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        ObCheck(met, size = 18.dp)
+        BeveledCheckMark(met = met, size = 18.dp)
         Text(text, color = color, fontSize = 13.sp, fontWeight = if (met) FontWeight.SemiBold else FontWeight.Medium)
     }
 }
@@ -170,9 +171,9 @@ private fun StrengthMeter(met: Int, started: Boolean) {
         met == 4 -> "Good" to ObColors.Cyan
         else -> "Strong" to ObColors.Lime
     }
-    val filled = if (!started) 0 else when { met <= 2 -> 1; met == 3 -> 2; met == 4 -> 3; else -> 4 }
+    val filled = if (!started) 0 else met
     Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        repeat(4) { i ->
+        repeat(5) { i ->
             val c by animateColorAsState(if (i < filled) color else Color(0x338CAFFF), label = "seg")
             Box(Modifier.weight(1f).height(4.dp).clip(CircleShape).background(c))
         }

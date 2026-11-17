@@ -149,7 +149,8 @@ fun ActiveChatMessageStream(
     onViewPollVotes: (PollData) -> Unit,
     onNavigateToProfile: ((String) -> Unit)?,
     onExpandVisibleCount: (Int) -> Unit,
-    onStoryClick: ((storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null
+    onStoryClick: ((storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null,
+    onFlashVideoClick: ((String) -> Unit)? = null
 ) {
     val colors = LocalChatColors.current
     var quoteHighlightedMessageId by remember(activeChat.id) { mutableStateOf<String?>(null) }
@@ -434,7 +435,8 @@ fun ActiveChatMessageStream(
                                 chatViewModel.retryMessage(msg.id)
                             }
                         },
-                        onStoryClick = onStoryClick
+                        onStoryClick = onStoryClick,
+                        onFlashVideoClick = onFlashVideoClick
                     )
                 }
 

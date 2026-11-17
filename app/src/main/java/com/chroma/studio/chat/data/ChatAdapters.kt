@@ -205,6 +205,7 @@ object ChatAdapters {
 
         val mappedMediaType = when {
             isPoll -> "poll"
+            msg.messageType.equals("flash_video", ignoreCase = true) || msg.flashVideoId != null -> "flash_video"
             msg.messageType.equals("story_reply", ignoreCase = true) || msg.storyThumbnailUrl != null || msg.storyId != null -> "story_reply"
             msg.messageType.equals("audio", ignoreCase = true) || msg.messageType.equals("voice", ignoreCase = true) -> "voice"
             msg.messageType.equals("image", ignoreCase = true) -> "image"
@@ -221,6 +222,7 @@ object ChatAdapters {
                 val parentProfile = userProfiles[parent.senderId]
                 val parentAuthor = if (parentIsMe) "You" else (parentProfile?.displayName?.takeIf { it.isNotBlank() } ?: parentProfile?.username?.takeIf { it.isNotBlank() } ?: "User")
                 val parentText = when {
+                    parent.messageType.equals("flash_video", ignoreCase = true) || parent.flashVideoId != null -> "⚡ Flash video"
                     parent.messageType.equals("audio", ignoreCase = true) || parent.messageType.equals("voice", ignoreCase = true) -> "🎤 Voice message"
                     parent.messageType.equals("image", ignoreCase = true) -> "📷 Photo"
                     parent.messageType.equals("video", ignoreCase = true) -> "🎥 Video"
@@ -247,11 +249,11 @@ object ChatAdapters {
                 isPoll -> null
                 mappedMediaType == "voice" -> null
                 mappedMediaType in listOf("image", "video", "file") && (msg.text == "🔒 Message encrypted" || msg.text.isBlank()) -> null
-                else -> msg.text.takeIf { it.isNotBlank() }
+                else -> msg.text.takeIf { it.isNotBlank() } ?: msg.flashVideoCaption
             },
             mediaType = mappedMediaType,
-            mediaUrl = msg.imageUrl ?: msg.mediaUrl,
-            mediaUrls = listOfNotNull(msg.imageUrl ?: msg.mediaUrl),
+            mediaUrl = msg.imageUrl ?: msg.mediaUrl ?: msg.flashVideoUrl,
+            mediaUrls = listOfNotNull(msg.imageUrl ?: msg.mediaUrl ?: msg.flashVideoUrl),
             localUri = if (mappedMediaType == "voice") (msg.imageUrl ?: msg.mediaUrl) else null,
             fileName = if (mappedMediaType == "file") "Document" else null,
             fileSize = null,
@@ -273,7 +275,14 @@ object ChatAdapters {
             isEdited = msg.isEdited,
             isForwarded = msg.isForwarded,
             storyId = msg.storyId,
-            storyThumbnailUrl = msg.storyThumbnailUrl
+            storyThumbnailUrl = msg.storyThumbnailUrl,
+            flashVideoId = msg.flashVideoId,
+            flashVideoThumbnailUrl = msg.flashVideoThumbnailUrl,
+            flashVideoUrl = msg.flashVideoUrl,
+            flashVideoCaption = msg.flashVideoCaption,
+            flashVideoAuthorUsername = msg.flashVideoAuthorUsername,
+            flashVideoAuthorAvatarUrl = msg.flashVideoAuthorAvatarUrl,
+            flashVideoDurationMs = msg.flashVideoDurationMs
         )
     }
 
@@ -357,6 +366,7 @@ object ChatAdapters {
             room.participants.map { uid ->
                 val memberProf = userProfiles[uid]
                 GroupMember(
+                    id = uid,
                     name = if (uid == currentUid) "You" else (memberProf?.displayName ?: memberProf?.username ?: "Member"),
                     role = if (room.admins.contains(uid)) "Admin" else "Member",
                     avatar = memberProf?.avatarUrl?.takeIf { it.isNotBlank() } ?: drawableUri(com.chroma.studio.R.drawable.ic_avatar_corporate_navy)
@@ -421,7 +431,9 @@ object ChatAdapters {
             members = membersList,
             messages = resolvedMessages,
             otherUserId = otherUid,
-            participantUids = room.participants
+            participantUids = room.participants,
+            admins = room.admins,
+            onlyAdminsCanPost = room.onlyAdminsCanPost
         )
     }
 

@@ -59,6 +59,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import com.chroma.studio.model.FlashComment
+import com.chroma.studio.ui.components.ShareFlashToChatSheet
 import com.chroma.studio.viewmodel.CommentSortOrder
 
 import com.google.firebase.auth.FirebaseAuth
@@ -80,10 +81,12 @@ fun FlashFeedScreen(
     onRequireLogin: () -> Unit,
     emptyContent: (@Composable () -> Unit)? = null,
     initialVideoId: String? = null,
-    onRemixVideo: ((FlashVideo) -> Unit)? = null
+    onRemixVideo: ((FlashVideo) -> Unit)? = null,
+    chatViewModel: com.chroma.studio.viewmodel.ChatViewModel? = null
 ) {
     val colors = LocalOscellionColors.current
     val context = LocalContext.current
+    val effectiveChatVm = chatViewModel ?: androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.ChatViewModel>()
 
     val flashFeed by flashVm.flashFeed.collectAsState()
     val isLoading by flashVm.isLoading.collectAsState()
@@ -92,6 +95,7 @@ fun FlashFeedScreen(
     val drafts by flashVm.drafts.collectAsState()
 
     var selectedTab by remember { mutableStateOf("Reels") }
+    var shareVideoTarget by remember { mutableStateOf<FlashVideo?>(null) }
 
     val initialPage = remember(initialVideoId, flashFeed) {
         if (!initialVideoId.isNullOrBlank()) {
@@ -108,6 +112,12 @@ fun FlashFeedScreen(
 
     BackHandler {
         onNavigateToOldHome()
+    }
+
+    LaunchedEffect(initialVideoId) {
+        if (!initialVideoId.isNullOrBlank()) {
+            flashVm.ensureFlashInFeed(initialVideoId)
+        }
     }
 
     LaunchedEffect(initialVideoId, flashFeed) {
@@ -238,12 +248,7 @@ fun FlashFeedScreen(
                             }
                         },
                         onShare = {
-                            flashVm.shareFlash(video.id)
-                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, "Check out this Flash on Oscellion: https://oscellion.vercel.app/flash/${video.id}")
-                            }
-                            context.startActivity(Intent.createChooser(sendIntent, "Share via"))
+                            shareVideoTarget = video
                         },
                         onAuthorClick = { onNavigateToProfile(video.creatorId) },
                         flashVm = flashVm,
@@ -392,6 +397,26 @@ fun FlashFeedScreen(
             },
             dismissText = "Cancel",
             onDismiss = { draftToDelete = null }
+        )
+    }
+
+    // Instagram-style Share to Chat bottom sheet
+    shareVideoTarget?.let { videoToShare ->
+        ShareFlashToChatSheet(
+            flashVideo = videoToShare,
+            chatViewModel = effectiveChatVm,
+            onDismissRequest = { shareVideoTarget = null },
+            onExternalShare = {
+                flashVm.shareFlash(videoToShare.id)
+                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, "Check out this Flash on Oscellion: https://oscellion.vercel.app/flash/${videoToShare.id}")
+                }
+                context.startActivity(Intent.createChooser(sendIntent, "Share via"))
+            },
+            onShareSuccess = {
+                flashVm.shareFlash(videoToShare.id)
+            }
         )
     }
 }

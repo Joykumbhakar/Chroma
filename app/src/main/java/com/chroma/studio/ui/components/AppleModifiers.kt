@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.ShieldAlert
 import com.composables.icons.lucide.Users
 import kotlin.math.abs
 
@@ -532,13 +533,21 @@ fun AppleStatusAvatar(
                         )
                     }
                 } else if (isUploadFailed) {
-                    // When failed: subtle warning tint overlay
+                    // When failed: subtle warning tint overlay with alert icon
                     Box(
                         modifier = Modifier
                             .size(avatarSize)
                             .clip(CircleShape)
-                            .background(Color(0xFFFF3B30).copy(alpha = 0.25f))
-                    )
+                            .background(Color(0xFFFF3B30).copy(alpha = 0.40f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.ShieldAlert,
+                            contentDescription = "Upload Failed",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         } else {
@@ -950,4 +959,113 @@ fun VoiceWaveform(isRecording: Boolean) {
             )
         }
     }
+}
+
+/**
+ * When any slider knob in the editor is being clicked/scrubbed, this modifier smoothly dims
+ * or hides surrounding background chrome, cards, divs, and toolbars down to targetAlpha (default 0f),
+ * keeping the media canvas (video/photo) completely unobstructed and visible.
+ */
+@Composable
+fun Modifier.editorChromeFadeOnScrub(
+    targetAlpha: Float = 0f,
+    durationMs: Int = 180
+): Modifier {
+    val scrubbingState = LocalSliderScrubbingState.current
+    val alpha by animateFloatAsState(
+        targetValue = if (scrubbingState.isScrubbing) targetAlpha else 1f,
+        animationSpec = tween(durationMillis = durationMs),
+        label = "chromeFadeOnScrub"
+    )
+    return this.graphicsLayer {
+        this.alpha = alpha
+    }
+}
+
+/**
+ * When any slider knob in the editor is being clicked/scrubbed, this modifier smoothly transitions
+ * the background color to transparent (or custom target color), allowing the user to see the
+ * live preview underneath without panels blocking the view.
+ */
+@Composable
+fun Modifier.editorBackgroundFadeOnScrub(
+    defaultColor: Color,
+    targetColor: Color = Color.Transparent,
+    shape: androidx.compose.ui.graphics.Shape = androidx.compose.ui.graphics.RectangleShape,
+    durationMs: Int = 180
+): Modifier {
+    val scrubbingState = LocalSliderScrubbingState.current
+    val animatedColor by animateColorAsState(
+        targetValue = if (scrubbingState.isScrubbing) targetColor else defaultColor,
+        animationSpec = tween(durationMillis = durationMs),
+        label = "bgFadeOnScrub"
+    )
+    return this.background(animatedColor, shape)
+}
+
+/**
+ * Zero-layout-shift Live Peek container for any active slider row/block.
+ *
+ * - Keeps padding 100% constant between idle and scrubbing states so the slider track never
+ *   shrinks or shifts under the user's finger (eliminating mid-touch value jumps).
+ * - Smoothly fades in a micro-beveled gradient pill behind THIS slider when active.
+ * - Smoothly fades this entire slider block to 0f alpha when a DIFFERENT slider is active.
+ */
+@Composable
+fun Modifier.focusSliderContainer(
+    sliderId: String,
+    isDark: Boolean,
+    cornerRadius: Dp = 14.dp,
+    horizontalPadding: Dp = 10.dp,
+    verticalPadding: Dp = 5.dp,
+    durationMs: Int = 180
+): Modifier {
+    val scrubbingState = LocalSliderScrubbingState.current
+    val isThisActive = scrubbingState.isScrubbing && scrubbingState.activeId == sliderId
+    val isOtherActive = scrubbingState.isScrubbing && scrubbingState.activeId != sliderId
+
+    val contentAlpha by animateFloatAsState(
+        targetValue = if (isOtherActive) 0f else 1f,
+        animationSpec = tween(durationMillis = durationMs),
+        label = "focusSliderContentAlpha"
+    )
+    val pillAlpha by animateFloatAsState(
+        targetValue = if (isThisActive) 1f else 0f,
+        animationSpec = tween(durationMillis = durationMs),
+        label = "focusSliderPillAlpha"
+    )
+
+    val topBg = if (isDark) Color(0xEE1E2433) else Color(0xF5FFFFFF)
+    val bottomBg = if (isDark) Color(0xEE131722) else Color(0xF2F3F6FA)
+    val topBevel = if (isDark) Color.White.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.92f)
+    val bottomBevel = if (isDark) Color.Black.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.14f)
+
+    return this
+        .graphicsLayer { alpha = contentAlpha }
+        .drawBehind {
+            if (pillAlpha > 0.01f) {
+                val radiusPx = cornerRadius.toPx()
+                val cr = androidx.compose.ui.geometry.CornerRadius(radiusPx, radiusPx)
+                drawRoundRect(
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            topBg.copy(alpha = topBg.alpha * pillAlpha),
+                            bottomBg.copy(alpha = bottomBg.alpha * pillAlpha)
+                        )
+                    ),
+                    cornerRadius = cr
+                )
+                drawRoundRect(
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            topBevel.copy(alpha = topBevel.alpha * pillAlpha),
+                            bottomBevel.copy(alpha = bottomBevel.alpha * pillAlpha)
+                        )
+                    ),
+                    cornerRadius = cr,
+                    style = Stroke(width = 1.dp.toPx())
+                )
+            }
+        }
+        .padding(horizontal = horizontalPadding, vertical = verticalPadding)
 }

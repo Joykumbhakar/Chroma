@@ -195,6 +195,7 @@ fun PostCreationFlowScreen(
     initialPostType: PostType = PostType.PHOTO,
     initialMediaUri: Uri? = null,
     initialPhotoUri: Uri? = initialMediaUri,
+    initialMediaUris: List<Uri> = emptyList(),
     onFinish: () -> Unit,
     onClose: () -> Unit
 ) {
@@ -213,18 +214,19 @@ fun PostCreationFlowScreen(
     var currentPostType by remember { mutableStateOf(initialPostType) }
 
     val effectiveInitialUri = initialMediaUri ?: initialPhotoUri
+    val effectiveInitialUris = if (initialMediaUris.isNotEmpty()) initialMediaUris else listOfNotNull(effectiveInitialUri)
 
     // Navigation Step
     var currentStep by remember {
         mutableStateOf(
-            if (effectiveInitialUri != null) PostCreationStep.IMAGE_EDITOR
+            if (effectiveInitialUris.isNotEmpty()) PostCreationStep.IMAGE_EDITOR
             else PostCreationStep.MEDIA_PICKER
         )
     }
 
     // Media & Editing States
     var selectedPhotoUris by remember {
-        mutableStateOf<List<Uri>>(if (effectiveInitialUri != null) listOf(effectiveInitialUri) else emptyList())
+        mutableStateOf<List<Uri>>(effectiveInitialUris)
     }
     var currentPhotoIndex by remember { mutableIntStateOf(0) }
     var editedPhotoUris by remember { mutableStateOf<Map<Uri, Uri>>(emptyMap()) }
@@ -551,13 +553,14 @@ fun PostCreationFlowScreen(
             }
 
             PostType.FLASH -> {
-                if (rawPhotoUri != null) {
-                    val activeOriginalRaw = rawPhotoUri!!
+                if (rawPhotoUri != null || selectedPhotoUris.isNotEmpty()) {
+                    val activeOriginalRaw = rawPhotoUri ?: selectedPhotoUris.first()
                     FinalCutProVideoEditorScreen(
                         initialUri = activeOriginalRaw,
+                        initialUris = selectedPhotoUris,
                         onDone = { startMs, endMs, clips ->
                             val renderedUri = clips.firstOrNull() ?: activeOriginalRaw
-                            selectedPhotoUris = listOf(renderedUri)
+                            selectedPhotoUris = clips.ifEmpty { listOf(renderedUri) }
                             editedPhotoUris = editedPhotoUris + (activeOriginalRaw to renderedUri)
                             flashTrimStartMs = 0L
                             flashTrimEndMs = endMs
@@ -565,7 +568,7 @@ fun PostCreationFlowScreen(
                             currentStep = PostCreationStep.POST_DETAILS
                         },
                         onBack = {
-                            if (effectiveInitialUri != null) onClose()
+                            if (effectiveInitialUris.isNotEmpty()) onClose()
                             else currentStep = PostCreationStep.MEDIA_PICKER
                         }
                     )
@@ -720,21 +723,21 @@ fun PostCreationFlowScreen(
                         // 3. Media Picker Gallery with filter tailored to PostType
                         val mediaFilter = when (currentPostType) {
                             PostType.PHOTO -> GalleryMediaTypeFilter.PHOTOS
-                            PostType.FLASH -> GalleryMediaTypeFilter.VIDEOS
+                            PostType.FLASH -> GalleryMediaTypeFilter.ALL
                             PostType.WORK -> GalleryMediaTypeFilter.PHOTOS
                             PostType.STORY -> GalleryMediaTypeFilter.ALL
                         }
 
                         val maxMediaCount = when (currentPostType) {
                             PostType.PHOTO -> 10
-                            PostType.FLASH -> 1
+                            PostType.FLASH -> 20
                             PostType.WORK -> 4
                             PostType.STORY -> 1
                         }
 
                         OscellionGalleryLayout(
                             title = currentPostType.title,
-                            badgeText = if (currentPostType == PostType.FLASH) "Max 60s" else "",
+                            badgeText = if (currentPostType == PostType.FLASH) "Multi-Clip Video" else "",
                             maxSelection = maxMediaCount,
                             allowedMediaFilter = mediaFilter,
                             showCameraTile = true,

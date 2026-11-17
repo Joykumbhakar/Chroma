@@ -470,6 +470,8 @@ fun DiscoverScreen(
 
     val isUploadingStory by (storyViewModel?.isUploading ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
 
+    val failedStoryUpload by (storyViewModel?.failedStoryUpload ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsState()
+
     val trendingWorks by (discoverViewModel?.trendingWorks ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
 
     val context = LocalContext.current
@@ -1130,6 +1132,12 @@ fun DiscoverScreen(
 
                         isUploading = isUploadingStory,
 
+                        isUploadFailed = failedStoryUpload != null,
+
+                        onRetryUpload = {
+                            storyViewModel?.retryFailedUpload(context)
+                        },
+
                         onMyStoryClick = {
 
                             if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
@@ -1789,6 +1797,80 @@ fun DiscoverScreen(
                     storyViewModel?.uploadStory(context, uri, audienceType = "only_friends", customAudienceIds = onlyFriends)
 
                     com.chroma.studio.ui.components.ToastManager.showToast("Shared with Only Friend! ⭐")
+
+                },
+
+                onSharePublicWithHighlight = { saveAsHighlight, highlightTitle ->
+
+                    showShareStoryAudienceSheet = false
+
+                    val uri = pendingUploadStoryUri ?: return@ShareStoryAudienceSheet
+
+                    pendingUploadStoryUri = null
+
+                    editingStoryImageUri = null
+
+                    storyViewModel?.uploadStory(
+
+                        context = context,
+
+                        uri = uri,
+
+                        audienceType = "public",
+
+                        isHighlight = saveAsHighlight,
+
+                        highlightTitle = highlightTitle
+
+                    )
+
+                    if (saveAsHighlight) {
+
+                        com.chroma.studio.ui.components.ToastManager.showToast("Story saved as Highlight! Lives forever ✨")
+
+                    } else {
+
+                        com.chroma.studio.ui.components.ToastManager.showToast("Sharing your story... 🌟")
+
+                    }
+
+                },
+
+                onShareOnlyFriendsWithHighlight = { saveAsHighlight, highlightTitle ->
+
+                    showShareStoryAudienceSheet = false
+
+                    val uri = pendingUploadStoryUri ?: return@ShareStoryAudienceSheet
+
+                    pendingUploadStoryUri = null
+
+                    editingStoryImageUri = null
+
+                    storyViewModel?.uploadStory(
+
+                        context = context,
+
+                        uri = uri,
+
+                        audienceType = "only_friends",
+
+                        customAudienceIds = onlyFriends,
+
+                        isHighlight = saveAsHighlight,
+
+                        highlightTitle = highlightTitle
+
+                    )
+
+                    if (saveAsHighlight) {
+
+                        com.chroma.studio.ui.components.ToastManager.showToast("Shared & saved to Highlights! ⭐✨")
+
+                    } else {
+
+                        com.chroma.studio.ui.components.ToastManager.showToast("Shared with Only Friend! ⭐")
+
+                    }
 
                 },
 

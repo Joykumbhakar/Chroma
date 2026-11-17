@@ -542,7 +542,15 @@ class ChatViewModel : ViewModel() {
         observeMessages(roomId)
     }
 
-    fun createGroup(groupName: String, groupDescription: String? = null, participantIds: List<String>, imageUrl: String? = null, preGeneratedRoomId: String? = null, onRoomReady: (String) -> Unit) {
+    fun createGroup(
+        groupName: String,
+        groupDescription: String? = null,
+        participantIds: List<String>,
+        imageUrl: String? = null,
+        preGeneratedRoomId: String? = null,
+        onlyAdminsCanPost: Boolean = false,
+        onRoomReady: (String) -> Unit
+    ) {
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
         val roomId = preGeneratedRoomId ?: "group_${java.util.UUID.randomUUID()}"
 
@@ -560,7 +568,8 @@ class ChatViewModel : ViewModel() {
             admins = listOf(currentUser.uid),
             createdBy = currentUser.uid,
             lastMessage = "Group created",
-            lastMessageTime = System.currentTimeMillis()
+            lastMessageTime = System.currentTimeMillis(),
+            onlyAdminsCanPost = onlyAdminsCanPost
         )
         val currentChats = _recentChats.value.toMutableList()
         currentChats.add(0, optimisticRoom)
@@ -571,8 +580,31 @@ class ChatViewModel : ViewModel() {
         fetchProfilesForUsers(allUsers)
 
         viewModelScope.launch {
-            repository.createGroup(groupName, groupDescription, participantIds, imageUrl, roomId)
+            repository.createGroup(groupName, groupDescription, participantIds, imageUrl, roomId, onlyAdminsCanPost)
         }
+    }
+
+    fun createGroup(
+        groupName: String,
+        groupDescription: String? = null,
+        participantIds: List<String>,
+        imageUrl: String? = null,
+        preGeneratedRoomId: String? = null,
+        onRoomReady: (String) -> Unit
+    ) = createGroup(
+        groupName = groupName,
+        groupDescription = groupDescription,
+        participantIds = participantIds,
+        imageUrl = imageUrl,
+        preGeneratedRoomId = preGeneratedRoomId,
+        onlyAdminsCanPost = false,
+        onRoomReady = onRoomReady
+    )
+
+    suspend fun fetchRoom(roomId: String): ChatRoom? {
+        val existing = _recentChats.value.find { it.id == roomId }
+        if (existing != null) return existing
+        return repository.getRoom(roomId)
     }
 
 
@@ -668,6 +700,83 @@ class ChatViewModel : ViewModel() {
             storyId = storyId,
             storyThumbnailUrl = storyThumbnailUrl
         )
+    }
+
+    fun sendFlashVideo(
+        roomId: String,
+        flashVideo: com.chroma.studio.model.FlashVideo,
+        caption: String? = null
+    ) {
+        val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        if (_activeRoomId.value == roomId) {
+            setTypingStatus(false)
+        }
+        val msgId = java.util.UUID.randomUUID().toString()
+        val timestamp = System.currentTimeMillis()
+        val messageText = caption ?: flashVideo.caption
+        val pendingMsg = ChatMessage(
+            id = msgId,
+            senderId = currentUserId,
+            text = messageText,
+            timestamp = timestamp,
+            isPending = true,
+            imageUrl = flashVideo.thumbnailUrl,
+            mediaUrl = flashVideo.videoUrl,
+            messageType = "flash_video",
+            flashVideoId = flashVideo.id,
+            flashVideoThumbnailUrl = flashVideo.thumbnailUrl,
+            flashVideoUrl = flashVideo.videoUrl,
+            flashVideoCaption = flashVideo.caption,
+            flashVideoAuthorUsername = flashVideo.authorUsername,
+            flashVideoAuthorAvatarUrl = flashVideo.authorAvatarUrl,
+            flashVideoDurationMs = flashVideo.duration
+        )
+
+        // Add to local immediately if this room is actively open
+        if (_activeRoomId.value == roomId) {
+            _localMessages.value = listOf(pendingMsg) + _localMessages.value
+        }
+
+        // Persist to offline cache
+        try {
+            com.chroma.studio.chat.data.ChatLocalCacheManager.appendOrUpdateMessage(
+                com.chroma.studio.ChromaApp.instance,
+                roomId,
+                pendingMsg
+            )
+        } catch (_: Exception) {}
+
+        // Optimistically update recent chats list
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        val previewText = "⚡ Shared a Flash video"
+        if (index != -1) {
+            val chat = currentChats.removeAt(index)
+            currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
+            _recentChats.value = currentChats
+        }
+
+        viewModelScope.launch {
+            val success = repository.sendMessage(
+                roomId = roomId,
+                text = messageText,
+                preGeneratedId = msgId,
+                messageType = "flash_video",
+                imageUrl = flashVideo.thumbnailUrl,
+                flashVideoId = flashVideo.id,
+                flashVideoThumbnailUrl = flashVideo.thumbnailUrl,
+                flashVideoUrl = flashVideo.videoUrl,
+                flashVideoCaption = flashVideo.caption,
+                flashVideoAuthorUsername = flashVideo.authorUsername,
+                flashVideoAuthorAvatarUrl = flashVideo.authorAvatarUrl,
+                flashVideoDurationMs = flashVideo.duration
+            )
+            if (!success && _activeRoomId.value == roomId) {
+                _localMessages.value = _localMessages.value.map {
+                    if (it.id == msgId) it.copy(isPending = false, isError = true) else it
+                }
+            }
+        }
     }
 
     fun sendMessageToRoom(
@@ -1244,26 +1353,79 @@ class ChatViewModel : ViewModel() {
     }
 
     fun updateGroupName(roomId: String, name: String) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            currentChats[index] = currentChats[index].copy(name = name)
+            _recentChats.value = currentChats
+        }
         viewModelScope.launch { repository.updateGroupName(roomId, name) }
     }
 
     fun updateGroupImage(roomId: String, imageUrl: String) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            currentChats[index] = currentChats[index].copy(avatarUrl = imageUrl)
+            _recentChats.value = currentChats
+        }
         viewModelScope.launch { repository.updateGroupImage(roomId, imageUrl) }
     }
 
     fun updateGroupDescription(roomId: String, description: String) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            currentChats[index] = currentChats[index].copy(groupDescription = description)
+            _recentChats.value = currentChats
+        }
         viewModelScope.launch { repository.updateGroupDescription(roomId, description) }
     }
 
+    fun updateOnlyAdminsCanPost(roomId: String, onlyAdminsCanPost: Boolean) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            currentChats[index] = currentChats[index].copy(onlyAdminsCanPost = onlyAdminsCanPost)
+            _recentChats.value = currentChats
+        }
+        viewModelScope.launch { repository.updateOnlyAdminsCanPost(roomId, onlyAdminsCanPost) }
+    }
+
     fun demoteAdmin(roomId: String, userId: String) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            val chat = currentChats[index]
+            currentChats[index] = chat.copy(admins = chat.admins.filter { it != userId })
+            _recentChats.value = currentChats
+        }
         viewModelScope.launch { repository.demoteAdmin(roomId, userId) }
     }
 
     fun addParticipants(roomId: String, userIds: List<String>) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            val chat = currentChats[index]
+            val newParticipants = (chat.participants + userIds).distinct()
+            currentChats[index] = chat.copy(participants = newParticipants)
+            _recentChats.value = currentChats
+        }
+        fetchProfilesForUsers(userIds)
         viewModelScope.launch { repository.addParticipants(roomId, userIds) }
     }
 
     fun removeParticipant(roomId: String, userId: String) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            val chat = currentChats[index]
+            val newParticipants = chat.participants.filter { it != userId }
+            val newAdmins = chat.admins.filter { it != userId }
+            currentChats[index] = chat.copy(participants = newParticipants, admins = newAdmins)
+            _recentChats.value = currentChats
+        }
         viewModelScope.launch { repository.removeParticipant(roomId, userId) }
     }
 
@@ -1282,6 +1444,16 @@ class ChatViewModel : ViewModel() {
     }
 
     fun leaveGroup(roomId: String) {
+        val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1 && currentUserId != null) {
+            val chat = currentChats[index]
+            val newParticipants = chat.participants.filter { it != currentUserId }
+            val newAdmins = chat.admins.filter { it != currentUserId }
+            currentChats[index] = chat.copy(participants = newParticipants, admins = newAdmins)
+            _recentChats.value = currentChats
+        }
         viewModelScope.launch { repository.leaveGroup(roomId) }
     }
 

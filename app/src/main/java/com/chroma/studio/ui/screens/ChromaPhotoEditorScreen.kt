@@ -21,6 +21,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -99,6 +100,10 @@ import com.chroma.studio.ui.components.GlassBottomSheet
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.IosAlertDialog
 import com.chroma.studio.ui.components.LocalHazeState
+import com.chroma.studio.ui.components.LocalSliderScrubbingState
+import com.chroma.studio.ui.components.editorChromeFadeOnScrub
+import com.chroma.studio.ui.components.focusSliderContainer
+import com.chroma.studio.ui.components.studioBevel
 import com.chroma.studio.ui.components.OscellionGalleryLayout
 import com.chroma.studio.ui.components.ToastManager
 import com.chroma.studio.ui.graphics3d.AppleSettingsSquircleVectorIcon
@@ -1148,6 +1153,7 @@ fun ChromaPhotoEditorScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .editorChromeFadeOnScrub()
                     .statusBarsPadding()
                     .background(Color.White)
                     .border(0.5.dp, Color(0xFFE5E7EB))
@@ -1322,6 +1328,7 @@ fun ChromaPhotoEditorScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .editorChromeFadeOnScrub()
                     .background(Color.White)
                     .padding(horizontal = 12.dp, vertical = 6.dp)
                     .horizontalScroll(rememberScrollState()),
@@ -1928,6 +1935,7 @@ private fun PhotoPreviewArea(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
+                .editorChromeFadeOnScrub()
                 .padding(12.dp)
                 .zIndex(30f),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2032,6 +2040,7 @@ private fun PhotoPreviewArea(
             exit = fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.9f),
             modifier = Modifier
                 .align(Alignment.BottomStart)
+                .editorChromeFadeOnScrub()
                 .padding(12.dp)
                 .zIndex(32f)
         ) {
@@ -2203,12 +2212,36 @@ private fun PhotoPreviewArea(
         }
 
         // Floating Zoom & Crop Smooth Slider Bar (Exact same UI as ChromaVideoEditorScreen)
+        val previewScrubState = LocalSliderScrubbingState.current
+        val isZoomScrubbing = previewScrubState.isScrubbing && previewScrubState.activeId == "PhotoPreviewZoom"
+        val isOtherPreviewScrubbing = previewScrubState.isScrubbing && previewScrubState.activeId != "PhotoPreviewZoom"
+        val zoomBarOuterAlpha by animateFloatAsState(
+            targetValue = if (isOtherPreviewScrubbing) 0f else 1f,
+            animationSpec = tween(180),
+            label = "zoomBarOuterAlpha"
+        )
+        val zoomChromeAlpha by animateFloatAsState(
+            targetValue = if (isZoomScrubbing) 0f else 1f,
+            animationSpec = tween(180),
+            label = "zoomChromeAlpha"
+        )
+        val zoomBoxBg by androidx.compose.animation.animateColorAsState(
+            targetValue = if (isZoomScrubbing) Color.Transparent else Color(0xE614161E),
+            animationSpec = tween(180),
+            label = "zoomBoxBg"
+        )
+        val zoomBoxBorder by androidx.compose.animation.animateColorAsState(
+            targetValue = if (isZoomScrubbing) Color.Transparent else Color.White.copy(alpha = 0.18f),
+            animationSpec = tween(180),
+            label = "zoomBoxBorder"
+        )
         AnimatedVisibility(
             visible = showZoomCropSlider && state.clips.isNotEmpty(),
             enter = fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.92f),
             exit = fadeOut(tween(450)) + scaleOut(tween(450), targetScale = 0.92f),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .graphicsLayer { alpha = zoomBarOuterAlpha }
                 .padding(horizontal = 14.dp, vertical = 10.dp)
                 .zIndex(45f)
         ) {
@@ -2217,9 +2250,9 @@ private fun PhotoPreviewArea(
                     .fillMaxWidth(0.92f)
                     .widthIn(max = 380.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xE614161E))
-                    .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(20.dp))
-                    .shadow(16.dp, RoundedCornerShape(20.dp), spotColor = Color.Black)
+                    .background(zoomBoxBg)
+                    .border(1.dp, zoomBoxBorder, RoundedCornerShape(20.dp))
+                    .shadow(if (isZoomScrubbing) 0.dp else 16.dp, RoundedCornerShape(20.dp), spotColor = Color.Black)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -2231,7 +2264,9 @@ private fun PhotoPreviewArea(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer { alpha = zoomChromeAlpha },
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -2304,6 +2339,7 @@ private fun PhotoPreviewArea(
                     ) {
                         Box(
                             modifier = Modifier
+                                .graphicsLayer { alpha = zoomChromeAlpha }
                                 .size(28.dp)
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.12f))
@@ -2332,33 +2368,42 @@ private fun PhotoPreviewArea(
                             )
                         }
 
-                        Slider(
-                            value = activeScale.coerceIn(0.5f, 4.0f),
-                            onValueChange = { newScale ->
-                                keepZoomSliderAlive()
-                                val target = activeTargetClip ?: return@Slider
-                                val curT = target.transform
-                                val maxPanX = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
-                                val maxPanY = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
-                                val newPanX = if (newScale <= 1.02f) 0f else curT.x.coerceIn(-maxPanX, maxPanX)
-                                val newPanY = if (newScale <= 1.02f) 0f else curT.y.coerceIn(-maxPanY, maxPanY)
-                                onTransformChange(
-                                    target.id,
-                                    curT.copy(scale = newScale, x = newPanX, y = newPanY)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusSliderContainer(
+                                    sliderId = "PhotoPreviewZoom",
+                                    isDark = true,
+                                    cornerRadius = 14.dp,
+                                    horizontalPadding = 10.dp,
+                                    verticalPadding = 4.dp
                                 )
-                            },
-                            onValueChangeFinished = { keepZoomSliderAlive() },
-                            valueRange = 0.5f..4.0f,
-                            modifier = Modifier.weight(1f),
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color(0xFF0381FE),
-                                activeTrackColor = Color(0xFF0381FE),
-                                inactiveTrackColor = Color.White.copy(alpha = 0.24f)
+                        ) {
+                            AppleSlider(
+                                value = activeScale.coerceIn(0.5f, 4.0f),
+                                sliderId = "PhotoPreviewZoom",
+                                onValueChange = { newScale ->
+                                    keepZoomSliderAlive()
+                                    val target = activeTargetClip ?: return@AppleSlider
+                                    val curT = target.transform
+                                    val maxPanX = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                    val maxPanY = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                    val newPanX = if (newScale <= 1.02f) 0f else curT.x.coerceIn(-maxPanX, maxPanX)
+                                    val newPanY = if (newScale <= 1.02f) 0f else curT.y.coerceIn(-maxPanY, maxPanY)
+                                    onTransformChange(
+                                        target.id,
+                                        curT.copy(scale = newScale, x = newPanX, y = newPanY)
+                                    )
+                                },
+                                onValueChangeFinished = { keepZoomSliderAlive() },
+                                valueRange = 0.5f..4.0f,
+                                modifier = Modifier.fillMaxWidth()
                             )
-                        )
+                        }
 
                         Box(
                             modifier = Modifier
+                                .graphicsLayer { alpha = zoomChromeAlpha }
                                 .size(28.dp)
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.12f))
@@ -2499,6 +2544,7 @@ private fun PhotoHorizontalToolbar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .editorChromeFadeOnScrub()
             .background(Color.White)
             .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 16.dp)
             .horizontalScroll(rememberScrollState()),
@@ -2555,6 +2601,12 @@ private fun PhotoCropPanel(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2681,6 +2733,8 @@ private fun PhotoCropPanel(
             }
         }
 
+        }
+
         PropertySlider("Straighten (${straighten.roundToInt()}°)", straighten, -45f, 45f) {
             viewModel.setTransform(t.copy(rotation = baseRotation + it))
         }
@@ -2711,6 +2765,12 @@ private fun PhotoFilterPanel(
             .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2890,6 +2950,8 @@ private fun PhotoFilterPanel(
             }
         }
 
+        }
+
         // Intensity Slider
         if (state.selectedPresetId != "ORIGINAL" || clip.filter != FilterType.NONE) {
             Box(modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -2923,6 +2985,12 @@ private fun PhotoAdjustmentsPanel(
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2966,6 +3034,8 @@ private fun PhotoAdjustmentsPanel(
                     )
                 }
             }
+        }
+
         }
 
         when (activeTab) {
@@ -3012,6 +3082,12 @@ private fun PhotoCurvesPanel(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -3132,6 +3208,8 @@ private fun PhotoCurvesPanel(
             }
         }
 
+        }
+
         PropertySlider("Blacks", activePoints.blacks, -1f, 1f) {
             viewModel.updateActiveCurvePoints(activePoints.copy(blacks = it))
         }
@@ -3167,6 +3245,12 @@ private fun PhotoColorMixPanel(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -3214,6 +3298,7 @@ private fun PhotoColorMixPanel(
         }
 
         Text("Highlight Grade", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        }
         PropertySlider("Hi Hue (${st.highlightHue.toInt()}°)", st.highlightHue, 0f, 360f) {
             viewModel.updateSplitToning(st.copy(highlightHue = it))
         }
@@ -3221,7 +3306,7 @@ private fun PhotoColorMixPanel(
             viewModel.updateSplitToning(st.copy(highlightStrength = it))
         }
 
-        Text("Shadow Grade", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Text("Shadow Grade", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.editorChromeFadeOnScrub())
         PropertySlider("Sh Hue (${st.shadowHue.toInt()}°)", st.shadowHue, 0f, 360f) {
             viewModel.updateSplitToning(st.copy(shadowHue = it))
         }
@@ -3229,7 +3314,7 @@ private fun PhotoColorMixPanel(
             viewModel.updateSplitToning(st.copy(shadowStrength = it))
         }
 
-        Text("White Balance & Global Hue", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Text("White Balance & Global Hue", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.editorChromeFadeOnScrub())
         PropertySlider("Warmth", state.warmth, -1f, 1f) { viewModel.setOptics(warmth = it) }
         PropertySlider("Tint", state.tint, -1f, 1f) { viewModel.setOptics(tint = it) }
         PropertySlider("Hue Shift (${adj.hue.toInt()}°)", adj.hue, 0f, 360f) { viewModel.setAdjustments(adj.copy(hue = it)) }
@@ -3251,6 +3336,12 @@ private fun PhotoEffectsPanel(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -3292,6 +3383,8 @@ private fun PhotoEffectsPanel(
                     )
                 }
             }
+        }
+
         }
 
         if (state.lightLeak != LightLeakType.NONE) {
@@ -3339,6 +3432,12 @@ private fun PhotoTransformPanel(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -3387,6 +3486,8 @@ private fun PhotoTransformPanel(
             )
         }
 
+        }
+
         PropertySlider("Scale (${String.format("%.1fx", t.scale)})", t.scale, 0.1f, 3.5f) {
             viewModel.setTransform(t.copy(scale = it))
         }
@@ -3424,6 +3525,7 @@ private fun PhotoTextEditorPanel(clip: Clip, viewModel: ChromaPhotoEditorViewMod
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 14.dp, vertical = 4.dp)
     ) {
+        Column(modifier = Modifier.fillMaxWidth().editorChromeFadeOnScrub()) {
         OutlinedTextField(
             value = clip.text,
             onValueChange = { viewModel.setText(it) },
@@ -3477,10 +3579,12 @@ private fun PhotoTextEditorPanel(clip: Clip, viewModel: ChromaPhotoEditorViewMod
             }
         }
 
+        }
         Spacer(Modifier.height(10.dp))
         PropertySlider("Size", clip.textSize, 12f, 120f) { viewModel.setTextSize(it) }
         Spacer(Modifier.height(6.dp))
 
+        Column(modifier = Modifier.fillMaxWidth().editorChromeFadeOnScrub()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -3533,6 +3637,7 @@ private fun PhotoTextEditorPanel(clip: Clip, viewModel: ChromaPhotoEditorViewMod
                         .clickable { viewModel.setTextColor(swatchColor) }
                 )
             }
+        }
         }
     }
 }
@@ -3725,6 +3830,12 @@ private fun PhotoBlendPanel(clip: Clip, viewModel: ChromaPhotoEditorViewModel) {
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         Text("Blend Mode & Compositing", color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
 
         modes.chunked(2).forEach { row ->
@@ -3763,6 +3874,8 @@ private fun PhotoBlendPanel(clip: Clip, viewModel: ChromaPhotoEditorViewModel) {
             }
         }
 
+        }
+
         PropertySlider("Layer Opacity (${(t.opacity * 100).roundToInt()}%)", t.opacity, 0f, 1f) {
             viewModel.setTransform(t.copy(opacity = it))
         }
@@ -3780,7 +3893,9 @@ private fun PhotoChromaKeyPanel(clip: Clip, viewModel: ChromaPhotoEditorViewMode
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -3792,6 +3907,12 @@ private fun PhotoChromaKeyPanel(clip: Clip, viewModel: ChromaPhotoEditorViewMode
         }
 
         if (clip.chromaKeyEnabled) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .editorChromeFadeOnScrub(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
             Text("Key Color", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -3816,6 +3937,8 @@ private fun PhotoChromaKeyPanel(clip: Clip, viewModel: ChromaPhotoEditorViewMode
                         Text(label, color = if (color == Color(0xFF00FF00)) Color.Black else Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
+            }
+
             }
 
             PropertySlider("Key Sensitivity", clip.chromaKeyIntensity, 0f, 1f) {
@@ -3848,7 +3971,9 @@ private fun PhotoMarkupPanel(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -3877,6 +4002,12 @@ private fun PhotoMarkupPanel(
             viewModel.setBrushStyle(state.activeBrushColor, it, state.activeBrushNeon)
         }
 
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -3912,6 +4043,7 @@ private fun PhotoMarkupPanel(
                 }
             }
         }
+        }
     }
 }
 
@@ -3928,6 +4060,12 @@ private fun PhotoFramePanel(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         Text("Studio Frame & Matte", color = colors.textMain, fontSize = 15.sp, fontWeight = FontWeight.Bold)
 
         Row(
@@ -3992,6 +4130,8 @@ private fun PhotoFramePanel(
                     }
                 }
             }
+        }
+
         }
 
         PropertySlider("Matte Padding (${state.framePadding.roundToInt()} dp)", state.framePadding, 0f, 48f) {

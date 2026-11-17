@@ -69,29 +69,47 @@ class ChatRepository {
             null
         }
     }
-    suspend fun createGroup(groupName: String): ChatRoom? {
+    suspend fun createGroup(
+        groupName: String,
+        groupDescription: String? = null,
+        participantIds: List<String> = emptyList(),
+        imageUrl: String? = null,
+        preGeneratedId: String? = null,
+        onlyAdminsCanPost: Boolean = false
+    ): ChatRoom? {
         val currentUser = auth.currentUser ?: return null
-        val roomId = "group_${java.util.UUID.randomUUID()}"
+        val roomId = preGeneratedId ?: "group_${java.util.UUID.randomUUID()}"
         
         return try {
+            val allUsers = participantIds.toMutableList()
+            if (!allUsers.contains(currentUser.uid)) allUsers.add(currentUser.uid)
+            val unreadMap = allUsers.associateWith { 0 }
+
             val newRoom = ChatRoom(
                 id = roomId,
                 name = groupName,
+                groupDescription = groupDescription,
                 isGroup = true,
-                participants = listOf(currentUser.uid),
+                avatarUrl = imageUrl,
+                participants = allUsers,
                 admins = listOf(currentUser.uid),
                 createdBy = currentUser.uid,
                 lastMessage = "Group created",
                 lastMessageTime = System.currentTimeMillis(),
-                unreadCount = mapOf(currentUser.uid to 0)
+                unreadCount = unreadMap,
+                onlyAdminsCanPost = onlyAdminsCanPost
             )
             chatsCollection.document(roomId).set(newRoom).await()
+            sendMessage(roomId, "Group created", messageType = "system")
             newRoom
         } catch (e: Exception) {
             Log.e("ChatRepository", "Error creating group", e)
             null
         }
     }
+
+    suspend fun createGroup(groupName: String): ChatRoom? =
+        createGroup(groupName = groupName, participantIds = emptyList())
 
     suspend fun sendMessage(
         roomId: String,
@@ -103,7 +121,14 @@ class ChatRepository {
         durationSeconds: Int? = null,
         replyToMessageId: String? = null,
         storyId: String? = null,
-        storyThumbnailUrl: String? = null
+        storyThumbnailUrl: String? = null,
+        flashVideoId: String? = null,
+        flashVideoThumbnailUrl: String? = null,
+        flashVideoUrl: String? = null,
+        flashVideoCaption: String? = null,
+        flashVideoAuthorUsername: String? = null,
+        flashVideoAuthorAvatarUrl: String? = null,
+        flashVideoDurationMs: Long? = null
     ): Boolean {
         val currentUser = auth.currentUser ?: return false
         return try {
@@ -121,7 +146,14 @@ class ChatRepository {
                 durationSeconds = durationSeconds,
                 replyToMessageId = replyToMessageId,
                 storyId = storyId,
-                storyThumbnailUrl = storyThumbnailUrl
+                storyThumbnailUrl = storyThumbnailUrl,
+                flashVideoId = flashVideoId,
+                flashVideoThumbnailUrl = flashVideoThumbnailUrl,
+                flashVideoUrl = flashVideoUrl,
+                flashVideoCaption = flashVideoCaption,
+                flashVideoAuthorUsername = flashVideoAuthorUsername,
+                flashVideoAuthorAvatarUrl = flashVideoAuthorAvatarUrl,
+                flashVideoDurationMs = flashVideoDurationMs
             )
             
             // Add message to subcollection
@@ -138,7 +170,8 @@ class ChatRepository {
                     for (id in otherUserIds) {
                         updatedUnreadCount[id] = (updatedUnreadCount[id] ?: 0) + 1
                     }
-                    val displayMessage = if (storyThumbnailUrl != null || storyId != null) "Replied to story: $text"
+                    val displayMessage = if (messageType == "flash_video" || flashVideoId != null) "⚡ Shared a Flash video"
+                                         else if (storyThumbnailUrl != null || storyId != null) "Replied to story: $text"
                                          else if (imageUrl != null) "Sent an image" 
                                          else if (workId != null) "Shared a work" 
                                          else text
@@ -157,6 +190,26 @@ class ChatRepository {
             Log.e("ChatRepository", "Error sending message", e)
             false
         }
+    }
+
+    suspend fun sendFlashVideoMessage(
+        roomId: String,
+        flashVideo: com.chroma.studio.model.FlashVideo,
+        captionText: String? = null
+    ): Boolean {
+        return sendMessage(
+            roomId = roomId,
+            text = captionText ?: flashVideo.caption,
+            messageType = "flash_video",
+            imageUrl = flashVideo.thumbnailUrl,
+            flashVideoId = flashVideo.id,
+            flashVideoThumbnailUrl = flashVideo.thumbnailUrl,
+            flashVideoUrl = flashVideo.videoUrl,
+            flashVideoCaption = flashVideo.caption,
+            flashVideoAuthorUsername = flashVideo.authorUsername,
+            flashVideoAuthorAvatarUrl = flashVideo.authorAvatarUrl,
+            flashVideoDurationMs = flashVideo.duration
+        )
     }
 
     suspend fun markAsRead(roomId: String) {
@@ -298,6 +351,106 @@ class ChatRepository {
             chatsCollection.document(roomId).update("favoritedBy", update).await()
         } catch (e: Exception) {
             Log.e("ChatRepository", "Error toggling favorite status", e)
+        }
+    }
+
+    suspend fun getRoom(roomId: String): ChatRoom? {
+        return try {
+            val doc = chatsCollection.document(roomId).get().await()
+            if (doc.exists()) doc.toObject(ChatRoom::class.java) else null
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error getting room $roomId", e)
+            null
+        }
+    }
+
+    suspend fun updateGroupName(roomId: String, name: String) {
+        try {
+            chatsCollection.document(roomId).update("name", name).await()
+            sendMessage(roomId, "Group name changed to \"$name\"", messageType = "system")
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error updating group name", e)
+        }
+    }
+
+    suspend fun updateGroupImage(roomId: String, imageUrl: String) {
+        try {
+            chatsCollection.document(roomId).update("avatarUrl", imageUrl).await()
+            sendMessage(roomId, "Group image updated", messageType = "system")
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error updating group image", e)
+        }
+    }
+
+    suspend fun updateGroupDescription(roomId: String, description: String) {
+        try {
+            chatsCollection.document(roomId).update("groupDescription", description).await()
+            sendMessage(roomId, "Group description updated", messageType = "system")
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error updating group description", e)
+        }
+    }
+
+    suspend fun updateOnlyAdminsCanPost(roomId: String, onlyAdminsCanPost: Boolean) {
+        try {
+            chatsCollection.document(roomId).update("onlyAdminsCanPost", onlyAdminsCanPost).await()
+            val notice = if (onlyAdminsCanPost) "Only admins can send messages" else "All members can send messages"
+            sendMessage(roomId, "Group settings updated: $notice", messageType = "system")
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error updating onlyAdminsCanPost", e)
+        }
+    }
+
+    suspend fun addParticipants(roomId: String, userIds: List<String>) {
+        if (userIds.isEmpty()) return
+        try {
+            chatsCollection.document(roomId).update("participants", FieldValue.arrayUnion(*userIds.toTypedArray())).await()
+            sendMessage(roomId, "New members added to the group", messageType = "system")
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error adding participants", e)
+        }
+    }
+
+    suspend fun removeParticipant(roomId: String, userId: String) {
+        try {
+            chatsCollection.document(roomId).update(
+                "participants", FieldValue.arrayRemove(userId),
+                "admins", FieldValue.arrayRemove(userId)
+            ).await()
+            sendMessage(roomId, "A member was removed from the group", messageType = "system")
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error removing participant", e)
+        }
+    }
+
+    suspend fun makeAdmin(roomId: String, userId: String) {
+        try {
+            chatsCollection.document(roomId).update("admins", FieldValue.arrayUnion(userId)).await()
+            sendMessage(roomId, "A member is now a group admin", messageType = "system")
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error making admin", e)
+        }
+    }
+
+    suspend fun demoteAdmin(roomId: String, userId: String) {
+        try {
+            chatsCollection.document(roomId).update("admins", FieldValue.arrayRemove(userId)).await()
+            sendMessage(roomId, "A member is no longer a group admin", messageType = "system")
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error demoting admin", e)
+        }
+    }
+
+    suspend fun leaveGroup(roomId: String) {
+        val currentUser = auth.currentUser ?: return
+        try {
+            chatsCollection.document(roomId).update(
+                "participants", FieldValue.arrayRemove(currentUser.uid),
+                "admins", FieldValue.arrayRemove(currentUser.uid)
+            ).await()
+            sendMessage(roomId, "A member left the group", messageType = "system")
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error leaving group", e)
         }
     }
 

@@ -1338,6 +1338,9 @@ private fun AuthenticatedRoute(
                                             },
                                             onInsideChatChange = { inside ->
                                                 isInsideChatTab = inside
+                                            },
+                                            onNavigateToFlashFeed = { videoId ->
+                                                navController.navigate("flash_feed?videoId=$videoId")
                                             }
                                         )
                                     }
@@ -1409,10 +1412,16 @@ private fun AuthenticatedRoute(
 
                     composable("create_post") {
                         AuthenticatedRoute(navController, "Post Creation") {
-                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull() ?: flashPickerVideoUri
+                            val importedUris = flashImportedMediaUris.ifEmpty {
+                                flashPickerPhotoUris.ifEmpty {
+                                    listOfNotNull(flashPickerVideoUri)
+                                }
+                            }
+                            val importedUri = importedUris.firstOrNull()
                             com.chroma.studio.ui.screens.PostCreationFlowScreen(
                                 initialPostType = com.chroma.studio.ui.screens.PostType.PHOTO,
                                 initialMediaUri = importedUri,
+                                initialMediaUris = importedUris,
                                 onFinish = {
                                     flashImportedMediaUris = emptyList()
                                     flashPickerPhotoUris = emptyList()
@@ -1439,10 +1448,16 @@ private fun AuthenticatedRoute(
                                 "story" -> com.chroma.studio.ui.screens.PostType.STORY
                                 else -> com.chroma.studio.ui.screens.PostType.PHOTO
                             }
-                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull() ?: flashPickerVideoUri
+                            val importedUris = flashImportedMediaUris.ifEmpty {
+                                flashPickerPhotoUris.ifEmpty {
+                                    listOfNotNull(flashPickerVideoUri)
+                                }
+                            }
+                            val importedUri = importedUris.firstOrNull()
                             com.chroma.studio.ui.screens.PostCreationFlowScreen(
                                 initialPostType = postType,
                                 initialMediaUri = importedUri,
+                                initialMediaUris = importedUris,
                                 onFinish = {
                                     flashImportedMediaUris = emptyList()
                                     flashPickerPhotoUris = emptyList()
@@ -1482,10 +1497,16 @@ private fun AuthenticatedRoute(
                                 "story" -> com.chroma.studio.ui.screens.PostType.STORY
                                 else -> com.chroma.studio.ui.screens.PostType.PHOTO
                             }
-                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull() ?: flashPickerVideoUri
+                            val importedUris = flashImportedMediaUris.ifEmpty {
+                                flashPickerPhotoUris.ifEmpty {
+                                    listOfNotNull(flashPickerVideoUri)
+                                }
+                            }
+                            val importedUri = importedUris.firstOrNull()
                             com.chroma.studio.ui.screens.PostCreationFlowScreen(
                                 initialPostType = postType,
                                 initialMediaUri = importedUri,
+                                initialMediaUris = importedUris,
                                 onFinish = {
                                     flashImportedMediaUris = emptyList()
                                     flashPickerPhotoUris = emptyList()
@@ -1561,6 +1582,7 @@ private fun AuthenticatedRoute(
                         FlashFeedScreen(
                             flashVm = flashVm,
                             commentVm = commentVm,
+                            chatViewModel = chatVm,
                             initialVideoId = initialVideoId,
                             onNavigateToOldHome = { navController.popBackStack() },
                             onNavigateToProfile = { userId ->
@@ -2173,7 +2195,10 @@ private fun AuthenticatedRoute(
                                 onNavigateBack = { navController.popBackStack() },
                                 onNavigateToUserProfile = { userId -> navController.navigate("userProfile/$userId") },
                                 onNavigateToGroupInfo = { rId -> navController.navigate("group_info/$rId") },
-                                onInsideChatChange = { isInsideChatTab = it }
+                                onInsideChatChange = { isInsideChatTab = it },
+                                onNavigateToFlashFeed = { videoId ->
+                                    navController.navigate("flash_feed?videoId=$videoId")
+                                }
                             )
                         }
                     }

@@ -83,6 +83,9 @@ import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.chroma.studio.chat.media.MediaStoreHelper
 import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.ui.components.AppleSlider
+import com.chroma.studio.ui.components.editorChromeFadeOnScrub
+import com.chroma.studio.ui.components.focusSliderContainer
 import com.chroma.studio.chat.util.PermissionHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -877,6 +880,7 @@ fun IosCameraScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .editorChromeFadeOnScrub()
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1073,6 +1077,7 @@ fun IosCameraScreen(
                     // Category Selector Tabs [ Beauty ] [ Styles ]
                     Row(
                         modifier = Modifier
+                            .editorChromeFadeOnScrub()
                             .clip(CircleShape)
                             .background(Color.Black.copy(alpha = 0.55f))
                             .border(0.5.dp, Color.White.copy(alpha = 0.18f), CircleShape)
@@ -1122,28 +1127,32 @@ fun IosCameraScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 2.dp),
+                                .padding(horizontal = 12.dp)
+                                .focusSliderContainer(
+                                    sliderId = "CameraFilterIntensity",
+                                    isDark = true,
+                                    cornerRadius = 14.dp,
+                                    horizontalPadding = 10.dp,
+                                    verticalPadding = 4.dp
+                                ),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
                                 text = if (selectedFilter.category == FilterCategory.BEAUTY) "Smooth" else "Strength",
-                                color = Color.White.copy(alpha = 0.75f),
+                                color = Color.White.copy(alpha = 0.85f),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Slider(
+                            AppleSlider(
                                 value = filterIntensity,
+                                sliderId = "CameraFilterIntensity",
                                 onValueChange = { newIntensity ->
                                     filterIntensity = newIntensity
                                 },
                                 valueRange = 0.2f..1.0f,
-                                modifier = Modifier.weight(1f),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color(0xFFFFCC00),
-                                    activeTrackColor = Color(0xFFFFCC00),
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.25f)
-                                )
+                                gradientColors = listOf(Color(0xFFFFCC00), Color(0xFFFF9500)),
+                                modifier = Modifier.weight(1f)
                             )
                             Text(
                                 text = "${(filterIntensity * 100).roundToInt()}%",
@@ -1159,7 +1168,9 @@ fun IosCameraScreen(
 
                     // Filter Chips Row
                     LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .editorChromeFadeOnScrub(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(horizontal = 4.dp)
                     ) {
@@ -1239,7 +1250,9 @@ fun IosCameraScreen(
                 onZoomChanged = { targetZoom ->
                     cameraControl?.setZoomRatio(targetZoom)
                 },
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier
+                    .editorChromeFadeOnScrub()
+                    .padding(horizontal = 16.dp)
             )
 
             Spacer(Modifier.height(10.dp))
@@ -1248,6 +1261,7 @@ fun IosCameraScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .editorChromeFadeOnScrub()
                     .padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
@@ -1284,6 +1298,7 @@ fun IosCameraScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .editorChromeFadeOnScrub()
                     .padding(horizontal = 34.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween

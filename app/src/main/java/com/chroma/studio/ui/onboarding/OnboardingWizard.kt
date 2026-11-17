@@ -40,6 +40,13 @@ import coil.compose.AsyncImage
 import com.chroma.studio.data.DiscoverRepository
 import com.chroma.studio.ui.components.OneUiGlassCard
 import com.chroma.studio.ui.components.doubleEdgeGlassBorder
+import com.chroma.studio.ui.components.evaluatePasswordDemands
+import com.chroma.studio.ui.components.PasswordRequirementChecklist
+import com.chroma.studio.ui.components.StudioBeveledPasswordField
+import com.chroma.studio.ui.components.StudioBeveledConfirmPasswordField
+import com.chroma.studio.ui.components.BeveledCheckMark
+import com.chroma.studio.ui.components.studioBevel
+import com.chroma.studio.ui.components.StudioDesignTokens
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.*
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -581,66 +588,9 @@ fun OnboardingWizard(
                                     }
                                 }
 
-                                // ── PASSWORD FIELD ──
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    Text(
-                                        text = "SET PASSWORD",
-                                        color = textMuted,
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                    Spacer(Modifier.height(6.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(fieldBg)
-                                            .border(0.5.dp, fieldBorder, RoundedCornerShape(14.dp))
-                                            .padding(horizontal = 16.dp, vertical = 14.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Lucide.Lock,
-                                                contentDescription = null,
-                                                tint = if (password.isNotEmpty()) Color(0xFF0381FE) else textMuted,
-                                                modifier = Modifier.size(17.dp)
-                                            )
-                                            Spacer(Modifier.width(10.dp))
-                                            BasicTextField(
-                                                value = password,
-                                                onValueChange = { password = it },
-                                                textStyle = TextStyle(color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium),
-                                                cursorBrush = SolidColor(Color(0xFF0381FE)),
-                                                visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            if (password.isNotEmpty()) {
-                                                IconButton(
-                                                    onClick = { showPassword = !showPassword },
-                                                    modifier = Modifier.size(22.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (showPassword) Lucide.EyeOff else Lucide.Eye,
-                                                        contentDescription = if (showPassword) "Hide password" else "Show password",
-                                                        tint = textMuted,
-                                                        modifier = Modifier.size(17.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if (password.isNotEmpty() && password.length < 6) {
-                                        Spacer(Modifier.height(4.dp))
-                                        Text(
-                                            text = "Minimum 6 characters required",
-                                            color = Color(0xFFFF453A),
-                                            fontSize = 11.5.sp
-                                        )
-                                    }
-                                }
+                                // ── USER PASSWORD SECURITY (5 STRICT DEMANDS + DYNAMIC CHECKMARKS) ──
+                                val passwordDemands = remember(password) { evaluatePasswordDemands(password) }
 
-                                // ── CONFIRM PASSWORD FIELD ──
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -648,78 +598,62 @@ fun OnboardingWizard(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "CONFIRM PASSWORD",
+                                            text = "SET STUDIO PASSWORD",
                                             color = textMuted,
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             letterSpacing = 0.5.sp
                                         )
-                                        if (confirmPassword.isNotEmpty()) {
-                                            if (confirmPassword == password && password.length >= 6) {
+                                        if (password.isNotEmpty()) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                            ) {
+                                                BeveledCheckMark(met = passwordDemands.allMet, size = 15.dp)
                                                 Text(
-                                                    text = "Passwords match",
-                                                    color = Color(0xFF00C853),
-                                                    fontSize = 11.5.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            } else if (confirmPassword != password) {
-                                                Text(
-                                                    text = "Passwords do not match",
-                                                    color = Color(0xFFFF453A),
-                                                    fontSize = 11.5.sp,
-                                                    fontWeight = FontWeight.Bold
+                                                    text = if (passwordDemands.allMet) "5/5 Demands Met" else "${passwordDemands.metCount}/5 Met",
+                                                    color = if (passwordDemands.allMet) Color(0xFF34D399) else textMuted,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.SemiBold
                                                 )
                                             }
                                         }
                                     }
                                     Spacer(Modifier.height(6.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(fieldBg)
-                                            .border(
-                                                BorderStroke(
-                                                    0.5.dp,
-                                                    if (confirmPassword.isEmpty()) fieldBorder
-                                                    else if (confirmPassword == password && password.length >= 6) Color(0xFF00C853)
-                                                    else Color(0xFFFF453A)
-                                                ),
-                                                RoundedCornerShape(14.dp)
-                                            )
-                                            .padding(horizontal = 16.dp, vertical = 14.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Lucide.Lock,
-                                                contentDescription = null,
-                                                tint = if (confirmPassword.isNotEmpty()) Color(0xFF0381FE) else textMuted,
-                                                modifier = Modifier.size(17.dp)
-                                            )
-                                            Spacer(Modifier.width(10.dp))
-                                            BasicTextField(
-                                                value = confirmPassword,
-                                                onValueChange = { confirmPassword = it },
-                                                textStyle = TextStyle(color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium),
-                                                cursorBrush = SolidColor(Color(0xFF0381FE)),
-                                                visualTransformation = if (showConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            if (confirmPassword.isNotEmpty()) {
-                                                IconButton(
-                                                    onClick = { showConfirmPassword = !showConfirmPassword },
-                                                    modifier = Modifier.size(22.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (showConfirmPassword) Lucide.EyeOff else Lucide.Eye,
-                                                        contentDescription = if (showConfirmPassword) "Hide password" else "Show password",
-                                                        tint = textMuted,
-                                                        modifier = Modifier.size(17.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
+                                    StudioBeveledPasswordField(
+                                        value = password,
+                                        onValueChange = { password = it },
+                                        placeholder = "Create secure studio password",
+                                        allDemandsMet = passwordDemands.allMet
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+
+                                    // Dynamic 5 Security Requirements Checklist with springy checkmarks
+                                    PasswordRequirementChecklist(
+                                        password = password,
+                                        alwaysVisible = true
+                                    )
+                                }
+
+                                Spacer(Modifier.height(6.dp))
+
+                                // ── CONFIRM PASSWORD FIELD ──
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = "CONFIRM STUDIO PASSWORD",
+                                        color = textMuted,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    StudioBeveledConfirmPasswordField(
+                                        value = confirmPassword,
+                                        onValueChange = { confirmPassword = it },
+                                        targetPassword = password,
+                                        allDemandsMet = passwordDemands.allMet,
+                                        placeholder = "Re-enter studio password to confirm"
+                                    )
                                 }
                             }
                         }
@@ -935,7 +869,7 @@ fun OnboardingWizard(
             // ── BOTTOM ACTION BAR ───────────────────────────────────────────
             if (currentStep != WizardStep.COMPLETING) {
                 val canProceed = when (currentStep) {
-                    WizardStep.IDENTITY -> displayName.isNotBlank() && usernameStatus == UsernameStatus.Free && password.length >= 6 && password == confirmPassword
+                    WizardStep.IDENTITY -> displayName.isNotBlank() && usernameStatus == UsernameStatus.Free && evaluatePasswordDemands(password).allMet && password == confirmPassword
                     WizardStep.PERSONAL_DETAILS -> dobMillis != null
                     WizardStep.INTERESTS -> selectedInterests.isNotEmpty()
                     WizardStep.COMPLETING -> false
@@ -943,12 +877,19 @@ fun OnboardingWizard(
 
                 Spacer(Modifier.height(14.dp))
 
+                val buttonBg = if (canProceed) {
+                    Brush.linearGradient(StudioDesignTokens.CobaltGradient)
+                } else {
+                    SolidColor(if (isDark) Color(0xFF1E2232) else Color(0xFFE2E8F0))
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp)
                         .clip(CircleShape)
-                        .background(if (canProceed) Color(0xFF0381FE) else if (isDark) Color(0xFF222226) else Color(0xFFE2E8F0))
+                        .background(buttonBg)
+                        .studioBevel(cornerRadius = 26.dp, borderWidth = 1.dp)
                         .clickable(enabled = canProceed, role = Role.Button) {
                             when (currentStep) {
                                 WizardStep.IDENTITY -> currentStep = WizardStep.PERSONAL_DETAILS
@@ -995,32 +936,18 @@ fun OnboardingWizard(
             }
         }
 
-        // Material3 DatePickerDialog
+        // Studio Custom Calendar Dialog
         if (showDatePicker) {
-            val datePickerState = rememberDatePickerState(
-                initialSelectedDateMillis = latestAllowedBirthMillis()
-            )
-            DatePickerDialog(
+            com.chroma.studio.ui.components.StudioCustomCalendarDialog(
+                initialDateMillis = dobMillis ?: latestAllowedBirthMillis(),
+                maxDateMillis = latestAllowedBirthMillis(),
                 onDismissRequest = { showDatePicker = false },
-                confirmButton = {
-                    TextButton(onClick = {
-                        val selected = datePickerState.selectedDateMillis
-                        if (selected != null && selected <= latestAllowedBirthMillis()) {
-                            dobMillis = selected
-                            showDatePicker = false
-                        }
-                    }) {
-                        Text("Confirm", color = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE), fontWeight = FontWeight.Bold)
-                    }
+                onDateConfirmed = { selected ->
+                    dobMillis = selected
+                    showDatePicker = false
                 },
-                dismissButton = {
-                    TextButton(onClick = { showDatePicker = false }) {
-                        Text("Cancel", color = textMuted)
-                    }
-                }
-            ) {
-                DatePicker(state = datePickerState)
-            }
+                title = "Date of Birth"
+            )
         }
     }
 }

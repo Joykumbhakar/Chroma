@@ -195,24 +195,47 @@ fun GlassBottomSheet(
     sheetState: androidx.compose.material3.SheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
 ) {
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+    val scrubbingState = LocalSliderScrubbingState.current
+
+    val sheetBg by androidx.compose.animation.animateColorAsState(
+        targetValue = if (scrubbingState.isScrubbing) Color.Transparent else if (isDark) Color(0xFF17171A) else Color.White,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 180),
+        label = "glassSheetBg"
+    )
+    val scrimColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (scrubbingState.isScrubbing) Color.Transparent else androidx.compose.material3.BottomSheetDefaults.ScrimColor,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 180),
+        label = "glassSheetScrim"
+    )
+
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
         sheetState = sheetState,
-        containerColor = Color.White,
-        contentColor = Color(0xFF1C1C1E),
+        containerColor = sheetBg,
+        scrimColor = scrimColor,
+        contentColor = if (isDark) Color.White else Color(0xFF1C1C1E),
         tonalElevation = 0.dp,
         dragHandle = {
-            androidx.compose.material3.BottomSheetDefaults.DragHandle(
-                color = Color(0xFFD1D5DB)
+            val handleAlpha by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (scrubbingState.isScrubbing) 0f else 1f,
+                animationSpec = androidx.compose.animation.core.tween(durationMillis = 180),
+                label = "handleAlpha"
             )
+            androidx.compose.foundation.layout.Box(modifier = Modifier.graphicsLayer { alpha = handleAlpha }) {
+                androidx.compose.material3.BottomSheetDefaults.DragHandle(
+                    color = if (isDark) Color(0xFF3F3F46) else Color(0xFFD1D5DB)
+                )
+            }
         },
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         androidx.compose.foundation.layout.Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.White)
+                .background(sheetBg)
                 .navigationBarsPadding()
                 .imePadding(),
             content = content

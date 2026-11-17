@@ -1067,24 +1067,118 @@ fun VoiceGlobeSubScreen(
 
 @Composable
 fun ThemeWallpapersSubScreen(
+    currentBubbleStyle: BubbleStyleType,
+    customCorners: CustomCornerConfig,
     accentColor: AccentColorType,
     colors: ChatColors,
     onToggleAppearance: () -> Unit,
     onAccentCycle: () -> Unit,
-    onOpenWallpaperPicker: () -> Unit
+    onSelectAccent: (AccentColorType) -> Unit = {},
+    onOpenWallpaperPicker: () -> Unit,
+    onNavigateToBubbleStyles: () -> Unit = {},
+    onNavigateToCornerGeometry: () -> Unit = {}
 ) {
+    val haptic = LocalHapticFeedback.current
+    val isDark = !colors.isLight
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
+        // 1. Live Interactive Bubble & Theme Preview
         item {
-            OneUiSettingsGroup(header = "Chat Wallpapers") {
+            LiveBubblePreviewCard(
+                bubbleStyle = currentBubbleStyle,
+                customCorners = customCorners,
+                colors = colors
+            )
+        }
+
+        // 2. Accent Color Palette with Micro-Beveled Swatches
+        item {
+            OneUiSettingsGroup(header = "Accent Theme (${AccentColorType.entries.size})") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AccentColorType.entries.forEach { accent ->
+                            val isSelected = accent == accentColor
+                            val scale by animateFloatAsState(
+                                targetValue = if (isSelected) 1.14f else 1.0f,
+                                animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMedium),
+                                label = "AccentScale"
+                            )
+
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        SoundManager.playReaction()
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onSelectAccent(accent)
+                                    }
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .scale(scale)
+                                        .size(44.dp)
+                                        .studioBevel(cornerRadius = 22.dp, borderWidth = if (isSelected) 2.dp else 1.dp)
+                                        .background(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(accent.color, accent.hoverColor)
+                                            ),
+                                            shape = CircleShape
+                                        )
+                                        .border(
+                                            width = if (isSelected) 2.5.dp else 0.8.dp,
+                                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.35f),
+                                            shape = CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Lucide.Check,
+                                            contentDescription = "Selected",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = accent.title,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) accent.color else colors.textMuted,
+                                    fontFamily = InterFontFamily
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Chat Wallpaper
+        item {
+            OneUiSettingsGroup(header = "Chat Wallpaper") {
                 OneUiSettingsNavRow(
                     title = "Choose Chat Wallpaper",
-                    subtitle = "Gallery images or gradient presets",
-                    icon = Lucide.FolderPlus,
-                    iconColor = Color(0xFF0055FF),
+                    subtitle = "HD wallpapers, macOS silk, nature & device themes",
+                    icon = Lucide.Image,
+                    iconColor = accentColor.color,
                     onClick = {
                         SoundManager.playReaction()
                         onOpenWallpaperPicker()
@@ -1093,31 +1187,42 @@ fun ThemeWallpapersSubScreen(
             }
         }
 
+        // 4. Appearance Mode
         item {
             OneUiSettingsGroup(header = "Appearance Mode") {
                 OneUiSettingsToggleRow(
                     title = "Dark Appearance",
                     subtitle = if (colors.isLight) "Light Mode active" else "Dark Mode active",
                     icon = Lucide.Moon,
-                    iconColor = Color(0xFF0055FF),
+                    iconColor = accentColor.color,
                     checked = !colors.isLight,
                     onCheckedChange = { onToggleAppearance() }
                 )
             }
         }
 
+        // 5. Chat Bubbles & Styling
         item {
-            OneUiSettingsGroup(header = "Accent Color Presets") {
+            OneUiSettingsGroup(header = "Chat Bubbles & Styling") {
                 OneUiSettingsNavRow(
-                    title = "Current Accent",
-                    subtitle = "${accentColor.title} — tap to cycle",
-                    icon = Lucide.Palette,
+                    title = "Bubble Styles",
+                    subtitle = "${currentBubbleStyle.title} • ${currentBubbleStyle.category}",
+                    icon = Lucide.MessageCircle,
                     iconColor = accentColor.color,
-                    valueText = accentColor.title,
-                    valueTextColor = accentColor.color,
                     onClick = {
                         SoundManager.playReaction()
-                        onAccentCycle()
+                        onNavigateToBubbleStyles()
+                    }
+                )
+                OneUiSettingsDivider()
+                OneUiSettingsNavRow(
+                    title = "Corners & Geometry",
+                    subtitle = if (customCorners.customEnabled) "Custom (${customCorners.topStart.toInt()}dp)" else "Preset defaults",
+                    icon = Lucide.SlidersHorizontal,
+                    iconColor = accentColor.color,
+                    onClick = {
+                        SoundManager.playReaction()
+                        onNavigateToCornerGeometry()
                     }
                 )
             }
@@ -1144,11 +1249,16 @@ fun AppearanceSettingsScreen(
     onAccentCycle: () -> Unit,
     onOpenWallpaperPicker: () -> Unit,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    initialSubScreen: AppearanceSubScreen = AppearanceSubScreen.MAIN,
+    onSelectAccent: (AccentColorType) -> Unit = {}
 ) {
     val colors = LocalChatColors.current
     val isDark = !colors.isLight
-    var currentSubScreen by remember { mutableStateOf(AppearanceSubScreen.MAIN) }
+    var currentSubScreen by remember(initialSubScreen) { mutableStateOf(initialSubScreen) }
+    LaunchedEffect(initialSubScreen) {
+        currentSubScreen = initialSubScreen
+    }
 
     BackHandler(enabled = currentSubScreen != AppearanceSubScreen.MAIN) {
         currentSubScreen = AppearanceSubScreen.MAIN
@@ -1293,11 +1403,16 @@ fun AppearanceSettingsScreen(
                         colors = colors
                     )
                     AppearanceSubScreen.THEME_WALLPAPERS -> ThemeWallpapersSubScreen(
+                        currentBubbleStyle = currentBubbleStyle,
+                        customCorners = currentCustomCorners,
                         accentColor = accentColor,
                         colors = colors,
                         onToggleAppearance = onToggleAppearance,
                         onAccentCycle = onAccentCycle,
-                        onOpenWallpaperPicker = onOpenWallpaperPicker
+                        onSelectAccent = onSelectAccent,
+                        onOpenWallpaperPicker = onOpenWallpaperPicker,
+                        onNavigateToBubbleStyles = { currentSubScreen = AppearanceSubScreen.BUBBLE_STYLES },
+                        onNavigateToCornerGeometry = { currentSubScreen = AppearanceSubScreen.CORNER_GEOMETRY }
                     )
                     AppearanceSubScreen.SWITCH_LAB -> SpringToggleShowcaseScreen(
                         onBack = { currentSubScreen = AppearanceSubScreen.MAIN }

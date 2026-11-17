@@ -4,7 +4,6 @@ import com.chroma.studio.ui.components.ProfileMediaEditorModal
 
 
 import android.Manifest
-import android.app.DatePickerDialog
 import android.content.Context
 import android.location.Geocoder
 import android.location.LocationManager
@@ -322,24 +321,7 @@ fun ProfileIdentityScreen(
     }
 
 
-    val datePickerDialog = remember {
-        val cal = Calendar.getInstance()
-        if (dob != null && dob != 0L) {
-            cal.timeInMillis = dob!!
-        }
-        DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                val newCal = Calendar.getInstance()
-                newCal.set(year, month, dayOfMonth)
-                dob = newCal.timeInMillis
-            },
-            cal.get(Calendar.YEAR),
-            cal.get(Calendar.MONTH),
-            cal.get(Calendar.DAY_OF_MONTH)
-        )
-    }
-
+    var showCustomCalendar by remember { mutableStateOf(false) }
 
     val pageBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F2F7)
 
@@ -902,7 +884,7 @@ fun ProfileIdentityScreen(
                             icon = Lucide.Calendar,
                             title = "Date of Birth",
                             valueText = formattedDob,
-                            onClick = { datePickerDialog.show() }
+                            onClick = { showCustomCalendar = true }
                         )
 
                         AppleSettingDivider()
@@ -1415,6 +1397,20 @@ fun ProfileIdentityScreen(
         }
     }
 
+
+    // ── STUDIO CUSTOM CALENDAR DIALOG ──────────────────────────────────────────
+    if (showCustomCalendar) {
+        com.chroma.studio.ui.components.StudioCustomCalendarDialog(
+            initialDateMillis = if (dob != null && dob != 0L) dob else null,
+            maxDateMillis = System.currentTimeMillis(),
+            onDismissRequest = { showCustomCalendar = false },
+            onDateConfirmed = { selectedMillis ->
+                dob = selectedMillis
+                showCustomCalendar = false
+            },
+            title = "Date of Birth"
+        )
+    }
 
     // ── PROFILE MEDIA CROP & TRANSFORM EDITOR MODAL ───────────────────────────
     if (pendingEditorUri != null) {

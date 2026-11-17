@@ -39,6 +39,18 @@ class FlashRepository {
         }
     }
 
+    /** Retrieve a single Flash Video by ID */
+    suspend fun getFlashById(videoId: String): FlashVideo? {
+        return try {
+            val doc = collection.document(videoId).get().await()
+            if (doc.exists()) doc.toObject(FlashVideo::class.java) else null
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "Error fetching flash by id $videoId", e)
+            null
+        }
+    }
+
     /** Real-time Flow of the latest 30 flashes — used for live updates. */
     fun listenToFlashFeed(): Flow<List<FlashVideo>> = callbackFlow {
         val listener = collection

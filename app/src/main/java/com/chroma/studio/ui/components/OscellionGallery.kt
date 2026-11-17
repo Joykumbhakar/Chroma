@@ -235,7 +235,7 @@ fun OscellionGalleryLayout(
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
             SoundManager.playTap(context)
-            if (onVideoSelected != null && uris.size == 1) {
+            if (maxSelection == 1 && onVideoSelected != null && uris.size == 1) {
                 val mime = context.contentResolver.getType(uris.first()) ?: ""
                 if (mime.startsWith("video/")) {
                     onVideoSelected(uris.first())
@@ -546,7 +546,7 @@ fun OscellionGalleryLayout(
                         },
                         onMediaClick = { item ->
                             SoundManager.playPop()
-                            if (item.isVideo && onVideoSelected != null && selectedUris.isEmpty()) {
+                            if (maxSelection == 1 && item.isVideo && onVideoSelected != null && selectedUris.isEmpty()) {
                                 onVideoSelected(item.uri)
                             } else {
                                 if (selectedUris.contains(item.uri)) {
@@ -745,7 +745,7 @@ fun OscellionGalleryLayout(
                     },
                     onMediaClick = { item ->
                         SoundManager.playPop()
-                        if (item.isVideo && onVideoSelected != null && selectedUris.isEmpty()) {
+                        if (maxSelection == 1 && item.isVideo && onVideoSelected != null && selectedUris.isEmpty()) {
                             onVideoSelected(item.uri)
                         } else {
                             if (selectedUris.contains(item.uri)) {
@@ -821,7 +821,7 @@ fun OscellionGalleryLayout(
             },
             onDirectSelect = { item ->
                 SoundManager.playSend(context)
-                if (item.isVideo && onVideoSelected != null) {
+                if (maxSelection == 1 && item.isVideo && onVideoSelected != null) {
                     onVideoSelected(item.uri)
                 } else {
                     if (!selectedUris.contains(item.uri)) {

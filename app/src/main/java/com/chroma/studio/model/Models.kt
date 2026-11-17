@@ -206,7 +206,10 @@ data class ChatRoom(
     val pinnedMessageId: String? = null,
     val pinnedMessageText: String? = null,
     val pinnedBy: String? = null,
-    val pinnedAt: Long = 0L
+    val pinnedAt: Long = 0L,
+    @get:com.google.firebase.firestore.PropertyName("onlyAdminsCanPost")
+    @set:com.google.firebase.firestore.PropertyName("onlyAdminsCanPost")
+    var onlyAdminsCanPost: Boolean = false
 )
 
 data class ChatMessage(
@@ -246,7 +249,14 @@ data class ChatMessage(
     @set:com.google.firebase.firestore.PropertyName("isForwarded")
     var isForwarded: Boolean = false,
     val storyId: String? = null,
-    val storyThumbnailUrl: String? = null
+    val storyThumbnailUrl: String? = null,
+    val flashVideoId: String? = null,
+    val flashVideoThumbnailUrl: String? = null,
+    val flashVideoUrl: String? = null,
+    val flashVideoCaption: String? = null,
+    val flashVideoAuthorUsername: String? = null,
+    val flashVideoAuthorAvatarUrl: String? = null,
+    val flashVideoDurationMs: Long? = null
 )
 
 @kotlinx.serialization.Serializable
@@ -272,7 +282,17 @@ data class Story(
     val likes: Int = 0,
     val shares: Int = 0,
     val viewedBy: List<String> = emptyList(),
-    val likedBy: List<String> = emptyList()
+    val likedBy: List<String> = emptyList(),
+    val isHighlight: Boolean = false,
+    val highlightId: String = "",
+    val highlightTitle: String = "",
+    val highlightCoverUrl: String = "",
+    @get:com.google.firebase.firestore.Exclude
+    val isUploading: Boolean = false,
+    @get:com.google.firebase.firestore.Exclude
+    val uploadProgress: Float = 0f,
+    @get:com.google.firebase.firestore.Exclude
+    val isFailed: Boolean = false
 ) {
     @get:com.google.firebase.firestore.Exclude
     val decompressedTextFormat: String
