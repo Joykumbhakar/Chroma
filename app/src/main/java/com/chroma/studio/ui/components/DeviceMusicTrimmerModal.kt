@@ -22,14 +22,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -239,21 +242,13 @@ fun AnimatedVinylDiscGraphic(
         modifier = modifier.size(108.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Ambient breathing aura glow behind vinyl
+        // Subtle ambient halo behind vinyl when playing
         if (isPlaying) {
             Box(
                 modifier = Modifier
-                    .size(108.dp)
+                    .size(104.dp)
                     .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF0381FE).copy(alpha = glowAlpha),
-                                Color(0xFF00E5FF).copy(alpha = glowAlpha * 0.45f),
-                                Color.Transparent
-                            )
-                        )
-                    )
+                    .background(Color(0xFF0381FE).copy(alpha = glowAlpha * 0.22f))
             )
         }
 
@@ -312,14 +307,10 @@ fun AnimatedVinylDiscGraphic(
                 center = center
             )
 
-            // Center Label Badge
+            // Center Label Badge (Clean Solid One UI Primary Blue)
             val labelRadius = radius * 0.36f
             drawCircle(
-                brush = Brush.linearGradient(
-                    colors = listOf(Color(0xFF0381FE), Color(0xFF00C6FF), Color(0xFF8B5CF6)),
-                    start = Offset(center.x - labelRadius, center.y - labelRadius),
-                    end = Offset(center.x + labelRadius, center.y + labelRadius)
-                ),
+                color = Color(0xFF0381FE),
                 radius = labelRadius,
                 center = center
             )
@@ -395,13 +386,8 @@ fun AnimatedAudioEqualizer(
                     .fillMaxHeight(animatedHeight)
                     .clip(RoundedCornerShape(2.dp))
                     .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF8B5CF6),
-                                Color(0xFF00E5FF),
-                                Color(0xFF0381FE)
-                            )
-                        )
+                        if (isPlaying) Color(0xFF0381FE)
+                        else Color(0xFF0381FE).copy(alpha = 0.35f)
                     )
             )
         }
@@ -422,23 +408,28 @@ fun InteractiveAudioWaveform(
     onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalOscellionColors.current
     val startRatio = (trimStartSec / maxDuration).coerceIn(0f, 1f)
     val endRatio = (trimEndSec / maxDuration).coerceIn(0f, 1f)
     val playRatio = (currentPlaybackSec / maxDuration).coerceIn(0f, 1f)
+    val containerBg = if (colors.isDark) Color(0xFF1F222A) else Color(0xFFEEF2F7)
+    val inactiveBar = if (colors.isDark) Color.White.copy(alpha = 0.18f) else Color(0xFFCBD5E1)
+    val playheadTint = if (colors.isDark) Color.White else Color(0xFF111827)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(52.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.Black.copy(alpha = 0.28f))
+            .clip(RoundedCornerShape(14.dp))
+            .background(containerBg)
+            .border(1.dp, colors.glassBorder, RoundedCornerShape(14.dp))
             .pointerInput(maxDuration) {
                 detectTapGestures { offset ->
                     val ratio = (offset.x / size.width).coerceIn(0f, 1f)
                     onSeek(ratio * maxDuration)
                 }
             }
-            .padding(horizontal = 6.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 7.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         // Waveform bars
@@ -452,9 +443,9 @@ fun InteractiveAudioWaveform(
                 val inTrimWindow = barProgress in startRatio..endRatio
 
                 val barColor = if (inTrimWindow) {
-                    if (barProgress <= playRatio) Color(0xFF10B981) else Color(0xFF0381FE)
+                    if (barProgress <= playRatio) Color(0xFF0056B3) else Color(0xFF0381FE)
                 } else {
-                    Color.White.copy(alpha = 0.20f)
+                    inactiveBar
                 }
 
                 Box(
@@ -468,7 +459,7 @@ fun InteractiveAudioWaveform(
             }
         }
 
-        // Live Playhead indicator line with glow
+        // Live Playhead indicator line
         Box(
             modifier = Modifier
                 .fillMaxHeight()
@@ -480,8 +471,7 @@ fun InteractiveAudioWaveform(
                     .width(2.5.dp)
                     .fillMaxHeight()
                     .clip(CircleShape)
-                    .background(Color.White)
-                    .shadow(6.dp, CircleShape, spotColor = Color(0xFF0381FE))
+                    .background(playheadTint)
             )
         }
     }
@@ -493,7 +483,8 @@ fun InteractiveAudioWaveform(
 @Composable
 fun MiniPlayingEqualizer(
     isPlaying: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    barColor: Color = Color.White
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "miniEq")
     val time by infiniteTransition.animateFloat(
@@ -520,7 +511,7 @@ fun MiniPlayingEqualizer(
                     .weight(1f)
                     .fillMaxHeight(factor.coerceIn(0.2f, 1f))
                     .clip(RoundedCornerShape(1.dp))
-                    .background(Color(0xFF0381FE))
+                    .background(barColor)
             )
         }
     }
@@ -761,6 +752,8 @@ fun DeviceMusicTrimmerModal(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp)
         ) {
@@ -768,24 +761,18 @@ fun DeviceMusicTrimmerModal(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(Color(0xFF0381FE), Color(0xFF00E5FF)),
-                                    start = Offset.Zero,
-                                    end = Offset.Infinite
-                                )
-                            )
-                            .border(0.5.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(Color(0xFF0381FE)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -796,18 +783,22 @@ fun DeviceMusicTrimmerModal(
                         )
                     }
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Music Player & Studio",
-                            fontSize = 17.sp,
+                            fontSize = 17.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = colors.textMain
+                            color = colors.textMain,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = if (videoDurationSec > 0f) "Preview, trim segment, and fit to video (${formatAudioTime(videoDurationSec)})"
-                                   else "Browse tracks, audition loop, and apply soundtrack",
+                            text = if (videoDurationSec > 0f) "Preview, trim & fit to ${formatAudioTime(videoDurationSec)}"
+                                   else "Browse tracks, audition & apply soundtrack",
                             fontSize = 12.sp,
-                            color = colors.textMuted
+                            color = colors.textMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -815,9 +806,9 @@ fun DeviceMusicTrimmerModal(
                 IconButton(
                     onClick = onDismiss,
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
-                        .background(colors.glassBgHover)
+                        .background(if (colors.isDark) Color(0xFF232736) else Color(0xFFE5E7EB))
                 ) {
                     Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(16.dp))
                 }
@@ -1143,9 +1134,9 @@ fun DeviceMusicTrimmerModal(
                 Spacer(Modifier.height(12.dp))
 
                 Surface(
-                    shape = RoundedCornerShape(22.dp),
-                    color = if (colors.isDark) Color(0xFF16161B) else Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, buttonGlassBorder),
+                    shape = RoundedCornerShape(24.dp),
+                    color = if (colors.isDark) Color(0xFF171920) else Color.White,
+                    border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -1175,7 +1166,7 @@ fun DeviceMusicTrimmerModal(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(if (isPlaying) Color(0xFF10B981) else colors.textMuted)
+                                            .background(if (isPlaying) Color(0xFF0381FE) else colors.textMuted.copy(alpha = 0.45f))
                                     )
                                     Text(
                                         text = track.title,
@@ -1244,16 +1235,12 @@ fun DeviceMusicTrimmerModal(
                                     )
                                 }
 
-                                // Main Play / Pause Capsule
+                                // Main Play / Pause Circle (Solid One UI Primary Blue)
                                 Box(
                                     modifier = Modifier
-                                        .size(42.dp)
+                                        .size(44.dp)
                                         .clip(CircleShape)
-                                        .background(
-                                            Brush.linearGradient(
-                                                colors = listOf(Color(0xFF0381FE), Color(0xFF00C6FF))
-                                            )
-                                        )
+                                        .background(Color(0xFF0381FE))
                                         .clickable {
                                             if (isPlaying) {
                                                 previewPlayer.pause()
@@ -1293,7 +1280,7 @@ fun DeviceMusicTrimmerModal(
                             // Speed Chips + Mute Button
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 val speeds = listOf(0.75f, 1.0f, 1.25f, 1.5f)
                                 speeds.forEach { spd ->
@@ -1303,15 +1290,15 @@ fun DeviceMusicTrimmerModal(
                                             currentSpeed = spd
                                             previewPlayer.setPlaybackSpeed(spd)
                                         },
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = if (isCurrentSpd) Color(0xFF0381FE) else colors.glassBgHover
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isCurrentSpd) Color(0xFF0381FE) else (if (colors.isDark) Color(0xFF232732) else Color(0xFFF1F5F9))
                                     ) {
                                         Text(
                                             text = "${spd}x",
                                             fontSize = 10.5.sp,
                                             fontWeight = if (isCurrentSpd) FontWeight.Bold else FontWeight.Medium,
                                             color = if (isCurrentSpd) Color.White else colors.textMuted,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
                                         )
                                     }
                                 }
@@ -1347,7 +1334,7 @@ fun DeviceMusicTrimmerModal(
                             }
                         )
 
-                        Spacer(Modifier.height(10.dp))
+                        Spacer(Modifier.height(12.dp))
 
                         // Trimmer Header & Active Selection Duration Tag
                         Row(
@@ -1362,13 +1349,13 @@ fun DeviceMusicTrimmerModal(
                                 Icon(
                                     imageVector = Lucide.Scissors,
                                     contentDescription = null,
-                                    tint = Color(0xFF10B981),
+                                    tint = Color(0xFF0381FE),
                                     modifier = Modifier.size(15.dp)
                                 )
                                 Text(
                                     text = "Trim Audio Segment",
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = colors.textMain
                                 )
                             }
@@ -1376,22 +1363,22 @@ fun DeviceMusicTrimmerModal(
                             val selectedDuration = (trimEndSec - trimStartSec).coerceAtLeast(0.1f)
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFF10B981).copy(alpha = 0.16f),
-                                border = BorderStroke(0.5.dp, Color(0xFF10B981).copy(alpha = 0.4f))
+                                color = Color(0xFF0381FE).copy(alpha = 0.11f),
+                                border = BorderStroke(0.5.dp, Color(0xFF0381FE).copy(alpha = 0.28f))
                             ) {
                                 Text(
                                     text = "${formatAudioTime(trimStartSec)} - ${formatAudioTime(trimEndSec)} (${String.format(Locale.US, "%.1fs", selectedDuration)})",
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF10B981),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (colors.isDark) Color(0xFF60A5FA) else Color(0xFF0072DE),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.5.dp)
                                 )
                             }
                         }
 
                         Spacer(Modifier.height(6.dp))
 
-                        // Start Time Slider
+                        // Start Time Slider (Unified One UI Blue)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -1399,8 +1386,8 @@ fun DeviceMusicTrimmerModal(
                         ) {
                             Text(
                                 text = "Start",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium,
                                 color = colors.textMuted,
                                 modifier = Modifier.width(36.dp)
                             )
@@ -1413,21 +1400,21 @@ fun DeviceMusicTrimmerModal(
                                 valueRange = 0f..max(1f, maxDuration - 0.5f),
                                 modifier = Modifier.weight(1f),
                                 colors = SliderDefaults.colors(
-                                    thumbColor = Color(0xFF10B981),
-                                    activeTrackColor = Color(0xFF10B981),
-                                    inactiveTrackColor = colors.glassBorder
+                                    thumbColor = Color(0xFF0381FE),
+                                    activeTrackColor = Color(0xFF0381FE),
+                                    inactiveTrackColor = if (colors.isDark) Color.White.copy(alpha = 0.14f) else Color(0xFFE2E8F0)
                                 )
                             )
                             Text(
                                 text = formatAudioTime(trimStartSec),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 color = colors.textMain,
-                                modifier = Modifier.width(48.dp)
+                                modifier = Modifier.width(50.dp)
                             )
                         }
 
-                        // End Time Slider
+                        // End Time Slider (Unified One UI Blue)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -1435,8 +1422,8 @@ fun DeviceMusicTrimmerModal(
                         ) {
                             Text(
                                 text = "End",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium,
                                 color = colors.textMuted,
                                 modifier = Modifier.width(36.dp)
                             )
@@ -1450,38 +1437,43 @@ fun DeviceMusicTrimmerModal(
                                 colors = SliderDefaults.colors(
                                     thumbColor = Color(0xFF0381FE),
                                     activeTrackColor = Color(0xFF0381FE),
-                                    inactiveTrackColor = colors.glassBorder
+                                    inactiveTrackColor = if (colors.isDark) Color.White.copy(alpha = 0.14f) else Color(0xFFE2E8F0)
                                 )
                             )
                             Text(
                                 text = formatAudioTime(trimEndSec),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 color = colors.textMain,
-                                modifier = Modifier.width(48.dp)
+                                modifier = Modifier.width(50.dp)
                             )
                         }
 
-                        // Smart Presets
+                        Spacer(Modifier.height(4.dp))
+
+                        // Smart Presets (Horizontally scrollable & full-height — never clipped!)
+                        val chipBg = if (colors.isDark) Color(0xFF232732) else Color(0xFFF1F5F9)
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (videoDurationSec > 0f) {
                                 Surface(
                                     onClick = {
                                         trimEndSec = min(maxDuration, trimStartSec + videoDurationSec)
                                     },
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFF0381FE).copy(alpha = 0.16f),
-                                    border = BorderStroke(0.5.dp, Color(0xFF0381FE).copy(alpha = 0.4f))
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color(0xFF0381FE).copy(alpha = 0.12f),
+                                    border = BorderStroke(0.8.dp, Color(0xFF0381FE).copy(alpha = 0.35f))
                                 ) {
                                     Text(
                                         text = "Fit Video (${videoDurationSec.toInt()}s)",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF0381FE),
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (colors.isDark) Color(0xFF60A5FA) else Color(0xFF0072DE),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
                                     )
                                 }
                             }
@@ -1491,14 +1483,15 @@ fun DeviceMusicTrimmerModal(
                                     trimStartSec = 0f
                                     trimEndSec = min(maxDuration, 15f)
                                 },
-                                shape = RoundedCornerShape(8.dp),
-                                color = colors.glassBgHover
+                                shape = RoundedCornerShape(10.dp),
+                                color = chipBg
                             ) {
                                 Text(
                                     text = "Intro 15s",
-                                    fontSize = 11.sp,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
                                     color = colors.textMain,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
                                 )
                             }
 
@@ -1508,14 +1501,15 @@ fun DeviceMusicTrimmerModal(
                                     trimStartSec = max(0f, mid - 15f)
                                     trimEndSec = min(maxDuration, mid + 15f)
                                 },
-                                shape = RoundedCornerShape(8.dp),
-                                color = colors.glassBgHover
+                                shape = RoundedCornerShape(10.dp),
+                                color = chipBg
                             ) {
                                 Text(
                                     text = "Hook 30s",
-                                    fontSize = 11.sp,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
                                     color = colors.textMain,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
                                 )
                             }
 
@@ -1524,14 +1518,15 @@ fun DeviceMusicTrimmerModal(
                                     trimStartSec = 0f
                                     trimEndSec = maxDuration
                                 },
-                                shape = RoundedCornerShape(8.dp),
-                                color = colors.glassBgHover
+                                shape = RoundedCornerShape(10.dp),
+                                color = chipBg
                             ) {
                                 Text(
                                     text = "Full Track",
-                                    fontSize = 11.sp,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
                                     color = colors.textMain,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
                                 )
                             }
                         }
@@ -1541,7 +1536,7 @@ fun DeviceMusicTrimmerModal(
                         // Preview Trim Loop Button & One-Click Apply Button
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             // Audition Trimmed Segment Loop
                             Surface(
@@ -1553,10 +1548,10 @@ fun DeviceMusicTrimmerModal(
                                 },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(46.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                color = colors.glassBgHover,
-                                border = BorderStroke(1.dp, buttonGlassBorder)
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                color = chipBg,
+                                border = BorderStroke(1.dp, colors.glassBorder)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxSize(),
@@ -1571,15 +1566,15 @@ fun DeviceMusicTrimmerModal(
                                     )
                                     Spacer(Modifier.width(6.dp))
                                     Text(
-                                        text = if (isPreviewingTrimOnly && isPlaying) "Looping Trim..." else "Preview Trim",
-                                        fontSize = 12.5.sp,
+                                        text = if (isPreviewingTrimOnly && isPlaying) "Looping..." else "Preview Trim",
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = colors.textMain
                                     )
                                 }
                             }
 
-                            // One-Click Use in Video Editor CTA
+                            // One-Click Use in Video Editor CTA (Solid One UI Primary Blue)
                             Surface(
                                 onClick = {
                                     try {
@@ -1595,21 +1590,12 @@ fun DeviceMusicTrimmerModal(
                                 },
                                 modifier = Modifier
                                     .weight(1.3f)
-                                    .height(46.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                color = Color.Transparent,
-                                border = BorderStroke(1.dp, buttonGlassBorder)
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(0xFF0381FE)
                             ) {
                                 Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.linearGradient(
-                                                colors = listOf(Color(0xFF0381FE), Color(0xFF10B981)),
-                                                start = Offset.Zero,
-                                                end = Offset.Infinite
-                                            )
-                                        ),
+                                    modifier = Modifier.fillMaxSize(),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Row(
@@ -1624,9 +1610,9 @@ fun DeviceMusicTrimmerModal(
                                         )
                                         Spacer(Modifier.width(6.dp))
                                         Text(
-                                            text = "Use in Video Editor",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
+                                            text = "Use in Editor",
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
                                             color = Color.White
                                         )
                                     }

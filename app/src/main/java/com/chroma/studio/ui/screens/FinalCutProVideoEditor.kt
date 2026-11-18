@@ -4768,21 +4768,15 @@ private fun TimelineAudioTrackLane(
     val latestPps by rememberUpdatedState(pixelsPerSec)
     // Lane shows only the trimmed segment; it always starts at timeline 0 (soundtrack in-point = trimStart)
     val audioTrackWidthDp = (customAudio.trimmedLengthSec * pixelsPerSec).dp.coerceAtLeast(28.dp)
+    val trackAccent = Color(0xFF0381FE)
     Box(
         modifier = Modifier
             .offset(x = timelineStartPaddingDp, y = 78.dp)
             .width(audioTrackWidthDp)
             .height(24.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(
-                Brush.horizontalGradient(
-                    listOf(
-                        Color(0xFF064E3B).copy(alpha = 0.85f),
-                        Color(0xFF047857).copy(alpha = 0.65f)
-                    )
-                )
-            )
-            .border(1.dp, Color(0xFF10B981).copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color(0xFF1A2942).copy(alpha = 0.92f))
+            .border(1.dp, trackAccent.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
             .clickable { onOpenAudioTab() }
             .padding(horizontal = 6.dp),
         contentAlignment = Alignment.CenterStart
@@ -4808,7 +4802,7 @@ private fun TimelineAudioTrackLane(
                 val barH = maxBarHeight * factor
                 val x = i * totalBarStep + barGap
                 drawRoundRect(
-                    color = Color(0xFF34D399).copy(alpha = 0.25f),
+                    color = trackAccent.copy(alpha = 0.32f),
                     topLeft = Offset(x, centerY - barH / 2f),
                     size = Size(barWidth, barH),
                     cornerRadius = CornerRadius(1.dp.toPx(), 1.dp.toPx())
@@ -4828,7 +4822,7 @@ private fun TimelineAudioTrackLane(
                 Icon(
                     imageVector = if (customAudio.isExtractedFromVideo) Lucide.Film else Lucide.Music,
                     contentDescription = "Audio track",
-                    tint = Color(0xFF34D399),
+                    tint = Color(0xFF60A5FA),
                     modifier = Modifier.size(11.dp)
                 )
                 Text(
@@ -4854,7 +4848,7 @@ private fun TimelineAudioTrackLane(
                         Text(
                             text = "Muted Video",
                             fontSize = 7.5.sp,
-                            color = Color(0xFF34D399),
+                            color = Color(0xFF93C5FD),
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -4874,7 +4868,7 @@ private fun TimelineAudioTrackLane(
                 modifier = modifier
                     .width(14.dp)
                     .fillMaxHeight()
-                    .background(Color(0xFF34D399).copy(alpha = 0.9f), RoundedCornerShape(if (isLeft) 4.dp else 4.dp))
+                    .background(trackAccent, RoundedCornerShape(4.dp))
                     .pointerInput(isLeft) {
                         detectDragGestures(
                             onDragStart = {
@@ -4892,7 +4886,7 @@ private fun TimelineAudioTrackLane(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Box(Modifier.width(2.dp).height(10.dp).background(Color(0xFF064E3B), RoundedCornerShape(1.dp)))
+                Box(Modifier.width(2.dp).height(10.dp).background(Color.White, RoundedCornerShape(1.dp)))
             }
         }
         TrimHandle(Modifier.align(Alignment.CenterStart).offset(x = (-6).dp), isLeft = true)
@@ -5984,15 +5978,19 @@ private fun AudioTrimPreviewCard(
     val waveform = remember {
         FloatArray(160) { i -> ((Math.sin(i * 0.37) * 0.4 + Math.cos(i * 0.19) * 0.3 + 0.75).toFloat()).coerceIn(0.15f, 1f) }
     }
-    val green = Color(0xFF34D399)
-    WorkspaceSectionCard(title = "TRIM & PREVIEW", icon = Lucide.Scissors) {
+    val accent = Color(0xFF0381FE)
+    val waveformSurface = if (colors.isDark) Color(0xFF1A1D24) else Color(0xFFF1F4F9)
+    val inactiveBarColor = if (colors.isDark) Color.White.copy(alpha = 0.18f) else Color(0xFFCBD5E1)
+    val playheadColor = if (colors.isDark) Color.White else Color(0xFF111827)
+    WorkspaceSectionCard(title = "Trim & Preview", icon = Lucide.Scissors) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black.copy(alpha = 0.25f))
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(waveformSurface)
+                    .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
                     .pointerInput(total) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
@@ -6035,19 +6033,19 @@ private fun AudioTrimPreviewCard(
                         val x = i * step + step / 2f
                         val h = size.height * 0.72f * waveform[(i * waveform.size / n.coerceAtLeast(1)).coerceIn(0, waveform.size - 1)]
                         drawLine(
-                            color = if (x in sx..ex) green.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.18f),
+                            color = if (x in sx..ex) accent.copy(alpha = 0.88f) else inactiveBarColor,
                             start = Offset(x, (size.height - h) / 2f),
                             end = Offset(x, (size.height + h) / 2f),
                             strokeWidth = 1.8.dp.toPx()
                         )
                     }
                     // selection frame + handles
-                    drawRect(green.copy(alpha = 0.12f), Offset(sx, 0f), Size((ex - sx).coerceAtLeast(0f), size.height))
-                    drawRoundRect(green, Offset(sx - 3.dp.toPx(), 0f), Size(6.dp.toPx(), size.height), CornerRadius(3.dp.toPx()))
-                    drawRoundRect(green, Offset(ex - 3.dp.toPx(), 0f), Size(6.dp.toPx(), size.height), CornerRadius(3.dp.toPx()))
+                    drawRect(accent.copy(alpha = 0.10f), Offset(sx, 0f), Size((ex - sx).coerceAtLeast(0f), size.height))
+                    drawRoundRect(accent, Offset(sx - 3.dp.toPx(), 0f), Size(6.dp.toPx(), size.height), CornerRadius(3.dp.toPx()))
+                    drawRoundRect(accent, Offset(ex - 3.dp.toPx(), 0f), Size(6.dp.toPx(), size.height), CornerRadius(3.dp.toPx()))
                     // preview playhead
                     val px = (audio.trimStartSec + previewPosSec) / total * size.width
-                    drawLine(Color.White, Offset(px, 0f), Offset(px, size.height), strokeWidth = 2.dp.toPx())
+                    drawLine(playheadColor, Offset(px, 0f), Offset(px, size.height), strokeWidth = 2.dp.toPx())
                 }
             }
             Row(
@@ -6070,23 +6068,23 @@ private fun AudioTrimPreviewCard(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(green.copy(alpha = 0.2f))
-                        .border(1.dp, green.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accent.copy(alpha = 0.12f))
+                        .border(1.dp, accent.copy(alpha = 0.28f), RoundedCornerShape(12.dp))
                         .clickable { onTogglePreview() }
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(if (isPreviewing) Lucide.Pause else Lucide.Play, contentDescription = if (isPreviewing) "Pause Preview" else "Play Preview", tint = green, modifier = Modifier.size(16.dp))
-                        Text(if (isPreviewing) "Pause Preview" else "Preview Audio", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
+                        Icon(if (isPreviewing) Lucide.Pause else Lucide.Play, contentDescription = if (isPreviewing) "Pause Preview" else "Play Preview", tint = accent, modifier = Modifier.size(16.dp))
+                        Text(if (isPreviewing) "Pause Preview" else "Preview Audio", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = accent)
                     }
                 }
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(colors.glassBg)
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(10.dp))
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
                         .clickable { onTrimStart(); onTrimChange(0f, audio.durationSec) }
                         .padding(vertical = 10.dp, horizontal = 14.dp),
                     contentAlignment = Alignment.Center
@@ -6095,8 +6093,8 @@ private fun AudioTrimPreviewCard(
                 }
             }
             Text(
-                "Drag the green handles to trim. Tap or drag elsewhere on the bar to scrub the preview. Preview is independent of the timeline.",
-                fontSize = 9.5.sp, color = colors.textMuted, lineHeight = 13.sp
+                "Drag the blue handles to trim. Tap or drag on the waveform to scrub the preview.",
+                fontSize = 10.sp, color = colors.textMuted, lineHeight = 14.sp
             )
         }
     }
@@ -6135,114 +6133,96 @@ private fun AudioTabContent(
     ) {
         // ── 1. CUSTOM SOUNDTRACK & VIDEO AUDIO EXTRACTION CARD ──
         item {
-            WorkspaceSectionCard(title = "SOUNDTRACK & AUDIO REPLACEMENT", icon = Lucide.Music) {
+            val oneUiPrimary = Color(0xFF0381FE)
+            val cardSurface = if (colors.isDark) Color(0xFF1A1D24) else Color.White
+            val cardBorderColor = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
+            WorkspaceSectionCard(title = "Soundtrack & Audio", icon = Lucide.Music) {
                 if (customAudio == null) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(
                             text = "Replace the video's original audio track with custom music or extract audio from another video.",
-                            fontSize = 11.sp,
+                            fontSize = 11.5.sp,
                             color = colors.textMuted,
-                            lineHeight = 15.sp
+                            lineHeight = 16.sp
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // "Add Audio" Button
+                            // "Add Audio" Button (Clean One UI Surface)
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(
-                                                colors.primary.copy(alpha = 0.22f),
-                                                colors.primary.copy(alpha = 0.08f)
-                                            )
-                                        )
-                                    )
-                                    .border(1.dp, colors.primary.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(cardSurface)
+                                    .border(1.dp, cardBorderColor, RoundedCornerShape(14.dp))
                                     .clickable { onAddAudioFile() }
-                                    .padding(vertical = 12.dp, horizontal = 10.dp),
+                                    .padding(vertical = 14.dp, horizontal = 10.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(32.dp)
+                                            .size(36.dp)
                                             .clip(CircleShape)
-                                            .background(colors.primary.copy(alpha = 0.25f)),
+                                            .background(oneUiPrimary.copy(alpha = 0.12f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Lucide.Music, contentDescription = "Add Audio", tint = colors.primary, modifier = Modifier.size(18.dp))
+                                        Icon(Lucide.Music, contentDescription = "Add Audio", tint = oneUiPrimary, modifier = Modifier.size(18.dp))
                                     }
-                                    Text("Add Audio", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
-                                    Text("MP3, M4A, WAV", fontSize = 9.5.sp, color = colors.textMuted)
+                                    Text("Add Audio", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                                    Text("MP3, M4A, WAV", fontSize = 10.sp, color = colors.textMuted)
                                 }
                             }
-                            // "Extract from a video" Button
+                            // "Extract from a video" Button (Clean One UI Surface)
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(
-                                                Color(0xFF8B5CF6).copy(alpha = 0.22f),
-                                                Color(0xFF8B5CF6).copy(alpha = 0.08f)
-                                            )
-                                        )
-                                    )
-                                    .border(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(cardSurface)
+                                    .border(1.dp, cardBorderColor, RoundedCornerShape(14.dp))
                                     .clickable { onExtractAudioFromVideo() }
-                                    .padding(vertical = 12.dp, horizontal = 10.dp),
+                                    .padding(vertical = 14.dp, horizontal = 10.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(32.dp)
+                                            .size(36.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFF8B5CF6).copy(alpha = 0.25f)),
+                                            .background(oneUiPrimary.copy(alpha = 0.12f)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Lucide.Film, contentDescription = "Extract Audio", tint = Color(0xFFA78BFA), modifier = Modifier.size(18.dp))
+                                        Icon(Lucide.Film, contentDescription = "Extract Audio", tint = oneUiPrimary, modifier = Modifier.size(18.dp))
                                     }
-                                    Text("Extract From Video", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
-                                    Text("Rip audio from video", fontSize = 9.5.sp, color = colors.textMuted)
+                                    Text("Extract From Video", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                                    Text("Rip audio from video", fontSize = 10.sp, color = colors.textMuted)
                                 }
                             }
                         }
                     }
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .editorChromeFadeOnScrub(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                        // Header banner with track info and delete button
+                        // Clean One UI Selected Soundtrack Card
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(
-                                            Color(0xFF064E3B).copy(alpha = 0.6f),
-                                            colors.glassBg
-                                        )
-                                    )
-                                )
-                                .border(1.dp, Color(0xFF10B981).copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                                .padding(10.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(cardSurface)
+                                .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
+                                .padding(horizontal = 12.dp, vertical = 11.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -6252,26 +6232,29 @@ private fun AudioTabContent(
                                 Row(
                                     modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(34.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF10B981).copy(alpha = 0.2f)),
+                                            .size(40.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(oneUiPrimary.copy(alpha = 0.12f)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = if (customAudio.isExtractedFromVideo) Lucide.Film else Lucide.Music,
                                             contentDescription = "Audio track",
-                                            tint = Color(0xFF34D399),
-                                            modifier = Modifier.size(18.dp)
+                                            tint = oneUiPrimary,
+                                            modifier = Modifier.size(19.dp)
                                         )
                                     }
-                                    Column(modifier = Modifier.weight(1f)) {
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
                                         Text(
                                             text = customAudio.name,
-                                            fontSize = 12.5.sp,
+                                            fontSize = 13.5.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = colors.textMain,
                                             maxLines = 1,
@@ -6283,21 +6266,21 @@ private fun AudioTabContent(
                                         ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(Color(0xFF10B981).copy(alpha = 0.2f))
-                                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(oneUiPrimary.copy(alpha = 0.12f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
                                             ) {
                                                 Text(
                                                     text = if (customAudio.isExtractedFromVideo) "Extracted Audio" else "Custom Audio",
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color(0xFF34D399)
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = if (colors.isDark) Color(0xFF60A5FA) else Color(0xFF0072DE)
                                                 )
                                             }
                                             if (customAudio.durationSec > 0f) {
                                                 Text(
                                                     text = formatTimecode(customAudio.durationSec),
-                                                    fontSize = 9.5.sp,
+                                                    fontSize = 10.5.sp,
                                                     color = colors.textMuted,
                                                     fontFamily = FontFamily.Monospace
                                                 )
@@ -6307,13 +6290,13 @@ private fun AudioTabContent(
                                 }
                                 IconButton(
                                     onClick = onRemoveCustomAudio,
-                                    modifier = Modifier.size(32.dp)
+                                    modifier = Modifier.size(34.dp)
                                 ) {
                                     Icon(
                                         imageVector = Lucide.Trash2,
                                         contentDescription = "Remove soundtrack",
                                         tint = Color(0xFFEF4444),
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
                             }
@@ -6322,27 +6305,27 @@ private fun AudioTabContent(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(colors.glassBg)
-                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(cardSurface)
+                                .border(1.dp, cardBorderColor, RoundedCornerShape(14.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
                                 Text(
                                     text = "Replace Video Audio (Mute Original)",
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colors.textMain
                                 )
                                 Text(
                                     text = if (customAudio.muteOriginalVideo)
-                                        "Original video sound is 100% muted & replaced"
+                                        "Original video sound is muted and replaced"
                                     else
                                         "Mix custom audio with original video sound",
-                                    fontSize = 10.sp,
-                                    color = if (customAudio.muteOriginalVideo) Color(0xFF34D399) else colors.textMuted
+                                    fontSize = 11.sp,
+                                    color = colors.textMuted
                                 )
                             }
                             SmallSwitch(
@@ -6354,27 +6337,27 @@ private fun AudioTabContent(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(colors.glassBg)
-                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(cardSurface)
+                                .border(1.dp, cardBorderColor, RoundedCornerShape(14.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
                                 Text(
                                     text = "Loop Soundtrack",
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colors.textMain
                                 )
                                 Text(
                                     text = if (customAudio.loopAudio)
-                                        "Soundtrack repeats continuously across entire project"
+                                        "Soundtrack repeats continuously across project"
                                     else
                                         "Plays once and stops when track ends",
-                                    fontSize = 10.sp,
-                                    color = if (customAudio.loopAudio) Color(0xFF34D399) else colors.textMuted
+                                    fontSize = 11.sp,
+                                    color = colors.textMuted
                                 )
                             }
                             SmallSwitch(
@@ -6386,27 +6369,27 @@ private fun AudioTabContent(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(colors.glassBg)
-                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(cardSurface)
+                                .border(1.dp, cardBorderColor, RoundedCornerShape(14.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
                                 Text(
                                     text = "Smart Audio Ducking",
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colors.textMain
                                 )
                                 Text(
                                     text = if (customAudio.autoDucking)
-                                        "Automatically lowers BGM by -12dB when dialogue speaks"
+                                        "Lowers background music by -12 dB during speech"
                                     else
                                         "Keep background soundtrack volume constant",
-                                    fontSize = 10.sp,
-                                    color = if (customAudio.autoDucking) Color(0xFF34D399) else colors.textMuted
+                                    fontSize = 11.sp,
+                                    color = colors.textMuted
                                 )
                             }
                             SmallSwitch(
@@ -6425,7 +6408,7 @@ private fun AudioTabContent(
                             isBipolar = false,
                             formatValue = { v -> "${v.toInt()}%" },
                             onValueChange = { onAudioVolumeChange(it / 100f) },
-                            gradientColors = listOf(Color(0xFF10B981), Color(0xFF84CC16), Color(0xFFFACC15), Color(0xFF38BDF8))
+                            gradientColors = listOf(oneUiPrimary, oneUiPrimary)
                         )
                         // Audio Fade In & Fade Out
                         Row(
@@ -6442,7 +6425,7 @@ private fun AudioTabContent(
                                     isBipolar = false,
                                     formatValue = { String.format("%.1fs", it) },
                                     onValueChange = onFadeInChange,
-                                    gradientColors = listOf(Color(0xFF0381FE), Color(0xFF5AC8FA))
+                                    gradientColors = listOf(oneUiPrimary, oneUiPrimary)
                                 )
                             }
                             Box(modifier = Modifier.weight(1f)) {
@@ -6455,7 +6438,7 @@ private fun AudioTabContent(
                                     isBipolar = false,
                                     formatValue = { String.format("%.1fs", it) },
                                     onValueChange = onFadeOutChange,
-                                    gradientColors = listOf(Color(0xFFFF9500), Color(0xFFFFCC00))
+                                    gradientColors = listOf(oneUiPrimary, oneUiPrimary)
                                 )
                             }
                         }
@@ -6469,37 +6452,37 @@ private fun AudioTabContent(
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(colors.glassBg)
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(cardSurface)
+                                    .border(1.dp, cardBorderColor, RoundedCornerShape(12.dp))
                                     .clickable { onAddAudioFile() }
-                                    .padding(vertical = 8.dp),
+                                    .padding(vertical = 10.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
-                                    Icon(Lucide.Music, contentDescription = "Soundtrack", tint = colors.primary, modifier = Modifier.size(13.dp))
-                                    Text("Change Audio", fontSize = 11.sp, color = colors.textMain, fontWeight = FontWeight.Medium)
+                                    Icon(Lucide.Music, contentDescription = "Soundtrack", tint = oneUiPrimary, modifier = Modifier.size(14.dp))
+                                    Text("Change Audio", fontSize = 12.sp, color = colors.textMain, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(colors.glassBg)
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(cardSurface)
+                                    .border(1.dp, cardBorderColor, RoundedCornerShape(12.dp))
                                     .clickable { onExtractAudioFromVideo() }
-                                    .padding(vertical = 8.dp),
+                                    .padding(vertical = 10.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
-                                    Icon(Lucide.Film, contentDescription = "Video file", tint = Color(0xFFA78BFA), modifier = Modifier.size(13.dp))
-                                    Text("Extract From Video", fontSize = 11.sp, color = colors.textMain, fontWeight = FontWeight.Medium)
+                                    Icon(Lucide.Film, contentDescription = "Video file", tint = oneUiPrimary, modifier = Modifier.size(14.dp))
+                                    Text("Extract From Video", fontSize = 12.sp, color = colors.textMain, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -6525,27 +6508,27 @@ private fun AudioTabContent(
         }
         // ── 2. ORIGINAL VIDEO AUDIO MIXER CARD ──
         item {
-            WorkspaceSectionCard(title = "ORIGINAL VIDEO AUDIO", icon = Lucide.Volume2) {
+            WorkspaceSectionCard(title = "Original Video Audio", icon = Lucide.Volume2) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     if (customAudio?.muteOriginalVideo == true) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .editorChromeFadeOnScrub()
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFFF59E0B).copy(alpha = 0.12f))
-                                .border(0.5.dp, Color(0xFFF59E0B).copy(alpha = 0.35f), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFFF59E0B).copy(alpha = 0.10f))
+                                .border(0.5.dp, Color(0xFFF59E0B).copy(alpha = 0.30f), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Icon(Lucide.VolumeX, contentDescription = "Muted audio", tint = Color(0xFFF59E0B), modifier = Modifier.size(14.dp))
+                                Icon(Lucide.VolumeX, contentDescription = "Muted audio", tint = Color(0xFFD97706), modifier = Modifier.size(14.dp))
                                 Text(
                                     text = "Original audio is muted. Toggle 'Replace Video Audio' above to unmute and mix.",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFFF59E0B),
+                                    fontSize = 10.5.sp,
+                                    color = Color(0xFFB45309),
                                     lineHeight = 14.sp
                                 )
                             }
@@ -6564,7 +6547,7 @@ private fun AudioTabContent(
                             if (iv > 0) "+$iv dB" else if (iv < 0) "$iv dB" else "0 dB"
                         },
                         onValueChange = onGainChange,
-                        gradientColors = listOf(Color(0xFF10B981), Color(0xFF84CC16), Color(0xFFFACC15), Color(0xFF38BDF8))
+                        gradientColors = listOf(Color(0xFF0381FE), Color(0xFF0381FE))
                     )
                     // Voice Isolation Switch
                     Row(
@@ -12850,6 +12833,8 @@ fun FcpExportSheet(
                     )
 
                     // Header Row: App Logo Badge + Title + Subtitle + Close Button
+                    val oneUiBlue = Color(0xFF0381FE)
+                    val metricIconBg = if (colors.isDark) Color(0xFF202532) else Color(0xFFEFF6FF)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -12862,12 +12847,8 @@ fun FcpExportSheet(
                             Box(
                                 modifier = Modifier
                                     .size(42.dp)
-                                    .clip(RoundedCornerShape(13.dp))
-                                    .background(
-                                        Brush.linearGradient(
-                                            listOf(Color(0xFF2563EB), Color(0xFF7C3AED))
-                                        )
-                                    ),
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(oneUiBlue),
                                 contentAlignment = Alignment.Center
                             ) {
                                 OscellionNotificationBadge(size = 22.dp, tint = Color.White)
@@ -12875,7 +12856,7 @@ fun FcpExportSheet(
                             Column {
                                 Text(
                                     text = "Export & Render",
-                                    fontSize = 18.5.sp,
+                                    fontSize = 19.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = colors.textMain
                                 )
@@ -12886,13 +12867,13 @@ fun FcpExportSheet(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(7.dp)
+                                            .size(6.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFF10B981))
+                                            .background(oneUiBlue)
                                     )
                                     Text(
                                         text = "Hardware Accelerated · H.264 / AAC",
-                                        fontSize = 11.sp,
+                                        fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = colors.textMuted
                                     )
@@ -12903,20 +12884,20 @@ fun FcpExportSheet(
                             modifier = Modifier
                                 .size(34.dp)
                                 .clip(CircleShape)
-                                .background(if (colors.isDark) Color(0xFF232736) else Color(0xFFE2E8F0))
+                                .background(if (colors.isDark) Color(0xFF232736) else Color(0xFFE5E7EB))
                                 .clickable(onClick = { if (isExporting) onCancelExport() else onDismiss() }),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Lucide.X,
                                 contentDescription = if (isExporting) "Cancel Export" else "Close",
-                                tint = if (isExporting) Color(0xFFEF4444) else colors.textMuted,
+                                tint = if (isExporting) Color(0xFFEF4444) else colors.textMain,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
                     }
 
-                    // Project Summary Specs (Samsung One UI 7 Focus Block: 2x2 Grid)
+                    // Project Summary Specs (Samsung One UI Focus Block: 2x2 Grid)
                     val separatorColor = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
                     Box(
                         modifier = Modifier
@@ -12946,13 +12927,13 @@ fun FcpExportSheet(
                                         modifier = Modifier
                                             .size(34.dp)
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(if (colors.isDark) Color(0xFF1E2433) else Color(0xFFEFF6FF)),
+                                            .background(metricIconBg),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Lucide.Clock,
                                             contentDescription = "Duration",
-                                            tint = Color(0xFF3B82F6),
+                                            tint = oneUiBlue,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -12997,13 +12978,13 @@ fun FcpExportSheet(
                                         modifier = Modifier
                                             .size(34.dp)
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(if (colors.isDark) Color(0xFF261E38) else Color(0xFFFAF5FF)),
+                                            .background(metricIconBg),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Lucide.Maximize2,
                                             contentDescription = "Output Dimensions",
-                                            tint = Color(0xFF8B5CF6),
+                                            tint = oneUiBlue,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -13021,7 +13002,7 @@ fun FcpExportSheet(
                                             text = resDimensionStr,
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = colors.primary,
+                                            color = colors.textMain,
                                             maxLines = 1,
                                             softWrap = false,
                                             overflow = TextOverflow.Ellipsis
@@ -13054,13 +13035,13 @@ fun FcpExportSheet(
                                         modifier = Modifier
                                             .size(34.dp)
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(if (colors.isDark) Color(0xFF2B2416) else Color(0xFFFEFCE8)),
+                                            .background(metricIconBg),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Lucide.Layers,
                                             contentDescription = "Timeline Clips",
-                                            tint = Color(0xFFF59E0B),
+                                            tint = oneUiBlue,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -13105,13 +13086,13 @@ fun FcpExportSheet(
                                         modifier = Modifier
                                             .size(34.dp)
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(if (colors.isDark) Color(0xFF132A22) else Color(0xFFECFDF5)),
+                                            .background(metricIconBg),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Lucide.HardDrive,
                                             contentDescription = "Estimated File Size",
-                                            tint = Color(0xFF10B981),
+                                            tint = oneUiBlue,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -13129,7 +13110,7 @@ fun FcpExportSheet(
                                             text = "~$estimatedSizeStr",
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF10B981),
+                                            color = colors.textMain,
                                             maxLines = 1,
                                             softWrap = false,
                                             overflow = TextOverflow.Ellipsis
@@ -13140,41 +13121,36 @@ fun FcpExportSheet(
                         }
                     }
 
-                    // Audio Track Spec Card
+                    // Audio Track Spec Card (Clean One UI Focus Block)
                     if (customAudio != null) {
-                        val audioBg = if (colors.isDark) Color(0xFF064E3B).copy(alpha = 0.30f) else Color(0xFFECFDF5)
-                        val audioBorder = if (colors.isDark) Color(0xFF059669).copy(alpha = 0.35f) else Color(0xFFA7F3D0)
-                        val audioIconBg = if (colors.isDark) Color(0xFF059669) else Color(0xFF10B981)
-                        val audioSubColor = if (colors.isDark) Color(0xFF6EE7B7) else Color(0xFF047857)
-
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(audioBg)
-                                .border(1.dp, audioBorder, RoundedCornerShape(16.dp))
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(cardBg)
+                                .border(1.dp, cardBorder, RoundedCornerShape(20.dp))
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(audioIconBg),
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(metricIconBg),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = if (customAudio.isExtractedFromVideo) Lucide.Film else Lucide.Music,
                                     contentDescription = "Audio track",
-                                    tint = Color.White,
+                                    tint = oneUiBlue,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = customAudio.name,
-                                    fontSize = 13.sp,
+                                    fontSize = 13.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colors.textMain,
                                     maxLines = 1,
@@ -13182,10 +13158,10 @@ fun FcpExportSheet(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = if (customAudio.muteOriginalVideo) "Replaces video audio (original muted)" else "Mixed with camera audio · AAC 48kHz",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = audioSubColor,
+                                    text = if (customAudio.muteOriginalVideo) "Replaces video audio · Original muted" else "Mixed with camera audio · AAC 48kHz",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = colors.textMuted,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -13193,15 +13169,15 @@ fun FcpExportSheet(
                             if (customAudio.loopAudio) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (colors.isDark) Color(0xFF065F46) else Color(0xFFD1FAE5))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(oneUiBlue.copy(alpha = 0.12f))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
                                 ) {
                                     Text(
                                         text = "Looping",
-                                        fontSize = 10.sp,
-                                        color = if (colors.isDark) Color(0xFFA7F3D0) else Color(0xFF065F46),
-                                        fontWeight = FontWeight.Bold
+                                        fontSize = 10.5.sp,
+                                        color = if (colors.isDark) Color(0xFF60A5FA) else Color(0xFF0072DE),
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }
@@ -13214,9 +13190,9 @@ fun FcpExportSheet(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(22.dp))
+                                .clip(RoundedCornerShape(24.dp))
                                 .background(cardBg)
-                                .border(1.dp, Color(0xFF2563EB).copy(alpha = 0.30f), RoundedCornerShape(22.dp))
+                                .border(1.dp, oneUiBlue.copy(alpha = 0.25f), RoundedCornerShape(24.dp))
                                 .padding(vertical = 20.dp, horizontal = 16.dp)
                         ) {
                             Column(
@@ -13224,7 +13200,7 @@ fun FcpExportSheet(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                // Circular Radial Gauge
+                                // Circular Radial Gauge (Solid One UI Primary Blue)
                                 Box(
                                     modifier = Modifier.size(130.dp),
                                     contentAlignment = Alignment.Center
@@ -13240,16 +13216,9 @@ fun FcpExportSheet(
                                             center = centerPt,
                                             style = Stroke(width = strokeW)
                                         )
-                                        // Sweeping progress arc
+                                        // Solid progress arc
                                         drawArc(
-                                            brush = Brush.sweepGradient(
-                                                listOf(
-                                                    Color(0xFF2563EB),
-                                                    Color(0xFF8B5CF6),
-                                                    Color(0xFF38BDF8),
-                                                    Color(0xFF2563EB)
-                                                )
-                                            ),
+                                            color = oneUiBlue,
                                             startAngle = -90f,
                                             sweepAngle = animatedProgress * 360f,
                                             useCenter = false,
@@ -13270,7 +13239,7 @@ fun FcpExportSheet(
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
                                             letterSpacing = 1.2.sp,
-                                            color = Color(0xFF3B82F6)
+                                            color = oneUiBlue
                                         )
                                     }
                                 }
@@ -13356,15 +13325,15 @@ fun FcpExportSheet(
                             ) {
                                 Text(
                                     text = "Resolution",
-                                    fontSize = 13.5.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colors.textMain
                                 )
                                 Text(
                                     text = "Hardware Accelerated",
-                                    fontSize = 11.sp,
+                                    fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = Color(0xFF10B981)
+                                    color = colors.textMuted
                                 )
                             }
                             Row(
@@ -13383,26 +13352,13 @@ fun FcpExportSheet(
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .height(72.dp)
-                                            .then(
-                                                if (isSel) Modifier.shadow(
-                                                    6.dp,
-                                                    RoundedCornerShape(16.dp),
-                                                    spotColor = Color(0xFF2563EB).copy(alpha = 0.45f)
-                                                )
-                                                else Modifier
-                                            )
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(
-                                                if (isSel) Brush.linearGradient(
-                                                    listOf(Color(0xFF1D4ED8), Color(0xFF2563EB))
-                                                )
-                                                else Brush.linearGradient(listOf(cardBg, cardBg))
-                                            )
+                                            .height(70.dp)
+                                            .clip(RoundedCornerShape(18.dp))
+                                            .background(if (isSel) oneUiBlue else cardBg)
                                             .border(
                                                 1.dp,
-                                                if (isSel) Color(0xFF60A5FA).copy(alpha = 0.40f) else cardBorder,
-                                                RoundedCornerShape(16.dp)
+                                                if (isSel) oneUiBlue else cardBorder,
+                                                RoundedCornerShape(18.dp)
                                             )
                                             .clickable { selectedRes = res }
                                             .padding(horizontal = 8.dp, vertical = 8.dp),
@@ -13428,15 +13384,15 @@ fun FcpExportSheet(
                                                             .clip(RoundedCornerShape(6.dp))
                                                             .background(
                                                                 if (isSel) Color.White.copy(alpha = 0.22f)
-                                                                else Color(0xFF2563EB).copy(alpha = 0.15f)
+                                                                else oneUiBlue.copy(alpha = 0.12f)
                                                             )
-                                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                            .padding(horizontal = 5.dp, vertical = 1.dp)
                                                     ) {
                                                         Text(
                                                             text = "PRO",
                                                             fontSize = 8.5.sp,
-                                                            fontWeight = FontWeight.Black,
-                                                            color = if (isSel) Color.White else Color(0xFF2563EB)
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isSel) Color.White else oneUiBlue
                                                         )
                                                     }
                                                 }
@@ -13532,27 +13488,18 @@ fun FcpExportSheet(
 
                         Spacer(modifier = Modifier.height(2.dp))
 
-                        // Action Buttons
+                        // Action Buttons (Clean One UI Contained & Tonal Hierarchy)
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // 1. Export & Post to Studio (Hero Button)
+                            // 1. Export & Post to Studio (Solid One UI Primary Blue Hero Button)
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(52.dp)
-                                    .shadow(
-                                        elevation = 6.dp,
-                                        shape = RoundedCornerShape(16.dp),
-                                        spotColor = Color(0xFF2563EB).copy(alpha = 0.45f)
-                                    )
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(
-                                        Brush.linearGradient(
-                                            colors = listOf(Color(0xFF1D4ED8), Color(0xFF2563EB), Color(0xFF6366F1))
-                                        )
-                                    )
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(oneUiBlue)
                                     .clickable { onExportToStudio(selectedRes, selectedFps) },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -13570,13 +13517,13 @@ fun FcpExportSheet(
                                     Text(
                                         text = if (totalDurationSec > 60f) "Export & Post to Studio (Max 60s)" else "Export & Post to Studio",
                                         color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.5.sp
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 15.sp
                                     )
                                 }
                             }
 
-                            // 2. Save to Gallery & Share Video (Side-by-side)
+                            // 2. Save to Gallery & Share Video (Side-by-side Clean One UI Secondary Buttons)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -13586,41 +13533,30 @@ fun FcpExportSheet(
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(48.dp)
-                                        .clip(RoundedCornerShape(14.dp))
+                                        .clip(RoundedCornerShape(16.dp))
                                         .background(cardBg)
-                                        .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
+                                        .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
                                         .clickable { onSaveToGallery(selectedRes, selectedFps) }
-                                        .padding(horizontal = 8.dp),
+                                        .padding(horizontal = 10.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.Center
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(28.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(
-                                                    Brush.linearGradient(
-                                                        listOf(Color(0xFF059669), Color(0xFF10B981))
-                                                    )
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Lucide.Download,
-                                                contentDescription = "Save to Gallery",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(15.dp)
-                                            )
-                                        }
+                                        Icon(
+                                            imageVector = Lucide.Download,
+                                            contentDescription = "Save to Gallery",
+                                            tint = oneUiBlue,
+                                            modifier = Modifier.size(17.dp)
+                                        )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = "Save to Gallery",
                                             color = colors.textMain,
                                             fontWeight = FontWeight.SemiBold,
-                                            fontSize = 12.5.sp
+                                            fontSize = 13.sp,
+                                            maxLines = 1
                                         )
                                     }
                                 }
@@ -13630,41 +13566,30 @@ fun FcpExportSheet(
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(48.dp)
-                                        .clip(RoundedCornerShape(14.dp))
+                                        .clip(RoundedCornerShape(16.dp))
                                         .background(cardBg)
-                                        .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
+                                        .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
                                         .clickable { onShareVideo(selectedRes, selectedFps) }
-                                        .padding(horizontal = 8.dp),
+                                        .padding(horizontal = 10.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.Center
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(28.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(
-                                                    Brush.linearGradient(
-                                                        listOf(Color(0xFF6366F1), Color(0xFF8B5CF6))
-                                                    )
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Lucide.Share2,
-                                                contentDescription = "Share Video",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(15.dp)
-                                            )
-                                        }
+                                        Icon(
+                                            imageVector = Lucide.Share2,
+                                            contentDescription = "Share Video",
+                                            tint = oneUiBlue,
+                                            modifier = Modifier.size(17.dp)
+                                        )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = "Share Video",
                                             color = colors.textMain,
                                             fontWeight = FontWeight.SemiBold,
-                                            fontSize = 12.5.sp
+                                            fontSize = 13.sp,
+                                            maxLines = 1
                                         )
                                     }
                                 }
@@ -13674,10 +13599,10 @@ fun FcpExportSheet(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(44.dp)
-                                    .clip(RoundedCornerShape(14.dp))
+                                    .height(46.dp)
+                                    .clip(RoundedCornerShape(16.dp))
                                     .background(cardBg)
-                                    .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
+                                    .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
                                     .clickable { onSaveDraftOnly() },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -13691,12 +13616,12 @@ fun FcpExportSheet(
                                         tint = colors.textMuted,
                                         modifier = Modifier.size(16.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(7.dp))
                                     Text(
                                         text = "Save Draft Only",
                                         color = colors.textMain,
                                         fontWeight = FontWeight.SemiBold,
-                                        fontSize = 13.sp
+                                        fontSize = 13.5.sp
                                     )
                                 }
                             }
@@ -14563,9 +14488,9 @@ private fun FcpTopHeaderBar(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "Oscellion",
-                                color = Color.White,
+                                color = colors.textMain,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
+                                fontSize = 14.5.sp,
                                 letterSpacing = (-0.3).sp,
                                 maxLines = 1,
                                 softWrap = false
@@ -14575,23 +14500,23 @@ private fun FcpTopHeaderBar(
                                 text = "Studio",
                                 color = Color(0xFF0381FE),
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
+                                fontSize = 14.5.sp,
                                 letterSpacing = (-0.3).sp,
                                 maxLines = 1,
                                 softWrap = false
                             )
                         }
-                    if (clipsCount > 0) {
-                        Text(
-                            text = "$clipsCount ${if (clipsCount == 1) "clip" else "clips"}",
-                            color = Color(0xFF8E98A8),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            softWrap = false
-                        )
+                        if (clipsCount > 0) {
+                            Text(
+                                text = "$clipsCount ${if (clipsCount == 1) "clip" else "clips"}",
+                                color = colors.textMuted,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
-                }
                 }
             }
             // Right: Undo, Redo, Divider, Export Button
@@ -14650,11 +14575,12 @@ private fun FcpTopHeaderBar(
                         }
                     }
                 }
-                // Export Primary Button
+                // Export Primary Button (Clean Solid One UI Pill)
                 PrimaryGradientButton(
                     onClick = onExportClick,
+                    shape = RoundedCornerShape(999.dp),
                     height = 34.dp,
-                    contentPadding = PaddingValues(horizontal = 11.dp, vertical = 6.dp)
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "Export",

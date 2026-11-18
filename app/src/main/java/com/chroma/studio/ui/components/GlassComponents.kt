@@ -386,22 +386,8 @@ fun PrimaryGradientButton(
 ) {
     Box(
         modifier = modifier
-            .shadow(
-                elevation = 2.dp,
-                shape = shape,
-                ambientColor = Color(0x66EFEFEF),
-                spotColor = Color(0x4D0550ED)
-            )
             .clip(shape)
-            .background(
-                if (enabled) PrimaryButtonGradient
-                else Brush.verticalGradient(listOf(Color(0xFF8E8E93), Color(0xFF636366)))
-            )
-            .border(
-                0.5.dp,
-                Color.White.copy(alpha = if (enabled) 0.4f else 0.1f),
-                shape
-            )
+            .background(if (enabled) Color(0xFF0381FE) else Color(0xFF8E8E93))
             .clickable(enabled = enabled, onClick = onClick)
             .then(if (height > 0.dp) Modifier.height(height) else Modifier)
             .padding(contentPadding),

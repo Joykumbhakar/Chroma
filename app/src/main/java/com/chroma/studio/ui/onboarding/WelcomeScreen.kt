@@ -136,22 +136,15 @@ fun WelcomeScreen(
                             .padding(top = 16.dp, bottom = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Luminous Brand Squircle Emblem
+                        // Clean One UI Brand Squircle Emblem
+                        val oneUiBlue = Color(0xFF0381FE)
+                        val iconContainerBg = if (isDark) oneUiBlue.copy(alpha = 0.18f) else oneUiBlue.copy(alpha = 0.10f)
+                        val dividerColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFECEFF4)
                         Box(
                             modifier = Modifier
-                                .size(60.dp)
-                                .shadow(
-                                    elevation = 12.dp,
-                                    shape = RoundedCornerShape(18.dp),
-                                    ambientColor = Color(0x332563EB),
-                                    spotColor = Color(0x4D2563EB)
-                                )
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(Color(0xFF38BDF8), Color(0xFF2563EB), Color(0xFF4F46E5))
-                                    )
-                                ),
+                                .size(62.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(oneUiBlue),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -162,18 +155,12 @@ fun WelcomeScreen(
                             )
                         }
 
-                        Spacer(Modifier.height(14.dp))
+                        Spacer(Modifier.height(16.dp))
 
                         Text(
                             text = buildAnnotatedString {
                                 append("Chroma ")
-                                withStyle(
-                                    SpanStyle(
-                                        brush = Brush.horizontalGradient(
-                                            listOf(Color(0xFF1A6DFF), Color(0xFF115AE8), Color(0xFF266EF9))
-                                        )
-                                    )
-                                ) {
+                                withStyle(SpanStyle(color = oneUiBlue)) {
                                     append("Studio")
                                 }
                             },
@@ -197,103 +184,67 @@ fun WelcomeScreen(
                             fontFamily = InterFontFamily
                         )
 
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(20.dp))
 
-                        // ── 2. FROSTED WHITE COMPACT FEATURE CARD ────────────────────
+                        // ── 2. CLEAN ONE UI FOCUS BLOCK FEATURE CARD ─────────────────
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .shadow(
-                                    elevation = 10.dp,
-                                    shape = RoundedCornerShape(26.dp),
-                                    ambientColor = Color(0x1F173E94),
-                                    spotColor = Color(0x28173E94)
-                                )
                                 .clip(RoundedCornerShape(26.dp))
-                                .background(
-                                    if (isDark) Color(0xFF111726).copy(alpha = 0.88f)
-                                    else Color.White.copy(alpha = 0.85f)
-                                )
+                                .background(if (isDark) Color(0xFF17171A) else Color.White)
                                 .border(
-                                    1.2.dp,
-                                    if (isDark) Color.White.copy(alpha = 0.12f) else Color.White,
+                                    1.dp,
+                                    if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB),
                                     RoundedCornerShape(26.dp)
                                 )
-                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
                             Column {
                                 // Row 1: Creative Canvas
                                 ChromaFeatureRow(
                                     title = "Creative Canvas",
                                     subtitle = "Multi-layer studio with real-time shader rendering",
-                                    iconBgBrush = Brush.linearGradient(
-                                        if (isDark) listOf(Color(0xFF1E293B), Color(0xFF0F172A), Color(0xFF1E3A8A))
-                                        else listOf(Color(0xFFF0F8FF), Color(0xFFCBE7FF), Color(0xFFB4DBFF))
-                                    ),
+                                    iconBgColor = iconContainerBg,
                                     iconVector = Lucide.Palette,
-                                    iconTint = Color(0xFF1267F6),
+                                    iconTint = oneUiBlue,
                                     isDark = isDark,
                                     onClick = { activeDetailSheet = WelcomeFeatureDetailType.CANVAS }
                                 )
 
-                                // Soft Gradient Divider
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 14.dp)
+                                        .padding(horizontal = 16.dp)
                                         .height(1.dp)
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                listOf(
-                                                    Color.Transparent,
-                                                    if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0),
-                                                    Color.Transparent
-                                                )
-                                            )
-                                        )
+                                        .background(dividerColor)
                                 )
 
                                 // Row 2: Global Community
                                 ChromaFeatureRow(
                                     title = "Global Community",
                                     subtitle = "Explore trending masterworks, video drops & remixes",
-                                    iconBgBrush = Brush.linearGradient(
-                                        if (isDark) listOf(Color(0xFF281F3E), Color(0xFF1C132E), Color(0xFF3B1E8A))
-                                        else listOf(Color(0xFFF7F3FF), Color(0xFFE3D7FF), Color(0xFFD3C2FF))
-                                    ),
+                                    iconBgColor = iconContainerBg,
                                     iconVector = Lucide.Users,
-                                    iconTint = Color(0xFF6336F5),
+                                    iconTint = oneUiBlue,
                                     isDark = isDark,
                                     onClick = { activeDetailSheet = WelcomeFeatureDetailType.COMMUNITY }
                                 )
 
-                                // Soft Gradient Divider
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 14.dp)
+                                        .padding(horizontal = 16.dp)
                                         .height(1.dp)
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                listOf(
-                                                    Color.Transparent,
-                                                    if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0),
-                                                    Color.Transparent
-                                                )
-                                            )
-                                        )
+                                        .background(dividerColor)
                                 )
 
                                 // Row 3: Encrypted Messaging
                                 ChromaFeatureRow(
                                     title = "Encrypted Messaging",
                                     subtitle = "End-to-end encrypted direct chats, audio & media",
-                                    iconBgBrush = Brush.linearGradient(
-                                        if (isDark) listOf(Color(0xFF102820), Color(0xFF091A14), Color(0xFF0D3B24))
-                                        else listOf(Color(0xFFEEFCF6), Color(0xFFC7F5E2), Color(0xFFB0EED5))
-                                    ),
+                                    iconBgColor = iconContainerBg,
                                     iconVector = Lucide.ShieldCheck,
-                                    iconTint = Color(0xFF0EB658),
+                                    iconTint = oneUiBlue,
                                     isDark = isDark,
                                     onClick = { activeDetailSheet = WelcomeFeatureDetailType.ENCRYPTION }
                                 )
@@ -450,172 +401,25 @@ fun WelcomeScreen(
 }
 
 /**
- * Fluid Silk Wave Canvas Background with subtle breathing motion.
- * Matches SVG waves from chroma_studio_onboarding_ui.html.
+ * Clean One UI solid neutral surface background — no distracting gradients or blobs.
  */
 @Composable
 private fun ChromaSilkWaveBackground(isDark: Boolean) {
-    val infiniteTransition = rememberInfiniteTransition(label = "silkTransition")
-    val shiftX by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(8000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "shiftX"
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (isDark) Color(0xFF080808) else Color(0xFFF7F8FA))
     )
-    val shiftY by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = -10f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(9000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "shiftY"
-    )
-
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val w = size.width
-        val h = size.height
-
-        // Base gradient
-        val baseGradient = Brush.verticalGradient(
-            colors = if (isDark) {
-                listOf(Color(0xFF070B14), Color(0xFF0B1324), Color(0xFF090E1A))
-            } else {
-                listOf(Color(0xFFD7EAFF), Color(0xFFF3F7FF), Color(0xFFEDF2FF))
-            }
-        )
-        drawRect(brush = baseGradient)
-
-        // Top-Left Sweeping Silk Wave 1
-        val wave1Path = Path().apply {
-            moveTo(-80f + shiftX, -40f + shiftY)
-            lineTo(w * 0.62f + shiftX, -40f + shiftY)
-            cubicTo(
-                w * 0.48f + shiftX, h * 0.18f + shiftY,
-                w * 0.26f + shiftX, h * 0.25f + shiftY,
-                -40f + shiftX, h * 0.48f + shiftY
-            )
-            close()
-        }
-        val topWave1Brush = Brush.linearGradient(
-            colors = if (isDark) {
-                listOf(Color(0xFF1E3A8A).copy(alpha = 0.45f), Color(0xFF3B82F6).copy(alpha = 0.15f), Color.Transparent)
-            } else {
-                listOf(Color(0xFF68B0FF).copy(alpha = 0.72f), Color(0xFFA6D1FF).copy(alpha = 0.42f), Color.Transparent)
-            },
-            start = Offset(0f, 0f),
-            end = Offset(w * 0.6f, h * 0.45f)
-        )
-        drawPath(wave1Path, brush = topWave1Brush)
-
-        // Top-Left Sweeping Silk Wave 2
-        val wave2Path = Path().apply {
-            moveTo(-60f + shiftX, -40f + shiftY)
-            lineTo(w * 0.82f + shiftX, -40f + shiftY)
-            cubicTo(
-                w * 0.62f + shiftX, h * 0.22f + shiftY,
-                w * 0.32f + shiftX, h * 0.32f + shiftY,
-                -60f + shiftX, h * 0.62f + shiftY
-            )
-            close()
-        }
-        val topWave2Brush = Brush.linearGradient(
-            colors = if (isDark) {
-                listOf(Color(0xFF2563EB).copy(alpha = 0.25f), Color(0xFF1D4ED8).copy(alpha = 0.10f), Color.Transparent)
-            } else {
-                listOf(Color(0xFF89C3FF).copy(alpha = 0.52f), Color(0xFFCBE3FF).copy(alpha = 0.32f), Color.Transparent)
-            },
-            start = Offset(w * 0.1f, 0f),
-            end = Offset(w * 0.7f, h * 0.55f)
-        )
-        drawPath(wave2Path, brush = topWave2Brush)
-
-        // Ambient Center-Right Soft Orb
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = if (isDark) {
-                    listOf(Color(0xFF3B82F6).copy(alpha = 0.22f), Color.Transparent)
-                } else {
-                    listOf(Color(0xFFB5CEFF).copy(alpha = 0.45f), Color.Transparent)
-                },
-                center = Offset(w * 0.95f, h * 0.28f),
-                radius = w * 0.55f
-            ),
-            radius = w * 0.55f,
-            center = Offset(w * 0.95f, h * 0.28f)
-        )
-
-        // Ambient Center-Left Soft Glow
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = if (isDark) {
-                    listOf(Color(0xFF1D4ED8).copy(alpha = 0.18f), Color.Transparent)
-                } else {
-                    listOf(Color(0xFFBCE3FF).copy(alpha = 0.40f), Color.Transparent)
-                },
-                center = Offset(w * 0.05f, h * 0.46f),
-                radius = w * 0.45f
-            ),
-            radius = w * 0.45f,
-            center = Offset(w * 0.05f, h * 0.46f)
-        )
-
-        // Bottom-Right Corner Waves
-        val bottomWave1 = Path().apply {
-            moveTo(w, h * 0.72f - shiftY)
-            cubicTo(
-                w * 0.75f - shiftX, h * 0.76f - shiftY,
-                w * 0.50f - shiftX, h * 0.88f - shiftY,
-                w * 0.35f - shiftX, h
-            )
-            lineTo(w, h)
-            close()
-        }
-        val bottomWave1Brush = Brush.linearGradient(
-            colors = if (isDark) {
-                listOf(Color(0xFF1E1B4B).copy(alpha = 0.4f), Color(0xFF3730A3).copy(alpha = 0.55f), Color(0xFF4338CA).copy(alpha = 0.75f))
-            } else {
-                listOf(Color(0xFFDCE8FF).copy(alpha = 0.45f), Color(0xFF96B8FF).copy(alpha = 0.58f), Color(0xFF6989FA).copy(alpha = 0.82f))
-            },
-            start = Offset(w * 0.45f, h * 0.75f),
-            end = Offset(w, h)
-        )
-        drawPath(bottomWave1, brush = bottomWave1Brush)
-
-        val bottomWave2 = Path().apply {
-            moveTo(w, h * 0.84f - shiftY)
-            cubicTo(
-                w * 0.80f - shiftX, h * 0.86f - shiftY,
-                w * 0.62f - shiftX, h * 0.92f - shiftY,
-                w * 0.50f - shiftX, h
-            )
-            lineTo(w, h)
-            close()
-        }
-        val bottomWave2Brush = Brush.linearGradient(
-            colors = if (isDark) {
-                listOf(Color(0xFF312E81).copy(alpha = 0.4f), Color(0xFF4F46E5).copy(alpha = 0.75f))
-            } else {
-                listOf(Color(0xFF8BA8FF).copy(alpha = 0.48f), Color(0xFF7F66FF).copy(alpha = 0.82f))
-            },
-            start = Offset(w * 0.55f, h * 0.85f),
-            end = Offset(w, h)
-        )
-        drawPath(bottomWave2, brush = bottomWave2Brush)
-    }
 }
 
 /**
- * Feature Row matching HTML with 3D squircle icon and circular right chevron button.
+ * Clean One UI Feature Row with unified icon tile and subtle chevron.
  */
 @Composable
 private fun ChromaFeatureRow(
     title: String,
     subtitle: String,
-    iconBgBrush: Brush,
+    iconBgColor: Color,
     iconVector: ImageVector,
     iconTint: Color,
     isDark: Boolean,
@@ -642,34 +446,23 @@ private fun ChromaFeatureRow(
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 8.dp, vertical = 7.dp),
+            .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Pastel 3D Squircle Icon
+        // Unified One UI Squircle Icon
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .shadow(
-                    elevation = 4.dp,
-                    shape = RoundedCornerShape(14.dp),
-                    ambientColor = iconTint.copy(alpha = 0.2f),
-                    spotColor = iconTint.copy(alpha = 0.3f)
-                )
                 .clip(RoundedCornerShape(14.dp))
-                .background(iconBgBrush)
-                .border(
-                    1.dp,
-                    if (isDark) Color.White.copy(alpha = 0.16f) else Color.White,
-                    RoundedCornerShape(14.dp)
-                ),
+                .background(iconBgColor),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = iconVector,
                 contentDescription = title,
                 tint = iconTint,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(21.dp)
             )
         }
 
@@ -680,18 +473,18 @@ private fun ChromaFeatureRow(
             Text(
                 text = title,
                 fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isDark) Color(0xFFF1F5F9) else Color(0xFF0C1425),
-                letterSpacing = (-0.3).sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF111827),
+                letterSpacing = (-0.2).sp,
                 fontFamily = InterFontFamily
             )
-            Spacer(Modifier.height(1.dp))
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = subtitle,
                 fontSize = 12.5.sp,
                 fontWeight = FontWeight.Normal,
-                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF566479),
-                lineHeight = 16.sp,
+                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                lineHeight = 16.5.sp,
                 fontFamily = InterFontFamily
             )
         }
@@ -701,13 +494,13 @@ private fun ChromaFeatureRow(
             modifier = Modifier
                 .size(28.dp)
                 .clip(CircleShape)
-                .background(if (isDark) Color(0x1FFFFFFF) else Color(0xFFE5EEF9)),
+                .background(if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Lucide.ChevronRight,
                 contentDescription = "Details",
-                tint = if (isDark) Color(0xFFCBD5E1) else Color(0xFF1E293B),
+                tint = if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
                 modifier = Modifier.size(15.dp)
             )
         }
@@ -715,8 +508,7 @@ private fun ChromaFeatureRow(
 }
 
 /**
- * Primary Google Blue Glossy Pill Button.
- * Clean, centered, and modern executive action button.
+ * Primary Solid One UI Blue Pill Button.
  */
 @Composable
 private fun GlossyGooglePillButton(
@@ -735,23 +527,13 @@ private fun GlossyGooglePillButton(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(54.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .shadow(
-                elevation = 10.dp,
-                shape = RoundedCornerShape(999.dp),
-                ambientColor = Color(0x441158EB),
-                spotColor = Color(0x601158EB)
-            )
             .clip(RoundedCornerShape(999.dp))
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
-                )
-            )
+            .background(Color(0xFF0381FE))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -759,7 +541,7 @@ private fun GlossyGooglePillButton(
                 role = Role.Button,
                 onClick = onClick
             )
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center
     ) {
         if (loading) {
@@ -777,8 +559,7 @@ private fun GlossyGooglePillButton(
                     modifier = Modifier
                         .size(26.dp)
                         .clip(CircleShape)
-                        .background(Color.White)
-                        .shadow(2.dp, CircleShape),
+                        .background(Color.White),
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
@@ -802,8 +583,7 @@ private fun GlossyGooglePillButton(
 }
 
 /**
- * Secondary Frosted Glass Pill Button.
- * Clean, centered, and modern executive action button.
+ * Secondary Clean One UI Surface Pill Button.
  */
 @Composable
 private fun GlossySecondaryPillButton(
@@ -823,30 +603,16 @@ private fun GlossySecondaryPillButton(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(50.dp)
+            .height(52.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .shadow(
-                elevation = 6.dp,
-                shape = RoundedCornerShape(999.dp),
-                ambientColor = Color(0x101E40AF),
-                spotColor = Color(0x181E40AF)
-            )
             .clip(RoundedCornerShape(999.dp))
-            .background(
-                Brush.verticalGradient(
-                    if (isDark) {
-                        listOf(Color(0xFF1D2638).copy(alpha = 0.95f), Color(0xFF141C2B).copy(alpha = 0.88f))
-                    } else {
-                        listOf(Color.White.copy(alpha = 0.96f), Color(0xFFF0F6FF).copy(alpha = 0.86f))
-                    }
-                )
-            )
+            .background(if (isDark) Color(0xFF17171A) else Color.White)
             .border(
-                1.2.dp,
-                if (isDark) Color.White.copy(alpha = 0.12f) else Color.White,
+                1.dp,
+                if (isDark) Color.White.copy(alpha = 0.10f) else Color(0xFFE5E7EB),
                 RoundedCornerShape(999.dp)
             )
             .clickable(
@@ -855,7 +621,7 @@ private fun GlossySecondaryPillButton(
                 role = Role.Button,
                 onClick = onClick
             )
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -865,13 +631,13 @@ private fun GlossySecondaryPillButton(
             Icon(
                 imageVector = iconVector,
                 contentDescription = null,
-                tint = Color(0xFF2563EB),
+                tint = Color(0xFF0381FE),
                 modifier = Modifier.size(19.dp)
             )
 
             Text(
                 text = text,
-                color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0D1526),
+                color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF111827),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = (-0.2).sp,
@@ -907,14 +673,8 @@ private fun WelcomeQuickResumePill(
                 scaleX = scale
                 scaleY = scale
             }
-            .shadow(10.dp, CircleShape, ambientColor = Color(0x352563EB), spotColor = Color(0x552563EB))
             .clip(CircleShape)
-            .background(
-                Brush.horizontalGradient(
-                    listOf(Color(0xFF0381FE), Color(0xFF1667F2))
-                )
-            )
-            .border(1.dp, Color(0x8072BEFF), CircleShape)
+            .background(Color(0xFF0381FE))
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -1019,99 +779,52 @@ private fun WelcomeFeatureDetailSheetContent(
             }
         }
 
-        // Live preview banner matching HTML preview block
-        when (detailType) {
-            WelcomeFeatureDetailType.CANVAS -> {
-                Row(
+        // Clean One UI preview banner
+        val oneUiBlue = Color(0xFF0381FE)
+        val previewLabel = when (detailType) {
+            WelcomeFeatureDetailType.CANVAS -> "Live Shader Pipeline Ready"
+            WelcomeFeatureDetailType.COMMUNITY -> "Global Discovery Feed"
+            WelcomeFeatureDetailType.ENCRYPTION -> "Device Keys Verified on Enclave"
+        }
+        val previewBadge = when (detailType) {
+            WelcomeFeatureDetailType.CANVAS -> "120 FPS"
+            WelcomeFeatureDetailType.COMMUNITY -> "+1,420 remixes today"
+            WelcomeFeatureDetailType.ENCRYPTION -> "E2EE"
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(if (isDark) Color(0xFF1E2430) else Color(0xFFEFF6FF))
+                .border(1.dp, oneUiBlue.copy(alpha = 0.22f), RoundedCornerShape(16.dp))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF))
-                        .border(1.dp, Color(0xFF3B82F6).copy(alpha = 0.25f), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF3B82F6))
-                        )
-                        Text(
-                            text = "Live Shader Pipeline Ready",
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF1267F6))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text("120 FPS", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(oneUiBlue)
+                )
+                Text(
+                    text = previewLabel,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
+                )
             }
-            WelcomeFeatureDetailType.COMMUNITY -> {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isDark) Color(0xFF281F3E) else Color(0xFFF5F3FF))
-                        .border(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.25f), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Global Discovery Feed",
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF6336F5))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text("+1,420 remixes today", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-            WelcomeFeatureDetailType.ENCRYPTION -> {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isDark) Color(0xFF102820) else Color(0xFFECFDF5))
-                        .border(1.dp, Color(0xFF10B981).copy(alpha = 0.25f), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Device Keys Verified on Enclave",
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF065F46)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF0EB658))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text("E2EE", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(oneUiBlue)
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
+                Text(previewBadge, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -1126,17 +839,13 @@ private fun WelcomeFeatureDetailSheetContent(
 
         Spacer(Modifier.height(4.dp))
 
-        // Glossy Continue button
+        // Solid One UI Continue button
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp)
                 .clip(RoundedCornerShape(999.dp))
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xFF329EFF), Color(0xFF1667F2), Color(0xFF0D51D4))
-                    )
-                )
+                .background(oneUiBlue)
                 .clickable(onClick = onClose),
             contentAlignment = Alignment.Center
         ) {
