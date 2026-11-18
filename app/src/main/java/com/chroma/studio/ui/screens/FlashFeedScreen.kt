@@ -143,8 +143,10 @@ fun FlashFeedScreen(
             .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
             .build()
 
-        List(3) {
+        val poolSize = if (com.chroma.studio.utils.DevicePerformanceManager.isLowEndDevice(context)) 2 else 3
+        List(poolSize) {
             androidx.media3.exoplayer.ExoPlayer.Builder(context)
+                .setLoadControl(com.chroma.studio.utils.DevicePerformanceManager.createOptimizedLoadControl(context))
                 .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(cacheDataSourceFactory))
                 .setAudioAttributes(audioAttributes, true)
                 .build().apply {
@@ -233,7 +235,7 @@ fun FlashFeedScreen(
                 val video = flashFeed.getOrNull(page)
                 if (video != null) {
                     FlashVideoItem(
-                        player = exoPlayers[page % 3],
+                        player = exoPlayers[page % exoPlayers.size],
                         video = video,
                         isActive = pagerState.currentPage == page,
                         isLiked = video.id in likedVideoIds,

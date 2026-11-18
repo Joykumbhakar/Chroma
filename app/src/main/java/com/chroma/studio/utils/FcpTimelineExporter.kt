@@ -863,7 +863,7 @@ object FcpTimelineExporter {
                 }
 
                 val clipSpecs = mutableListOf<ClipSpec>()
-                val maxPhotoDim = (max(finalW, finalH) * 3) / 2
+                val maxPhotoDim = DevicePerformanceManager.maxVideoPhotoInputDim(context, finalW, finalH)
 
                 for ((idx, clip) in clips.withIndex()) {
                     if (isCancelled || !isActive) return@withContext null
@@ -993,7 +993,7 @@ object FcpTimelineExporter {
                     val cmdArgs = mutableListOf<String>()
                     cmdArgs.add("ffmpeg")
                     cmdArgs.add("-y")
-                    val numCores = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+                    val numCores = DevicePerformanceManager.ffmpegThreads(context)
                     cmdArgs.add("-threads")
                     cmdArgs.add(numCores.toString())
                     cmdArgs.add("-filter_threads")

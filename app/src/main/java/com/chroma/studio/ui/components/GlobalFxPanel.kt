@@ -98,20 +98,26 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                 return@rememberLauncherForActivityResult
             }
             scope.launch(Dispatchers.IO) {
-                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    val source = ImageDecoder.createSource(context.contentResolver, uri)
-                    ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
-                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                        decoder.isMutableRequired = true
+                val bitmap = com.chroma.studio.utils.DevicePerformanceManager.decodeSampledBitmap(
+                    context = context,
+                    uri = uri,
+                    reqWidth = 768,
+                    reqHeight = 768,
+                    preferRgb565 = true
+                )
+                if (bitmap == null) {
+                    launch(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "Could not decode image", android.widget.Toast.LENGTH_SHORT).show()
                     }
-                } else {
-                    @Suppress("DEPRECATION")
-                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                    return@launch
                 }
-                
-                val outputStream = java.io.ByteArrayOutputStream()
-                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, outputStream)
-                val base64Image = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.NO_WRAP)
+                val base64Image = try {
+                    val outputStream = java.io.ByteArrayOutputStream()
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 78, outputStream)
+                    android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.NO_WRAP)
+                } finally {
+                    if (!bitmap.isRecycled) bitmap.recycle()
+                }
                 
                 try {
                     val prompt = vm.promptText.ifBlank { "Make this gradient better and try new color combinations" }

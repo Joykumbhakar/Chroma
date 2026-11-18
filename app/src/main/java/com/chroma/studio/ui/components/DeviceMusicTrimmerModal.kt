@@ -602,7 +602,9 @@ fun DeviceMusicTrimmerModal(
 
     // Preview Player State
     val previewPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
+        ExoPlayer.Builder(context)
+            .setLoadControl(com.chroma.studio.utils.DevicePerformanceManager.createOptimizedLoadControl(context, forEditor = true))
+            .build().apply {
             repeatMode = Player.REPEAT_MODE_OFF
         }
     }

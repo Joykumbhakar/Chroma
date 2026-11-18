@@ -269,8 +269,9 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
                 }
 
                 // Center: Canvas Area
+                val useCanvasBlur = com.chroma.studio.ui.components.rememberUseRealtimeBlur()
                 Column(
-                    modifier = Modifier.weight(1f).fillMaxHeight().haze(hazeState),
+                    modifier = Modifier.weight(1f).fillMaxHeight().then(if (useCanvasBlur) Modifier.haze(hazeState) else Modifier),
                     verticalArrangement = Arrangement.Top,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -425,10 +426,11 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
 
         } else {
             // Mobile layout
+            val useMobileBlur = com.chroma.studio.ui.components.rememberUseRealtimeBlur()
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .haze(hazeState)
+                    .then(if (useMobileBlur) Modifier.haze(hazeState) else Modifier)
                     .statusBarsPadding()
                     .padding(top = 68.dp)
                     .navigationBarsPadding()

@@ -355,7 +355,9 @@ fun PostVideoSlideView(
     var currentProgress by remember { mutableFloatStateOf(0f) }
 
     val player = remember(videoUrl) {
-        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+        androidx.media3.exoplayer.ExoPlayer.Builder(context)
+            .setLoadControl(com.chroma.studio.utils.DevicePerformanceManager.createOptimizedLoadControl(context))
+            .build().apply {
             setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
             repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
             playWhenReady = false

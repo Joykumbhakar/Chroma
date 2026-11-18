@@ -20,9 +20,31 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
 import dev.chrisbanes.haze.hazeChild
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import com.chroma.studio.ui.theme.OscellionPalette
+import com.chroma.studio.utils.DevicePerformanceManager
+
+@Composable
+fun rememberUseRealtimeBlur(): Boolean {
+    val context = LocalContext.current
+    return remember(context) { DevicePerformanceManager.shouldUseRealtimeBlur(context) }
+}
+
+@Composable
+fun Modifier.adaptiveHazeSource(state: HazeState): Modifier {
+    return if (rememberUseRealtimeBlur()) this.haze(state) else this
+}
+
+@Composable
+fun Modifier.adaptiveHazeChild(
+    state: HazeState,
+    shape: Shape = RectangleShape
+): Modifier {
+    return if (rememberUseRealtimeBlur()) this.hazeChild(state = state, shape = shape) else this
+}
 
 fun Modifier.glossyBorder(
     shape: Shape,
@@ -40,7 +62,7 @@ val LocalHazeState = androidx.compose.runtime.compositionLocalOf { HazeState() }
 @Composable
 fun HazeSourceRoot(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val hazeState = LocalHazeState.current
-    Box(modifier = modifier.haze(hazeState)) { content() }
+    Box(modifier = modifier.adaptiveHazeSource(hazeState)) { content() }
 }
 
 @Composable
@@ -52,14 +74,16 @@ fun GlassPanel(
 ) {
     val colors = LocalOscellionColors.current
     val hazeState = LocalHazeState.current
+    val useBlur = rememberUseRealtimeBlur()
     val shape = RoundedCornerShape(cornerRadius.dp)
+    val resolvedBg = backgroundColor ?: if (useBlur) colors.glassBg else colors.glassBg.copy(alpha = maxOf(colors.glassBg.alpha, 0.94f))
 
     Box(
         modifier = modifier
-            .shadow(elevation = 8.dp, shape = shape, ambientColor = Color(0x0D1F2687), spotColor = Color(0x0D1F2687))
+            .shadow(elevation = if (useBlur) 8.dp else 4.dp, shape = shape, ambientColor = Color(0x0D1F2687), spotColor = Color(0x0D1F2687))
             .clip(shape)
-            .hazeChild(state = hazeState, shape = shape) // backdrop-filter: blur(16px)
-            .background(backgroundColor ?: colors.glassBg, shape) // fallback tint if blur unsupported below API 31
+            .adaptiveHazeChild(state = hazeState, shape = shape)
+            .background(resolvedBg, shape)
             .glossyBorder(shape, colors)
     ) {
         content()
@@ -89,7 +113,7 @@ fun GlassButton(
     
     androidx.compose.material3.Button(
         onClick = onClick,
-        modifier = modifier.hazeChild(state = hazeState, shape = shape),
+        modifier = modifier.adaptiveHazeChild(state = hazeState, shape = shape),
         enabled = enabled,
         shape = shape,
         colors = colors,
@@ -168,7 +192,7 @@ fun GlassDialog(
                         spotColor = Color.Black.copy(alpha = 0.25f)
                     )
                     .clip(shape)
-                    .hazeChild(state = hazeState, shape = shape)
+                    .adaptiveHazeChild(state = hazeState, shape = shape)
                     .background(colors.glassBg.copy(alpha = 0.98f), shape)
                     .border(
                         width = 0.5.dp,
@@ -261,7 +285,7 @@ fun GlassIconButton(
     androidx.compose.material3.IconButton(
         onClick = onClick,
         modifier = modifier
-            .hazeChild(state = hazeState, shape = shape)
+            .adaptiveHazeChild(state = hazeState, shape = shape)
             .glossyBorder(shape, chromaColors),
         enabled = enabled,
         colors = colors,
@@ -289,7 +313,7 @@ fun GlassTextButton(
     androidx.compose.material3.TextButton(
         onClick = onClick,
         modifier = modifier
-            .hazeChild(state = hazeState, shape = shape)
+            .adaptiveHazeChild(state = hazeState, shape = shape)
             .glossyBorder(shape, chromaColors),
         enabled = enabled,
         shape = shape,
@@ -321,7 +345,7 @@ fun GlassOutlinedButton(
     androidx.compose.material3.OutlinedButton(
         onClick = onClick,
         modifier = modifier
-            .hazeChild(state = hazeState, shape = shape)
+            .adaptiveHazeChild(state = hazeState, shape = shape)
             .glossyBorder(shape, chromaColors),
         enabled = enabled,
         shape = shape,
@@ -351,7 +375,7 @@ fun GlassFloatingActionButton(
     androidx.compose.material3.FloatingActionButton(
         onClick = onClick,
         modifier = modifier
-            .hazeChild(state = hazeState, shape = shape)
+            .adaptiveHazeChild(state = hazeState, shape = shape)
             .glossyBorder(shape, chromaColors),
         shape = shape,
         containerColor = containerColor,

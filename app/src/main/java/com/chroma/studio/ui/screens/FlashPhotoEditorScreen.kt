@@ -1378,11 +1378,12 @@ fun FlashPhotoEditorScreen(
                 scope.launch {
                     val u = Uri.parse(item.uri)
                     val bmp = withContext(Dispatchers.IO) {
-                        try {
-                            context.contentResolver.openInputStream(u)?.use {
-                                BitmapFactory.decodeStream(it)
-                            }
-                        } catch (_: Exception) { null }
+                        com.chroma.studio.utils.DevicePerformanceManager.decodeSampledBitmap(
+                            context = context,
+                            uri = u,
+                            reqWidth = 512,
+                            reqHeight = 512
+                        )
                     }
                     if (bmp != null) {
                         activeStickers.add(StickerOverlayItem(bitmap = bmp))

@@ -81,7 +81,9 @@ fun FloatingVideoMiniPlayer(
 
     // Dedicated mini player
     val exoPlayer = remember(videoUri) {
-        ExoPlayer.Builder(context).build().apply {
+        ExoPlayer.Builder(context)
+            .setLoadControl(com.chroma.studio.utils.DevicePerformanceManager.createOptimizedLoadControl(context))
+            .build().apply {
             setMediaItem(MediaItem.fromUri(videoUri))
             prepare()
             repeatMode = Player.REPEAT_MODE_ALL

@@ -2269,12 +2269,18 @@ fun FinalCutProVideoEditorScreen(
             val isPhoto = isClipPhoto(curClip)
             if (isPhoto) {
                 try {
-                    context.contentResolver.openInputStream(curClip.uri)?.use { stream ->
-                        val bmp = android.graphics.BitmapFactory.decodeStream(stream)
-                        if (bmp != null) {
-                            withContext(Dispatchers.Main) {
-                                blurBackgroundBitmap = bmp
-                            }
+                    val photoKey = "blur_photo_${curClip.uri}"
+                    val cachedPhoto = FcpThumbnailMemoryCache.get(photoKey)
+                    val bmp = cachedPhoto ?: com.chroma.studio.utils.DevicePerformanceManager.decodeSampledBitmap(
+                        context = context,
+                        uri = curClip.uri,
+                        reqWidth = 240,
+                        reqHeight = 240,
+                        preferRgb565 = true
+                    )?.also { FcpThumbnailMemoryCache.put(photoKey, it) }
+                    if (bmp != null) {
+                        withContext(Dispatchers.Main) {
+                            blurBackgroundBitmap = bmp
                         }
                     }
                 } catch (_: Throwable) {}
@@ -4029,7 +4035,7 @@ private fun VideoWorkspaceTabs(
 // ============================================================================
 object FcpThumbnailMemoryCache {
     private val maxMemoryKb = (Runtime.getRuntime().maxMemory() / 1024).toInt()
-    private val cacheSizeKb = (maxMemoryKb / 8).coerceIn(16384, 131072)
+    private val cacheSizeKb = (maxMemoryKb / 12).coerceIn(8192, 32768)
     private val cache = object : LruCache<String, Bitmap>(cacheSizeKb) {
         override fun sizeOf(key: String, value: Bitmap): Int = (value.byteCount / 1024).coerceAtLeast(1)
     }

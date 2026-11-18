@@ -792,24 +792,30 @@ private fun AuthenticatedRoute(
                                     )
                                     val pillDisplayX = if (isDraggingPill) dragStartTabX + pillDragOffsetX else activeTabX
 
+                                    val useRealtimeBlur = remember { com.chroma.studio.utils.DevicePerformanceManager.shouldUseRealtimeBlur(this@HomeActivity) }
+                                    val resolvedNavBg = if (useRealtimeBlur) bgColor else bgColor.copy(alpha = maxOf(bgColor.alpha, 0.94f))
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(64.dp)
                                             .shadow(
-                                                elevation = 16.dp,
+                                                elevation = if (useRealtimeBlur) 16.dp else 8.dp,
                                                 shape = navShape,
                                                 spotColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.1f)
                                             )
-                                            .hazeChild(
-                                                state = hazeState,
-                                                shape = navShape,
-                                                style = dev.chrisbanes.haze.HazeDefaults.style(
-                                                    blurRadius = 16.dp,
-                                                    noiseFactor = 0f
-                                                )
+                                            .then(
+                                                if (useRealtimeBlur) {
+                                                    Modifier.hazeChild(
+                                                        state = hazeState,
+                                                        shape = navShape,
+                                                        style = dev.chrisbanes.haze.HazeDefaults.style(
+                                                            blurRadius = 16.dp,
+                                                            noiseFactor = 0f
+                                                        )
+                                                    )
+                                                } else Modifier
                                             )
-                                            .background(color = bgColor, shape = navShape)
+                                            .background(color = resolvedNavBg, shape = navShape)
                                             .drawWithContent {
                                                 drawContent()
                                                 val strokeWidth = 1.5.dp.toPx()
@@ -1014,7 +1020,8 @@ private fun AuthenticatedRoute(
                         !prefs.getBoolean("has_completed_post_onboarding", false) -> "post_onboarding"
                         else -> "main"
                     }
-                    val navHostModifier = if (showBottomNav) androidx.compose.ui.Modifier.haze(state = hazeState) else androidx.compose.ui.Modifier
+                    val useNavBlur = remember { com.chroma.studio.utils.DevicePerformanceManager.shouldUseRealtimeBlur(this@HomeActivity) }
+                    val navHostModifier = if (showBottomNav && useNavBlur) androidx.compose.ui.Modifier.haze(state = hazeState) else androidx.compose.ui.Modifier
                     NavHost(navController, startDestination = targetDestination, modifier = navHostModifier) {
                         composable("terms_agreement") {
                             com.chroma.studio.ui.screens.PrivacyPolicyTermsScreen(

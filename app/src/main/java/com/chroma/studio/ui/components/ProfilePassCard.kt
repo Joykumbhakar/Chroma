@@ -802,16 +802,25 @@ private suspend fun savePassCardImageToGallery(
         // 1. Background Rendering
         when (customization.bgMode) {
             PassBackgroundMode.CUSTOM_IMAGE -> {
-                val customBmp = customization.customImageBitmap ?: customization.customImageUri?.let { uri ->
-                    try {
-                        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-                    } catch (_: Exception) { null }
-                }
+                val decodedUriBmp = if (customization.customImageBitmap == null) {
+                    customization.customImageUri?.let { uri ->
+                        com.chroma.studio.utils.DevicePerformanceManager.decodeSampledBitmap(
+                            context = context,
+                            uri = uri,
+                            reqWidth = width,
+                            reqHeight = height
+                        )
+                    }
+                } else null
+                val customBmp = customization.customImageBitmap ?: decodedUriBmp
 
                 if (customBmp != null) {
                     val srcRect = android.graphics.Rect(0, 0, customBmp.width, customBmp.height)
                     val dstRect = RectF(0f, 0f, width.toFloat(), height.toFloat())
                     canvas.drawBitmap(customBmp, srcRect, dstRect, null)
+                    if (decodedUriBmp != null && !decodedUriBmp.isRecycled) {
+                        decodedUriBmp.recycle()
+                    }
 
                     if (customization.imageScrimAlpha > 0f) {
                         val scrimPaint = Paint().apply {

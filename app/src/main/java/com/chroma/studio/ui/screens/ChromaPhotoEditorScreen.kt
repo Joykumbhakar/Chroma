@@ -4547,10 +4547,11 @@ private suspend fun exportEditedPhotoToGallery(
     state: PhotoProjectState
 ): Uri? = withContext(Dispatchers.IO) {
     try {
-        val loader = ImageLoader(context)
+        val loader = coil.Coil.imageLoader(context)
         val outAspect = state.effectiveAspectRatio
-        val outWidth = state.exportSettings.resolution.coerceIn(720, 4320)
-        val outHeight = (outWidth / outAspect).roundToInt().coerceIn(720, 4320)
+        val maxDim = com.chroma.studio.utils.DevicePerformanceManager.maxPhotoExportDim(context)
+        val outWidth = state.exportSettings.resolution.coerceIn(720, maxDim)
+        val outHeight = (outWidth / outAspect).roundToInt().coerceIn(720, maxDim)
 
         val outputBitmap = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
         val canvas = AndroidCanvas(outputBitmap)
@@ -4591,18 +4592,24 @@ private suspend fun exportEditedPhotoToGallery(
                     val uriStr = clip.uri ?: continue
                     val req = ImageRequest.Builder(context)
                         .data(Uri.parse(uriStr))
+                        .size(outWidth, outHeight)
                         .allowHardware(false)
                         .build()
                     val result = loader.execute(req)
                     val rawBmp = (result as? SuccessResult)?.drawable?.let { (it as? BitmapDrawable)?.bitmap } ?: continue
 
                     // Apply studio blur if blur > 0.01f on main photo
+                    var blurredBmp: Bitmap? = null
                     val bmp = if (clip.trackId == 1 && state.blur > 0.01f) {
                         val blurScale = (1f - state.blur * 0.9f).coerceIn(0.04f, 1f)
                         val bw = (rawBmp.width * blurScale).toInt().coerceAtLeast(8)
                         val bh = (rawBmp.height * blurScale).toInt().coerceAtLeast(8)
                         val small = Bitmap.createScaledBitmap(rawBmp, bw, bh, true)
-                        Bitmap.createScaledBitmap(small, rawBmp.width, rawBmp.height, true)
+                        try {
+                            Bitmap.createScaledBitmap(small, rawBmp.width, rawBmp.height, true).also { blurredBmp = it }
+                        } finally {
+                            if (small !== rawBmp && !small.isRecycled) small.recycle()
+                        }
                     } else rawBmp
 
                     val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG or AndroidPaint.FILTER_BITMAP_FLAG).apply {
@@ -4656,6 +4663,9 @@ private suspend fun exportEditedPhotoToGallery(
                     val dstRect = RectF(-drawW / 2f, -drawH / 2f, drawW / 2f, drawH / 2f)
                     canvas.drawBitmap(bmp, null, dstRect, paint)
                     canvas.restore()
+                    if (blurredBmp != null && blurredBmp !== rawBmp && !blurredBmp!!.isRecycled) {
+                        blurredBmp!!.recycle()
+                    }
                 }
 
                 MediaType.TEXT -> {

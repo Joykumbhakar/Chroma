@@ -13,9 +13,10 @@ object MediaCacheManager {
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     fun getInstance(context: Context): SimpleCache {
         if (cache == null) {
-            val cacheDir = File(context.cacheDir, "media_cache")
-            val evictor = LeastRecentlyUsedCacheEvictor(500 * 1024 * 1024) // 500 MB
-            val databaseProvider = StandaloneDatabaseProvider(context)
+            val appCtx = context.applicationContext
+            val cacheDir = File(appCtx.cacheDir, "media_cache")
+            val evictor = LeastRecentlyUsedCacheEvictor(DevicePerformanceManager.mediaCacheBytes(appCtx))
+            val databaseProvider = StandaloneDatabaseProvider(appCtx)
             cache = SimpleCache(cacheDir, evictor, databaseProvider)
         }
         return cache!!
