@@ -3,29 +3,34 @@ package com.chroma.studio.chat.util
 import android.app.KeyguardManager
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Handles biometric (and device-credential fallback) authentication for Chat Lock.
+ * Handles biometric (fingerprint, face, iris) and device-credential (PIN/pattern/password)
+ * authentication for App Lock, Chat Lock, Hidden Chats, and sensitive security actions.
  *
- * Uses the AndroidX BiometricPrompt API — supports fingerprint, face, iris, and
- * PIN/pattern/password fallback across Android 8–15+.
- *
- * Security guarantee:
- *   - [onSuccess] is ONLY called after a verified, successful authentication.
- *   - [onCancel] / [onError] is called for every cancel/failure path — callers must NOT unlock.
+ * Security guarantees:
+ *   - [onSuccess] is ONLY invoked after verified system authentication.
+ *   - [onCancel] / [onError] is invoked on all cancel/error paths — callers must never bypass.
+ *   - Automatically waits until the hosting [FragmentActivity] is RESUMED before showing
+ *     [BiometricPrompt] so prompts are never silently dropped during transitions/splash exit.
  */
 object BiometricHelper {
     private const val TAG = "BiometricHelper"
 
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val activePromptCounter = AtomicInteger(0)
 
     /** True while a system biometric / device-credential prompt is currently displayed. */
@@ -37,13 +42,15 @@ object BiometricHelper {
      */
     fun canAuthenticate(context: Context): Boolean {
         val manager = BiometricManager.from(context)
+        val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        val isDeviceSecure = km?.isDeviceSecure == true
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            manager.canAuthenticate(BIOMETRIC_STRONG or BIOMETRIC_WEAK or DEVICE_CREDENTIAL) ==
-                BiometricManager.BIOMETRIC_SUCCESS
+            manager.canAuthenticate(BIOMETRIC_WEAK or DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS ||
+                manager.canAuthenticate(DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS ||
+                manager.canAuthenticate(BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS ||
+                isDeviceSecure
         } else {
-            val bioOk = manager.canAuthenticate(BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
-            val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-            bioOk || (km?.isDeviceSecure == true)
+            manager.canAuthenticate(BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS || isDeviceSecure
         }
     }
 
@@ -62,12 +69,19 @@ object BiometricHelper {
     fun authenticate(
         activity: android.app.Activity,
         title: String = "Unlock Conversation",
-        subtitle: String = "Verify your identity to open this chat",
+        subtitle: String = "Verify your identity to continue",
         description: String? = null,
         onSuccess: () -> Unit,
         onCancel: () -> Unit = {},
         onError: (String) -> Unit
     ) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post {
+                authenticate(activity, title, subtitle, description, onSuccess, onCancel, onError)
+            }
+            return
+        }
+
         val fragmentActivity = activity as? FragmentActivity
         if (fragmentActivity == null) {
             Log.e(TAG, "Activity ${activity::class.java.simpleName} is not a FragmentActivity — cannot show BiometricPrompt")
@@ -81,90 +95,58 @@ object BiometricHelper {
         }
 
         val biometricManager = BiometricManager.from(fragmentActivity)
+        val km = fragmentActivity.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        val hasDeviceLock = km?.isDeviceSecure == true
+
+        // Determine the best supported authenticator configuration without crashing on OEM quirks
+        var api30Authenticators = 0
         var useLegacyDeviceCredential = false
+        var useLegacyBiometricOnly = false
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val allowed = BIOMETRIC_STRONG or BIOMETRIC_WEAK or DEVICE_CREDENTIAL
-            when (biometricManager.canAuthenticate(allowed)) {
-                BiometricManager.BIOMETRIC_SUCCESS -> Unit
-                BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
-                    Log.w(TAG, "No biometrics or screen lock enrolled — refusing to bypass chat lock")
+            val combinedStatus = biometricManager.canAuthenticate(BIOMETRIC_WEAK or DEVICE_CREDENTIAL)
+            val credOnlyStatus = biometricManager.canAuthenticate(DEVICE_CREDENTIAL)
+            val bioOnlyStatus = biometricManager.canAuthenticate(BIOMETRIC_WEAK)
+
+            when {
+                combinedStatus == BiometricManager.BIOMETRIC_SUCCESS -> {
+                    api30Authenticators = BIOMETRIC_WEAK or DEVICE_CREDENTIAL
+                }
+                bioOnlyStatus == BiometricManager.BIOMETRIC_SUCCESS -> {
+                    api30Authenticators = BIOMETRIC_WEAK
+                }
+                credOnlyStatus == BiometricManager.BIOMETRIC_SUCCESS || hasDeviceLock -> {
+                    api30Authenticators = DEVICE_CREDENTIAL
+                }
+                combinedStatus == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ||
+                    bioOnlyStatus == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
+                    Log.w(TAG, "No biometrics or screen lock enrolled — refusing to bypass lock")
                     onError("Set up a fingerprint, face unlock, or screen lock in device Settings first")
                     return
                 }
-                BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE,
-                BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE,
-                BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED,
-                BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED -> {
-                    Log.w(TAG, "Biometric hardware unavailable")
-                    onError("Biometric authentication is unavailable on this device")
-                    return
-                }
                 else -> {
-                    onError("Authentication unavailable")
+                    Log.w(TAG, "Biometric hardware unavailable (combined=$combinedStatus, cred=$credOnlyStatus, bio=$bioOnlyStatus)")
+                    onError("Biometric authentication is unavailable on this device")
                     return
                 }
             }
         } else {
             val bioStatus = biometricManager.canAuthenticate(BIOMETRIC_WEAK)
-            val km = fragmentActivity.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-            val hasDeviceLock = km?.isDeviceSecure == true
-            if (bioStatus == BiometricManager.BIOMETRIC_SUCCESS) {
-                // Allow device credential fallback on API 28-29 if screen lock is also configured
-                useLegacyDeviceCredential = hasDeviceLock
-            } else if (hasDeviceLock) {
-                useLegacyDeviceCredential = true
-            } else {
-                Log.w(TAG, "No biometrics or screen lock enrolled (API < 30)")
-                onError("Set up a fingerprint, face unlock, or screen lock in device Settings first")
-                return
-            }
-        }
-
-        val executor = ContextCompat.getMainExecutor(fragmentActivity)
-        var settled = false
-        fun releasePromptGuard() {
-            if (!settled) {
-                settled = true
-                activePromptCounter.updateAndGet { (it - 1).coerceAtLeast(0) }
-            }
-        }
-
-        val callback = object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                super.onAuthenticationSucceeded(result)
-                releasePromptGuard()
-                Log.d(TAG, "Authentication succeeded")
-                onSuccess()
-            }
-
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                super.onAuthenticationError(errorCode, errString)
-                releasePromptGuard()
-                Log.d(TAG, "Authentication error [$errorCode]: $errString")
-                when (errorCode) {
-                    BiometricPrompt.ERROR_USER_CANCELED,
-                    BiometricPrompt.ERROR_NEGATIVE_BUTTON,
-                    BiometricPrompt.ERROR_CANCELED -> onCancel()
-                    BiometricPrompt.ERROR_LOCKOUT ->
-                        onError("Too many attempts. Try again in 30 seconds.")
-                    BiometricPrompt.ERROR_LOCKOUT_PERMANENT ->
-                        onError("Biometrics locked. Unlock your device with PIN/password first.")
-                    BiometricPrompt.ERROR_NO_BIOMETRICS,
-                    BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL ->
-                        onError("Set up a fingerprint, face unlock, or screen lock in device Settings first")
-                    else -> onError(errString.toString().ifBlank { "Authentication failed" })
+            when {
+                hasDeviceLock -> {
+                    // On API 28-29, setDeviceCredentialAllowed(true) supports both biometrics and PIN/pattern/password
+                    useLegacyDeviceCredential = true
+                }
+                bioStatus == BiometricManager.BIOMETRIC_SUCCESS -> {
+                    useLegacyBiometricOnly = true
+                }
+                else -> {
+                    Log.w(TAG, "No biometrics or screen lock enrolled (API < 30)")
+                    onError("Set up a fingerprint, face unlock, or screen lock in device Settings first")
+                    return
                 }
             }
-
-            override fun onAuthenticationFailed() {
-                super.onAuthenticationFailed()
-                // A single bad biometric attempt — system dialog retries automatically.
-                Log.d(TAG, "Authentication attempt failed (will retry)")
-            }
         }
-
-        val prompt = BiometricPrompt(fragmentActivity, executor, callback)
 
         val promptInfoBuilder = BiometricPrompt.PromptInfo.Builder()
             .setTitle(title)
@@ -175,22 +157,116 @@ object BiometricHelper {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            promptInfoBuilder.setAllowedAuthenticators(BIOMETRIC_STRONG or BIOMETRIC_WEAK or DEVICE_CREDENTIAL)
+            promptInfoBuilder.setAllowedAuthenticators(api30Authenticators)
+            if ((api30Authenticators and DEVICE_CREDENTIAL) == 0) {
+                promptInfoBuilder.setNegativeButtonText("Cancel")
+            }
         } else if (useLegacyDeviceCredential) {
             promptInfoBuilder.setDeviceCredentialAllowed(true)
-        } else {
+        } else if (useLegacyBiometricOnly) {
             promptInfoBuilder
                 .setAllowedAuthenticators(BIOMETRIC_WEAK)
                 .setNegativeButtonText("Cancel")
         }
 
-        try {
-            activePromptCounter.incrementAndGet()
-            prompt.authenticate(promptInfoBuilder.build())
+        val promptInfo = try {
+            promptInfoBuilder.build()
         } catch (e: Exception) {
-            releasePromptGuard()
-            Log.e(TAG, "Failed to launch BiometricPrompt: ${e.message}", e)
-            onError("Could not launch authentication: ${e.message ?: "Unknown error"}")
+            Log.e(TAG, "Invalid BiometricPrompt.PromptInfo: ${e.message}", e)
+            onError("Could not initialize biometric prompt: ${e.message ?: "Unknown error"}")
+            return
+        }
+
+        fun launchNow() {
+            if (fragmentActivity.isFinishing || fragmentActivity.isDestroyed) {
+                onCancel()
+                return
+            }
+
+            val executor = ContextCompat.getMainExecutor(fragmentActivity)
+            var settled = false
+            var destroyObserver: LifecycleEventObserver? = null
+
+            fun releasePromptGuard() {
+                if (!settled) {
+                    settled = true
+                    destroyObserver?.let { fragmentActivity.lifecycle.removeObserver(it) }
+                    destroyObserver = null
+                    activePromptCounter.updateAndGet { (it - 1).coerceAtLeast(0) }
+                }
+            }
+
+            destroyObserver = LifecycleEventObserver { _: LifecycleOwner, event: Lifecycle.Event ->
+                if (event == Lifecycle.Event.ON_DESTROY) {
+                    releasePromptGuard()
+                }
+            }.also { fragmentActivity.lifecycle.addObserver(it) }
+
+            val callback = object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    super.onAuthenticationSucceeded(result)
+                    releasePromptGuard()
+                    Log.d(TAG, "Authentication succeeded")
+                    onSuccess()
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    super.onAuthenticationError(errorCode, errString)
+                    releasePromptGuard()
+                    Log.d(TAG, "Authentication error [$errorCode]: $errString")
+                    when (errorCode) {
+                        BiometricPrompt.ERROR_USER_CANCELED,
+                        BiometricPrompt.ERROR_NEGATIVE_BUTTON,
+                        BiometricPrompt.ERROR_CANCELED -> onCancel()
+                        BiometricPrompt.ERROR_LOCKOUT ->
+                            onError("Too many attempts. Try again in 30 seconds.")
+                        BiometricPrompt.ERROR_LOCKOUT_PERMANENT ->
+                            onError("Biometrics locked. Unlock your device with PIN/password first.")
+                        BiometricPrompt.ERROR_NO_BIOMETRICS,
+                        BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL ->
+                            onError("Set up a fingerprint, face unlock, or screen lock in device Settings first")
+                        else -> onError(errString.toString().ifBlank { "Authentication failed" })
+                    }
+                }
+
+                override fun onAuthenticationFailed() {
+                    super.onAuthenticationFailed()
+                    // A single bad biometric attempt — system dialog retries automatically.
+                    Log.d(TAG, "Authentication attempt failed (will retry)")
+                }
+            }
+
+            try {
+                val prompt = BiometricPrompt(fragmentActivity, executor, callback)
+                activePromptCounter.incrementAndGet()
+                prompt.authenticate(promptInfo)
+            } catch (e: Exception) {
+                releasePromptGuard()
+                Log.e(TAG, "Failed to launch BiometricPrompt: ${e.message}", e)
+                onError("Could not launch authentication: ${e.message ?: "Unknown error"}")
+            }
+        }
+
+        // Wait for RESUMED state so Android 14/15 never drops the prompt during activity transitions
+        if (fragmentActivity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            launchNow()
+        } else {
+            val resumeObserver = object : LifecycleEventObserver {
+                override fun onStateChanged(source: LifecycleOwner, event: Lifecycle.Event) {
+                    when (event) {
+                        Lifecycle.Event.ON_RESUME -> {
+                            source.lifecycle.removeObserver(this)
+                            launchNow()
+                        }
+                        Lifecycle.Event.ON_DESTROY -> {
+                            source.lifecycle.removeObserver(this)
+                            onCancel()
+                        }
+                        else -> Unit
+                    }
+                }
+            }
+            fragmentActivity.lifecycle.addObserver(resumeObserver)
         }
     }
 }

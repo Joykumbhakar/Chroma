@@ -15,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.chat.util.BiometricHelper
+import com.chroma.studio.chat.util.findActivity
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.*
 import com.composables.icons.lucide.*
@@ -125,14 +127,32 @@ fun SecurityScreen(
                 ) {
                     AppleSettingToggleRow(
                         title = "Biometric Passkey Lock",
-                        subtitle = "Require fingerprint, face, or screen lock for sensitive actions",
+                        subtitle = "Require fingerprint, face, or screen lock to open Oscellion and for sensitive actions",
                         icon = Lucide.Fingerprint,
                         iconGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE)),
                         checked = biometricPasskeyEnabled,
                         onCheckedChange = { enabled ->
-                            biometricPasskeyEnabled = enabled
-                            secPrefs.edit().putBoolean("biometric_passkey_lock", enabled).apply()
-                            ToastManager.showToast(if (enabled) "Biometric lock enabled" else "Biometric lock disabled")
+                            val activity = context.findActivity()
+                            if (activity == null) {
+                                ToastManager.showToast("Biometric authentication unavailable on this screen")
+                            } else {
+                                BiometricHelper.authenticate(
+                                    activity = activity,
+                                    title = if (enabled) "Enable Biometric Lock" else "Disable Biometric Lock",
+                                    subtitle = if (enabled) {
+                                        "Verify your identity to lock Oscellion with Biometrics"
+                                    } else {
+                                        "Verify your identity to turn off Biometric Lock"
+                                    },
+                                    onSuccess = {
+                                        biometricPasskeyEnabled = enabled
+                                        secPrefs.edit().putBoolean("biometric_passkey_lock", enabled).apply()
+                                        ToastManager.showToast(if (enabled) "Biometric lock enabled" else "Biometric lock disabled")
+                                    },
+                                    onCancel = {},
+                                    onError = { err -> ToastManager.showToast(err) }
+                                )
+                            }
                         }
                     )
 
@@ -190,40 +210,59 @@ fun SecurityScreen(
                     enabled = !isDeletingAccount,
                     onClick = {
                         val currentUser = auth.currentUser ?: return@TextButton
-                        isDeletingAccount = true
-                        scope.launch {
-                            try {
-                                val db = FirebaseFirestore.getInstance()
-                                // 1. Release username reservation if present
-                                if (profile.username.isNotBlank()) {
-                                    try {
-                                        db.collection("usernames").document(profile.username.lowercase()).delete().await()
-                                    } catch (_: Exception) {}
-                                }
-                                // 2. Delete Firestore user profile document
+                        val executeDelete: () -> Unit = {
+                            isDeletingAccount = true
+                            scope.launch {
                                 try {
-                                    db.collection("users").document(currentUser.uid).delete().await()
-                                } catch (_: Exception) {}
-                                // 3. Delete Firebase Auth account
-                                currentUser.delete().await()
-                                showDeleteConfirm = false
-                                isDeletingAccount = false
-                                ToastManager.showToast("Account deleted")
-                                if (onAccountDeleted != null) {
-                                    onAccountDeleted()
-                                } else {
-                                    auth.signOut()
-                                    onBack()
+                                    val db = FirebaseFirestore.getInstance()
+                                    // 1. Release username reservation if present
+                                    if (profile.username.isNotBlank()) {
+                                        try {
+                                            db.collection("usernames").document(profile.username.lowercase()).delete().await()
+                                        } catch (_: Exception) {}
+                                    }
+                                    // 2. Delete Firestore user profile document
+                                    try {
+                                        db.collection("users").document(currentUser.uid).delete().await()
+                                    } catch (_: Exception) {}
+                                    // 3. Delete Firebase Auth account
+                                    currentUser.delete().await()
+                                    showDeleteConfirm = false
+                                    isDeletingAccount = false
+                                    ToastManager.showToast("Account deleted")
+                                    if (onAccountDeleted != null) {
+                                        onAccountDeleted()
+                                    } else {
+                                        auth.signOut()
+                                        onBack()
+                                    }
+                                } catch (e: FirebaseAuthRecentLoginRequiredException) {
+                                    isDeletingAccount = false
+                                    showDeleteConfirm = false
+                                    ToastManager.showToast("For security, please sign out and sign back in before deleting your account.")
+                                } catch (e: Exception) {
+                                    isDeletingAccount = false
+                                    showDeleteConfirm = false
+                                    ToastManager.showToast("Could not delete account: ${e.localizedMessage ?: "Try again"}")
                                 }
-                            } catch (e: FirebaseAuthRecentLoginRequiredException) {
-                                isDeletingAccount = false
-                                showDeleteConfirm = false
-                                ToastManager.showToast("For security, please sign out and sign back in before deleting your account.")
-                            } catch (e: Exception) {
-                                isDeletingAccount = false
-                                showDeleteConfirm = false
-                                ToastManager.showToast("Could not delete account: ${e.localizedMessage ?: "Try again"}")
                             }
+                        }
+                        if (biometricPasskeyEnabled) {
+                            val activity = context.findActivity()
+                            if (activity == null) {
+                                ToastManager.showToast("Biometric authentication unavailable on this screen")
+                            } else {
+                                BiometricHelper.authenticate(
+                                    activity = activity,
+                                    title = "Confirm Account Deletion",
+                                    subtitle = "Verify your identity before permanently deleting your account",
+                                    onSuccess = executeDelete,
+                                    onCancel = {},
+                                    onError = { err -> ToastManager.showToast(err) }
+                                )
+                            }
+                        } else {
+                            executeDelete()
                         }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFEF4444))
