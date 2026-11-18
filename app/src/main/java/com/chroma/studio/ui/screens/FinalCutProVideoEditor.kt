@@ -898,12 +898,8 @@ data class FcpEditorSnapshot(
     val textLayers: List<FcpTextLayer>,
     val customAudio: FcpCustomAudio?
 )
-fun isClipPhoto(context: Context, clip: FcpClip): Boolean {
-    return try {
-        val type = context.contentResolver.getType(clip.uri)
-        type?.startsWith("image/") == true
-    } catch (_: Exception) { false }
-}
+fun isClipPhoto(context: Context, clip: FcpClip): Boolean =
+    FcpTimelineExporter.isImageClip(context, clip)
 private fun queryMediaFileName(context: Context, uri: Uri): String {
     var name: String? = null
     if (uri.scheme == "content") {
@@ -1543,6 +1539,7 @@ fun FinalCutProVideoEditorScreen(
     // Declared here (before export helpers) so export can invalidate the preview-player cache.
     var loadedClipId by remember { mutableStateOf<String?>(null) }
     var loadedClipUri by remember { mutableStateOf<Uri?>(null) }
+    var previewViewportSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     /** Frees hardware decoders held by the preview players so the exporter's encoder/decoders can start. */
     fun releasePreviewForExport() {
         try { exoPlayer.pause(); exoPlayer.stop(); exoPlayer.clearMediaItems() } catch (_: Throwable) {}
@@ -1580,18 +1577,23 @@ fun FinalCutProVideoEditorScreen(
     }
     fun performExport(res: String, fps: String, saveToGallery: Boolean, shareExternal: Boolean = false) {
         if (isExporting) return // ignore double taps while a render is running
+        if (clips.isEmpty()) {
+            ToastManager.showToast("No video clips to export")
+            showExportSheet = false
+            return
+        }
+        // Validate 60-second Studio upload limit BEFORE rendering so users never wait for a discarded render
+        if (!saveToGallery && !shareExternal && totalDurationSec > 60f) {
+            showExportSheet = false
+            showDurationWarningDialog = true
+            ToastManager.showToast("Videos shared to Studio must be 60 seconds or less")
+            return
+        }
         isPlaying = false
         releasePreviewForExport()
         exportJob?.cancel()
         exportJob = scope.launch {
             try {
-                if (clips.isEmpty()) {
-                    ToastManager.showToast("No video clips to export")
-                    isExporting = false
-                    showExportSheet = false
-                    restorePreviewAfterExport()
-                    return@launch
-                }
                 isExporting = true
                 exportProgress = 0.05f
                 exportStageText = "Preparing timeline & ${clips.size} clip(s)..."
@@ -1610,6 +1612,8 @@ fun FinalCutProVideoEditorScreen(
                         aspectRatio = aspectRatio,
                         res = res,
                         fps = fps,
+                        previewWidthPx = previewViewportSize.width,
+                        previewHeightPx = previewViewportSize.height,
                         onProgress = { p, stage ->
                             scope.launch(Dispatchers.Main) {
                                 exportProgress = p
@@ -1697,6 +1701,7 @@ fun FinalCutProVideoEditorScreen(
                     }
                 } else {
                     if (totalDurationSec > 60f) {
+                        try { exportedFile.delete() } catch (_: Throwable) {}
                         isExporting = false
                         showExportSheet = false
                         restorePreviewAfterExport()
@@ -2617,6 +2622,7 @@ fun FinalCutProVideoEditorScreen(
                     modifier = Modifier
                         .fillMaxHeight()
                         .aspectRatio(aspectRatio.ratio)
+                        .onSizeChanged { previewViewportSize = it }
                         .shadow(elevation = 8.dp, shape = previewShape, ambientColor = Color(0x0D1F2687), spotColor = Color(0x0D1F2687))
                         .clip(previewShape)
                         .background(Color(0xFF111317))
@@ -12872,7 +12878,7 @@ fun FcpExportSheet(
                                             .background(oneUiBlue)
                                     )
                                     Text(
-                                        text = "Hardware Accelerated · H.264 / AAC",
+                                        text = "H.264 / AAC · Studio Encoder",
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = colors.textMuted
@@ -13330,7 +13336,7 @@ fun FcpExportSheet(
                                     color = colors.textMain
                                 )
                                 Text(
-                                    text = "Hardware Accelerated",
+                                    text = "Smart CRF",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = colors.textMuted

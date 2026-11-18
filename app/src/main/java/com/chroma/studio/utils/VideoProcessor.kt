@@ -518,6 +518,9 @@ object VideoProcessor {
             muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             var videoMuxTrack = -1
             var audioMuxTrack = -1
+            var refVideoMime: String? = null
+            var refVideoWidth = -1
+            var refVideoHeight = -1
 
             // 1. Find track formats from first playable video clip
             for (clip in clips) {
@@ -539,6 +542,9 @@ object VideoProcessor {
                         val mime = fmt.getString(MediaFormat.KEY_MIME) ?: continue
                         if (mime.startsWith("video/") && videoMuxTrack < 0) {
                             videoMuxTrack = muxer.addTrack(fmt)
+                            refVideoMime = mime
+                            refVideoWidth = runCatching { fmt.getInteger(MediaFormat.KEY_WIDTH) }.getOrDefault(-1)
+                            refVideoHeight = runCatching { fmt.getInteger(MediaFormat.KEY_HEIGHT) }.getOrDefault(-1)
                         } else if (mime.startsWith("audio/") && audioMuxTrack < 0) {
                             audioMuxTrack = muxer.addTrack(fmt)
                         }
@@ -561,6 +567,8 @@ object VideoProcessor {
             val bufferInfo = MediaCodec.BufferInfo()
             var globalVideoTimeOffsetUs = 0L
             var globalAudioTimeOffsetUs = 0L
+            var lastWrittenVideoPtsUs = -1L
+            var lastWrittenAudioPtsUs = -1L
             var totalSamplesWritten = 0
 
             var hasClipErrors = false
@@ -580,23 +588,42 @@ object VideoProcessor {
                     }
                     var videoTrackIdx = -1
                     var audioTrackIdx = -1
+                    var clipVideoMime: String? = null
+                    var clipVideoW = -1
+                    var clipVideoH = -1
                     for (i in 0 until extractor.trackCount) {
                         val fmt = extractor.getTrackFormat(i)
                         val mime = fmt.getString(MediaFormat.KEY_MIME) ?: continue
-                        if (mime.startsWith("video/") && videoTrackIdx < 0) videoTrackIdx = i
+                        if (mime.startsWith("video/") && videoTrackIdx < 0) {
+                            videoTrackIdx = i
+                            clipVideoMime = mime
+                            clipVideoW = runCatching { fmt.getInteger(MediaFormat.KEY_WIDTH) }.getOrDefault(-1)
+                            clipVideoH = runCatching { fmt.getInteger(MediaFormat.KEY_HEIGHT) }.getOrDefault(-1)
+                        }
                         if (mime.startsWith("audio/") && audioTrackIdx < 0) audioTrackIdx = i
                     }
 
-                    val startUs = (clip.trimStartSec * 1_000_000L).toLong()
-                    val endUs = (clip.trimEndSec * 1_000_000L).toLong()
+                    // Guard against mixing incompatible video codec/dimensions in raw MediaMuxer
+                    if (videoTrackIdx < 0 ||
+                        (refVideoMime != null && clipVideoMime != refVideoMime) ||
+                        (refVideoWidth > 0 && clipVideoW > 0 && (clipVideoW != refVideoWidth || clipVideoH != refVideoHeight))
+                    ) {
+                        Log.w(TAG, "concatVideoClips: incompatible clip format (${clipVideoMime} ${clipVideoW}x${clipVideoH} vs ${refVideoMime} ${refVideoWidth}x${refVideoHeight})")
+                        hasClipErrors = true
+                        continue
+                    }
+
+                    val startUs = (clip.trimStartSec * 1_000_000L).toLong().coerceAtLeast(0L)
+                    val endUs = (clip.trimEndSec * 1_000_000L).toLong().coerceAtLeast(startUs + 100_000L)
                     val clipDurationUs = (endUs - startUs).coerceAtLeast(100_000L)
 
-                    // Write video track samples
+                    // Write video track samples (always begin on a keyframe so players don't render green/frozen frames)
                     if (videoTrackIdx >= 0 && videoMuxTrack >= 0) {
                         extractor.selectTrack(videoTrackIdx)
-                        extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+                        extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
                         var firstSampleUs = -1L
                         var lastSampleUs = 0L
+                        var seenKeyFrame = false
 
                         while (true) {
                             bufferInfo.offset = 0
@@ -604,23 +631,33 @@ object VideoProcessor {
                             if (sampleSize < 0) break
                             val sampleTimeUs = extractor.sampleTime
                             if (sampleTimeUs > endUs) break
-                            if (sampleTimeUs >= startUs) {
-                                if (firstSampleUs < 0) firstSampleUs = sampleTimeUs
-                                bufferInfo.size = sampleSize
-                                val relativeTime = sampleTimeUs - firstSampleUs
-                                bufferInfo.presentationTimeUs = globalVideoTimeOffsetUs + relativeTime
-                                bufferInfo.flags = extractor.sampleFlags
-                                muxer.writeSampleData(videoMuxTrack, buffer, bufferInfo)
-                                totalSamplesWritten++
-                                lastSampleUs = relativeTime
+                            val flags = extractor.sampleFlags
+                            val isSync = (flags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0
+                            if (!seenKeyFrame) {
+                                if (!isSync) {
+                                    extractor.advance()
+                                    continue
+                                }
+                                seenKeyFrame = true
+                                firstSampleUs = sampleTimeUs
                             }
+                            bufferInfo.size = sampleSize
+                            val relativeTime = (sampleTimeUs - firstSampleUs).coerceAtLeast(0L)
+                            var pts = globalVideoTimeOffsetUs + relativeTime
+                            if (pts <= lastWrittenVideoPtsUs) pts = lastWrittenVideoPtsUs + 1000L
+                            lastWrittenVideoPtsUs = pts
+                            bufferInfo.presentationTimeUs = pts
+                            bufferInfo.flags = flags
+                            muxer.writeSampleData(videoMuxTrack, buffer, bufferInfo)
+                            totalSamplesWritten++
+                            lastSampleUs = (pts - globalVideoTimeOffsetUs).coerceAtLeast(0L)
                             extractor.advance()
                         }
                         extractor.unselectTrack(videoTrackIdx)
                         globalVideoTimeOffsetUs += (lastSampleUs + 33_333L).coerceAtLeast(clipDurationUs)
                     }
 
-                    // Write audio track samples
+                    // Write audio track samples with monotonic PTS
                     if (audioTrackIdx >= 0 && audioMuxTrack >= 0) {
                         extractor.selectTrack(audioTrackIdx)
                         extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
@@ -636,12 +673,15 @@ object VideoProcessor {
                             if (sampleTimeUs >= startUs) {
                                 if (firstAudioSampleUs < 0) firstAudioSampleUs = sampleTimeUs
                                 bufferInfo.size = sampleSize
-                                val relativeTime = sampleTimeUs - firstAudioSampleUs
-                                bufferInfo.presentationTimeUs = globalAudioTimeOffsetUs + relativeTime
+                                val relativeTime = (sampleTimeUs - firstAudioSampleUs).coerceAtLeast(0L)
+                                var pts = globalAudioTimeOffsetUs + relativeTime
+                                if (pts <= lastWrittenAudioPtsUs) pts = lastWrittenAudioPtsUs + 1000L
+                                lastWrittenAudioPtsUs = pts
+                                bufferInfo.presentationTimeUs = pts
                                 bufferInfo.flags = extractor.sampleFlags
                                 muxer.writeSampleData(audioMuxTrack, buffer, bufferInfo)
                                 totalSamplesWritten++
-                                lastAudioSampleUs = relativeTime
+                                lastAudioSampleUs = (pts - globalAudioTimeOffsetUs).coerceAtLeast(0L)
                             }
                             extractor.advance()
                         }
