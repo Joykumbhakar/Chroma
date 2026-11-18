@@ -1149,51 +1149,35 @@ fun ChromaPhotoEditorScreen(
                 .fillMaxSize()
                 .background(editorColors.bg)
         ) {
-            // ── Top Action Bar (Compact, Responsive, NEVER pushes Export off screen) ──
+            // ── Top Action Bar (Clean One UI action-only editor bar — no title/logo clutter) ──
+            val topBtnBg = if (editorColors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6)
+            val topBorder = if (editorColors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .editorChromeFadeOnScrub()
                     .statusBarsPadding()
-                    .background(Color.White)
-                    .border(0.5.dp, Color(0xFFE5E7EB))
+                    .background(editorColors.bg)
+                    .border(0.5.dp, topBorder)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Left: Back button + Title
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Left: Back button only
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(topBtnBg)
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFF3F4F6))
-                            .clickable(onClick = onBack),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Lucide.ChevronLeft,
-                            contentDescription = "Back",
-                            tint = Color(0xFF1F2937),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "Photo Studio",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF111827),
-                            letterSpacing = (-0.3).sp
-                        )
-                    }
+                    Icon(
+                        imageVector = Lucide.ChevronLeft,
+                        contentDescription = "Back",
+                        tint = editorColors.textMain,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
 
                 // Right: Undo/Redo + Layers + Next/Export
@@ -1205,13 +1189,13 @@ fun ChromaPhotoEditorScreen(
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
-                            .background(Color(0xFFF3F4F6))
+                            .background(topBtnBg)
                             .padding(horizontal = 2.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(30.dp, 28.dp)
+                                .size(32.dp, 30.dp)
                                 .clip(RoundedCornerShape(999.dp))
                                 .clickable(enabled = viewModel.canUndo(), onClick = { viewModel.undo() }),
                             contentAlignment = Alignment.Center
@@ -1219,19 +1203,19 @@ fun ChromaPhotoEditorScreen(
                             Icon(
                                 imageVector = Lucide.Undo2,
                                 contentDescription = "Undo",
-                                tint = if (viewModel.canUndo()) Color(0xFF1F2937) else Color(0xFF9CA3AF).copy(alpha = 0.5f),
-                                modifier = Modifier.size(15.dp)
+                                tint = if (viewModel.canUndo()) editorColors.textMain else editorColors.textMuted.copy(alpha = 0.45f),
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                         Box(
                             modifier = Modifier
                                 .width(1.dp)
                                 .height(14.dp)
-                                .background(Color(0xFFE5E7EB))
+                                .background(topBorder)
                         )
                         Box(
                             modifier = Modifier
-                                .size(30.dp, 28.dp)
+                                .size(32.dp, 30.dp)
                                 .clip(RoundedCornerShape(999.dp))
                                 .clickable(enabled = viewModel.canRedo(), onClick = { viewModel.redo() }),
                             contentAlignment = Alignment.Center
@@ -1239,8 +1223,8 @@ fun ChromaPhotoEditorScreen(
                             Icon(
                                 imageVector = Lucide.Redo2,
                                 contentDescription = "Redo",
-                                tint = if (viewModel.canRedo()) Color(0xFF1F2937) else Color(0xFF9CA3AF).copy(alpha = 0.5f),
-                                modifier = Modifier.size(15.dp)
+                                tint = if (viewModel.canRedo()) editorColors.textMain else editorColors.textMuted.copy(alpha = 0.45f),
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
@@ -1250,27 +1234,23 @@ fun ChromaPhotoEditorScreen(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFF3F4F6))
+                            .background(topBtnBg)
                             .clickable { showLayersSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Lucide.Layers,
                             contentDescription = "Layers",
-                            tint = Color(0xFF374151),
+                            tint = editorColors.textMain,
                             modifier = Modifier.size(18.dp)
                         )
                     }
 
-                    // Primary Action: "Next" or "Export" (Prominent, High Visibility, NEVER cut off)
+                    // Primary Action: Solid One UI Blue "Next" or "Export"
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(Color(0xFF0381FE), Color(0xFF2563EB))
-                                )
-                            )
+                            .background(Color(0xFF0381FE))
                             .clickable(enabled = !isExporting) {
                                 if (exportButtonLabel == "Next") {
                                     isExporting = true

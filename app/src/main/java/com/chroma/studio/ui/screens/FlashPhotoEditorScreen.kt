@@ -745,108 +745,145 @@ fun FlashPhotoEditorScreen(
                 .fillMaxSize()
                 .navigationBarsPadding()
         ) {
-            // ── 1. STUDIO HEADER (Simple & Clean) ───────────────────────────
-            Box(modifier = Modifier.fillMaxWidth().editorChromeFadeOnScrub()) {
-            ChromaScreenHeader(
-                title = title,
-                badgeText = if (isSlideshow) "${previewIndex + 1}/${photoUris.size}" else null,
-                badgeColor = colors.primary,
-                showBackButton = true,
-                circularBackButton = false,
-                onBack = onBack,
-                actions = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+            // ── 1. CLEAN ACTION-ONLY EDITOR HEADER (No branding/title clutter) ──
+            val topBtnBg = if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF1F5F9)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .editorChromeFadeOnScrub()
+                    .background(colors.bg)
+                    .border(0.5.dp, colors.glassBorder)
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left: Back button + optional slideshow counter pill
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(topBtnBg)
+                            .clickable(onClick = onBack),
+                        contentAlignment = Alignment.Center
                     ) {
-                        // Undo Action
-                        if (undoStack.isNotEmpty()) {
-                            IconButton(
-                                onClick = { handleUndo() },
-                                modifier = Modifier.size(36.dp).minimumInteractiveComponentSize()
-                            ) {
-                                Icon(
-                                    Lucide.Undo2,
-                                    contentDescription = "Undo Action",
-                                    tint = colors.textMain,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-
-                        // Compare with Original Toggle
-                        IconButton(
-                            onClick = {
-                                isComparingOriginal = !isComparingOriginal
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            },
-                            modifier = Modifier.size(36.dp).minimumInteractiveComponentSize()
-                        ) {
-                            Icon(
-                                Lucide.Eye,
-                                contentDescription = "Compare with Original",
-                                tint = if (isComparingOriginal) colors.primary else colors.textMuted,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Reset Edits
-                        IconButton(
-                            onClick = { resetAll() },
-                            modifier = Modifier.size(36.dp).minimumInteractiveComponentSize()
-                        ) {
-                            Icon(
-                                Lucide.RotateCcw,
-                                contentDescription = "Reset Workspace",
-                                tint = colors.textMuted,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(2.dp))
-
-                        // Next / Done Button (Sleek Studio Action Button)
+                        Icon(
+                            imageVector = Lucide.ChevronLeft,
+                            contentDescription = "Back",
+                            tint = colors.textMain,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    if (isSlideshow) {
                         Box(
                             modifier = Modifier
-                                .height(36.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    if (!isExporting) Brush.horizontalGradient(listOf(Color(0xFFF5882E), Color(0xFFEA580C)))
-                                    else Brush.horizontalGradient(listOf(Color(0xFFF5882E).copy(alpha = 0.5f), Color(0xFFEA580C).copy(alpha = 0.5f)))
-                                )
-                                .clickable(enabled = !isExporting) { handleExportAndNext() }
-                                .padding(horizontal = 14.dp),
-                            contentAlignment = Alignment.Center
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(topBtnBg)
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
-                            if (isExporting) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Text(
-                                        nextButtonLabel,
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Icon(
-                                        imageVector = Lucide.ArrowRight,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
+                            Text(
+                                text = "${previewIndex + 1}/${photoUris.size}",
+                                color = colors.textMain,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                 }
-            )
+
+                // Right: Undo + Compare + Reset + Solid One UI Blue Next/Done CTA
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (undoStack.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(topBtnBg)
+                                .clickable { handleUndo() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Lucide.Undo2,
+                                contentDescription = "Undo Action",
+                                tint = colors.textMain,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
+
+                    // Compare with Original Toggle
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (isComparingOriginal) Color(0xFF0381FE).copy(alpha = 0.14f) else topBtnBg)
+                            .clickable {
+                                isComparingOriginal = !isComparingOriginal
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Lucide.Eye,
+                            contentDescription = "Compare with Original",
+                            tint = if (isComparingOriginal) Color(0xFF0381FE) else colors.textMain,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+
+                    // Reset Edits
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(topBtnBg)
+                            .clickable { resetAll() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Lucide.RotateCcw,
+                            contentDescription = "Reset Workspace",
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    // Next / Done Button (Solid One UI Primary Blue Pill)
+                    Box(
+                        modifier = Modifier
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(
+                                if (!isExporting) Color(0xFF0381FE)
+                                else Color(0xFF0381FE).copy(alpha = 0.5f)
+                            )
+                            .clickable(enabled = !isExporting) { handleExportAndNext() }
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isExporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(
+                                nextButtonLabel,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
             }
 
             // ── 2. MULTI-PHOTO FILMSTRIP (If Multiple Images) ────────────────

@@ -14457,9 +14457,9 @@ private fun FcpTopHeaderBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
-            .background(if (colors.isDark) Color(0xFF1E212B) else colors.glassBg)
-            .border(width = 0.5.dp, color = if (colors.isDark) Color(0xFF2A2F3A) else colors.glassBorder)
+            .height(54.dp)
+            .background(if (colors.isDark) Color(0xFF14161D) else colors.bg)
+            .border(width = 0.5.dp, color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else colors.glassBorder)
     ) {
         Row(
             modifier = Modifier
@@ -14468,61 +14468,38 @@ private fun FcpTopHeaderBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left: Back button + Branding & Clip count
+            // Left: Back button + optional compact clip count pill (no branding/logo clutter)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f, fill = false)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 IconGhostButton(
                     icon = Lucide.ArrowLeft,
                     contentDesc = "Back",
                     onClick = onBackClick
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    OscellionWebLogo(size = 20.dp)
-                    Column(verticalArrangement = Arrangement.Center) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Oscellion",
-                                color = colors.textMain,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.5.sp,
-                                letterSpacing = (-0.3).sp,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = "Studio",
-                                color = Color(0xFF0381FE),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.5.sp,
-                                letterSpacing = (-0.3).sp,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                        if (clipsCount > 0) {
-                            Text(
-                                text = "$clipsCount ${if (clipsCount == 1) "clip" else "clips"}",
-                                color = colors.textMuted,
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
+                if (clipsCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "$clipsCount ${if (clipsCount == 1) "clip" else "clips"}",
+                            color = colors.textMuted,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
             }
-            // Right: Undo, Redo, Divider, Export Button
+            // Right: Undo, Redo, Duration Warning (if >1m), Export Button
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 IconGhostButton(
                     icon = Lucide.Undo,
@@ -14536,22 +14513,14 @@ private fun FcpTopHeaderBar(
                     disabled = redoEmpty,
                     onClick = onRedoClick
                 )
-                // Divider
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 2.dp)
-                        .width(1.dp)
-                        .height(18.dp)
-                        .background(colors.glassBorder)
-                )
                 if (isOverOneMinute) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFFFF9500).copy(alpha = 0.18f))
-                            .border(0.5.dp, Color(0xFFFF9500).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Color(0xFFFF9500).copy(alpha = 0.14f))
+                            .border(0.5.dp, Color(0xFFFF9500).copy(alpha = 0.35f), RoundedCornerShape(999.dp))
                             .clickable(onClick = onDurationWarningClick)
-                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
@@ -14579,23 +14548,16 @@ private fun FcpTopHeaderBar(
                 PrimaryGradientButton(
                     onClick = onExportClick,
                     shape = RoundedCornerShape(999.dp),
-                    height = 34.dp,
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    height = 36.dp,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                 ) {
                     Text(
                         text = "Export",
                         color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         softWrap = false
-                    )
-                    Spacer(modifier = Modifier.width(2.dp))
-                    Icon(
-                        imageVector = Lucide.ChevronRight,
-                        contentDescription = "Next",
-                        tint = Color.White,
-                        modifier = Modifier.size(13.dp)
                     )
                 }
             }

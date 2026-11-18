@@ -132,7 +132,7 @@ fun StickerStudioModal(
                     .fillMaxSize()
                     .padding(16.dp)
             ) {
-                // Top Navigation Bar
+                // Top Action Bar (clean One UI — action buttons only, no branding/title clutter)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -140,60 +140,91 @@ fun StickerStudioModal(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(38.dp)
+                    val iconBtnBg = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF0F2F5)
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(iconBtnBg)
+                            .clickable(onClick = onDismiss),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain)
+                        Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(19.dp))
                     }
 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "Sticker Studio",
-                            color = colors.textMain,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (applyWhiteBorder) "5px White Die-Cut Border" else "Transparent Cutout",
-                            color = colors.primary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    Button(
-                        onClick = {
-                            val targetBitmap = previewWithBorderBitmap ?: cutoutBitmap
-                            if (targetBitmap != null) {
-                                isProcessing = true
-                                scope.launch {
-                                    val finalBmp = if (applyWhiteBorder && previewWithBorderBitmap == null) {
-                                        withContext(Dispatchers.Default) {
-                                            StickerStudioEngine.apply5pxWhiteBorder(targetBitmap, borderPx = 5)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (eraserHistory.size > 1) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(iconBtnBg)
+                                    .clickable {
+                                        if (eraserHistory.size > 1) {
+                                            eraserHistory.removeAt(eraserHistory.lastIndex)
+                                            val prev = eraserHistory.last().copy(Bitmap.Config.ARGB_8888, true)
+                                            cutoutBitmap = prev
+                                            updateBorderPreview()
                                         }
-                                    } else targetBitmap
-
-                                    val stickerItem = StickerRepository.saveCustomSticker(
-                                        context = context,
-                                        bitmap = finalBmp,
-                                        name = "Custom Sticker"
-                                    )
-                                    isProcessing = false
-                                    onStickerCreated(stickerItem)
-                                    onDismiss()
-                                }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Lucide.Undo2, contentDescription = "Undo", tint = colors.textMain, modifier = Modifier.size(17.dp))
                             }
-                        },
-                        enabled = cutoutBitmap != null && !isProcessing,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colors.primary,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Text("Done", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        }
+
+                        if (cutoutBitmap != null) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(iconBtnBg)
+                                    .clickable { galleryLauncher.launch("image/*") },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Lucide.ImagePlus, contentDescription = "Replace Image", tint = colors.textMain, modifier = Modifier.size(17.dp))
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                val targetBitmap = previewWithBorderBitmap ?: cutoutBitmap
+                                if (targetBitmap != null) {
+                                    isProcessing = true
+                                    scope.launch {
+                                        val finalBmp = if (applyWhiteBorder && previewWithBorderBitmap == null) {
+                                            withContext(Dispatchers.Default) {
+                                                StickerStudioEngine.apply5pxWhiteBorder(targetBitmap, borderPx = 5)
+                                            }
+                                        } else targetBitmap
+
+                                        val stickerItem = StickerRepository.saveCustomSticker(
+                                            context = context,
+                                            bitmap = finalBmp,
+                                            name = "Custom Sticker"
+                                        )
+                                        isProcessing = false
+                                        onStickerCreated(stickerItem)
+                                        onDismiss()
+                                    }
+                                }
+                            },
+                            enabled = cutoutBitmap != null && !isProcessing,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF0381FE),
+                                contentColor = Color.White,
+                                disabledContainerColor = Color(0xFF0381FE).copy(alpha = 0.35f),
+                                disabledContentColor = Color.White.copy(alpha = 0.7f)
+                            ),
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 7.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text("Done", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
 

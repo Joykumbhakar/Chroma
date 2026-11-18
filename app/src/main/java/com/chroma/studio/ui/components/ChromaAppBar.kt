@@ -91,11 +91,7 @@ fun ChromaAppBar(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(colors.primary, Color(0xFFEC4899))
-                            )
-                        )
+                        .background(Color(0xFF0381FE))
                         .clickable(
                             indication = null,
                             interactionSource = remember { MutableInteractionSource() }
@@ -114,26 +110,13 @@ fun ChromaAppBar(
                         text = "Publish Remix",
                         color = Color.White,
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
         }
 
-        // ---- CENTER TITLE ----
-        Row(
-            modifier = Modifier.align(Alignment.Center),
-            verticalAlignment = Alignment.CenterVertically, 
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            OscellionBrandLockup(
-                iconSize = 20.dp,
-                fontSize = 17.dp,
-                textColor = colors.textMain
-            )
-        }
-
-        // ---- RIGHT CONTROLS ----
+        // ---- RIGHT CONTROLS (Clean action-only editor header — no logo/title clutter) ----
         Row(
             modifier = Modifier.align(Alignment.CenterEnd),
             verticalAlignment = Alignment.CenterVertically, 

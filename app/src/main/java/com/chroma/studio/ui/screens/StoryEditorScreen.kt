@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -418,84 +419,100 @@ fun StoryEditorScreen(
 
     Scaffold(
         topBar = {
+            val topBtnBg = if (themeColors.isDark) Color(0xFF1E222A) else Color(0xFFF1F5F9)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(themeColors.bg)
                     .statusBarsPadding()
                     .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Clean Close icon button (NO background)
-                IconButton(
-                    onClick = {
-                        if (bodyContent.isNotBlank() || headlineText.isNotBlank() || backgroundImageUri != null) {
-                            showDiscardDialog = true
-                        } else {
-                            onNavigateBack()
-                        }
-                    },
-                    modifier = Modifier.size(36.dp)
+                // Left: Close button + optional compact word count pill
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Lucide.X,
-                        contentDescription = "Close",
-                        tint = themeColors.textMain,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Story Writer",
-                        fontSize = 16.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = themeColors.textMain,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = "${wordCount} words • ${estimatedReadTime}m read",
-                        fontSize = 11.sp,
-                        color = themeColors.textMuted,
-                        maxLines = 1
-                    )
-                }
-
-                Spacer(Modifier.width(6.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // Templates (NO background)
-                    IconButton(
-                        onClick = { showTemplatesSheet = true },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        AiWaveSphereIcon(
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    // Preview Toggle (NO background)
-                    IconButton(
-                        onClick = { showLivePreview = !showLivePreview },
-                        modifier = Modifier.size(36.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(topBtnBg)
+                            .clickable {
+                                if (bodyContent.isNotBlank() || headlineText.isNotBlank() || backgroundImageUri != null) {
+                                    showDiscardDialog = true
+                                } else {
+                                    onNavigateBack()
+                                }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Lucide.Eye,
-                            contentDescription = "Preview",
-                            tint = if (showLivePreview) themeColors.primary else themeColors.textMuted,
+                            imageVector = Lucide.X,
+                            contentDescription = "Close",
+                            tint = themeColors.textMain,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    if (wordCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(topBtnBg)
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "${wordCount}w · ${estimatedReadTime}m",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = themeColors.textMuted,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                // Right: Templates, Preview, Publish
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(topBtnBg)
+                            .clickable { showTemplatesSheet = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AiWaveSphereIcon(
                             modifier = Modifier.size(19.dp)
                         )
                     }
 
-                    Spacer(Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (showLivePreview) Color(0xFF0381FE).copy(alpha = 0.14f) else topBtnBg)
+                            .clickable { showLivePreview = !showLivePreview },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Eye,
+                            contentDescription = "Preview",
+                            tint = if (showLivePreview) Color(0xFF0381FE) else themeColors.textMain,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
 
-                    // Primary Liquid Glass Publish Button
-                    LiquidGlassPrimaryButton(
-                        onClick = onPublishAction,
-                        enabled = (bodyContent.isNotBlank() || headlineText.isNotBlank()) && !isPublishing,
-                        isSmall = true
+                    val canPublish = (bodyContent.isNotBlank() || headlineText.isNotBlank()) && !isPublishing
+                    Box(
+                        modifier = Modifier
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (canPublish) Color(0xFF0381FE) else Color(0xFF0381FE).copy(alpha = 0.4f))
+                            .clickable(enabled = canPublish, onClick = onPublishAction)
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         if (isPublishing) {
                             CircularProgressIndicator(
@@ -504,8 +521,7 @@ fun StoryEditorScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("Publish", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
-                            Icon(Lucide.Send, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                            Text("Publish", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         }
                     }
                 }

@@ -435,32 +435,19 @@ fun ProfileMediaEditorModal(
                         )
                     }
 
-                    // Title & Badge
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Compact Ratio Pill (clean action-only bar — no title clutter)
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.12f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
                         Text(
-                            text = target.title,
-                            color = Color.White,
-                            fontSize = 15.5.sp,
-                            fontWeight = FontWeight.Bold
+                            text = target.tagText,
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF0381FE).copy(alpha = 0.22f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = target.tagText,
-                                    color = Color(0xFF64D2FF),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
                     }
 
                     // Done / Save Button
