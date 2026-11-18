@@ -88,11 +88,14 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
             },
         contentAlignment = Alignment.Center
     ) {
-        // Offscreen Canvas for Export (moved to root to avoid disrupting Column layout)
+        // Offscreen Canvas for Export (exact 1080x1920 PX using LocalDensity to prevent 4x DP OOM!)
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val exportW = with(density) { 1080.toDp() }
+        val exportH = with(density) { 1920.toDp() }
         Box(
             modifier = Modifier
                 .absoluteOffset(x = (-10000).dp)
-                .size(1080.dp, 1920.dp)
+                .size(exportW, exportH)
                 .drawWithCache {
                     val width = this.size.width.toInt()
                     val height = this.size.height.toInt()
@@ -229,11 +232,15 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                         val uri = ExportHelper.saveBitmap(context, bitmap, "Oscellion_$safeWorkName", true)
                         if (uri != null) {
                             ToastManager.showToast("Saved to Gallery", "Open", 4000L, onAction = {
-                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                    setDataAndType(uri, "image/png")
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(uri, "image/png")
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
+                                    ToastManager.showToast("No app available to open PNG")
                                 }
-                                context.startActivity(intent)
                             })
                         }
                     })
@@ -250,11 +257,15 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                         val uri = ExportHelper.saveBitmap(context, bitmap, "Oscellion_$safeWorkName", false)
                         if (uri != null) {
                             ToastManager.showToast("Saved to Gallery", "Open", 4000L, onAction = {
-                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                    setDataAndType(uri, "image/jpeg")
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(uri, "image/jpeg")
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
+                                    ToastManager.showToast("No app available to open JPG")
                                 }
-                                context.startActivity(intent)
                             })
                         }
                     })
@@ -264,7 +275,7 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                         val svgCode = ExportEngine.generateCode(
                             type = "SVG",
                             layersRaw = vm.layers,
-                            isDarkTheme = false,
+                            isDarkTheme = colors.isDark,
                             hasAnim = vm.globalAnimStatus != com.chroma.studio.model.AnimStatus.STOPPED,
                             aStyle = vm.globalAnimStyle,
                             aSpeed = vm.globalAnimSpeed,
@@ -275,11 +286,15 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                         val uri = ExportHelper.saveText(context, svgCode, "Oscellion_$safeWorkName", ".svg")
                         if (uri != null) {
                             ToastManager.showToast("Saved to Downloads", "Open", 4000L, onAction = {
-                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                    setDataAndType(uri, "image/svg+xml")
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(uri, "image/svg+xml")
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
+                                    ToastManager.showToast("Saved to Downloads/Oscellion")
                                 }
-                                context.startActivity(intent)
                             })
                         }
                     })

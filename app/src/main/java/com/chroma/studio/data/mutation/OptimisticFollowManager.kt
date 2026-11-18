@@ -95,8 +95,17 @@ object OptimisticFollowManager {
                 }
                 if (snapshot != null) {
                     val serverIds = snapshot.documents.map { it.id }.toSet()
-                    _followingUserIds.value = serverIds
-                    FollowingLocalStorageManager.saveFollowingIds(appContext, uid, serverIds)
+                    // Preserve any in-flight optimistic follow/unfollow mutations so UI does not flicker
+                    val currentLocal = _followingUserIds.value
+                    val merged = serverIds.toMutableSet()
+                    val allCandidates = serverIds + currentLocal
+                    for (candidateId in allCandidates) {
+                        if (coordinator.isInFlight("follow:$uid:$candidateId")) {
+                            if (currentLocal.contains(candidateId)) merged.add(candidateId) else merged.remove(candidateId)
+                        }
+                    }
+                    _followingUserIds.value = merged
+                    FollowingLocalStorageManager.saveFollowingIds(appContext, uid, merged)
                 }
             }
         } catch (e: Exception) {
@@ -134,7 +143,7 @@ object OptimisticFollowManager {
         val uid = currentUserId ?: activeUserId ?: try {
             FirebaseAuth.getInstance().currentUser?.uid
         } catch (_: Exception) { null } ?: return false
-        return coordinator.getDesiredState<Boolean>("follow:$uid:$targetUserId") != null
+        return coordinator.isInFlight("follow:$uid:$targetUserId")
     }
 
     fun isFollowing(userId: String): Boolean {

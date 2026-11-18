@@ -1274,8 +1274,19 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    fun sendMediaMessage(imageBytes: ByteArray, extension: String, text: String = "", replyToMessageId: String? = null, localPreviewUri: String? = null) {
-        val maxLimit = if (extension.lowercase() in listOf("mp4", "mov", "avi", "mkv", "3gp", "webm")) {
+    fun sendMediaMessage(
+        imageBytes: ByteArray,
+        extension: String,
+        text: String = "",
+        replyToMessageId: String? = null,
+        localPreviewUri: String? = null,
+        explicitMessageType: String? = null
+    ) {
+        val extLower = extension.lowercase()
+        val videoExts = setOf("mp4", "mov", "avi", "mkv", "3gp", "webm")
+        val imageExts = setOf("jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp")
+        val audioExts = setOf("mp3", "m4a", "wav", "aac", "ogg", "flac")
+        val maxLimit = if (extLower in videoExts) {
             com.chroma.studio.chat.media.ChatMediaLimiter.MAX_VIDEO_SIZE_BYTES
         } else {
             com.chroma.studio.chat.media.ChatMediaLimiter.MAX_FILE_SIZE_BYTES
@@ -1291,7 +1302,12 @@ class ChatViewModel : ViewModel() {
         setTypingStatus(false)
         val msgId = java.util.UUID.randomUUID().toString()
         val timestamp = System.currentTimeMillis()
-        val messageType = if (extension.lowercase() in listOf("mp4", "mov", "avi", "mkv")) "video" else "image"
+        val messageType = explicitMessageType ?: when (extLower) {
+            in videoExts -> "video"
+            in imageExts -> "image"
+            in audioExts -> "audio"
+            else -> "file"
+        }
 
         val pendingMsg = ChatMessage(
             id = msgId,
@@ -1323,21 +1339,44 @@ class ChatViewModel : ViewModel() {
         val index = currentChats.indexOfFirst { it.id == roomId }
         if (index != -1) {
             val chat = currentChats.removeAt(index)
-            val previewText = if (text.isNotBlank()) text else if (messageType == "video") "Video" else "Image"
+            val previewText = if (text.isNotBlank()) text else when (messageType) {
+                "video" -> "Video"
+                "sticker" -> "Sticker"
+                "audio" -> "Audio"
+                "file" -> "File"
+                else -> "Image"
+            }
             currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
             _recentChats.value = currentChats
         }
 
-        viewModelScope.launch {
-            // Compress image bytes before uploading to save storage & bandwidth
-            val compressedBytes = if (messageType == "image") {
-                com.chroma.studio.utils.ImageUtils.compressChatImageBytes(imageBytes) ?: imageBytes
-            } else {
-                imageBytes
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val mediaUrl = when (messageType) {
+                "video" -> repository.uploadVideoToSupabase(imageBytes, extLower)
+                "audio" -> repository.uploadAudioToSupabase(imageBytes, extLower)
+                "sticker" -> repository.uploadImageToSupabase(imageBytes, "png") // Preserve PNG transparency
+                "file" -> {
+                    // Upload generic files to Supabase Storage (or Cloudinary raw/video fallback)
+                    com.chroma.studio.data.SupabaseMediaStorage.uploadFile(
+                        bytes = imageBytes,
+                        fileName = "chat_${msgId}.$extLower",
+                        bucket = "chat-media"
+                    ) ?: repository.uploadVideoToSupabase(imageBytes, extLower)
+                }
+                else -> {
+                    val compressedBytes = com.chroma.studio.utils.ImageUtils.compressChatImageBytes(imageBytes) ?: imageBytes
+                    repository.uploadImageToSupabase(compressedBytes, extLower)
+                }
             }
-            val mediaUrl = repository.uploadImageToSupabase(compressedBytes, extension)
             if (mediaUrl != null) {
-                val success = repository.sendMessage(roomId, text, imageUrl = mediaUrl, preGeneratedId = msgId, messageType = messageType, replyToMessageId = replyToMessageId)
+                val success = repository.sendMessage(
+                    roomId = roomId,
+                    text = text,
+                    imageUrl = mediaUrl,
+                    preGeneratedId = msgId,
+                    messageType = messageType,
+                    replyToMessageId = replyToMessageId
+                )
                 if (!success) {
                     _localMessages.value = _localMessages.value.map {
                         if (it.id == msgId) it.copy(isPending = false, isError = true) else it
@@ -1745,7 +1784,8 @@ class ChatViewModel : ViewModel() {
                     roomId = targetRoomId,
                     text = message.text,
                     imageUrl = mediaUrl,
-                    messageType = msgType
+                    messageType = msgType,
+                    isForwarded = true
                 )
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -1755,6 +1795,8 @@ class ChatViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
+        try { callManager?.endCall() } catch (_: Exception) {}
+        try { activityPresenceController.onPauseOrBackground() } catch (_: Exception) {}
         authStateListener?.let { listener ->
             try {
                 com.google.firebase.auth.FirebaseAuth.getInstance().removeAuthStateListener(listener)

@@ -590,7 +590,7 @@ class DiscoverRepository {
 
     suspend fun archivePost(postId: String, archive: Boolean) {
         try {
-            collection.document(postId).update("isArchived", archive).await()
+            collection.document(postId).update("archived", archive).await()
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error archiving post", e)
@@ -1364,7 +1364,7 @@ class DiscoverRepository {
                     "officeLocation" to updatedProfile.officeLocation.trim(),
                     "homeLocation" to updatedProfile.homeLocation.trim(),
                     "countryLocation" to updatedProfile.countryLocation.trim(),
-                    "isPrivateAccount" to updatedProfile.isPrivateAccount,
+                    "privateAccount" to updatedProfile.isPrivateAccount,
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
 

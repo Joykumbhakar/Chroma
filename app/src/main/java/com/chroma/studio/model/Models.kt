@@ -200,6 +200,7 @@ data class ChatRoom(
     val lastMessageIsDelivered: Boolean = false,
     val unreadCount: Map<String, Int> = emptyMap(),
     val favoritedBy: List<String> = emptyList(),
+    val archivedBy: List<String> = emptyList(),
     val deletedBy: List<String> = emptyList(),
     // Per-user deletion timestamp: uid -> timestamp when they deleted the chat
     // Messages before this timestamp are hidden for that user
@@ -284,7 +285,9 @@ data class Story(
     val shares: Int = 0,
     val viewedBy: List<String> = emptyList(),
     val likedBy: List<String> = emptyList(),
-    val isHighlight: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isHighlight")
+    @set:com.google.firebase.firestore.PropertyName("isHighlight")
+    var isHighlight: Boolean = false,
     val highlightId: String = "",
     val highlightTitle: String = "",
     val highlightCoverUrl: String = "",
@@ -386,8 +389,12 @@ data class FlashComment(
     val likesCount: Int = 0,
     val likedBy: List<String> = emptyList(),
     val dislikedBy: List<String> = emptyList(),
-    val isPinned: Boolean = false,
-    val isCreatorHearted: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isPinned")
+    @set:com.google.firebase.firestore.PropertyName("isPinned")
+    var isPinned: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isCreatorHearted")
+    @set:com.google.firebase.firestore.PropertyName("isCreatorHearted")
+    var isCreatorHearted: Boolean = false,
     val replyToCommentId: String? = null,
     val replyFlashVideoUrl: String? = null,
     val isPending: Boolean = false,

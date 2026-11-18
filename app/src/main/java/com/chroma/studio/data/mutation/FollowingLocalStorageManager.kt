@@ -125,9 +125,6 @@ object FollowingLocalStorageManager {
                 return true
             }
         }
-        for (set in memoryFollowingIds.values) {
-            if (set.contains(userId)) return true
-        }
 
         // Check OptimisticFollowManager in-memory StateFlow
         if (OptimisticFollowManager.followingUserIds.value.contains(userId)) {
@@ -231,12 +228,9 @@ object FollowingLocalStorageManager {
         val activeUid = uid ?: getActiveUid(context)
         val ctx = context ?: appContext ?: try { ChromaApp.instance } catch (_: Exception) { null }
 
-        // 1. Update L1 Memory Cache
+        // 1. Update L1 Memory Cache (strictly scoped to activeUid)
         if (activeUid != null) {
             memoryFollowingIds[activeUid]?.remove(targetUserId)
-        }
-        for (set in memoryFollowingIds.values) {
-            set.remove(targetUserId)
         }
         memoryFollowedUsers.remove(targetUserId)
 

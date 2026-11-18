@@ -13,6 +13,8 @@ if (file("google-services.json").exists()) {
 secrets {
     propertiesFileName = ".env"
     defaultPropertiesFileName = ".env.example"
+    ignoreList.add("DATABASE_URL")
+    ignoreList.add("sdk.*")
 }
 
 android {
@@ -23,9 +25,8 @@ android {
         applicationId = "com.chroma.studio"
         minSdk = 26 // Haze blur needs 26+ for best results (uses RenderEffect on 31+, fallback below)
         targetSdk = 34
-        versionCode = 2
-        versionName = "2.0"
-        multiDexEnabled = true
+        versionCode = 3
+        versionName = "1.2"
     }
 
     signingConfigs {
@@ -56,10 +57,6 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-
-    androidResources {
-        noCompress += "tflite"
     }
 
     // composeOptions removed for Kotlin 2.0
@@ -119,7 +116,6 @@ dependencies {
     // Lottie
     implementation("com.airbnb.android:lottie-compose:6.3.0")
 
-    implementation("androidx.compose.material3:material3")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.compose.animation:animation-graphics")
 
@@ -169,10 +165,6 @@ dependencies {
 
     // FFmpeg for Pro Video Editor Rendering
     implementation("com.github.microshow:RxFFmpeg:4.9.0")
-
-    // TensorFlow Lite for Ultra-Fast On-Device Safety ML Inference
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     // CameraX for Apple iOS Style In-App Camera
     val cameraxVersion = "1.3.4"

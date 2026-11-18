@@ -10,7 +10,7 @@
     <style name="Theme.Oscellion.Splash" parent="Theme.SplashScreen">
         <!-- Cold-boot luxury light-black to dark-black gradient background -->
         <item name="android:windowBackground">@drawable/splash_bg_gradient</item>
-        <item name="windowSplashScreenBackground">@drawable/splash_bg_gradient</item>
+        <item name="windowSplashScreenBackground">@android:color/black</item>
         <!-- Animated icon (Apple Entry animation) -->
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_animated</item>
         <!-- Theme to apply once splash exits -->

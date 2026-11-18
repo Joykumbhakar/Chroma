@@ -120,4 +120,26 @@ object SupabaseMediaStorage {
         }
         uploadBannerBytes(uid, bytes)
     }
+
+    /**
+     * Uploads an arbitrary document/file to Supabase Storage with fallback buckets.
+     */
+    suspend fun uploadFile(
+        bytes: ByteArray,
+        fileName: String,
+        bucket: String = "chat-media"
+    ): String? = withContext(Dispatchers.IO) {
+        val candidates = listOf(bucket, "files", "media", "avatars").distinct()
+        for (bucketName in candidates) {
+            try {
+                val storageBucket = SupabaseClient.client.storage[bucketName]
+                storageBucket.upload(fileName, bytes, upsert = true)
+                val publicUrl = storageBucket.publicUrl(fileName)
+                if (publicUrl.isNotBlank()) return@withContext publicUrl
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed uploading file to bucket '$bucketName': ${e.message}")
+            }
+        }
+        null
+    }
 }

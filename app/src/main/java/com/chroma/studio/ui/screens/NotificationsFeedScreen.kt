@@ -1934,7 +1934,10 @@ fun NotificationsFeedScreen(
                     }
 
                     notificationsList = fetched
-                    if (fetched.isEmpty() && currentUid != null) {
+                    val welcomePrefs = context.getSharedPreferences("oscellion_notif_prefs", android.content.Context.MODE_PRIVATE)
+                    val alreadyWelcomed = welcomePrefs.getBoolean("welcome_sent_$currentUid", false)
+                    if (fetched.isEmpty() && currentUid != null && !alreadyWelcomed) {
+                        welcomePrefs.edit().putBoolean("welcome_sent_$currentUid", true).apply()
                         scope.launch {
                             com.chroma.studio.data.NotificationDispatcher.sendWelcomeNotification(currentUid)
                         }
@@ -2082,7 +2085,7 @@ fun NotificationsFeedScreen(
 
 
 
-    fun removeNotification(removed: ChromaNotification) {
+    fun removeNotification(removed: ChromaNotification, rejectIfFollowRequest: Boolean = true) {
 
         val idx = notificationsList.indexOfFirst { it.id == removed.id }
 
@@ -2096,13 +2099,15 @@ fun NotificationsFeedScreen(
 
             if (openSwipeCardId == removed.id) openSwipeCardId = null
 
-            showToast("Notification removed", showUndo = true)
+            if (rejectIfFollowRequest) {
+                showToast("Notification removed", showUndo = true)
+            }
 
 
 
             if (currentUid != null) {
                 scope.launch {
-                    if (removed.type == NotificationActionType.FOLLOW_REQUEST && removed.actorUid.isNotBlank()) {
+                    if (rejectIfFollowRequest && removed.type == NotificationActionType.FOLLOW_REQUEST && removed.actorUid.isNotBlank()) {
                         com.chroma.studio.data.DiscoverRepository.getInstance().rejectFollowRequest(
                             requesterUid = removed.actorUid,
                             currentUserId = currentUid
@@ -2272,7 +2277,7 @@ fun NotificationsFeedScreen(
 
                     showToast("Approved follow request from ${item.actorHandle}")
 
-                    removeNotification(item)
+                    removeNotification(item, rejectIfFollowRequest = false)
 
                     scope.launch {
                         com.chroma.studio.data.DiscoverRepository.getInstance().approveFollowRequest(
@@ -2401,7 +2406,13 @@ fun NotificationsFeedScreen(
 
                     if (onNavigateToPost != null) {
 
-                        onNavigateToPost(clicked.targetId ?: "", clicked.actorUid.ifBlank { null })
+                        // Open the post on its owner's profile (currentUid for own post likes/comments; actorUid for mentions)
+                        val targetOwnerUid = if (clicked.type == NotificationActionType.MENTION) {
+                            clicked.actorUid.ifBlank { currentUid }
+                        } else {
+                            currentUid ?: clicked.actorUid.ifBlank { null }
+                        }
+                        onNavigateToPost(clicked.targetId ?: "", targetOwnerUid)
 
                     } else {
 

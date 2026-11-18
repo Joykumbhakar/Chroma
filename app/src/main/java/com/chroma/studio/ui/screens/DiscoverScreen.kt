@@ -7156,7 +7156,7 @@ private fun FeedPostModals(
 
 
     if (modalState.showBlockConfirm) {
-
+        val blockScope = rememberCoroutineScope()
         AppleDialog(
 
             title = "Block @${work.authorUsername}?",
@@ -7167,7 +7167,33 @@ private fun FeedPostModals(
 
             primaryIsDestructive = true,
 
-            onPrimaryClick = { modalState.showBlockConfirm = false },
+            onPrimaryClick = {
+                modalState.showBlockConfirm = false
+                val myUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                val targetUid = work.creatorId
+                if (!myUid.isNullOrBlank() && targetUid.isNotBlank() && myUid != targetUid) {
+                    blockScope.launch(Dispatchers.IO) {
+                        try {
+                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                .collection("users")
+                                .document(myUid)
+                                .update("blockedUserIds", com.google.firebase.firestore.FieldValue.arrayUnion(targetUid))
+                                .await()
+                            if (com.chroma.studio.data.mutation.OptimisticFollowManager.isFollowing(targetUid)) {
+                                com.chroma.studio.data.DiscoverRepository.getInstance().setFollow(myUid, targetUid, false)
+                                com.chroma.studio.data.mutation.OptimisticFollowManager.removeFollowing(targetUid, myUid)
+                            }
+                            withContext(Dispatchers.Main) {
+                                ToastManager.showToast("@${work.authorUsername} has been blocked")
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                ToastManager.showToast("Failed to block user")
+                            }
+                        }
+                    }
+                }
+            },
 
             secondaryButtonText = "Cancel",
 

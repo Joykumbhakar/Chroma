@@ -522,112 +522,131 @@ fun AccountCenterScreen(
                         )
                     }
 
-                    // Section 1: Core Preferences & Account
+                    // Section 1: Core Preferences & Account (filtered by searchQuery)
                     item {
-                        OneUiSettingsCardGroup(
-                            title = "Core Preferences & Privacy",
-                            cardBgColor = cardBgColor,
-                            cardBorderColor = cardBorderColor,
-                            dividerColor = dividerColor,
-                            textMuted = textMuted
-                        ) {
-                            OneUiSettingsRow(
-                                title = "Profile & Identity",
-                                subtitle = "Name, avatar, bio, and social handles",
-                                icon = LucideFilled.User,
-                                iconTint = Color(0xFF0055FF),
-                                textDark = textDark,
-                                textMuted = textMuted,
-                                onClick = { profile?.let { onNavigateToProfileIdentity(it) } }
-                            )
+                        val q = searchQuery.trim().lowercase()
+                        fun matchesSearch(vararg terms: String): Boolean =
+                            q.isEmpty() || terms.any { it.lowercase().contains(q) }
+                        fun withProfile(action: (UserProfile) -> Unit) {
+                            val p = profile
+                            if (p != null) {
+                                action(p)
+                            } else {
+                                ToastManager.showToast("Loading profile... please try again in a moment")
+                            }
+                        }
 
-                            HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
+                        val showProfileRow = matchesSearch("Profile", "Identity", "Name", "avatar", "bio", "handles")
+                        val showSecurityRow = matchesSearch("Security", "Access", "Password", "Delete Account", "logins", "biometric")
+                        val showPrivacyRow = matchesSearch("Privacy", "Interaction", "visibility", "mentions", "blocking", "blocked")
+                        val showNotifRow = matchesSearch("Notifications", "Alerts", "Push", "tones", "vibration")
+                        val showArchivesRow = matchesSearch("Archived", "Creatives", "restore")
+                        val showActivityRow = matchesSearch("Activity", "Liked", "saved", "shared", "history")
+                        val showAppearanceRow = matchesSearch("Appearance", "Themes", "Dark mode", "chat bubbles", "accent", "wallpaper")
 
-                            OneUiSettingsRow(
-                                title = "Security & Access",
-                                subtitle = "Password, logins, and recovery alerts",
-                                icon = LucideFilled.ShieldCheck,
-                                iconTint = Color(0xFF0055FF),
-                                textDark = textDark,
-                                textMuted = textMuted,
-                                onClick = { profile?.let { onNavigateToSecurity(it) } }
-                            )
+                        if (showProfileRow || showSecurityRow || showPrivacyRow || showNotifRow || showArchivesRow || showActivityRow || showAppearanceRow) {
+                            OneUiSettingsCardGroup(
+                                title = "Core Preferences & Privacy",
+                                cardBgColor = cardBgColor,
+                                cardBorderColor = cardBorderColor,
+                                dividerColor = dividerColor,
+                                textMuted = textMuted
+                            ) {
+                                var renderedAny = false
+                                @Composable
+                                fun maybeDivider() {
+                                    if (renderedAny) HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
+                                    renderedAny = true
+                                }
 
-                            HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
-
-                            OneUiSettingsRow(
-                                title = "Privacy & Interaction",
-                                subtitle = "Account visibility, mentions, and blocking",
-                                icon = LucideFilled.Lock,
-                                iconTint = Color(0xFF0055FF),
-                                valueText = if (profile?.isPrivateAccount == true) "Private" else "Public",
-                                textDark = textDark,
-                                textMuted = textMuted,
-                                onClick = { profile?.let { onNavigateToPrivacy(it) } }
-                            )
-
-                            HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
-
-                            OneUiSettingsRow(
-                                title = "Notifications & Alerts",
-                                subtitle = "Push notifications, tones, and vibration",
-                                icon = LucideFilled.Bell,
-                                iconTint = Color(0xFF0055FF),
-                                valueText = if (profile?.pushNotificationsEnabled == true) "On" else "Off",
-                                textDark = textDark,
-                                textMuted = textMuted,
-                                onClick = { profile?.let { onNavigateToNotifications(it) } }
-                            )
-
-                            HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
-
-                            OneUiSettingsRow(
-                                title = "Archived Creatives",
-                                subtitle = "View and restore your archived creations",
-                                icon = LucideFilled.Archive,
-                                iconTint = Color(0xFF0055FF),
-                                textDark = textDark,
-                                textMuted = textMuted,
-                                onClick = { profile?.let { onNavigateToArchives(it) } }
-                            )
-
-                            HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
-
-                            OneUiSettingsRow(
-                                title = "Your Activity",
-                                subtitle = "Liked, saved, and shared posts history",
-                                icon = LucideFilled.History,
-                                iconTint = Color(0xFF0055FF),
-                                textDark = textDark,
-                                textMuted = textMuted,
-                                onClick = { profile?.let { onNavigateToActivityHistory(it) } }
-                            )
-
-                            HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
-
-                            OneUiSettingsRow(
-                                title = "Appearance & Themes",
-                                subtitle = "Dark mode, chat bubbles, and accent styling",
-                                icon = LucideFilled.Palette,
-                                iconTint = Color(0xFF0055FF),
-                                valueText = if (isDark) "Dark" else "Light",
-                                textDark = textDark,
-                                textMuted = textMuted,
-                                onClick = { onNavigateToAppearance?.invoke() }
-                            )
-
-                            HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
-
-                            OneUiSettingsRow(
-                                title = "Toggle Switch Lab",
-                                subtitle = "Spring physics solver, telemetry & presets",
-                                icon = LucideFilled.Sliders,
-                                iconTint = Color(0xFF0055FF),
-                                valueText = "Lab",
-                                textDark = textDark,
-                                textMuted = textMuted,
-                                onClick = { onNavigateToSwitchLab?.invoke() }
-                            )
+                                if (showProfileRow) {
+                                    maybeDivider()
+                                    OneUiSettingsRow(
+                                        title = "Profile & Identity",
+                                        subtitle = "Name, avatar, bio, and social handles",
+                                        icon = LucideFilled.User,
+                                        iconTint = Color(0xFF0381FE),
+                                        textDark = textDark,
+                                        textMuted = textMuted,
+                                        onClick = { withProfile(onNavigateToProfileIdentity) }
+                                    )
+                                }
+                                if (showSecurityRow) {
+                                    maybeDivider()
+                                    OneUiSettingsRow(
+                                        title = "Security & Access",
+                                        subtitle = "Password, biometric lock, and account deletion",
+                                        icon = LucideFilled.ShieldCheck,
+                                        iconTint = Color(0xFF0381FE),
+                                        textDark = textDark,
+                                        textMuted = textMuted,
+                                        onClick = { withProfile(onNavigateToSecurity) }
+                                    )
+                                }
+                                if (showPrivacyRow) {
+                                    maybeDivider()
+                                    OneUiSettingsRow(
+                                        title = "Privacy & Interaction",
+                                        subtitle = "Account visibility, mentions, and blocked accounts",
+                                        icon = LucideFilled.Lock,
+                                        iconTint = Color(0xFF0381FE),
+                                        valueText = if (profile?.isPrivateAccount == true) "Private" else "Public",
+                                        textDark = textDark,
+                                        textMuted = textMuted,
+                                        onClick = { withProfile(onNavigateToPrivacy) }
+                                    )
+                                }
+                                if (showNotifRow) {
+                                    maybeDivider()
+                                    OneUiSettingsRow(
+                                        title = "Notifications & Alerts",
+                                        subtitle = "Push notifications, tones, and vibration",
+                                        icon = LucideFilled.Bell,
+                                        iconTint = Color(0xFF0381FE),
+                                        valueText = if (profile?.pushNotificationsEnabled == true) "On" else "Off",
+                                        textDark = textDark,
+                                        textMuted = textMuted,
+                                        onClick = { withProfile(onNavigateToNotifications) }
+                                    )
+                                }
+                                if (showArchivesRow) {
+                                    maybeDivider()
+                                    OneUiSettingsRow(
+                                        title = "Archived Creatives",
+                                        subtitle = "View and restore your archived creations",
+                                        icon = LucideFilled.Archive,
+                                        iconTint = Color(0xFF0381FE),
+                                        textDark = textDark,
+                                        textMuted = textMuted,
+                                        onClick = { withProfile(onNavigateToArchives) }
+                                    )
+                                }
+                                if (showActivityRow) {
+                                    maybeDivider()
+                                    OneUiSettingsRow(
+                                        title = "Your Activity",
+                                        subtitle = "Liked, saved, and shared posts history",
+                                        icon = LucideFilled.History,
+                                        iconTint = Color(0xFF0381FE),
+                                        textDark = textDark,
+                                        textMuted = textMuted,
+                                        onClick = { withProfile(onNavigateToActivityHistory) }
+                                    )
+                                }
+                                if (showAppearanceRow) {
+                                    maybeDivider()
+                                    OneUiSettingsRow(
+                                        title = "Appearance & Themes",
+                                        subtitle = "Dark mode, chat bubbles, and accent styling",
+                                        icon = LucideFilled.Palette,
+                                        iconTint = Color(0xFF0381FE),
+                                        valueText = if (isDark) "Dark" else "Light",
+                                        textDark = textDark,
+                                        textMuted = textMuted,
+                                        onClick = { onNavigateToAppearance?.invoke() }
+                                    )
+                                }
+                            }
                         }
                     }
 

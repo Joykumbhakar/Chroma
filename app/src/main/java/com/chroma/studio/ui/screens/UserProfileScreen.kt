@@ -257,6 +257,7 @@ fun UserProfileScreen(
     var showBannerLibrarySheet by remember { mutableStateOf(false) }
     var showOtherUserOptionsSheet by remember { mutableStateOf(false) }
     var showBlockConfirmDialog by remember { mutableStateOf(false) }
+    var isBlockedByViewer by remember { mutableStateOf(false) }
     var showReportUserSheet by remember { mutableStateOf(false) }
     var selectedReportReason by remember { mutableStateOf("Spam, Scam, or Fraud") }
     var isMutedStories by remember { mutableStateOf(false) }
@@ -287,6 +288,19 @@ fun UserProfileScreen(
         }
     }
 
+
+    LaunchedEffect(userId, currentUserId) {
+        if (!isCurrentUser && !currentUserId.isNullOrBlank() && userId.isNotBlank()) {
+            try {
+                val myDoc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("users").document(currentUserId).get().await()
+                val blockedIds = (myDoc.get("blockedUserIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                isBlockedByViewer = blockedIds.contains(userId)
+            } catch (_: Exception) {}
+        } else {
+            isBlockedByViewer = false
+        }
+    }
 
     LaunchedEffect(userId) {
         launch {
@@ -488,7 +502,7 @@ fun UserProfileScreen(
                 val isMyStoryUploading = isCurrentUser && (isUploadingStory || effectiveMyStories.any { it.isUploading })
                 val isMyStoryFailed = isCurrentUser && (failedStoryUpload != null || effectiveMyStories.any { it.isFailed })
                 UserProfileHeroSection(
-                    profile = profile,
+                    profile = effectiveProfile,
                     hasActiveStories = hasActiveStories,
                     worksCount = works.size + flashPosts.size,
                     isRestricted = isRestricted,
@@ -511,6 +525,67 @@ fun UserProfileScreen(
                     },
                     onNavigateToUserList = onNavigateToUserList
                 )
+            }
+
+            if (!isCurrentUser && isBlockedByViewer) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    val bannerBg = if (colors.isDark) Color(0xFF1F171A) else Color(0xFFFEF2F2)
+                    val bannerBorder = Color(0xFFEF4444).copy(alpha = 0.25f)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(bannerBg)
+                            .border(1.dp, bannerBorder, RoundedCornerShape(18.dp))
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(Lucide.Ban, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "You blocked this account",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textMain
+                            )
+                            Text(
+                                text = "Unblock to message or follow again.",
+                                fontSize = 11.5.sp,
+                                color = colors.textMuted
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFF0381FE),
+                            modifier = Modifier.clickable {
+                                val uid = currentUserId ?: return@clickable
+                                isBlockedByViewer = false
+                                scope.launch {
+                                    try {
+                                        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                            .collection("users").document(uid)
+                                            .update("blockedUserIds", com.google.firebase.firestore.FieldValue.arrayRemove(userId))
+                                            .await()
+                                        ToastManager.showToast("Unblocked @${profile?.username ?: "user"}")
+                                    } catch (e: Exception) {
+                                        isBlockedByViewer = true
+                                        ToastManager.showToast("Failed to unblock user")
+                                    }
+                                }
+                            }
+                        ) {
+                            Text(
+                                text = "Unblock",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
             }
 
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -1318,16 +1393,18 @@ fun UserProfileScreen(
             onAuthorClick = { clickedUid ->
                 showStoryViewer = false
                 highlightStoriesViewerGroup = null
-                if (clickedUid != userId) {
-                    onNavigateToUserList?.invoke(clickedUid, "followers")
+                if (clickedUid != userId && clickedUid.isNotBlank()) {
+                    onNavigateToOriginal(clickedUid, "")
                 }
             },
             onReplySend = { authorId, text, storyId, thumbUrl ->
                 val myUid = currentUserId ?: ""
                 if (authorId.isNotBlank() && authorId != myUid && myUid.isNotBlank()) {
-                    val roomId = if (myUid < authorId) "${myUid}_${authorId}" else "${authorId}_${myUid}"
                     scope.launch(Dispatchers.IO) {
-                        com.chroma.studio.data.ChatRepository.getInstance().sendMessage(
+                        val chatRepo = com.chroma.studio.data.ChatRepository.getInstance()
+                        val roomId = chatRepo.getOrCreateChatRoom(authorId)?.id
+                            ?: if (myUid < authorId) "${myUid}_${authorId}" else "${authorId}_${myUid}"
+                        chatRepo.sendMessage(
                             roomId = roomId,
                             text = text,
                             storyId = storyId,
@@ -1549,6 +1626,7 @@ fun UserProfileScreen(
         showBlockConfirmDialog = showBlockConfirmDialog,
         onShowBlockConfirmDialog = { showBlockConfirmDialog = it },
         onUserBlocked = {
+            isBlockedByViewer = true
             isFollowing = false
             com.chroma.studio.data.mutation.OptimisticFollowManager.removeFollowing(userId, currentUserId)
         },
@@ -1943,6 +2021,10 @@ private fun UserProfileModalsAndSheets(
                     try {
                         FirebaseFirestore.getInstance().collection("users").document(uid)
                             .update("blockedUserIds", FieldValue.arrayUnion(userId)).await()
+                        try {
+                            com.chroma.studio.data.DiscoverRepository.getInstance().setFollow(uid, userId, false)
+                            com.chroma.studio.data.mutation.OptimisticFollowManager.removeFollowing(userId, uid)
+                        } catch (_: Exception) {}
                         ToastManager.showToast("@${profile?.username ?: ""} has been blocked")
                         onUserBlocked()
                     } catch (e: Exception) {

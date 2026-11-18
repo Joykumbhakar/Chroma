@@ -400,8 +400,47 @@ object ExportEngine {
                 }
                 code += "LayerDrawable layerDrawable = new LayerDrawable(layers);\nview.setBackground(layerDrawable);"
             }
+            "Canvas JS" -> {
+                val sb = StringBuilder()
+                sb.appendLine("// HTML5 Canvas 2D Gradient Renderer")
+                sb.appendLine("const canvas = document.getElementById('chroma-canvas');")
+                sb.appendLine("const ctx = canvas.getContext('2d');")
+                sb.appendLine("const w = canvas.width = 1080;")
+                sb.appendLine("const h = canvas.height = 1920;")
+                sb.appendLine("ctx.fillStyle = '$bgColor';")
+                sb.appendLine("ctx.fillRect(0, 0, w, h);")
+                sb.appendLine()
+                layers.forEachIndexed { i, l ->
+                    sb.appendLine("ctx.save();")
+                    sb.appendLine("ctx.globalAlpha = ${l.opacity};")
+                    val sortedStops = l.stops.sortedBy { it.position }
+                    when (l.type) {
+                        LayerType.RADIAL, LayerType.BLOB, LayerType.LIQUID, LayerType.MESH, LayerType.AURORA -> {
+                            val cx = (l.centerX / 100f)
+                            val cy = (l.centerY / 100f)
+                            sb.appendLine("const g$i = ctx.createRadialGradient(w * $cx, h * $cy, 0, w * $cx, h * $cy, Math.max(w, h) * 0.75);")
+                        }
+                        else -> {
+                            val rad = Math.toRadians(l.angle.toDouble())
+                            val dx = kotlin.math.cos(rad)
+                            val dy = kotlin.math.sin(rad)
+                            sb.appendLine("const g$i = ctx.createLinearGradient(w * ${0.5 - dx * 0.5}, h * ${0.5 - dy * 0.5}, w * ${0.5 + dx * 0.5}, h * ${0.5 + dy * 0.5});")
+                        }
+                    }
+                    sortedStops.forEach { stop ->
+                        val hex = "#${rgb2hex(stop.color.red, stop.color.green, stop.color.blue)}"
+                        val pos = (stop.position / 100f).coerceIn(0f, 1f)
+                        sb.appendLine("g$i.addColorStop($pos, '$hex');")
+                    }
+                    sb.appendLine("ctx.fillStyle = g$i;")
+                    sb.appendLine("ctx.fillRect(0, 0, w, h);")
+                    sb.appendLine("ctx.restore();")
+                    sb.appendLine()
+                }
+                code = sb.toString().trimEnd()
+            }
             else -> {
-                code = "/* Code generation for $type is not yet implemented. */"
+                code = "/* Code generation for $type is not supported. */"
             }
         }
         return code

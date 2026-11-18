@@ -544,20 +544,17 @@ fun IosCameraScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // ── 1. CameraX Viewfinder ──────────────────────────────────────────
-        AndroidView(
-            factory = { ctx ->
-                val previewView = PreviewView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                    scaleType = PreviewView.ScaleType.FILL_CENTER
-                }
+        // ── 1. CameraX Viewfinder (rebinds cleanly on cameraSelector flip & releases on dispose) ──
+        var previewViewRef by remember { mutableStateOf<PreviewView?>(null) }
+        var cameraProviderRef by remember { mutableStateOf<ProcessCameraProvider?>(null) }
 
-                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                cameraProviderFuture.addListener({
+        LaunchedEffect(cameraSelector, previewViewRef) {
+            val previewView = previewViewRef ?: return@LaunchedEffect
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+            cameraProviderFuture.addListener({
+                try {
                     val cameraProvider = cameraProviderFuture.get()
+                    cameraProviderRef = cameraProvider
                     val preview = Preview.Builder().build().also {
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
@@ -574,45 +571,58 @@ fun IosCameraScreen(
                         .build()
                     imageCapture = capture
 
-                    // Video Recording Pipeline
                     val recorder = Recorder.Builder()
                         .setQualitySelector(QualitySelector.from(Quality.HD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)))
                         .build()
                     val vidCapture = VideoCapture.withOutput(recorder)
                     videoCapture = vidCapture
 
-                    try {
-                        cameraProvider.unbindAll()
-                        val camera = cameraProvider.bindToLifecycle(
-                            lifecycleOwner,
-                            cameraSelector,
-                            preview,
-                            capture,
-                            vidCapture
-                        )
-                        cameraControl = camera.cameraControl
-                        cameraInfo = camera.cameraInfo
+                    cameraProvider.unbindAll()
+                    val camera = cameraProvider.bindToLifecycle(
+                        lifecycleOwner,
+                        cameraSelector,
+                        preview,
+                        capture,
+                        vidCapture
+                    )
+                    cameraControl = camera.cameraControl
+                    cameraInfo = camera.cameraInfo
 
-                        // Torch control
-                        if (camera.cameraInfo.hasFlashUnit()) {
-                            camera.cameraControl.enableTorch(flashMode == IosFlashMode.TORCH)
-                        }
-
-                        // Exposure bounds
-                        val expState = camera.cameraInfo.exposureState
-                        minExposureIndex = expState.exposureCompensationRange.lower
-                        maxExposureIndex = expState.exposureCompensationRange.upper
-                        exposureCompensationIndex = expState.exposureCompensationIndex
-
-                        camera.cameraInfo.zoomState.observe(lifecycleOwner) { zoomState ->
-                            currentZoomRatio = zoomState.zoomRatio
-                            minZoom = zoomState.minZoomRatio
-                            maxZoom = zoomState.maxZoomRatio
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    if (camera.cameraInfo.hasFlashUnit()) {
+                        camera.cameraControl.enableTorch(flashMode == IosFlashMode.TORCH)
                     }
-                }, ContextCompat.getMainExecutor(ctx))
+
+                    val expState = camera.cameraInfo.exposureState
+                    minExposureIndex = expState.exposureCompensationRange.lower
+                    maxExposureIndex = expState.exposureCompensationRange.upper
+                    exposureCompensationIndex = expState.exposureCompensationIndex
+
+                    camera.cameraInfo.zoomState.observe(lifecycleOwner) { zoomState ->
+                        currentZoomRatio = zoomState.zoomRatio
+                        minZoom = zoomState.minZoomRatio
+                        maxZoom = zoomState.maxZoomRatio
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }, ContextCompat.getMainExecutor(context))
+        }
+
+        DisposableEffect(Unit) {
+            onDispose {
+                try { cameraProviderRef?.unbindAll() } catch (_: Exception) {}
+            }
+        }
+
+        AndroidView(
+            factory = { ctx ->
+                val previewView = PreviewView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                }
 
                 // Pinch to Zoom gesture
                 val scaleGestureDetector = ScaleGestureDetector(ctx, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -630,6 +640,7 @@ fun IosCameraScreen(
                     false
                 }
 
+                previewViewRef = previewView
                 previewView
             },
             modifier = Modifier

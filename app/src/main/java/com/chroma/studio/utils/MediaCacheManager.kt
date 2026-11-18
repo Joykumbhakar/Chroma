@@ -9,6 +9,7 @@ import java.io.File
 object MediaCacheManager {
     private var cache: SimpleCache? = null
 
+    @Synchronized
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     fun getInstance(context: Context): SimpleCache {
         if (cache == null) {

@@ -13,7 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object AIGenerator {
-    private val gson = Gson()
+    private val gson = com.chroma.studio.data.chromaGson
 
     suspend fun generateGradientLayers(prompt: String, base64Image: String? = null): List<GradientLayer> = withContext(Dispatchers.IO) {
         val systemInstructionText = """
@@ -34,20 +34,19 @@ object AIGenerator {
                   {"x": 20, "y": 20, "width": 50, "height": 50, "feather": 100, "opacity": 1.0, "rotation": 0.0}
                 ],
                 "stops": [
-                  {"id": "stop_1", "color": {"value": 4294901760}, "position": 0.0}
+                  {"id": "stop_1", "color": -65536, "position": 0.0}
                 ]
               }
             ]
-            Important: "color": {"value": 4294901760} corresponds to Color(0xFFFF0000). Use typical ARGB int format where Alpha is FF (e.g. 4294901760 is Red).
+            Important: "color" must be a signed 32-bit ARGB integer (e.g. -65536 for 0xFFFF0000 Red, -16744194 for 0xFF0381FE Blue).
             If the user provides an image, match its vibe, color palette, and general composition.
         """.trimIndent()
 
         // Initialize Firebase AI model with system instructions
-        // Using the free Gemini Developer API backend (googleAI)
         val model = com.google.firebase.Firebase.ai(
             backend = com.google.firebase.ai.type.GenerativeBackend.googleAI()
         ).generativeModel(
-            modelName = "gemini-1.5-flash",
+            modelName = "gemini-2.0-flash",
             systemInstruction = content { text(systemInstructionText) }
         )
 
@@ -57,7 +56,9 @@ object AIGenerator {
                 try {
                     val decodedBytes = Base64.decode(base64Image, Base64.DEFAULT)
                     val bitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
-                    image(bitmap)
+                    if (bitmap != null) {
+                        image(bitmap)
+                    }
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -93,7 +94,7 @@ object AIGenerator {
             val audioBytes = if (audioUrlOrUri.startsWith("http://") || audioUrlOrUri.startsWith("https://")) {
                 java.net.URL(audioUrlOrUri).readBytes()
             } else if (audioUrlOrUri.startsWith("content://")) {
-                context.contentResolver.openInputStream(android.net.Uri.parse(audioUrlOrUri))?.readBytes() ?: ByteArray(0)
+                context.contentResolver.openInputStream(android.net.Uri.parse(audioUrlOrUri))?.use { it.readBytes() } ?: ByteArray(0)
             } else if (audioUrlOrUri.startsWith("file://")) {
                 java.io.File(android.net.Uri.parse(audioUrlOrUri).path ?: audioUrlOrUri).readBytes()
             } else {
@@ -104,7 +105,7 @@ object AIGenerator {
             val model = com.google.firebase.Firebase.ai(
                 backend = com.google.firebase.ai.type.GenerativeBackend.googleAI()
             ).generativeModel(
-                modelName = "gemini-1.5-flash",
+                modelName = "gemini-2.0-flash",
                 systemInstruction = content { text("Transcribe this voice recording accurately into text. Return ONLY the plain transcribed text without markdown or commentary.") }
             )
             val response = model.generateContent(

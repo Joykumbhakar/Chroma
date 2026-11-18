@@ -447,18 +447,29 @@ fun ProfileSettingsScreen(
 
                     SettingsDivider()
 
-                    // Clear Cache Row
+                    // Clear Cache Row (measures and deletes real cacheDir files)
                     SettingsActionRow(
                         icon = { LucideTrash(tint = Color(0xFFFF3B30), size = 18.dp) },
                         title = "Clear Cached Files",
-                        value = if (cacheSizeMb > 0f) "${"%.1f".format(cacheSizeMb)} MB" else "Cleared",
+                        value = if (cacheSizeMb > 0.05f) "${"%.1f".format(cacheSizeMb)} MB" else "Clean",
                         onClick = {
-                            if (cacheSizeMb > 0f) {
-                                cacheSizeMb = 0f
-                                SoundManager.playReaction()
-                                onShowToast("Cached files cleared! Freed 14.8 MB ")
+                            val freedBytes = try {
+                                var total = 0L
+                                context.cacheDir.walkBottomUp().forEach { f ->
+                                    if (f != context.cacheDir && f.isFile) {
+                                        val len = f.length()
+                                        if (f.delete()) total += len
+                                    }
+                                }
+                                total
+                            } catch (_: Exception) { 0L }
+                            cacheSizeMb = 0f
+                            SoundManager.playReaction()
+                            val freedMb = freedBytes / (1024f * 1024f)
+                            if (freedMb >= 0.1f) {
+                                onShowToast("Cleared ${"%.1f".format(freedMb)} MB of cached files")
                             } else {
-                                onShowToast("Cache is already clean")
+                                onShowToast("Cache is clean")
                             }
                         }
                     )
@@ -471,16 +482,16 @@ fun ProfileSettingsScreen(
                     SettingsActionRow(
                         icon = { LucideInfo(tint = colors.iosBlue, size = 18.dp) },
                         title = "Version",
-                        value = "3.4.0 (2026.10)",
+                        value = "v${com.chroma.studio.BuildConfig.VERSION_NAME} (${com.chroma.studio.BuildConfig.VERSION_CODE})",
                         onClick = { isAboutModalOpen = true }
                     )
 
                     SettingsDivider()
 
                     SettingsActionRow(
-                        icon = { LucideHeart(tint = Color(0xFFFF2D55), size = 18.dp) },
+                        icon = { LucideHeart(tint = Color(0xFF0381FE), size = 18.dp) },
                         title = "Designed For",
-                        value = "ChromaStudio • Apple iOS HIG",
+                        value = "Oscellion Studio",
                         onClick = { isAboutModalOpen = true }
                     )
                 }

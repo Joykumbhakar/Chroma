@@ -929,16 +929,6 @@ private fun FlashVideoItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                // Explicit Badge [E]
-                Box(
-                    modifier = Modifier
-                        .size(width = 14.dp, height = 14.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color.White.copy(alpha = 0.35f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("E", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                }
             }
 
             Spacer(Modifier.height(6.dp))
@@ -983,22 +973,28 @@ private fun FlashVideoItem(
                     .fillMaxWidth()
                     .height(44.dp)
                     .clip(RoundedCornerShape(22.dp))
-                    .background(Color.White.copy(alpha = 0.16f))
+                    .background(Color.White.copy(alpha = if (video.turnOffComments) 0.08f else 0.16f))
                     .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(22.dp))
-                    .clickable { showComments = true }
+                    .clickable(enabled = !video.turnOffComments) {
+                        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                            onRequireLogin()
+                        } else {
+                            showComments = true
+                        }
+                    }
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Add comment...",
-                    color = Color.White.copy(alpha = 0.7f),
+                    text = if (video.turnOffComments) "Comments are turned off" else "Add comment...",
+                    color = Color.White.copy(alpha = if (video.turnOffComments) 0.45f else 0.7f),
                     fontSize = 13.sp
                 )
                 Icon(
-                    imageVector = Lucide.Smile,
-                    contentDescription = "Emoji",
-                    tint = Color.White.copy(alpha = 0.7f),
+                    imageVector = if (video.turnOffComments) Lucide.MessageSquareOff else Lucide.Smile,
+                    contentDescription = "Comments",
+                    tint = Color.White.copy(alpha = if (video.turnOffComments) 0.45f else 0.7f),
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -1261,6 +1257,20 @@ private fun FlashMoreOptionsSheet(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
                         .clickable {
+                            val reporterUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                            if (!reporterUid.isNullOrBlank()) {
+                                val reportData = mapOf(
+                                    "reporterId" to reporterUid,
+                                    "targetId" to video.id,
+                                    "targetType" to "flash_video",
+                                    "targetAuthorId" to video.creatorId,
+                                    "reason" to "Inappropriate content",
+                                    "timestamp" to System.currentTimeMillis()
+                                )
+                                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                    .collection("reports")
+                                    .add(reportData)
+                            }
                             ToastManager.showToast("Report submitted. Thank you.")
                             onDismiss()
                         }

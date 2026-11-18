@@ -421,7 +421,7 @@ fun EditorSlider(
     }
 }
 
-/** Backward-compatible alias used by any external code that referenced PropertySlider */
+/** Backward-compatible slider wrapper forwarding drag start/end callbacks so Undo/Redo records snapshots cleanly. */
 @Composable
 fun PropertySlider(
     label:         String,
@@ -431,5 +431,64 @@ fun PropertySlider(
     onChangeStart: () -> Unit = {},
     onChangeEnd:   () -> Unit = {},
     onValueChange: (Float) -> Unit
-) = EditorSlider(label, value, min, max, onValueChange)
+) {
+    val colors = LocalOscellionColors.current
+    var pos by remember(value) { mutableFloatStateOf(value) }
+    var isDragging by remember { mutableStateOf(false) }
+    val sliderKey = remember(label) { "PropertySlider:$label" }
+    val scrubState = com.chroma.studio.ui.components.LocalSliderScrubbingState.current
+    val isThisActive = scrubState.isScrubbing && scrubState.activeId == sliderKey
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusSliderContainer(
+                sliderId = sliderKey,
+                isDark = colors.isDark,
+                cornerRadius = 14.dp,
+                horizontalPadding = 8.dp,
+                verticalPadding = 3.dp
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = label,
+            color = if (isThisActive) colors.textMain else colors.textMuted,
+            fontSize = 10.5.sp,
+            fontWeight = if (isThisActive) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.width(82.dp),
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
+        AppleSlider(
+            value = pos,
+            sliderId = sliderKey,
+            onValueChange = {
+                if (!isDragging) {
+                    isDragging = true
+                    onChangeStart()
+                }
+                pos = it
+                onValueChange(it)
+            },
+            onValueChangeFinished = {
+                if (isDragging) {
+                    isDragging = false
+                    onChangeEnd()
+                }
+            },
+            valueRange = min..max,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = String.format("%.2f", pos),
+            color = colors.primary,
+            fontSize = 9.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.width(36.dp),
+            textAlign = TextAlign.End
+        )
+    }
+}
 

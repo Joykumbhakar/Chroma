@@ -487,5 +487,19 @@ fun OscellionOnboardingScreen(
                 }
             )
         }
+
+        // Terms & Privacy Policy Modal
+        if (showTermsModal) {
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { showTermsModal = false },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                com.chroma.studio.ui.screens.PrivacyPolicyTermsScreen(
+                    isFirstLaunch = false,
+                    onAccept = { showTermsModal = false },
+                    onBack = { showTermsModal = false }
+                )
+            }
+        }
     }
 }

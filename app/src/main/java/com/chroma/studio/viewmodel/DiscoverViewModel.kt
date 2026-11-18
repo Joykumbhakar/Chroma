@@ -49,6 +49,15 @@ class DiscoverViewModel : ViewModel() {
 
     private var hasMoreWorks = true
 
+    private val authStateListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { auth ->
+        val uid = auth.currentUser?.uid
+        if (!uid.isNullOrBlank()) {
+            refreshUserInteractions(uid)
+        } else {
+            resetUserInteractions()
+        }
+    }
+
     init {
         val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
         if (!currentUid.isNullOrBlank()) {
@@ -59,14 +68,14 @@ class DiscoverViewModel : ViewModel() {
         }
         loadWorks()
         loadTrending()
-        com.google.firebase.auth.FirebaseAuth.getInstance().addAuthStateListener { auth ->
-            val uid = auth.currentUser?.uid
-            if (!uid.isNullOrBlank()) {
-                refreshUserInteractions(uid)
-            } else {
-                resetUserInteractions()
-            }
-        }
+        com.google.firebase.auth.FirebaseAuth.getInstance().addAuthStateListener(authStateListener)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        try {
+            com.google.firebase.auth.FirebaseAuth.getInstance().removeAuthStateListener(authStateListener)
+        } catch (_: Exception) {}
     }
 
     private fun getCachedLikedWorkIds(userId: String): Set<String> {

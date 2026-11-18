@@ -1495,6 +1495,52 @@ private fun MessageBubbleInnerContent(
                     }
                 }
             }
+            "video" -> {
+                val rawVideoUrl = message.localUri ?: message.mediaUrl
+                if (!rawVideoUrl.isNullOrEmpty()) {
+                    val safeUrl = remember(rawVideoUrl) {
+                        com.chroma.studio.chat.data.ChatLocalCacheManager.getOfflineSafeMediaUrl(context, rawVideoUrl)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(210.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFF101218))
+                            .clickable { openChatFileIntent(context, safeUrl, "video.mp4") },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = coil.request.ImageRequest.Builder(context)
+                                .data(safeUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "Video message",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.28f))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.6f))
+                                .border(1.dp, Color.White.copy(alpha = 0.45f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LucidePlay(
+                                tint = Color.White,
+                                size = 24.dp
+                            )
+                        }
+                    }
+                    if (!isMediaOnly) Spacer(Modifier.height(4.dp))
+                }
+            }
             "image", "image_stack" -> {
                 val rawUrls = if (message.mediaUrls.isNotEmpty()) message.mediaUrls else listOfNotNull(message.mediaUrl)
                 val urls = remember(rawUrls) {
@@ -4641,7 +4687,15 @@ fun FileStackCluster(
 fun openChatFileIntent(context: android.content.Context, uriString: String?, fileName: String?) {
     try {
         if (!uriString.isNullOrEmpty()) {
-            val uri = android.net.Uri.parse(uriString)
+            val parsed = android.net.Uri.parse(uriString)
+            val uri = if (parsed.scheme == "file" && !parsed.path.isNullOrBlank()) {
+                val f = java.io.File(parsed.path!!)
+                if (f.exists()) {
+                    try {
+                        androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", f)
+                    } catch (_: Throwable) { parsed }
+                } else parsed
+            } else parsed
             val extension = fileName?.substringAfterLast('.', "")?.lowercase() ?: ""
             val mimeType = context.contentResolver.getType(uri) ?: when (extension) {
                 "pdf" -> "application/pdf"

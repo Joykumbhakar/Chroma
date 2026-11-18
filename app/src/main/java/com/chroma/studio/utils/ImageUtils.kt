@@ -1,252 +1,280 @@
 package com.chroma.studio.utils
 
 import android.content.Context
-import android.os.Build
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import android.os.Build
 import android.util.Log
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.io.InputStream
 import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Ultra-aggressive image compressor designed for Supabase Free Tier storage preservation.
- * Avatars are scaled to max 320x320 and compressed to < 25KB.
- * Banners are scaled to max 1080x450 and compressed to < 45KB.
+ * OOM-safe image compressor using two-pass inSampleSize decoding and deterministic bitmap recycling.
+ * Avatars: max 320x320 (< 25 KB).
+ * Banners: max 1080x450 (< 45 KB).
+ * Chat images: max 1280px (< 180 KB).
+ * Community posts: max 1440px (< 600 KB).
  */
 object ImageUtils {
 
     private const val MAX_AVATAR_DIMENSION = 320
-    private const val MAX_AVATAR_BYTES = 25_000 // 25 KB target
+    private const val MAX_AVATAR_BYTES = 25_000
 
     private const val MAX_BANNER_WIDTH = 1080
     private const val MAX_BANNER_HEIGHT = 450
-    private const val MAX_BANNER_BYTES = 45_000 // 45 KB target
+    private const val MAX_BANNER_BYTES = 45_000
 
-    /**
-     * Aggressively compress a profile avatar from a Uri to under 25KB before uploading to Supabase,
-     * applying EXIF orientation correction.
-     */
+    private const val MAX_CHAT_IMAGE_DIMENSION = 1280
+    private const val MAX_CHAT_IMAGE_BYTES = 180_000
+
+    private const val MAX_POST_IMAGE_DIMENSION = 1440
+    private const val MAX_POST_IMAGE_BYTES = 600_000
+
+    private fun calculateInSampleSize(srcW: Int, srcH: Int, reqW: Int, reqH: Int): Int {
+        var inSampleSize = 1
+        if (srcH > reqH || srcW > reqW) {
+            val halfH = srcH / 2
+            val halfW = srcW / 2
+            while ((halfH / inSampleSize) >= reqH && (halfW / inSampleSize) >= reqW) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize.coerceAtLeast(1)
+    }
+
+    private fun decodeSampledFromUri(context: Context, uri: Uri, reqW: Int, reqH: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, reqW, reqH)
+        }
+        return context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+    }
+
+    private fun decodeSampledFromBytes(imageBytes: ByteArray, reqW: Int, reqH: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, reqW, reqH)
+        }
+        return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, opts)
+    }
+
+    private fun safeRecycle(vararg bitmaps: Bitmap?, keep: Bitmap? = null) {
+        val seen = mutableSetOf<Bitmap>()
+        if (keep != null) seen.add(keep)
+        for (b in bitmaps) {
+            if (b != null && !b.isRecycled && seen.add(b)) {
+                try { b.recycle() } catch (_: Throwable) {}
+            }
+        }
+    }
+
     fun compressAvatarForSupabase(context: Context, uri: Uri): ByteArray? {
+        var original: Bitmap? = null
+        var rotated: Bitmap? = null
+        var scaled: Bitmap? = null
         return try {
             val rotation = getOrientationDegrees(context, uri)
-            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
-            val original = BitmapFactory.decodeStream(inputStream)
-            inputStream.close()
-            if (original == null) return null
-
-            val rotated = rotateBitmap(original, rotation)
-            val scaled = scaleBitmap(rotated, MAX_AVATAR_DIMENSION, MAX_AVATAR_DIMENSION, squareCrop = true)
+            original = decodeSampledFromUri(context, uri, MAX_AVATAR_DIMENSION * 2, MAX_AVATAR_DIMENSION * 2) ?: return null
+            rotated = rotateBitmap(original, rotation)
+            scaled = scaleBitmap(rotated, MAX_AVATAR_DIMENSION, MAX_AVATAR_DIMENSION, squareCrop = true)
             compressBitmapUnderLimit(scaled, MAX_AVATAR_BYTES, initialQuality = 80)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress avatar from uri", e)
             null
+        } finally {
+            safeRecycle(original, rotated, scaled)
         }
     }
 
-    /**
-     * Aggressively compress a profile avatar from raw bytes to under 25KB.
-     */
     fun compressAvatarBytesForSupabase(imageBytes: ByteArray): ByteArray? {
+        var original: Bitmap? = null
+        var scaled: Bitmap? = null
         return try {
-            val inputStream = ByteArrayInputStream(imageBytes)
-            compressAvatarStream(inputStream)
+            original = decodeSampledFromBytes(imageBytes, MAX_AVATAR_DIMENSION * 2, MAX_AVATAR_DIMENSION * 2) ?: return null
+            scaled = scaleBitmap(original, MAX_AVATAR_DIMENSION, MAX_AVATAR_DIMENSION, squareCrop = true)
+            compressBitmapUnderLimit(scaled, MAX_AVATAR_BYTES, initialQuality = 80)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress avatar bytes", e)
             null
+        } finally {
+            safeRecycle(original, scaled)
         }
     }
 
-    /**
-     * Aggressively compress a profile avatar Bitmap to under 25KB.
-     */
     fun compressAvatarBitmapForSupabase(bitmap: Bitmap): ByteArray? {
+        var scaled: Bitmap? = null
         return try {
-            val scaled = scaleBitmap(bitmap, MAX_AVATAR_DIMENSION, MAX_AVATAR_DIMENSION, squareCrop = true)
+            scaled = scaleBitmap(bitmap, MAX_AVATAR_DIMENSION, MAX_AVATAR_DIMENSION, squareCrop = true)
             compressBitmapUnderLimit(scaled, MAX_AVATAR_BYTES, initialQuality = 80)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress avatar bitmap", e)
             null
+        } finally {
+            safeRecycle(scaled, keep = bitmap)
         }
     }
 
-    /**
-     * Aggressively compress a profile banner from a Uri to under 45KB before uploading to Supabase,
-     * preserving landscape aspect ratio and applying EXIF orientation correction.
-     */
     fun compressBannerForSupabase(context: Context, uri: Uri): ByteArray? {
+        var original: Bitmap? = null
+        var rotated: Bitmap? = null
+        var scaled: Bitmap? = null
         return try {
             val rotation = getOrientationDegrees(context, uri)
-            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
-            val original = BitmapFactory.decodeStream(inputStream)
-            inputStream.close()
-            if (original == null) return null
-
-            val rotated = rotateBitmap(original, rotation)
-            val scaled = scaleBitmap(rotated, MAX_BANNER_WIDTH, MAX_BANNER_HEIGHT, squareCrop = false)
+            original = decodeSampledFromUri(context, uri, MAX_BANNER_WIDTH * 2, MAX_BANNER_HEIGHT * 2) ?: return null
+            rotated = rotateBitmap(original, rotation)
+            scaled = scaleBitmap(rotated, MAX_BANNER_WIDTH, MAX_BANNER_HEIGHT, squareCrop = false)
             compressBitmapUnderLimit(scaled, MAX_BANNER_BYTES, initialQuality = 82)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress banner from uri", e)
             null
+        } finally {
+            safeRecycle(original, rotated, scaled)
         }
     }
 
-    /**
-     * Aggressively compress a profile banner from raw bytes to under 45KB without cropping to square.
-     */
     fun compressBannerBytesForSupabase(imageBytes: ByteArray): ByteArray? {
+        var original: Bitmap? = null
+        var scaled: Bitmap? = null
         return try {
-            val original = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size) ?: return null
-            val scaled = scaleBitmap(original, MAX_BANNER_WIDTH, MAX_BANNER_HEIGHT, squareCrop = false)
+            original = decodeSampledFromBytes(imageBytes, MAX_BANNER_WIDTH * 2, MAX_BANNER_HEIGHT * 2) ?: return null
+            scaled = scaleBitmap(original, MAX_BANNER_WIDTH, MAX_BANNER_HEIGHT, squareCrop = false)
             compressBitmapUnderLimit(scaled, MAX_BANNER_BYTES, initialQuality = 82)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress banner bytes", e)
             null
+        } finally {
+            safeRecycle(original, scaled)
         }
     }
 
-    /**
-     * Aggressively compress a profile banner Bitmap to under 45KB without cropping to square.
-     */
     fun compressBannerBitmapForSupabase(bitmap: Bitmap): ByteArray? {
+        var scaled: Bitmap? = null
         return try {
-            val scaled = scaleBitmap(bitmap, MAX_BANNER_WIDTH, MAX_BANNER_HEIGHT, squareCrop = false)
+            scaled = scaleBitmap(bitmap, MAX_BANNER_WIDTH, MAX_BANNER_HEIGHT, squareCrop = false)
             compressBitmapUnderLimit(scaled, MAX_BANNER_BYTES, initialQuality = 82)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress banner bitmap", e)
             null
+        } finally {
+            safeRecycle(scaled, keep = bitmap)
         }
     }
 
-    private const val MAX_CHAT_IMAGE_DIMENSION = 1280
-    private const val MAX_CHAT_IMAGE_BYTES = 180_000 // 180 KB target for high quality + low storage
-
-    // ── Community Post Image (high-quality, lossless-looking) ──────────────
-    private const val MAX_POST_IMAGE_DIMENSION = 1440   // 1440px long-edge — retina detail preserved
-    private const val MAX_POST_IMAGE_BYTES = 600_000    // 600 KB ceiling — Cloudinary free-tier safe
-
-    /**
-     * Efficiently compresses a chat or post image from a Uri with orientation correction.
-     */
     fun compressChatImage(
         context: Context,
         uri: Uri,
         maxDimension: Int = MAX_CHAT_IMAGE_DIMENSION,
         maxBytes: Int = MAX_CHAT_IMAGE_BYTES
     ): ByteArray? {
+        var original: Bitmap? = null
+        var rotated: Bitmap? = null
+        var scaled: Bitmap? = null
         return try {
             val rotation = getOrientationDegrees(context, uri)
-            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
-            val original = BitmapFactory.decodeStream(inputStream)
-            inputStream.close()
-            if (original == null) return null
-
-            val rotated = rotateBitmap(original, rotation)
-            val scaled = scaleBitmap(rotated, maxDimension, maxDimension, squareCrop = false)
+            original = decodeSampledFromUri(context, uri, maxDimension, maxDimension) ?: return null
+            rotated = rotateBitmap(original, rotation)
+            scaled = scaleBitmap(rotated, maxDimension, maxDimension, squareCrop = false)
             compressBitmapUnderLimit(scaled, maxBytes, initialQuality = 85)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress chat image from uri", e)
             null
+        } finally {
+            safeRecycle(original, rotated, scaled)
         }
     }
 
-    /**
-     * Efficiently compresses a chat image from raw bytes.
-     */
     fun compressChatImageBytes(
         imageBytes: ByteArray,
         maxDimension: Int = MAX_CHAT_IMAGE_DIMENSION,
         maxBytes: Int = MAX_CHAT_IMAGE_BYTES
     ): ByteArray? {
+        var original: Bitmap? = null
+        var scaled: Bitmap? = null
         return try {
-            val original = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size) ?: return null
-            val scaled = scaleBitmap(original, maxDimension, maxDimension, squareCrop = false)
+            original = decodeSampledFromBytes(imageBytes, maxDimension, maxDimension) ?: return null
+            scaled = scaleBitmap(original, maxDimension, maxDimension, squareCrop = false)
             compressBitmapUnderLimit(scaled, maxBytes, initialQuality = 85)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress chat image bytes", e)
             null
+        } finally {
+            safeRecycle(original, scaled)
         }
     }
 
-    /**
-     * Efficiently compresses a chat image Bitmap.
-     */
     fun compressChatImageBitmap(
         bitmap: Bitmap,
         maxDimension: Int = MAX_CHAT_IMAGE_DIMENSION,
         maxBytes: Int = MAX_CHAT_IMAGE_BYTES
     ): ByteArray? {
+        var scaled: Bitmap? = null
         return try {
-            val scaled = scaleBitmap(bitmap, maxDimension, maxDimension, squareCrop = false)
+            scaled = scaleBitmap(bitmap, maxDimension, maxDimension, squareCrop = false)
             compressBitmapUnderLimit(scaled, maxBytes, initialQuality = 85)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress chat image bitmap", e)
             null
+        } finally {
+            safeRecycle(scaled, keep = bitmap)
         }
     }
 
-
-    /**
-     * Smart high-quality community post image compressor.
-     *
-     * Strategy:
-     *  1. Scale to 1440px long-edge maximum (preserves full detail on retina screens).
-     *  2. Try WebP lossy at 88% quality first (Android 11+ native WebP encoder).
-     *     WebP saves 25-35% over JPEG at the same visual quality.
-     *  3. If WebP still exceeds the byte ceiling, progressively step down quality by 5%.
-     *  4. Fall back to JPEG on older devices (pre-API 30) with the same step-down logic.
-     *  5. Never drops below 60% JPEG / 55% WebP quality — image always looks crisp.
-     *
-     * Typical result: 3–8 MB camera JPEG → 250–500 KB without visible quality loss.
-     */
     fun compressPostImage(context: Context, uri: Uri): ByteArray? {
+        var original: Bitmap? = null
+        var rotated: Bitmap? = null
+        var scaled: Bitmap? = null
         return try {
             val rotation = getOrientationDegrees(context, uri)
-            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
-            val original = BitmapFactory.decodeStream(inputStream)
-            inputStream.close()
-            if (original == null) return null
-            val rotated = rotateBitmap(original, rotation)
-            val scaled = scaleBitmap(rotated, MAX_POST_IMAGE_DIMENSION, MAX_POST_IMAGE_DIMENSION, squareCrop = false)
+            original = decodeSampledFromUri(context, uri, MAX_POST_IMAGE_DIMENSION, MAX_POST_IMAGE_DIMENSION) ?: return null
+            rotated = rotateBitmap(original, rotation)
+            scaled = scaleBitmap(rotated, MAX_POST_IMAGE_DIMENSION, MAX_POST_IMAGE_DIMENSION, squareCrop = false)
             compressPostBitmapUnderLimit(scaled)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress post image from uri", e)
             null
+        } finally {
+            safeRecycle(original, rotated, scaled)
         }
     }
 
-    /** Compress a post image directly from a [Bitmap] (e.g. from canvas filter rendering). */
     fun compressPostBitmap(bitmap: Bitmap): ByteArray? {
+        var scaled: Bitmap? = null
         return try {
-            val scaled = scaleBitmap(bitmap, MAX_POST_IMAGE_DIMENSION, MAX_POST_IMAGE_DIMENSION, squareCrop = false)
+            scaled = scaleBitmap(bitmap, MAX_POST_IMAGE_DIMENSION, MAX_POST_IMAGE_DIMENSION, squareCrop = false)
             compressPostBitmapUnderLimit(scaled)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress post bitmap", e)
             null
+        } finally {
+            safeRecycle(scaled, keep = bitmap)
         }
     }
 
-    /** Compress a post image directly from raw bytes (e.g. from gallery picker). */
     fun compressPostImageBytes(imageBytes: ByteArray): ByteArray? {
+        var original: Bitmap? = null
+        var scaled: Bitmap? = null
         return try {
-            val original = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size) ?: return null
-            val scaled = scaleBitmap(original, MAX_POST_IMAGE_DIMENSION, MAX_POST_IMAGE_DIMENSION, squareCrop = false)
+            original = decodeSampledFromBytes(imageBytes, MAX_POST_IMAGE_DIMENSION, MAX_POST_IMAGE_DIMENSION) ?: return null
+            scaled = scaleBitmap(original, MAX_POST_IMAGE_DIMENSION, MAX_POST_IMAGE_DIMENSION, squareCrop = false)
             compressPostBitmapUnderLimit(scaled)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress post image bytes", e)
             null
+        } finally {
+            safeRecycle(original, scaled)
         }
     }
 
     private fun compressPostBitmapUnderLimit(bitmap: Bitmap): ByteArray {
         val stream = ByteArrayOutputStream()
-
-        // Android 11+ (API 30): use lossless-looking WebP lossy — 25-35% smaller than JPEG at same quality
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             var quality = 88
             do {
@@ -256,15 +284,12 @@ object ImageUtils {
             } while (stream.size() > MAX_POST_IMAGE_BYTES && quality >= 55)
             return stream.toByteArray()
         }
-
-        // Fallback: JPEG for older devices
         var quality = 92
         do {
             stream.reset()
             bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
             quality -= 5
         } while (stream.size() > MAX_POST_IMAGE_BYTES && quality >= 60)
-
         return stream.toByteArray()
     }
 
@@ -290,24 +315,20 @@ object ImageUtils {
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
-    private fun compressAvatarStream(inputStream: InputStream): ByteArray? {
-        val original = BitmapFactory.decodeStream(inputStream) ?: return null
-        val scaled = scaleBitmap(original, MAX_AVATAR_DIMENSION, MAX_AVATAR_DIMENSION, squareCrop = true)
-        return compressBitmapUnderLimit(scaled, MAX_AVATAR_BYTES, initialQuality = 80)
-    }
-
     private fun scaleBitmap(
         src: Bitmap,
         maxWidth: Int,
         maxHeight: Int,
         squareCrop: Boolean
     ): Bitmap {
-        var bmp = src
-        if (squareCrop && bmp.width != bmp.height) {
-            val minDim = min(bmp.width, bmp.height)
-            val xOffset = (bmp.width - minDim) / 2
-            val yOffset = (bmp.height - minDim) / 2
-            bmp = Bitmap.createBitmap(bmp, xOffset, yOffset, minDim, minDim)
+        var cropped: Bitmap? = null
+        val bmp = if (squareCrop && src.width != src.height) {
+            val minDim = min(src.width, src.height)
+            val xOffset = (src.width - minDim) / 2
+            val yOffset = (src.height - minDim) / 2
+            Bitmap.createBitmap(src, xOffset, yOffset, minDim, minDim).also { cropped = it }
+        } else {
+            src
         }
 
         val widthRatio = bmp.width.toFloat() / maxWidth.toFloat()
@@ -317,7 +338,11 @@ object ImageUtils {
         return if (maxRatio > 1f) {
             val targetWidth = (bmp.width / maxRatio).toInt().coerceAtLeast(1)
             val targetHeight = (bmp.height / maxRatio).toInt().coerceAtLeast(1)
-            Bitmap.createScaledBitmap(bmp, targetWidth, targetHeight, true)
+            val res = Bitmap.createScaledBitmap(bmp, targetWidth, targetHeight, true)
+            if (cropped != null && cropped !== res) {
+                try { cropped?.recycle() } catch (_: Throwable) {}
+            }
+            res
         } else {
             bmp
         }
@@ -335,13 +360,11 @@ object ImageUtils {
             bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
             quality -= 8
         } while (stream.size() > maxBytes && quality >= 35)
-
         return stream.toByteArray()
     }
 }
 
-// Backward compatibility extension / helper
-// NOTE: Redirected to the high-quality post compressor (1440px / WebP 88% / 600 KB ceiling)
+// Backward compatibility top-level helpers
 fun compressImageToUnder50KB(context: Context, uri: Uri): ByteArray? =
     ImageUtils.compressPostImage(context, uri)
 

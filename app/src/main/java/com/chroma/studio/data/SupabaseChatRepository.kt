@@ -238,7 +238,8 @@ class SupabaseChatRepository {
         flashVideoCaption: String? = null,
         flashVideoAuthorUsername: String? = null,
         flashVideoAuthorAvatarUrl: String? = null,
-        flashVideoDurationMs: Long? = null
+        flashVideoDurationMs: Long? = null,
+        isForwarded: Boolean = false
     ): Boolean = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext false
         try {
@@ -271,7 +272,8 @@ class SupabaseChatRepository {
                 flashVideoCaption = flashVideoCaption,
                 flashVideoAuthorUsername = flashVideoAuthorUsername,
                 flashVideoAuthorAvatarUrl = flashVideoAuthorAvatarUrl,
-                flashVideoDurationMs = flashVideoDurationMs
+                flashVideoDurationMs = flashVideoDurationMs,
+                isForwarded = isForwarded
             )
 
             // 1. Save directly to Firestore subcollection for 100% reliable persistence & realtime listeners
@@ -516,7 +518,6 @@ class SupabaseChatRepository {
                     if (cached.isNotEmpty()) {
                         trySend(cached)
                     }
-                    close()
                     return@addSnapshotListener
                 }
 
@@ -526,7 +527,7 @@ class SupabaseChatRepository {
                     val dAt = chat.deletedAt[uid] ?: 0L
                     roomDeletedAtCache[chat.id] = dAt
                 }
-                val activeChats = rawChats.filter { !it.deletedBy.contains(uid) }
+                val activeChats = rawChats.filter { !it.deletedBy.contains(uid) && !it.archivedBy.contains(uid) }
                 trySend(activeChats.sortedByDescending { it.lastMessageTime })
             }
 
@@ -562,7 +563,6 @@ class SupabaseChatRepository {
                     if (cached.isNotEmpty()) {
                         trySend(cached)
                     }
-                    close()
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
@@ -866,7 +866,20 @@ class SupabaseChatRepository {
         val currentUser = auth.currentUser ?: return@withContext
         try {
             val roomRef = chatsCollection.document(roomId)
-            var leftName = "Someone"
+            val leftName = try {
+                val uDoc = usersCollection.document(currentUser.uid).get().await()
+                uDoc.getString("displayName")?.takeIf { it.isNotBlank() }
+                    ?: uDoc.getString("username")?.takeIf { it.isNotBlank() }
+                    ?: "Someone"
+            } catch (_: Exception) { "Someone" }
+
+            // Send system "left the group" message BEFORE removing self from participants (required by Firestore rules)
+            try {
+                sendMessage(roomId, "$leftName left the group", messageType = "system")
+            } catch (ex: Exception) {
+                Log.w("SupabaseChatRepository", "Could not send leave system message", ex)
+            }
+
             var updatedParticipants = emptyList<String>()
 
             firestore.runTransaction { transaction ->
@@ -889,13 +902,6 @@ class SupabaseChatRepository {
             }.await()
 
             roomParticipantsCache[roomId] = updatedParticipants
-
-            leftName = try {
-                usersCollection.document(currentUser.uid).get().await().getString("displayName")?.takeIf { it.isNotBlank() }
-                    ?: usersCollection.document(currentUser.uid).get().await().getString("username")?.takeIf { it.isNotBlank() }
-                    ?: "Someone"
-            } catch (_: Exception) { "Someone" }
-            sendMessage(roomId, "$leftName left the group", messageType = "system")
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error leaving group", e)
         }
@@ -1149,9 +1155,41 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
                         msg == null -> ""
                         msg.messageType == "video" -> "Sent a video"
                         msg.messageType == "audio" || msg.messageType == "voice" -> "Voice message"
+                        msg.messageType == "sticker" -> "Sent a sticker"
                         msg.messageType == "image" || msg.imageUrl != null -> "Sent an image"
                         msg.messageType == "poll" || msg.text.startsWith("[POLL]:") -> "📊 Poll"
                         msg.messageType == "file" -> "Sent a file"
+                        msg.iv.isNotEmpty() -> {
+                            val cacheKey = "${msg.id}_${msg.text.hashCode()}_${msg.iv}"
+                            val cached = decryptedMessageCache[cacheKey]
+                            if (cached != null) cached else {
+                                var plain = ""
+                                val uid = auth.currentUser?.uid
+                                if (uid != null && msg.encryptedAesKeys.containsKey(uid)) {
+                                    try {
+                                        val aesBytes = com.chroma.studio.utils.CryptoHelper.decryptAESKeyWithRSA(msg.encryptedAesKeys[uid]!!)
+                                        if (aesBytes != null) {
+                                            plain = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, aesBytes)
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                                if (plain.isEmpty()) {
+                                    try {
+                                        val fb = msg.encryptedAesKeys["_room_fallback"]
+                                        if (!fb.isNullOrEmpty() && fb.contains(":")) {
+                                            val parts = fb.split(":", limit = 2)
+                                            val rk = com.chroma.studio.utils.CryptoHelper.deriveRoomKey(roomId)
+                                            val aesB64 = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(parts[0], parts[1], rk)
+                                            if (aesB64.isNotEmpty()) {
+                                                val aesBytes = android.util.Base64.decode(aesB64, android.util.Base64.NO_WRAP)
+                                                plain = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, aesBytes)
+                                            }
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                                plain.ifEmpty { "Message" }
+                            }
+                        }
                         else -> msg.text
                     }
                     Pair(text, msg?.timestamp ?: System.currentTimeMillis())
@@ -1259,17 +1297,19 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
 
     private suspend fun purgeMessages(roomId: String) {
         try {
+            val uid = auth.currentUser?.uid ?: return
             val messagesRef = chatsCollection.document(roomId).collection("messages")
-            var snapshot = messagesRef.limit(100).get().await()
+            // Only purge messages authored by currentUser to comply with Firestore senderId delete rule
+            var snapshot = messagesRef.whereEqualTo("senderId", uid).limit(100).get().await()
             while (snapshot.documents.isNotEmpty()) {
                 val batch = firestore.batch()
                 for (doc in snapshot.documents) {
                     batch.delete(doc.reference)
                 }
                 batch.commit().await()
-                snapshot = messagesRef.limit(100).get().await()
+                snapshot = messagesRef.whereEqualTo("senderId", uid).limit(100).get().await()
             }
-            android.util.Log.d("SupabaseChatRepo", "Purged all messages from $roomId")
+            android.util.Log.d("SupabaseChatRepo", "Purged own messages from $roomId")
         } catch (e: Exception) {
             android.util.Log.e("SupabaseChatRepo", "Error purging messages for $roomId", e)
         }

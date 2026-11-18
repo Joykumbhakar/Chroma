@@ -103,13 +103,29 @@ open class ChromaMessagingService : FirebaseMessagingService() {
             roomId = roomId
         )
 
-        // Rule 2: foreground + inside this chat -> no popup, mark read
+        // Rule 2: foreground + inside this chat -> no popup, mark read (also sets delivered)
         if (isForeground && isUserInActiveChat) {
             if (roomId.isNotBlank()) runBounded {
-                val repo = SupabaseChatRepository()
-                repo.markAsDelivered(roomId)
-                repo.markAsRead(roomId)
+                SupabaseChatRepository().markAsRead(roomId)
             }
+            return
+        }
+
+        // Check user notification settings (Quiet Mode & DM push preference)
+        val notifPrefs = getSharedPreferences("oscellion_notif_prefs", MODE_PRIVATE)
+        val quietMode = notifPrefs.getBoolean("quiet_mode_enabled", false)
+        val dmPushEnabled = notifPrefs.getBoolean("push_notifications_dm", true)
+        val masterPushEnabled = notifPrefs.getBoolean("push_notifications_enabled", true)
+
+        // Check locked & hidden chats using the canonical security SharedPreferences file
+        val secPrefs = getSharedPreferences("chroma_chat_security_prefs", MODE_PRIVATE)
+        val lockedIds = secPrefs.getStringSet("locked_chat_ids", emptySet()) ?: emptySet()
+        val hiddenIds = secPrefs.getStringSet("hidden_chat_ids", emptySet()) ?: emptySet()
+        val isLocked = (roomId.isNotBlank() && (roomId in lockedIds || roomId in hiddenIds)) ||
+            (senderId.isNotBlank() && (senderId in lockedIds || senderId in hiddenIds))
+
+        if (quietMode || !masterPushEnabled || !dmPushEnabled) {
+            if (roomId.isNotBlank()) runBounded { SupabaseChatRepository().markAsDelivered(roomId) }
             return
         }
 
@@ -119,9 +135,9 @@ open class ChromaMessagingService : FirebaseMessagingService() {
                 ChatInAppEvent(
                     roomId = roomId,
                     senderId = senderId,
-                    senderName = if (groupName.isNotBlank()) "$senderName in $groupName" else senderName,
-                    messageText = body,
-                    avatarUrl = avatarUrl
+                    senderName = if (isLocked) "Locked Chat" else if (groupName.isNotBlank()) "$senderName in $groupName" else senderName,
+                    messageText = if (isLocked) "New message" else body,
+                    avatarUrl = if (isLocked) "" else avatarUrl
                 )
             )
             com.chroma.studio.chat.sound.SoundManager.playNotification(this)
@@ -130,11 +146,6 @@ open class ChromaMessagingService : FirebaseMessagingService() {
         }
 
         // Rule 4: background / killed / locked -> WhatsApp-style heads-up popup.
-        val prefs = getSharedPreferences("chat_security_preferences", MODE_PRIVATE)
-        val lockedIds = prefs.getStringSet("locked_chat_ids", emptySet()) ?: emptySet()
-        val isLocked = (roomId.isNotBlank() && roomId in lockedIds) || (senderId.isNotBlank() && senderId in lockedIds)
-
-        // Show the notification FIRST (time-critical), then report "delivered" (double grey ticks).
         ChatNotificationBuilder.showHeadsUpNotification(
             context = this,
             roomId = roomId,

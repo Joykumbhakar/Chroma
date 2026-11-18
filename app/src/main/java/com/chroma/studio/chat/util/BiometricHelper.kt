@@ -70,10 +70,8 @@ object BiometricHelper {
         when (biometricManager.canAuthenticate(allowedAuthenticators)) {
             BiometricManager.BIOMETRIC_SUCCESS -> Unit // proceed
             BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
-                // No biometric enrolled — treat as success (device is not secured with biometrics,
-                // so there is nothing to authenticate against; open chat safely)
-                Log.w(TAG, "No biometrics enrolled; opening chat without authentication")
-                onSuccess()
+                Log.w(TAG, "No biometrics or screen lock enrolled — refusing to bypass chat lock")
+                onError("Set up a fingerprint, face unlock, or screen lock in device Settings first")
                 return
             }
             BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE,

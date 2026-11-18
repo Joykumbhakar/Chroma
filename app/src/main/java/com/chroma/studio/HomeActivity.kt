@@ -429,21 +429,59 @@ private fun AuthenticatedRoute(
                         incomingSharedData = data
                     }
                     com.chroma.studio.AppIntentManager.onWidgetAction = { action ->
-                        when (action) {
-                            com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_CREATE_POST -> {
+                        when {
+                            action == com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_CREATE_POST -> {
                                 navController.navigate("create_post")
                             }
-                            com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_VIDEO_EDITOR -> {
+                            action == com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_VIDEO_EDITOR -> {
                                 navController.navigate("create_post/flash")
                             }
-                            com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_MUSIC_PLAYER -> {
+                            action == com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_MUSIC_PLAYER -> {
                                 showDeviceMusicTrimmer = true
                             }
-                            com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_CHAT -> {
+                            action == com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_CHAT -> {
                                 navigateToTab(3)
                             }
-                            com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_SWITCH_LAB -> {
+                            action == com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_SWITCH_LAB -> {
                                 navController.navigate("switch_lab")
+                            }
+                            action.startsWith("deeplink_user:") -> {
+                                val handleOrUid = action.removePrefix("deeplink_user:").trim()
+                                if (handleOrUid.isNotBlank()) {
+                                    discoverVm.viewModelScope.launch {
+                                        val resolvedUid = try {
+                                            val byUsername = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                                .collection("usernames").document(handleOrUid.lowercase()).get().await()
+                                                .getString("uid")
+                                            byUsername?.takeIf { it.isNotBlank() } ?: handleOrUid
+                                        } catch (_: Exception) { handleOrUid }
+                                        navController.navigate("userProfile/$resolvedUid")
+                                    }
+                                }
+                            }
+                            action.startsWith("deeplink_post:") -> {
+                                val postId = action.removePrefix("deeplink_post:").trim()
+                                if (postId.isNotBlank()) {
+                                    discoverVm.viewModelScope.launch {
+                                        val creatorId = try {
+                                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                                .collection("community_works").document(postId).get().await()
+                                                .getString("creatorId")
+                                        } catch (_: Exception) { null }
+                                        if (!creatorId.isNullOrBlank()) {
+                                            navController.navigate("userProfile/$creatorId?postId=$postId")
+                                        } else {
+                                            navigateToTab(0)
+                                        }
+                                    }
+                                }
+                            }
+                            action.startsWith("deeplink_flash:") -> {
+                                navigateToTab(2)
+                            }
+                            action.startsWith("deeplink_chat:") -> {
+                                val roomId = action.removePrefix("deeplink_chat:").trim()
+                                if (roomId.isNotBlank()) navController.navigate("chat/$roomId")
                             }
                         }
                     }
@@ -1701,6 +1739,7 @@ private fun AuthenticatedRoute(
                         val settingsManager = remember { com.chroma.studio.chat.data.SettingsManager.getInstance(this@HomeActivity) }
                         var currentBubbleStyle by remember { mutableStateOf<com.chroma.studio.chat.data.BubbleStyleType>(settingsManager.bubbleStyle) }
                         var currentGlobeStyle by remember { mutableStateOf<com.chroma.studio.chat.data.VoiceGlobeStyleType>(settingsManager.globeStyle) }
+                        var currentAccentColor by remember { mutableStateOf<com.chroma.studio.chat.data.AccentColorType>(settingsManager.accentColor) }
                         var currentCustomCorners by remember { mutableStateOf<com.chroma.studio.chat.data.CustomCornerConfig>(settingsManager.customCorners) }
                         var currentAnimationStyle by remember { mutableStateOf<com.chroma.studio.chat.data.BubbleAnimationStyle>(settingsManager.animationStyle) }
 
@@ -1708,7 +1747,7 @@ private fun AuthenticatedRoute(
                             com.chroma.studio.chat.ui.components.AppearanceSettingsScreen(
                                 currentBubbleStyle = currentBubbleStyle,
                                 currentGlobeStyle = currentGlobeStyle,
-                                accentColor = com.chroma.studio.chat.data.AccentColorType.BLUE,
+                                accentColor = currentAccentColor,
                                 currentCustomCorners = currentCustomCorners,
                                 onUpdateCustomCorners = {
                                     currentCustomCorners = it
@@ -1733,8 +1772,22 @@ private fun AuthenticatedRoute(
                                     prefs.edit().putBoolean("is_dark_mode", newDark).apply()
                                     settingsManager.isDarkMode = newDark
                                 },
-                                onAccentCycle = {},
-                                onOpenWallpaperPicker = {},
+                                onAccentCycle = {
+                                    val values = com.chroma.studio.chat.data.AccentColorType.entries
+                                    val next = values[(values.indexOf(currentAccentColor) + 1) % values.size]
+                                    currentAccentColor = next
+                                    settingsManager.accentColor = next
+                                },
+                                onSelectAccent = { picked ->
+                                    currentAccentColor = picked
+                                    settingsManager.accentColor = picked
+                                },
+                                onOpenWallpaperPicker = {
+                                    val values = com.chroma.studio.chat.data.WallpaperType.entries
+                                    val next = values[(values.indexOf(settingsManager.wallpaperType) + 1) % values.size]
+                                    settingsManager.wallpaperType = next
+                                    com.chroma.studio.ui.components.ToastManager.showToast("Chat wallpaper: ${next.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }}")
+                                },
                                 onClose = { navController.popBackStack() }
                             )
                         }
@@ -1836,7 +1889,8 @@ private fun AuthenticatedRoute(
                                             }
                                             navController.popBackStack()
                                         },
-                                        onBack = { navController.popBackStack() }
+                                        onBack = { navController.popBackStack() },
+                                        onAccountDeleted = handleLogout
                                     )
                                 }
                             }
@@ -2042,7 +2096,10 @@ private fun AuthenticatedRoute(
                     composable("flash_photo_editor") {
                         val uris = flashPickerPhotoUris.takeIf { it.isNotEmpty() }
                             ?: flashImportedMediaUris.takeIf { it.isNotEmpty() }
-                            ?: run { navController.popBackStack(); return@composable }
+                        if (uris == null) {
+                            androidx.compose.runtime.LaunchedEffect(Unit) { navController.popBackStack() }
+                            return@composable
+                        }
                         val photoUri = uris.first()
                         ChromaPhotoEditorScreen(
                             photoUri = photoUri,
@@ -2072,10 +2129,10 @@ private fun AuthenticatedRoute(
                         val photoUri = uriStr?.let { Uri.parse(Uri.decode(it)) }
                             ?: flashPickerPhotoUris.firstOrNull()
                             ?: flashImportedMediaUris.firstOrNull()
-                            ?: run {
-                                navController.popBackStack()
-                                return@composable
-                            }
+                        if (photoUri == null) {
+                            androidx.compose.runtime.LaunchedEffect(Unit) { navController.popBackStack() }
+                            return@composable
+                        }
 
                         ChromaPhotoEditorScreen(
                             photoUri = photoUri,
@@ -2147,9 +2204,12 @@ private fun AuthenticatedRoute(
                             onNavigateToEditProfile = { navController.navigate("profile_identity") },
                             onNavigateToSettings = { navController.navigate("settings") },
                             onDownloadWork = onDownloadCommunityPost,
+                            onNavigateToUserList = { targetUserId, type ->
+                                navController.navigate("user_list/$targetUserId/$type")
+                            },
                             onRemixWork = onRemixCommunityPost,
                             onNavigateToOriginal = { authorId, origPostId ->
-                                if (origPostId != null) {
+                                if (!origPostId.isNullOrBlank()) {
                                     navController.navigate("userProfile/$authorId?postId=$origPostId")
                                 } else {
                                     navController.navigate("userProfile/$authorId")
@@ -2168,7 +2228,11 @@ private fun AuthenticatedRoute(
                         arguments = listOf(androidx.navigation.navArgument("userId") { type = androidx.navigation.NavType.StringType })
                     ) { backStackEntry ->
                         val userId = backStackEntry.arguments?.getString("userId") ?: return@composable
-                        navController.navigate("userProfile/$userId")
+                        androidx.compose.runtime.LaunchedEffect(userId) {
+                            navController.navigate("userProfile/$userId") {
+                                popUpTo("user_profile/{userId}") { inclusive = true }
+                            }
+                        }
                     }
                     composable(
                         route = "chat/{roomId}",
@@ -2411,11 +2475,27 @@ private fun AuthenticatedRoute(
             return
         }
 
-        // Deep link scheme: oscellion://create_post, etc.
+        // Deep links: https://oscellion.vercel.app/u/{username}, /post/{id}, /flash/{id}, /story/{id}
+        // and custom schemes: oscellion://create_post, etc.
         intent.data?.let { uri ->
-            val host = uri.host ?: uri.path?.removePrefix("/")
-            if (!host.isNullOrBlank()) {
-                com.chroma.studio.AppIntentManager.onWidgetAction?.invoke(host)
+            val host = uri.host ?: ""
+            val segments = uri.pathSegments ?: emptyList()
+            if (host.equals("oscellion.vercel.app", ignoreCase = true) && segments.isNotEmpty()) {
+                val routeAction = when (segments[0].lowercase()) {
+                    "u", "user", "profile" -> segments.getOrNull(1)?.let { "deeplink_user:$it" }
+                    "post", "work" -> segments.getOrNull(1)?.let { "deeplink_post:$it" }
+                    "flash", "reel" -> "deeplink_flash:${segments.getOrNull(1).orEmpty()}"
+                    "chat" -> segments.getOrNull(1)?.let { "deeplink_chat:$it" }
+                    else -> null
+                }
+                if (!routeAction.isNullOrBlank()) {
+                    com.chroma.studio.AppIntentManager.onWidgetAction?.invoke(routeAction)
+                }
+            } else {
+                val fallback = host.ifBlank { uri.path?.removePrefix("/") }
+                if (!fallback.isNullOrBlank()) {
+                    com.chroma.studio.AppIntentManager.onWidgetAction?.invoke(fallback)
+                }
             }
         }
     }

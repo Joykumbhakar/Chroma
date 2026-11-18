@@ -593,12 +593,27 @@ fun FlashProjectsHubScreen(
                                 }
                             },
                             onExport = {
+                                fun toShareableUri(raw: Uri): Uri {
+                                    if (raw.scheme == "file" && !raw.path.isNullOrBlank()) {
+                                        val f = java.io.File(raw.path!!)
+                                        if (f.exists()) {
+                                            return try {
+                                                androidx.core.content.FileProvider.getUriForFile(
+                                                    context,
+                                                    "${context.packageName}.provider",
+                                                    f
+                                                )
+                                            } catch (_: Throwable) { raw }
+                                        }
+                                    }
+                                    return raw
+                                }
                                 try {
                                     when (item) {
                                         is FlashHubItem.LocalExported -> {
                                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                                 type = "video/mp4"
-                                                putExtra(Intent.EXTRA_STREAM, item.fileUri)
+                                                putExtra(Intent.EXTRA_STREAM, toShareableUri(item.fileUri))
                                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                             }
                                             context.startActivity(Intent.createChooser(shareIntent, "Share Video"))
@@ -606,7 +621,7 @@ fun FlashProjectsHubScreen(
                                         is FlashHubItem.Draft -> {
                                             val videoUri = item.draft.videoUri?.let { Uri.parse(it) }
                                             val imageUri = item.draft.imageUris.firstOrNull()?.let { Uri.parse(it) }
-                                            val streamUri = videoUri ?: imageUri
+                                            val streamUri = (videoUri ?: imageUri)?.let { toShareableUri(it) }
                                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                                 if (streamUri != null) {
                                                     type = if (videoUri != null) "video/*" else "image/*"

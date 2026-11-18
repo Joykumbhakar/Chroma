@@ -108,6 +108,13 @@ fun NotificationsSettingsScreen(
             putBoolean("notif_haptics", notifHaptics)
             apply()
         }
+        // Mirror core push/quiet flags to oscellion_notif_prefs so ChromaMessagingService enforces them live
+        context.getSharedPreferences("oscellion_notif_prefs", Context.MODE_PRIVATE).edit().apply {
+            putBoolean("push_notifications_enabled", pushEnabled)
+            putBoolean("push_notifications_dm", pushEnabled)
+            putBoolean("quiet_mode_enabled", quietMode)
+            apply()
+        }
         ToastManager.showToast("Notification preferences updated")
         onSave(
             profile.copy(

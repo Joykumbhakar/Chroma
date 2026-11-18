@@ -16,11 +16,13 @@ rules_version = '2';
 //      - followersCount: int (counter, updateable on follow)
 //      - followingCount: int (counter, updateable on follow)
 //      - isPrivateAccount: bool (privacy setting)
+//      - verified: bool (server-managed verification badge; immutable by client)
 //      - ... other profile & preference fields
 //    Subcollections:
 //      - /users/{userId}/followers/{followerId} (followerId is the follower's UID)
 //      - /users/{userId}/following/{followingId} (followingId is the followed user's UID)
 //      - /users/{userId}/follow_requests/{requesterId} (requesterId is the requesting user's UID)
+//      - /users/{userId}/highlights/{highlightId} (saved permanent story highlights)
 //      - /users/{userId}/liked_posts/{workId} (bookmarked/liked post record)
 //      - /users/{userId}/saved_posts/{workId} (saved post record)
 //      - /users/{userId}/shared_posts/{workId} (shared post record)
@@ -127,6 +129,9 @@ rules_version = '2';
 //      - timestamp: number
 //      - likesCount: int
 //      - likedBy: list of string
+//      - dislikedBy: list of string
+//      - isPinned / pinned: bool
+//      - isCreatorHearted / creatorHearted: bool
 //
 // 7. Collection: stories
 //    Document ID: {storyId}
@@ -177,6 +182,10 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
     // ===============================================================
     // 1. Users Collection
     // ===============================================================
@@ -184,31 +193,39 @@ service cloud.firestore {
       // Authenticated users can view public creator profiles
       allow read: if isAuthenticated();
 
-      // Users can create and delete only their own profile
-      allow create: if isOwner(userId);
+      // Users can create (without self-verifying) and delete only their own profile
+      allow create: if isOwner(userId) && (
+        !('verified' in request.resource.data) ||
+        request.resource.data.verified == false
+      );
       allow delete: if isOwner(userId);
 
-      // Owner can update their profile, OR any user can safely increment/decrement follower/following counts
+      // Owner can update their profile (cannot modify verified), OR any user can safely increment/decrement follower/following counts
       allow update: if isAuthenticated() && (
-        isOwner(userId) ||
+        (isOwner(userId) && areImmutableFieldsUnchanged(['verified'])) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount'])
       );
 
       // Subcollections
       match /followers/{followerId} {
         allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && request.auth.uid == followerId;
+        allow write: if isAuthenticated() && (request.auth.uid == followerId || isOwner(userId));
       }
 
       match /following/{followingId} {
         allow read: if isAuthenticated();
-        allow write: if isOwner(userId);
+        allow write: if isAuthenticated() && (isOwner(userId) || request.auth.uid == followingId);
       }
 
       match /follow_requests/{requesterId} {
         allow read: if isAuthenticated() && (isOwner(userId) || request.auth.uid == requesterId);
-        allow create: if isAuthenticated() && request.auth.uid == requesterId;
+        allow create, update: if isAuthenticated() && request.auth.uid == requesterId;
         allow delete: if isAuthenticated() && (isOwner(userId) || request.auth.uid == requesterId);
+      }
+
+      match /highlights/{highlightId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
       }
 
       match /liked_posts/{workId} {
@@ -346,7 +363,8 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
       allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.userId ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'likesCount'])
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['likedBy', 'likesCount', 'dislikedBy', 'isPinned', 'pinned', 'isCreatorHearted', 'creatorHearted'])
       );
       allow delete: if isAuthenticated() && (
         resource == null ||
@@ -372,7 +390,10 @@ service cloud.firestore {
     // 8. User Chat Preferences Collection
     // ===============================================================
     match /user_chat_prefs/{prefId} {
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Split read into get and list so both single-doc checks on not-yet-created prefs
+      // and collection queries (whereEqualTo("userId", currentUserId)) succeed.
+      allow get: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
+      allow list: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;

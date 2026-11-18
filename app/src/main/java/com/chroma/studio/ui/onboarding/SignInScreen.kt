@@ -201,17 +201,7 @@ fun SignInScreen(
                         loginError = "Network connection failed. Please check your internet connection."
                     }
                     else -> {
-                        val localMatch = savedAccounts.find {
-                            it.username.equals(cleanIdentifier, ignoreCase = true) ||
-                            it.email.equals(cleanIdentifier, ignoreCase = true)
-                        }
-                        if (localMatch != null) {
-                            SavedAccountManager.saveAccount(context, localMatch.copy(lastLoginMillis = System.currentTimeMillis()))
-                            Toast.makeText(context, "Welcome back, ${localMatch.displayName}!", Toast.LENGTH_SHORT).show()
-                            onLoginSuccess()
-                        } else {
-                            loginError = e.localizedMessage ?: "Sign in failed. Please check your credentials."
-                        }
+                        loginError = e.localizedMessage ?: "Sign in failed. Please check your credentials."
                     }
                 }
             } finally {

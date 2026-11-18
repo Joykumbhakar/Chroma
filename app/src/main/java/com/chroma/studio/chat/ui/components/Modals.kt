@@ -2550,7 +2550,7 @@ fun FullCallModal(
                 modifier = Modifier.padding(top = 28.dp)
             ) {
                 Text(
-                    text = if (isCamOn) "FaceTime Video" else "FaceTime Audio",
+                    text = if (isCamOn) "Oscellion Video" else "Oscellion Audio",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White.copy(alpha = 0.7f)
@@ -2616,7 +2616,7 @@ fun FullCallModal(
                 verticalArrangement = Arrangement.spacedBy(28.dp),
                 modifier = Modifier.padding(bottom = 16.dp)
             ) {
-                // Row 1: Mute, Keypad, Speaker
+                // Clean Active Call Controls (Mute, Speaker, Video)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(32.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -2631,47 +2631,22 @@ fun FullCallModal(
                         onClick = { isMicMuted = !isMicMuted; onToggleMic() }
                     )
                     AppleCallIconButton(
-                        icon = { PhosphorKeypadIcon(tint = Color.White, size = 26.dp) },
-                        label = "keypad",
-                        isActive = false,
-                        onClick = {}
-                    )
-                    AppleCallIconButton(
                         icon = {
                             if (isSpeakerOn) LucideVolume2(tint = Color.Black, size = 26.dp)
                             else LucideVolume2(tint = Color.White, size = 26.dp)
                         },
-                        label = "audio",
+                        label = "speaker",
                         isActive = isSpeakerOn,
                         onClick = { isSpeakerOn = !isSpeakerOn; onToggleSpeaker() }
-                    )
-                }
-
-                // Row 2: Add Call, FaceTime, Contacts
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(32.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppleCallIconButton(
-                        icon = { PhosphorPlusIcon(tint = Color.White, size = 24.dp) },
-                        label = "add call",
-                        isActive = false,
-                        onClick = {}
                     )
                     AppleCallIconButton(
                         icon = {
                             if (isCamOn) LucideVideo(tint = Color.Black, size = 26.dp)
                             else LucideVideoOff(tint = Color.White, size = 26.dp)
                         },
-                        label = "FaceTime",
+                        label = "video",
                         isActive = isCamOn,
                         onClick = { isCamOn = !isCamOn; onToggleCam() }
-                    )
-                    AppleCallIconButton(
-                        icon = { PhosphorUserIcon(tint = Color.White, size = 26.dp) },
-                        label = "contacts",
-                        isActive = false,
-                        onClick = {}
                     )
                 }
 

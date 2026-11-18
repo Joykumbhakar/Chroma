@@ -1,6 +1,7 @@
 package com.chroma.studio.chat
 
 import com.chroma.studio.R
+import com.chroma.studio.chat.util.findActivity
 
 
 
@@ -481,6 +482,9 @@ private fun ChatScreenContent(
             if (effectiveRoomId != null) {
                 chatViewModel?.closeChat()
             }
+            try { AudioPlayerManager.stop() } catch (_: Exception) {}
+            try { AudioRecorderManager.cancelRecording() } catch (_: Exception) {}
+            try { chatViewModel?.endCall() } catch (_: Exception) {}
             com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = null
         }
     }
@@ -551,7 +555,10 @@ private fun ChatScreenContent(
 
                 typingMap = activeRoomTyping
 
-            ).copy(isMuted = mutedChatIds.contains(activeRoom.id))
+            ).copy(
+                isMuted = mutedChatIds.contains(activeRoom.id),
+                isBlocked = !activeRoom.isGroup && otherUid != null && blockedUserIds.contains(otherUid)
+            )
 
         } else {
 
@@ -583,8 +590,8 @@ private fun ChatScreenContent(
                 bio = otherProfile?.bio ?: "",
                 unreadCount = 0,
                 pinnedMessage = null,
-                isMuted = false,
-                isBlocked = false,
+                isMuted = mutedChatIds.contains(activeChatId),
+                isBlocked = blockedUserIds.contains(resolvedTargetUid),
                 messages = emptyList()
             )
 
@@ -594,7 +601,7 @@ private fun ChatScreenContent(
 
 
 
-    var chats by remember(recentRooms, userProfiles, isOtherOnline, otherLastSeen, onlineUsersPresence, typingStatuses, mutedChatIds, isInsideChat, activeChatBase) {
+    var chats by remember(recentRooms, userProfiles, isOtherOnline, otherLastSeen, onlineUsersPresence, typingStatuses, mutedChatIds, blockedUserIds, isInsideChat, activeChatBase) {
 
         mutableStateOf(
 
@@ -618,7 +625,10 @@ private fun ChatScreenContent(
                                 isOnline = isOnline,
                                 lastSeenTime = lastSeenTime,
                                 typingMap = roomTyping
-                            ).copy(isMuted = mutedChatIds.contains(room.id))
+                            ).copy(
+                                isMuted = mutedChatIds.contains(room.id),
+                                isBlocked = !room.isGroup && oUid != null && blockedUserIds.contains(oUid)
+                            )
                         }
                     }
                 } else {
@@ -654,7 +664,10 @@ private fun ChatScreenContent(
 
                         typingMap = roomTyping
 
-                    ).copy(isMuted = mutedChatIds.contains(room.id))
+                    ).copy(
+                        isMuted = mutedChatIds.contains(room.id),
+                        isBlocked = !room.isGroup && oUid != null && blockedUserIds.contains(oUid)
+                    )
 
                 }
 
@@ -1202,12 +1215,12 @@ private fun ChatScreenContent(
             chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + photoMsg) else it }
         }
         activeReplyQuote = null
-        coroutineScope.launch {
+        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val bytes = com.chroma.studio.utils.ImageUtils.compressChatImage(context, uri)
                     ?: context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
-                    chatViewModel.sendMediaMessage(bytes, "jpg", caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
+                    chatViewModel.sendMediaMessage(bytes, "jpg", caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString(), explicitMessageType = "image")
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ChatScreen", "Failed to upload camera photo", e)
@@ -1235,12 +1248,12 @@ private fun ChatScreenContent(
             chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + sMsg) else it }
         }
         activeReplyQuote = null
-        coroutineScope.launch {
+        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val u = Uri.parse(sticker.uri)
                 val bytes = context.contentResolver.openInputStream(u)?.use { it.readBytes() }
                 if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
-                    chatViewModel.sendMediaMessage(bytes, "png", "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = sticker.uri)
+                    chatViewModel.sendMediaMessage(bytes, "png", "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = sticker.uri, explicitMessageType = "sticker")
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ChatScreen", "Failed to upload sticker", e)
@@ -1268,11 +1281,11 @@ private fun ChatScreenContent(
             chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + videoMsg) else it }
         }
         activeReplyQuote = null
-        coroutineScope.launch {
+        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
-                    chatViewModel.sendMediaMessage(bytes, "mp4", caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
+                    chatViewModel.sendMediaMessage(bytes, "mp4", caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString(), explicitMessageType = "video")
                 }
             } catch (e: Exception) {
                 android.util.Log.e("ChatScreen", "Failed to upload camera video", e)
@@ -2140,47 +2153,35 @@ private fun ChatScreenContent(
                     },
                     onLockChatToggle = { chat ->
                         val isCurrentlyLocked = chat.id in lockedChatIds
-                        val activity = context as? android.app.Activity
-                        if (isCurrentlyLocked) {
-                            if (activity != null) {
-                                com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                    activity = activity,
-                                    title = "Unlock ${chat.name}",
-                                    subtitle = "Verify identity to remove biometric lock",
-                                    onSuccess = {
-                                        val next = lockedChatIds - chat.id
-                                        lockedChatIds = next
-                                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                        showToast("Biometric lock removed from ${chat.name}")
-                                    },
-                                    onError = {}
-                                )
-                            } else {
-                                val next = lockedChatIds - chat.id
-                                lockedChatIds = next
-                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                showToast("Biometric lock removed")
-                            }
+                        val activity = context.findActivity()
+                        if (activity == null) {
+                            showToast("Biometric authentication unavailable on this screen")
+                        } else if (isCurrentlyLocked) {
+                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                activity = activity,
+                                title = "Unlock ${chat.name}",
+                                subtitle = "Verify identity to remove biometric lock",
+                                onSuccess = {
+                                    val next = lockedChatIds - chat.id
+                                    lockedChatIds = next
+                                    chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                                    showToast("Biometric lock removed from ${chat.name}")
+                                },
+                                onError = { err -> showToast(err) }
+                            )
                         } else {
-                            if (activity != null) {
-                                com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                    activity = activity,
-                                    title = "Lock ${chat.name}",
-                                    subtitle = "Confirm Face ID or fingerprint to lock chat",
-                                    onSuccess = {
-                                        val next = lockedChatIds + chat.id
-                                        lockedChatIds = next
-                                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                        showToast("${chat.name} locked with Biometrics")
-                                    },
-                                    onError = {}
-                                )
-                            } else {
-                                val next = lockedChatIds + chat.id
-                                lockedChatIds = next
-                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                showToast("${chat.name} locked")
-                            }
+                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                activity = activity,
+                                title = "Lock ${chat.name}",
+                                subtitle = "Confirm Face ID or fingerprint to lock chat",
+                                onSuccess = {
+                                    val next = lockedChatIds + chat.id
+                                    lockedChatIds = next
+                                    chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                                    showToast("${chat.name} locked with Biometrics")
+                                },
+                                onError = { err -> showToast(err) }
+                            )
                         }
                     },
                     onLockMultipleChatsToggle = handleLockMultipleChats,
@@ -4605,8 +4606,14 @@ private fun ChatScreenContent(
                                 } else c
                             }
                             if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                                val msgById = allMessages.associateBy { it.id }
                                 idsToDelete.forEach { id ->
-                                    chatViewModel.deleteMessage(id, activeChatId)
+                                    val msg = msgById[id]
+                                    if (msg == null || msg.senderId == currentUser.id) {
+                                        chatViewModel.deleteMessage(id, activeChatId)
+                                    } else {
+                                        chatViewModel.deleteMessageForMe(id, activeChatId)
+                                    }
                                 }
                             }
                             showToast(if (idsToDelete.size == 1) "Message deleted" else "${idsToDelete.size} messages deleted")

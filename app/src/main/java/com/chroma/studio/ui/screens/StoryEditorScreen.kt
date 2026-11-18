@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -365,7 +366,7 @@ fun StoryEditorScreen(
                 isHighlight = isHighlight,
                 headingLevel = headingLevel,
                 textColorHex = textColorHex,
-                backgroundColorHex = if (isCustomSolidBg) customBgColorHex else String.format("#%08X", (0xFFFFFFFF and (currentGradient.colors.firstOrNull()?.value?.toLong() ?: 0xFF000000L))),
+                backgroundColorHex = if (isCustomSolidBg) customBgColorHex else String.format("#%08X", currentGradient.colors.firstOrNull()?.toArgb() ?: 0xFF000000.toInt()),
                 title = headlineText.trim(),
                 tag = selectedCategory,
                 mood = selectedMood,
@@ -1107,7 +1108,7 @@ fun StoryEditorScreen(
                                             .clickable {
                                                 isCustomSolidBg = false
                                                 selectedGradientId = theme.id
-                                                textColorHex = String.format("#%08X", (0xFFFFFFFF and theme.defaultTextColor.value.toLong()))
+                                                textColorHex = String.format("#%08X", theme.defaultTextColor.toArgb())
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {

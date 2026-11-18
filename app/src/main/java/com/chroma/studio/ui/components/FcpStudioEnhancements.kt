@@ -51,15 +51,15 @@ object StudioDesignTokens {
     val BevelHighlightTop = Color.White.copy(alpha = 0.22f)
     val BevelShadeBottom = Color.Black.copy(alpha = 0.40f)
     val BevelBorderDefault = Color.White.copy(alpha = 0.08f)
-    val BevelBorderActive = Color(0xFF00E5FF).copy(alpha = 0.55f)
+    val BevelBorderActive = Color(0xFF0381FE).copy(alpha = 0.55f)
 
-    // Professional Multi-stop Gradients
-    val CobaltGradient = listOf(Color(0xFF0284C7), Color(0xFF06B6D4))
+    // Unified One UI Studio Accents
+    val CobaltGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE))
     val AmberGoldGradient = listOf(Color(0xFFD97706), Color(0xFFF59E0B))
-    val EmeraldMintGradient = listOf(Color(0xFF059669), Color(0xFF10B981))
-    val CrimsonFlareGradient = listOf(Color(0xFFE11D48), Color(0xFFFB7185))
-    val ElectricVioletGradient = listOf(Color(0xFF6366F1), Color(0xFF8B5CF6))
-    val CyberNeonGradient = listOf(Color(0xFF00F5FF), Color(0xFF0077FF))
+    val EmeraldMintGradient = listOf(Color(0xFF0381FE), Color(0xFF3E91FF))
+    val CrimsonFlareGradient = listOf(Color(0xFFEF4444), Color(0xFFDC2626))
+    val ElectricVioletGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE))
+    val CyberNeonGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE))
     val TitaniumGradient = listOf(Color(0xFF333848), Color(0xFF222634))
 }
 

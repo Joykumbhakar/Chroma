@@ -308,8 +308,9 @@ fun StickerStudioModal(
                         }
 
                         if (displayBmp != null) {
-                            // Touch Drawing for Manual Eraser
+                            // Touch Drawing for Manual Eraser (maps Compose ContentScale.Fit coords -> bitmap pixels)
                             val currentPoints = remember { mutableStateListOf<Offset>() }
+                            val padPx = with(androidx.compose.ui.platform.LocalDensity.current) { 16.dp.toPx() }
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -326,13 +327,34 @@ fun StickerStudioModal(
                                                 },
                                                 onDragEnd = {
                                                     val src = cutoutBitmap ?: return@detectDragGestures
+                                                    val availW = (size.width - padPx * 2f).coerceAtLeast(1f)
+                                                    val availH = (size.height - padPx * 2f).coerceAtLeast(1f)
+                                                    val fitScale = minOf(availW / src.width.toFloat(), availH / src.height.toFloat()).coerceAtLeast(0.01f)
+                                                    val drawnW = src.width * fitScale
+                                                    val drawnH = src.height * fitScale
+                                                    val originX = padPx + (availW - drawnW) / 2f
+                                                    val originY = padPx + (availH - drawnH) / 2f
+
+                                                    val mappedPoints = currentPoints.map { pt ->
+                                                        Offset(
+                                                            x = ((pt.x - originX) / fitScale).coerceIn(0f, src.width.toFloat()),
+                                                            y = ((pt.y - originY) / fitScale).coerceIn(0f, src.height.toFloat())
+                                                        )
+                                                    }
+                                                    val mappedRadius = (eraserBrushRadius / fitScale).coerceIn(4f, 200f)
                                                     val erased = StickerStudioEngine.manualErase(
                                                         source = src,
-                                                        pathPoints = currentPoints.toList(),
-                                                        brushRadiusPx = eraserBrushRadius
+                                                        pathPoints = mappedPoints,
+                                                        brushRadiusPx = mappedRadius
                                                     )
                                                     cutoutBitmap = erased
                                                     eraserHistory.add(erased.copy(Bitmap.Config.ARGB_8888, true))
+                                                    while (eraserHistory.size > 15) {
+                                                        val evicted = eraserHistory.removeAt(0)
+                                                        if (evicted !== erased && evicted !== originalBitmap) {
+                                                            try { evicted.recycle() } catch (_: Throwable) {}
+                                                        }
+                                                    }
                                                     currentPoints.clear()
                                                     updateBorderPreview()
                                                 }

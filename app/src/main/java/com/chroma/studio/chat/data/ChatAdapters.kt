@@ -207,6 +207,7 @@ object ChatAdapters {
             isPoll -> "poll"
             msg.messageType.equals("flash_video", ignoreCase = true) || msg.flashVideoId != null -> "flash_video"
             msg.messageType.equals("story_reply", ignoreCase = true) || msg.storyThumbnailUrl != null || msg.storyId != null -> "story_reply"
+            msg.messageType.equals("sticker", ignoreCase = true) -> "sticker"
             msg.messageType.equals("audio", ignoreCase = true) || msg.messageType.equals("voice", ignoreCase = true) -> "voice"
             msg.messageType.equals("image", ignoreCase = true) -> "image"
             msg.messageType.equals("video", ignoreCase = true) -> "video"
@@ -255,7 +256,9 @@ object ChatAdapters {
             mediaUrl = msg.imageUrl ?: msg.mediaUrl ?: msg.flashVideoUrl,
             mediaUrls = listOfNotNull(msg.imageUrl ?: msg.mediaUrl ?: msg.flashVideoUrl),
             localUri = if (mappedMediaType == "voice") (msg.imageUrl ?: msg.mediaUrl) else null,
-            fileName = if (mappedMediaType == "file") "Document" else null,
+            fileName = if (mappedMediaType == "file") {
+                msg.text.takeIf { it.isNotBlank() && it != "🔒 Message encrypted" } ?: "Document"
+            } else null,
             fileSize = null,
             fileItems = emptyList(),
             voiceDuration = msg.durationSeconds ?: 4,

@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -102,8 +103,8 @@ fun StoryEditorModal(
     }
 
     var storyCaption by remember { mutableStateOf("") }
-    var selectedLocation by remember { mutableStateOf<String?>("San Francisco, CA") }
-    var selectedMusic by remember { mutableStateOf<String?>("Odesza • A Moment Apart") }
+    var selectedLocation by remember { mutableStateOf<String?>(null) }
+    var selectedMusic by remember { mutableStateOf<String?>(null) }
     var storyPoll by remember { mutableStateOf<PollData?>(null) }
     var isAddingSticker by remember { mutableStateOf(false) }
 
@@ -850,24 +851,33 @@ fun StoryEditorModal(
                 }
             }
 
-            // Full-Width Primary Apple Share Button
+            // Full-Width Primary Share Button
+            val canPublishStory = selectedPhotoUri != null || storyCaption.isNotBlank()
             Button(
+                enabled = canPublishStory,
                 onClick = {
                     SoundManager.playSend()
                     val finalImage = selectedPhotoUrl
-                    val finalCaption = if (storyCaption.isNotBlank()) storyCaption else ""
+                    val finalCaption = storyCaption.trim()
                     val authorName = currentUser?.name?.takeIf { it.isNotBlank() } ?: "Your Story"
                     val avatarUrl = currentUser?.avatar?.takeIf { it.isNotBlank() } ?: ""
                     val authorId = currentUser?.id ?: ""
+                    val chosenGradient = gradients[selectedGradientIndex]
+                    val bgColorHex = String.format("#%08X", chosenGradient.colors.firstOrNull()?.toArgb() ?: 0xFF000000.toInt())
+                    val chosenFontId = StoryFonts.items.getOrNull(fontIndex)?.id ?: "Sans"
+                    val textFormatJson = "{\"fontFamily\":\"$chosenFontId\",\"fontIndex\":$fontIndex,\"textAlign\":\"${textAlign}\",\"highlightMode\":\"${highlightMode.name}\"}"
 
                     // Real Upload/Publish to Firestore & Cloudinary
-                    if (selectedPhotoUri != null && storyViewModel != null) {
-                        storyViewModel.uploadStory(context, selectedPhotoUri!!)
-                    } else if (storyViewModel != null && (finalCaption.isNotBlank() || finalImage != null)) {
-                        val chosenGradient = gradients[selectedGradientIndex]
-                        val bgColorHex = String.format("#%08X", (0xFFFFFFFF and (chosenGradient.colors.firstOrNull()?.value?.toLong() ?: 0xFF000000L)))
-                        val chosenFontId = StoryFonts.items.getOrNull(fontIndex)?.id ?: "Sans"
-                        val textFormatJson = "{\"fontFamily\":\"$chosenFontId\",\"fontIndex\":$fontIndex,\"textAlign\":\"${textAlign}\",\"highlightMode\":\"${highlightMode.name}\"}" 
+                    val photoUri = selectedPhotoUri
+                    if (photoUri != null && storyViewModel != null) {
+                        storyViewModel.uploadStory(
+                            context = context,
+                            uri = photoUri,
+                            textContent = finalCaption,
+                            textFormat = textFormatJson,
+                            backgroundColor = bgColorHex
+                        )
+                    } else if (storyViewModel != null && finalCaption.isNotBlank()) {
                         storyViewModel.publishTextStory(
                             textContent = finalCaption,
                             textFormat = textFormatJson,
@@ -887,7 +897,7 @@ fun StoryEditorModal(
                         caption = finalCaption,
                         seen = false,
                         isMyStory = true,
-                        viewCount = 1,
+                        viewCount = 0,
                         likesCount = 0,
                         musicTrack = selectedMusic,
                         locationTag = selectedLocation,
