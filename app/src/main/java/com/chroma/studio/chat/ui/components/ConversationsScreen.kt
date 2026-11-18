@@ -262,20 +262,22 @@ fun ConversationsScreen(
 
     val totalUnread = remember(chats, hiddenChatIds) { chats.filter { it.id !in hiddenChatIds }.sumOf { it.unreadCount } }
 
-    val filteredChats = remember(chats, activeTab, searchQuery, pinnedChatIds, hiddenChatIds) {
+    val filteredChats = remember(chats, activeTab, searchQuery, pinnedChatIds, hiddenChatIds, lockedChatIds) {
         val filtered = chats.filter { c ->
             if (c.id in hiddenChatIds) return@filter false
-            val matchTab = when (activeTab) {
+            val isLocked = c.id in lockedChatIds
+            val matchTab = when (activeTab.lowercase()) {
                 "unread" -> c.unreadCount > 0
                 "direct" -> c.type == "direct"
-                "group" -> c.type == "group"
+                "group", "groups" -> c.type == "group"
+                "locked" -> isLocked
                 "calls" -> true // Handled specifically in calls view or filtered
                 else -> true
             }
             val query = searchQuery.trim().lowercase()
             val matchSearch = query.isEmpty() ||
                 c.name.lowercase().contains(query) ||
-                c.messages.any { it.text?.lowercase()?.contains(query) == true }
+                (!isLocked && c.messages.any { it.text?.lowercase()?.contains(query) == true })
             matchTab && matchSearch
         }
         filtered.sortedWith(compareByDescending<ChatConversation> { it.id in pinnedChatIds })

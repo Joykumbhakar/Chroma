@@ -7,7 +7,7 @@ import android.content.Intent
 import com.chroma.studio.ui.components.VerifiedBadge
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -87,7 +87,7 @@ import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.composables.icons.lucide.QrCode
 import androidx.compose.material3.ExperimentalMaterial3Api
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     companion object {
         const val EXTRA_WORK_ID = "work_id"

@@ -1006,6 +1006,44 @@ private fun ChatScreenContent(
         )
     }
     var unlockedChatSessionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var isAppScreenLockEnabled by remember {
+        mutableStateOf(chatSecurityPrefs.getBoolean("chat_screen_lock_enabled", false))
+    }
+    var isAppScreenUnlocked by remember { mutableStateOf(!isAppScreenLockEnabled) }
+
+    // Keep prefs in sync if ProfileSettingsScreen updates screen lock or locked chats
+    DisposableEffect(chatSecurityPrefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            when (key) {
+                "locked_chat_ids" -> {
+                    lockedChatIds = prefs.getStringSet("locked_chat_ids", emptySet())?.toSet() ?: emptySet()
+                }
+                "chat_screen_lock_enabled" -> {
+                    val enabled = prefs.getBoolean("chat_screen_lock_enabled", false)
+                    isAppScreenLockEnabled = enabled
+                    if (!enabled) isAppScreenUnlocked = true
+                }
+            }
+        }
+        chatSecurityPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { chatSecurityPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    // Re-lock all unlocked conversations and app screen lock when app moves to background
+    // (skip while a system Biometric/PIN prompt is active so ConfirmDeviceCredential doesn't trip it)
+    val chatLifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(chatLifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP && !com.chroma.studio.chat.util.BiometricHelper.isPromptShowing) {
+                unlockedChatSessionIds = emptySet()
+                if (isAppScreenLockEnabled) {
+                    isAppScreenUnlocked = false
+                }
+            }
+        }
+        chatLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { chatLifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     var activePollForDetails by remember { mutableStateOf<PollData?>(null) }
 
@@ -1079,6 +1117,81 @@ private fun ChatScreenContent(
 
         showIsland(title = msg, type = islandType)
 
+    }
+
+    fun persistLockedChats(next: Set<String>) {
+        lockedChatIds = next
+        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", HashSet(next)).apply()
+    }
+
+    fun runBiometricProtected(
+        title: String,
+        subtitle: String,
+        onSuccess: () -> Unit
+    ) {
+        val activity = context.findActivity()
+        if (activity == null) {
+            showToast("Biometric authentication unavailable on this screen")
+            return
+        }
+        if (com.chroma.studio.chat.util.BiometricHelper.isPromptShowing) return
+        com.chroma.studio.chat.util.BiometricHelper.authenticate(
+            activity = activity,
+            title = title,
+            subtitle = subtitle,
+            onSuccess = onSuccess,
+            onCancel = { /* User cancelled — leave lock state unchanged */ },
+            onError = { err -> showToast(err) }
+        )
+    }
+
+    fun toggleLockForChats(chatIds: List<String>, singleChatName: String? = null) {
+        if (chatIds.isEmpty()) return
+        val idSet = chatIds.toSet()
+        val allLocked = idSet.all { it in lockedChatIds }
+        if (allLocked) {
+            val title = if (singleChatName != null) "Unlock $singleChatName" else "Unlock Chats"
+            runBiometricProtected(
+                title = title,
+                subtitle = "Verify your identity to remove chat lock"
+            ) {
+                persistLockedChats(lockedChatIds - idSet)
+                unlockedChatSessionIds = unlockedChatSessionIds - idSet
+                showToast(
+                    if (singleChatName != null) "Biometric lock removed from $singleChatName"
+                    else "Biometric lock removed from ${chatIds.size} chat(s)"
+                )
+            }
+        } else {
+            val title = if (singleChatName != null) "Lock $singleChatName" else "Biometric Chat Lock"
+            runBiometricProtected(
+                title = title,
+                subtitle = "Verify your identity to lock ${if (chatIds.size == 1) "this chat" else "${chatIds.size} chats"}"
+            ) {
+                persistLockedChats(lockedChatIds + idSet)
+                unlockedChatSessionIds = unlockedChatSessionIds - idSet
+                showToast(
+                    if (singleChatName != null) "$singleChatName locked with Biometrics"
+                    else "${chatIds.size} chat(s) locked with Biometrics"
+                )
+            }
+        }
+    }
+
+    fun requireUnlockIfLocked(
+        chat: ChatConversation,
+        actionLabel: String,
+        onAuthorized: () -> Unit
+    ) {
+        if (chat.id !in lockedChatIds) {
+            onAuthorized()
+            return
+        }
+        runBiometricProtected(
+            title = "Unlock ${chat.name}",
+            subtitle = "Verify your identity to $actionLabel",
+            onSuccess = onAuthorized
+        )
     }
 
 
@@ -1996,51 +2109,10 @@ private fun ChatScreenContent(
             }
 
             val handleLockMultipleChats: (List<String>) -> Unit = { chatIds ->
-                if (chatIds.isNotEmpty()) {
-                    val activity = context as? android.app.Activity
-                    val allLocked = chatIds.all { it in lockedChatIds }
-                    if (allLocked) {
-                        if (activity != null) {
-                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                activity = activity,
-                                title = "Unlock Chats",
-                                subtitle = "Verify biometric identity to remove chat lock",
-                                onSuccess = {
-                                    val next = lockedChatIds - chatIds.toSet()
-                                    lockedChatIds = next
-                                    chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                    showToast("Biometric lock removed from selected chats")
-                                },
-                                onError = { _ -> }
-                            )
-                        } else {
-                            val next = lockedChatIds - chatIds.toSet()
-                            lockedChatIds = next
-                            chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                            showToast("Biometric lock removed")
-                        }
-                    } else {
-                        if (activity != null) {
-                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                activity = activity,
-                                title = "Biometric Chat Lock",
-                                subtitle = "Confirm Face ID or fingerprint to lock selected chats",
-                                onSuccess = {
-                                    val next = lockedChatIds + chatIds.toSet()
-                                    lockedChatIds = next
-                                    chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                    showToast("${chatIds.size} chat(s) locked with Biometrics")
-                                },
-                                onError = { _ -> }
-                            )
-                        } else {
-                            val next = lockedChatIds + chatIds.toSet()
-                            lockedChatIds = next
-                            chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                            showToast("${chatIds.size} chat(s) locked")
-                        }
-                    }
-                }
+                toggleLockForChats(
+                    chatIds = chatIds,
+                    singleChatName = if (chatIds.size == 1) chats.find { it.id == chatIds.first() }?.name else null
+                )
             }
 
             if (useOneUiHeaderMode) {
@@ -2152,37 +2224,7 @@ private fun ChatScreenContent(
                         showToast(if (wasUnread) "Marked as read" else "Marked as unread")
                     },
                     onLockChatToggle = { chat ->
-                        val isCurrentlyLocked = chat.id in lockedChatIds
-                        val activity = context.findActivity()
-                        if (activity == null) {
-                            showToast("Biometric authentication unavailable on this screen")
-                        } else if (isCurrentlyLocked) {
-                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                activity = activity,
-                                title = "Unlock ${chat.name}",
-                                subtitle = "Verify identity to remove biometric lock",
-                                onSuccess = {
-                                    val next = lockedChatIds - chat.id
-                                    lockedChatIds = next
-                                    chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                    showToast("Biometric lock removed from ${chat.name}")
-                                },
-                                onError = { err -> showToast(err) }
-                            )
-                        } else {
-                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                activity = activity,
-                                title = "Lock ${chat.name}",
-                                subtitle = "Confirm Face ID or fingerprint to lock chat",
-                                onSuccess = {
-                                    val next = lockedChatIds + chat.id
-                                    lockedChatIds = next
-                                    chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                    showToast("${chat.name} locked with Biometrics")
-                                },
-                                onError = { err -> showToast(err) }
-                            )
-                        }
+                        toggleLockForChats(listOf(chat.id), singleChatName = chat.name)
                     },
                     onLockMultipleChatsToggle = handleLockMultipleChats,
                     onArchiveChat = { chat ->
@@ -2191,35 +2233,43 @@ private fun ChatScreenContent(
                         showToast("Chat archived")
                     },
                     onClearChatHistory = { chat ->
-                        chats = chats.map { if (it.id == chat.id) it.copy(messages = emptyList()) else it }
-                        chatViewModel?.clearChatHistory(chat.id)
-                        showToast("Chat history cleared")
+                        requireUnlockIfLocked(chat, "clear chat history") {
+                            chats = chats.map { if (it.id == chat.id) it.copy(messages = emptyList()) else it }
+                            chatViewModel?.clearChatHistory(chat.id)
+                            showToast("Chat history cleared")
+                        }
                     },
                     onExportChat = { chat ->
-                        try {
-                            val transcript = buildString {
-                                appendLine("--- ChromaStudio Chat Transcript: ${chat.name} ---")
-                                appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
-                                appendLine()
-                                chat.messages.forEach { m ->
-                                    appendLine("[${m.time}] ${m.senderName}: ${m.text}")
+                        requireUnlockIfLocked(chat, "export chat transcript") {
+                            try {
+                                val transcript = buildString {
+                                    appendLine("--- Oscellion Chat Transcript: ${chat.name} ---")
+                                    appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
+                                    appendLine()
+                                    chat.messages.forEach { m ->
+                                        appendLine("[${m.time}] ${m.senderName}: ${m.text}")
+                                    }
                                 }
+                                val sendIntent = android.content.Intent().apply {
+                                    action = android.content.Intent.ACTION_SEND
+                                    putExtra(android.content.Intent.EXTRA_TEXT, transcript)
+                                    type = "text/plain"
+                                }
+                                context.startActivity(android.content.Intent.createChooser(sendIntent, "Export chat with ${chat.name}"))
+                                showToast("Exporting transcript for ${chat.name}")
+                            } catch (e: Exception) {
+                                showToast("Exported transcript for ${chat.name}")
                             }
-                            val sendIntent = android.content.Intent().apply {
-                                action = android.content.Intent.ACTION_SEND
-                                putExtra(android.content.Intent.EXTRA_TEXT, transcript)
-                                type = "text/plain"
-                            }
-                            context.startActivity(android.content.Intent.createChooser(sendIntent, "Export chat with ${chat.name}"))
-                            showToast("Exporting transcript for ${chat.name}")
-                        } catch (e: Exception) {
-                            showToast("Exported transcript for ${chat.name}")
                         }
                     },
                     onDeleteChat = { chat ->
-                        chats = chats.filter { it.id != chat.id }
-                        chatViewModel?.deleteChat(chat.id)
-                        showToast("Chat deleted")
+                        requireUnlockIfLocked(chat, "delete locked chat") {
+                            persistLockedChats(lockedChatIds - chat.id)
+                            unlockedChatSessionIds = unlockedChatSessionIds - chat.id
+                            chats = chats.filter { it.id != chat.id }
+                            chatViewModel?.deleteChat(chat.id)
+                            showToast("Chat deleted")
+                        }
                     }
                 )
             } else {
@@ -2394,53 +2444,7 @@ private fun ChatScreenContent(
             },
 
             onLockChatToggle = { chat ->
-                val isCurrentlyLocked = chat.id in lockedChatIds
-                val activity = context as? android.app.Activity
-                if (isCurrentlyLocked) {
-                    if (activity != null) {
-                        com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                            activity = activity,
-                            title = "Unlock ${chat.name}",
-                            subtitle = "Verify identity to remove biometric lock",
-                            onSuccess = {
-                                val next = lockedChatIds - chat.id
-                                lockedChatIds = next
-                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                showToast("Biometric lock removed from ${chat.name}")
-                            },
-                            onError = { _ ->
-                                // User cancelled or biometric unavailable -- lock remains, do nothing
-                            }
-                        )
-                    } else {
-                        val next = lockedChatIds - chat.id
-                        lockedChatIds = next
-                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                        showToast("Biometric lock removed")
-                    }
-                } else {
-                    if (activity != null) {
-                        com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                            activity = activity,
-                            title = "Lock ${chat.name}",
-                            subtitle = "Confirm Face ID or fingerprint to lock chat",
-                            onSuccess = {
-                                val next = lockedChatIds + chat.id
-                                lockedChatIds = next
-                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                showToast("${chat.name} locked with Biometrics")
-                            },
-                            onError = { _ ->
-                                // User cancelled -- do nothing
-                            }
-                        )
-                    } else {
-                        val next = lockedChatIds + chat.id
-                        lockedChatIds = next
-                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                        showToast("${chat.name} locked")
-                    }
-                }
+                toggleLockForChats(listOf(chat.id), singleChatName = chat.name)
             },
 
             onLockMultipleChatsToggle = handleLockMultipleChats,
@@ -2456,65 +2460,45 @@ private fun ChatScreenContent(
             },
 
             onClearChatHistory = { chat ->
-
-                chats = chats.map { if (it.id == chat.id) it.copy(messages = emptyList()) else it }
-
-                chatViewModel?.clearChatHistory(chat.id)
-
-                showToast("Chat history cleared")
-
+                requireUnlockIfLocked(chat, "clear chat history") {
+                    chats = chats.map { if (it.id == chat.id) it.copy(messages = emptyList()) else it }
+                    chatViewModel?.clearChatHistory(chat.id)
+                    showToast("Chat history cleared")
+                }
             },
 
             onExportChat = { chat ->
-
-                try {
-
-                    val transcript = buildString {
-
-                        appendLine("--- ChromaStudio Chat Transcript: ${chat.name} ---")
-
-                        appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
-
-                        appendLine()
-
-                        chat.messages.forEach { m ->
-
-                            appendLine("[${m.time}] ${m.senderName}: ${m.text}")
-
+                requireUnlockIfLocked(chat, "export chat transcript") {
+                    try {
+                        val transcript = buildString {
+                            appendLine("--- Oscellion Chat Transcript: ${chat.name} ---")
+                            appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
+                            appendLine()
+                            chat.messages.forEach { m ->
+                                appendLine("[${m.time}] ${m.senderName}: ${m.text}")
+                            }
                         }
-
+                        val sendIntent = android.content.Intent().apply {
+                            action = android.content.Intent.ACTION_SEND
+                            putExtra(android.content.Intent.EXTRA_TEXT, transcript)
+                            type = "text/plain"
+                        }
+                        context.startActivity(android.content.Intent.createChooser(sendIntent, "Export chat with ${chat.name}"))
+                        showToast("Exporting transcript for ${chat.name}")
+                    } catch (e: Exception) {
+                        showToast("Exported transcript for ${chat.name}")
                     }
-
-                    val sendIntent = android.content.Intent().apply {
-
-                        action = android.content.Intent.ACTION_SEND
-
-                        putExtra(android.content.Intent.EXTRA_TEXT, transcript)
-
-                        type = "text/plain"
-
-                    }
-
-                    context.startActivity(android.content.Intent.createChooser(sendIntent, "Export chat with ${chat.name}"))
-
-                    showToast("Exporting transcript for ${chat.name}")
-
-                } catch (e: Exception) {
-
-                    showToast("Exported transcript for ${chat.name}")
-
                 }
-
             },
 
             onDeleteChat = { chat ->
-
-                chats = chats.filter { it.id != chat.id }
-
-                chatViewModel?.deleteChat(chat.id)
-
-                showToast("Chat deleted")
-
+                requireUnlockIfLocked(chat, "delete locked chat") {
+                    persistLockedChats(lockedChatIds - chat.id)
+                    unlockedChatSessionIds = unlockedChatSessionIds - chat.id
+                    chats = chats.filter { it.id != chat.id }
+                    chatViewModel?.deleteChat(chat.id)
+                    showToast("Chat deleted")
+                }
             },
 
             onViewStoryAnalytics = { story ->
@@ -2722,30 +2706,34 @@ private fun ChatScreenContent(
                 // -- Biometric lock state (declared here so overlay can reference them) --
                 val isCurrentChatLocked = activeChatId in lockedChatIds && activeChatId !in unlockedChatSessionIds
 
-                // Guard: only auto-prompt once per chat session to avoid repeated dialogs
-                var biometricAutoPrompted by remember(activeChatId) { mutableStateOf(false) }
+                // Guard: only auto-prompt once per locked entry to avoid repeated dialogs
+                var biometricAutoPrompted by remember(activeChatId, isCurrentChatLocked) { mutableStateOf(false) }
 
                 LaunchedEffect(activeChatId, isCurrentChatLocked) {
                     if (isCurrentChatLocked && !biometricAutoPrompted) {
                         biometricAutoPrompted = true
-                        kotlinx.coroutines.delay(200)
-                        val activity = context as? android.app.Activity
-                        if (activity != null) {
+                        kotlinx.coroutines.delay(180)
+                        val activity = context.findActivity()
+                        if (activity != null && !com.chroma.studio.chat.util.BiometricHelper.isPromptShowing) {
                             com.chroma.studio.chat.util.BiometricHelper.authenticate(
                                 activity = activity,
                                 title = "Unlock ${activeChat.name}",
-                                subtitle = "Verify identity to unveil locked conversation",
+                                subtitle = "Verify your identity to view this locked conversation",
                                 onSuccess = {
                                     unlockedChatSessionIds = unlockedChatSessionIds + activeChatId
                                 },
-                                onError = {
-                                    // User skipped or cancelled — blur shield stays up
+                                onCancel = {
+                                    // User dismissed prompt — keep privacy shield up
+                                },
+                                onError = { err ->
+                                    showToast(err)
                                 }
                             )
                         }
                     }
                 }
 
+                if (!isCurrentChatLocked) {
                 Column(
 
                     modifier = Modifier
@@ -3565,6 +3553,7 @@ private fun ChatScreenContent(
 
                 }
             }
+                } // end if (!isCurrentChatLocked)
 
                 // Full-screen Biometric Privacy Shield (covers header + messages)
                 // Rendered inside the outer Box so it sits above the ChatHeader.
@@ -3660,20 +3649,11 @@ private fun ChatScreenContent(
                                     .background(colors.iosBlue)
                                     .clickable {
                                         SoundManager.playReaction()
-                                        val activity = context as? android.app.Activity
-                                        if (activity != null) {
-                                            biometricAutoPrompted = false
-                                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                                activity = activity,
-                                                title = "Unlock ${activeChat.name}",
-                                                subtitle = "Authenticate to unveil conversation",
-                                                onSuccess = {
-                                                    unlockedChatSessionIds = unlockedChatSessionIds + activeChatId
-                                                },
-                                                onError = {
-                                                    // Stay on lock screen
-                                                }
-                                            )
+                                        runBiometricProtected(
+                                            title = "Unlock ${activeChat.name}",
+                                            subtitle = "Verify your identity to view this conversation"
+                                        ) {
+                                            unlockedChatSessionIds = unlockedChatSessionIds + activeChatId
                                         }
                                     },
                                 contentAlignment = Alignment.Center
@@ -3892,6 +3872,16 @@ private fun ChatScreenContent(
 
                     showToast(if (nextMuted) "Notifications muted" else "Notifications unmuted")
 
+                },
+
+                isChatLocked = activeChatId in lockedChatIds,
+
+                onToggleLockChat = {
+                    val wasLocked = activeChatId in lockedChatIds
+                    toggleLockForChats(listOf(activeChatId), singleChatName = activeChat.name)
+                    if (!wasLocked) {
+                        isContactDrawerOpen = false
+                    }
                 },
 
                 onReportUser = {
@@ -6284,6 +6274,99 @@ private fun ChatScreenContent(
             modifier = Modifier.align(Alignment.TopCenter)
 
         )
+
+        // Full-screen Messages App Screen Lock Shield (when enabled in Chat Settings)
+        if (isAppScreenLockEnabled && !isAppScreenUnlocked) {
+            var appLockAutoPrompted by remember { mutableStateOf(false) }
+            LaunchedEffect(isAppScreenLockEnabled, isAppScreenUnlocked) {
+                if (isAppScreenLockEnabled && !isAppScreenUnlocked && !appLockAutoPrompted) {
+                    appLockAutoPrompted = true
+                    kotlinx.coroutines.delay(180)
+                    runBiometricProtected(
+                        title = "Unlock Messages",
+                        subtitle = "Verify your identity to access your conversations"
+                    ) {
+                        isAppScreenUnlocked = true
+                    }
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(500f)
+                    .background(if (colors.isLight) Color(0xFFF2F4F7) else Color(0xFF0A0A0D))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) {},
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 36.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(88.dp)
+                            .clip(CircleShape)
+                            .background(if (colors.isLight) Color.White else Color(0xFF1C1C1E))
+                            .border(1.5.dp, colors.iosBlue.copy(alpha = 0.45f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LucideLock(tint = colors.iosBlue, size = 38.dp)
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = "Messages Locked",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textDark,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Authenticate with Biometrics or PIN to open your chats.",
+                        fontSize = 14.sp,
+                        color = colors.textMuted,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(28.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.72f)
+                            .height(50.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.iosBlue)
+                            .clickable {
+                                SoundManager.playReaction()
+                                runBiometricProtected(
+                                    title = "Unlock Messages",
+                                    subtitle = "Verify your identity to access your conversations"
+                                ) {
+                                    isAppScreenUnlocked = true
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            LucideLock(tint = Color.White, size = 18.dp)
+                            Text(
+                                text = "Unlock Messages",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
     }
 

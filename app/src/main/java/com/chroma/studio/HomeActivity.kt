@@ -6,7 +6,7 @@ import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -75,7 +75,7 @@ import androidx.compose.ui.platform.LocalContext
 
 @androidx.compose.material3.ExperimentalMaterial3Api
 @androidx.compose.foundation.ExperimentalFoundationApi
-class HomeActivity : ComponentActivity() {
+class HomeActivity : FragmentActivity() {
 
 @Composable
 private fun AuthenticatedRoute(

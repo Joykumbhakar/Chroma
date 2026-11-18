@@ -262,6 +262,8 @@ fun ContactInfoDrawer(
     onShareProfile: () -> Unit = {},
     onAddToFavorites: () -> Unit = {},
     onMuteNotifications: () -> Unit = {},
+    isChatLocked: Boolean = false,
+    onToggleLockChat: (() -> Unit)? = null,
     onReportUser: () -> Unit = {},
     onBlockUser: () -> Unit = {},
     onUpdateGroupAvatar: ((String) -> Unit)? = null,
@@ -614,6 +616,8 @@ fun ContactInfoDrawer(
                     ContactInfoActionsAndDangerGroup(
                         chat = chat,
                         isGroup = isGroup,
+                        isChatLocked = isChatLocked,
+                        onToggleLockChat = onToggleLockChat,
                         onShareProfile = onShareProfile,
                         onMuteNotifications = onMuteNotifications,
                         onSendMessage = onSendMessage,
@@ -1558,6 +1562,8 @@ private fun ContactInfoSharedContentSection(
 private fun ContactInfoActionsAndDangerGroup(
     chat: ChatConversation,
     isGroup: Boolean,
+    isChatLocked: Boolean = false,
+    onToggleLockChat: (() -> Unit)? = null,
     onShareProfile: () -> Unit,
     onMuteNotifications: () -> Unit,
     onSendMessage: () -> Unit,
@@ -1597,6 +1603,22 @@ private fun ContactInfoActionsAndDangerGroup(
                     color = colors.iosBlue,
                     fontWeight = FontWeight.Normal
                 )
+            }
+            if (onToggleLockChat != null) {
+                HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onToggleLockChat() }
+                        .padding(horizontal = 16.dp, vertical = 13.dp)
+                ) {
+                    Text(
+                        text = if (isChatLocked) "Remove Biometric Lock" else "Lock Group with Biometrics",
+                        fontSize = 16.5.sp,
+                        color = colors.iosBlue,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
             }
         }
 
@@ -1661,6 +1683,22 @@ private fun ContactInfoActionsAndDangerGroup(
                     .padding(horizontal = 16.dp, vertical = 13.dp)
             ) {
                 Text("Add to Favorites", fontSize = 16.5.sp, color = colors.iosBlue, fontWeight = FontWeight.Normal)
+            }
+            if (onToggleLockChat != null) {
+                HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onToggleLockChat() }
+                        .padding(horizontal = 16.dp, vertical = 13.dp)
+                ) {
+                    Text(
+                        text = if (isChatLocked) "Remove Biometric Lock" else "Lock Chat with Biometrics",
+                        fontSize = 16.5.sp,
+                        color = colors.iosBlue,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
             }
         }
 

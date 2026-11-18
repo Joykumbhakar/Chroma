@@ -2,6 +2,7 @@
 package com.chroma.studio.chat.ui.components
 
 import android.content.Context
+import com.chroma.studio.chat.util.findActivity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -87,11 +88,17 @@ fun ProfileSettingsScreen(
     var isDataStorageModalOpen by remember { mutableStateOf(false) }
     var isAboutModalOpen by remember { mutableStateOf(false) }
 
+    val chatSecurityPrefs = remember(context) {
+        context.getSharedPreferences("chroma_chat_security_prefs", android.content.Context.MODE_PRIVATE)
+    }
+
     // Toggle states
     var soundsEnabled by remember { mutableStateOf(SoundManager.isSoundsEnabled) }
     var hapticsEnabled by remember { mutableStateOf(true) }
     var readReceiptsEnabled by remember { mutableStateOf(true) }
-    var screenLockEnabled by remember { mutableStateOf(false) }
+    var screenLockEnabled by remember {
+        mutableStateOf(chatSecurityPrefs.getBoolean("chat_screen_lock_enabled", false))
+    }
 
     // Cache calculation
     var cacheSizeMb by remember { mutableFloatStateOf(14.8f) }
@@ -412,13 +419,28 @@ fun ProfileSettingsScreen(
 
                     // Screen Lock Toggle
                     SettingsToggleRow(
-                        icon = { LucideLock(tint = Color(0xFF34C759), size = 18.dp) },
+                        icon = { LucideLock(tint = Color(0xFF0381FE), size = 18.dp) },
                         title = "App Screen Lock",
                         subtitle = "Require Biometrics / PIN to access conversations",
                         checked = screenLockEnabled,
-                        onCheckedChange = {
-                            screenLockEnabled = it
-                            onShowToast(if (it) "Screen lock enabled" else "Screen lock disabled")
+                        onCheckedChange = { enable ->
+                            val act = context.findActivity()
+                            if (act == null) {
+                                onShowToast("Biometric authentication unavailable on this screen")
+                            } else {
+                                com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                    activity = act,
+                                    title = if (enable) "Enable App Screen Lock" else "Disable App Screen Lock",
+                                    subtitle = if (enable) "Verify your identity to lock Messages" else "Verify your identity to turn off screen lock",
+                                    onSuccess = {
+                                        screenLockEnabled = enable
+                                        chatSecurityPrefs.edit().putBoolean("chat_screen_lock_enabled", enable).apply()
+                                        onShowToast(if (enable) "Screen lock enabled" else "Screen lock disabled")
+                                    },
+                                    onCancel = {},
+                                    onError = { err -> onShowToast(err) }
+                                )
+                            }
                         }
                     )
 

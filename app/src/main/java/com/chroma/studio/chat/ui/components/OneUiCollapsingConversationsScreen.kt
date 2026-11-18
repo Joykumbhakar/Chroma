@@ -412,15 +412,16 @@ fun OneUiCollapsingConversationsScreen(
     val totalUnreadMessages = remember(chats) { chats.sumOf { it.unreadCount } }
     val filteredChats = remember(chats, activeTab, searchQuery, pinnedChatIds, lockedChatIds) {
         val base = chats.filter { chat ->
+            val isLocked = chat.id in lockedChatIds
             val matchesSearch = searchQuery.isBlank() ||
                 chat.name.contains(searchQuery, ignoreCase = true) ||
-                chat.messages.lastOrNull()?.text?.contains(searchQuery, ignoreCase = true) == true
+                (!isLocked && chat.messages.lastOrNull()?.text?.contains(searchQuery, ignoreCase = true) == true)
             val matchesTab = when (activeTab.lowercase()) {
                 "unread" -> chat.unreadCount > 0
                 "groups", "group" -> chat.type == "group"
                 "direct" -> chat.type == "direct"
                 "pinned", "favorites" -> chat.id in pinnedChatIds
-                "locked" -> chat.id in lockedChatIds
+                "locked" -> isLocked
                 else -> true
             }
             matchesSearch && matchesTab
