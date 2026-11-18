@@ -898,8 +898,11 @@ data class FcpEditorSnapshot(
     val textLayers: List<FcpTextLayer>,
     val customAudio: FcpCustomAudio?
 )
+private val fcpPhotoMimeCache = java.util.concurrent.ConcurrentHashMap<Uri, Boolean>()
 fun isClipPhoto(context: Context, clip: FcpClip): Boolean =
-    FcpTimelineExporter.isImageClip(context, clip)
+    fcpPhotoMimeCache.getOrPut(clip.uri) {
+        FcpTimelineExporter.isImageClip(context, clip)
+    }
 private fun queryMediaFileName(context: Context, uri: Uri): String {
     var name: String? = null
     if (uri.scheme == "content") {
@@ -1330,14 +1333,14 @@ fun FinalCutProVideoEditorScreen(
             }
         }
     }
-    // ── ExoPlayer Engine (Low Latency Realtime LoadControl) ───────────────
+    // ── ExoPlayer Engine (Smooth Realtime LoadControl) ───────────────────
     val exoPlayer = remember {
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 1500,
-                /* maxBufferMs = */ 5000,
-                /* bufferForPlaybackMs = */ 60,
-                /* bufferForPlaybackAfterRebufferMs = */ 120
+                /* minBufferMs = */ 2000,
+                /* maxBufferMs = */ 6000,
+                /* bufferForPlaybackMs = */ 250,
+                /* bufferForPlaybackAfterRebufferMs = */ 500
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -1350,7 +1353,11 @@ fun FinalCutProVideoEditorScreen(
                 addListener(object : Player.Listener {
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         android.util.Log.e("FinalCutProVideoEditor", "ExoPlayer playback error: ${error.errorCodeName} - ${error.message}", error)
-                        isPlaying = false
+                        // Only stop timeline playback if the active clip is actually a video clip
+                        val activeClipNow = clips.find { it.id == selectedId }
+                        if (activeClipNow == null || !isClipPhoto(context, activeClipNow)) {
+                            isPlaying = false
+                        }
                     }
                 })
             }
@@ -1416,7 +1423,9 @@ fun FinalCutProVideoEditorScreen(
     }
     // ── Dedicated Soundtrack Previewer (independent from the timeline clock) ──────────
     val audioPreviewPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
+        ExoPlayer.Builder(context)
+            .setLoadControl(com.chroma.studio.utils.DevicePerformanceManager.createOptimizedLoadControl(context, forEditor = true))
+            .build().apply {
             playWhenReady = false
             repeatMode = Player.REPEAT_MODE_OFF
             addListener(object : Player.Listener {
@@ -1428,6 +1437,20 @@ fun FinalCutProVideoEditorScreen(
     }
     DisposableEffect(Unit) {
         onDispose { audioPreviewPlayer.release() }
+    }
+    // Pause all editor players cleanly when the app is backgrounded or screen locks
+    val editorLifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(editorLifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
+                isPlaying = false
+                try { exoPlayer.playWhenReady = false; if (exoPlayer.isPlaying) exoPlayer.pause() } catch (_: Throwable) {}
+                try { customAudioPlayer.playWhenReady = false; if (customAudioPlayer.isPlaying) customAudioPlayer.pause() } catch (_: Throwable) {}
+                try { audioPreviewPlayer.playWhenReady = false; if (audioPreviewPlayer.isPlaying) audioPreviewPlayer.pause() } catch (_: Throwable) {}
+            }
+        }
+        editorLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { editorLifecycleOwner.lifecycle.removeObserver(observer) }
     }
     var isAudioPreviewing by remember { mutableStateOf(false) }
     // Preview playhead, in seconds relative to the trimmed segment start (0..trimmedLengthSec)
@@ -1767,6 +1790,7 @@ fun FinalCutProVideoEditorScreen(
     }
     var lastPlayerSeekMs by remember { mutableLongStateOf(0L) }
     var isClipSwitching by remember { mutableStateOf(false) }
+    var clipSwitchStartUptimeMs by remember { mutableLongStateOf(0L) }
     fun ensureClipLoadedInPlayer(
         clip: FcpClip,
         targetMediaSec: Float,
@@ -1775,11 +1799,24 @@ fun FinalCutProVideoEditorScreen(
         forceExactSeek: Boolean = true
     ) {
         if (isExporting) return
+        // Photo clips are rendered via Compose AsyncImage and driven by the display clock —
+        // NEVER feed an image URI into ExoPlayer (doing so throws PlaybackException & stops playback!).
+        if (isClipPhoto(clip)) {
+            isClipSwitching = false
+            loadedClipId = clip.id
+            loadedClipUri = null
+            try {
+                exoPlayer.playWhenReady = false
+                if (exoPlayer.isPlaying) exoPlayer.pause()
+            } catch (_: Throwable) {}
+            return
+        }
         val mediaMs = (targetMediaSec * 1000f).toLong().coerceAtLeast(0L)
         val isDifferentClip = loadedClipId != clip.id
-        val isDifferentUri = loadedClipUri != clip.uri
-        if (isDifferentClip && shouldPlay) {
+        val isDifferentUri = loadedClipUri != clip.uri || exoPlayer.mediaItemCount == 0
+        if ((isDifferentClip || isDifferentUri) && shouldPlay) {
             isClipSwitching = true
+            clipSwitchStartUptimeMs = SystemClock.uptimeMillis()
         } else if (!shouldPlay) {
             isClipSwitching = false
         }
@@ -1790,14 +1827,15 @@ fun FinalCutProVideoEditorScreen(
             exoPlayer.setSeekParameters(if (seamlessTransition) SeekParameters.CLOSEST_SYNC else SeekParameters.EXACT)
             exoPlayer.setMediaItem(MediaItem.fromUri(clip.uri), mediaMs)
             exoPlayer.prepare()
-            exoPlayer.setPlaybackSpeed(clip.speed)
+            exoPlayer.setPlaybackSpeed(clip.speed.coerceAtLeast(0.1f))
         } else {
             // Same media URI (e.g. split clip or reused media)
             if (exoPlayer.playbackState == Player.STATE_IDLE || exoPlayer.playbackState == Player.STATE_ENDED) {
                 exoPlayer.prepare()
             }
-            if (abs(exoPlayer.playbackParameters.speed - clip.speed) > 0.01f) {
-                exoPlayer.setPlaybackSpeed(clip.speed)
+            val safeSpeed = clip.speed.coerceAtLeast(0.1f)
+            if (abs(exoPlayer.playbackParameters.speed - safeSpeed) > 0.01f) {
+                exoPlayer.setPlaybackSpeed(safeSpeed)
             }
             val currentPosMs = exoPlayer.currentPosition
             val shouldSeek = isDifferentClip || if (seamlessTransition) {
@@ -1805,7 +1843,7 @@ fun FinalCutProVideoEditorScreen(
             } else if (!forceExactSeek) {
                 abs(lastPlayerSeekMs - mediaMs) >= 24L
             } else {
-                true
+                abs(currentPosMs - mediaMs) > 35L
             }
             if (shouldSeek) {
                 lastPlayerSeekMs = mediaMs
@@ -1962,9 +2000,46 @@ fun FinalCutProVideoEditorScreen(
             forceExactSeek = true
         )
     }
-    // Load initial or selected clip into ExoPlayer (only when stopped/paused)
-    LaunchedEffect(selectedId) {
-        if (isPlaying) return@LaunchedEffect
+    fun togglePlayback(): Boolean {
+        if (isExporting) return isPlaying
+        val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
+        if (isAtEnd) {
+            seekToGlobalTime(0f, autoPlay = true)
+            return true
+        }
+        val nextPlay = !isPlaying
+        if (nextPlay) {
+            val span = getActiveSpanAt(currentTimeSec)
+            if (span != null) {
+                if (selectedId != span.clip.id) selectedId = span.clip.id
+                isPlaying = true
+                val targetMediaSec = getMediaTimeForGlobal(span, currentTimeSec)
+                ensureClipLoadedInPlayer(
+                    clip = span.clip,
+                    targetMediaSec = targetMediaSec,
+                    shouldPlay = true,
+                    forceExactSeek = false
+                )
+            } else {
+                isPlaying = false
+            }
+        } else {
+            isPlaying = false
+            isClipSwitching = false
+            try {
+                exoPlayer.playWhenReady = false
+                if (exoPlayer.isPlaying) exoPlayer.pause()
+            } catch (_: Throwable) {}
+            try {
+                customAudioPlayer.playWhenReady = false
+                if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
+            } catch (_: Throwable) {}
+        }
+        return isPlaying
+    }
+    // Load initial or selected clip into ExoPlayer (only when stopped/paused and not scrubbing)
+    LaunchedEffect(selectedId, clips.firstOrNull()?.id) {
+        if (isPlaying || isUserScrubbing) return@LaunchedEffect
         val clip = clips.find { it.id == selectedId } ?: clips.firstOrNull()
         if (clip != null) {
             val span = timelineSpans.find { it.clip.id == clip.id }
@@ -2024,7 +2099,17 @@ fun FinalCutProVideoEditorScreen(
         }
     }
     // High precision master playback clock & timeline sync (Lockstep hardware clock, buttery smooth playback)
-    LaunchedEffect(isPlaying, isUserScrubbing, clips, isAutoReplay, customAudio) {
+    val latestTimelineSpans by rememberUpdatedState(timelineSpans)
+    val latestTotalDurationSec by rememberUpdatedState(totalDurationSec)
+    val latestIsAutoReplay by rememberUpdatedState(isAutoReplay)
+    val latestCustomAudio by rememberUpdatedState(customAudio)
+    val latestSeekToGlobalTime by rememberUpdatedState<(Float, Boolean?) -> Unit>({ t, autoPlay ->
+        seekToGlobalTime(t, autoPlay)
+    })
+    val latestEnsureClipLoaded by rememberUpdatedState<(FcpClip, Float, Boolean, Boolean, Boolean) -> Unit>({ c, sec, play, seamless, exact ->
+        ensureClipLoadedInPlayer(c, sec, play, seamless, exact)
+    })
+    LaunchedEffect(isPlaying, isUserScrubbing) {
         if (!isPlaying || isUserScrubbing) return@LaunchedEffect
         var lastFrameNanos = 0L
         while (isActive && isPlaying && !isUserScrubbing) {
@@ -2036,38 +2121,42 @@ fun FinalCutProVideoEditorScreen(
                 val dtNanos = frameTimeNanos - lastFrameNanos
                 lastFrameNanos = frameTimeNanos
                 val dtSec = (dtNanos / 1_000_000_000f).coerceIn(0f, 0.05f)
-                val curSpan = getActiveSpanAt(currentTimeSec)
+                val spansNow = latestTimelineSpans
+                val totalDurNow = latestTotalDurationSec
+                val curSpan = spansNow.find { currentTimeSec >= it.timelineStartSec && currentTimeSec < it.timelineEndSec }
+                    ?: spansNow.lastOrNull()
                 if (curSpan == null) return@withFrameNanos
                 val clip = curSpan.clip
                 val isPhoto = isClipPhoto(clip)
-                val curSpanIdx = timelineSpans.indexOfFirst { it.clip.id == clip.id }
+                val curSpanIdx = spansNow.indexOfFirst { it.clip.id == clip.id }
+
+                fun advanceToNextOrEnd() {
+                    val nextSpan = spansNow.getOrNull(curSpanIdx + 1)
+                    if (nextSpan != null) {
+                        val nextClip = nextSpan.clip
+                        selectedId = nextClip.id
+                        currentTimeSec = nextSpan.timelineStartSec
+                        latestEnsureClipLoaded(nextClip, nextClip.trimStartSec, true, true, true)
+                    } else if (latestIsAutoReplay) {
+                        latestSeekToGlobalTime(0f, true)
+                    } else {
+                        currentTimeSec = totalDurNow
+                        isPlaying = false
+                        isClipSwitching = false
+                        try { exoPlayer.playWhenReady = false; exoPlayer.pause() } catch (_: Throwable) {}
+                        try { customAudioPlayer.playWhenReady = false; if (customAudioPlayer.isPlaying) customAudioPlayer.pause() } catch (_: Throwable) {}
+                    }
+                }
+
                 if (isPhoto) {
-                    // Photo clip playback: smoothly advanced by display clock
-                    val speed = clip.speed.coerceAtLeast(0.1f)
-                    val nextTime = currentTimeSec + (dtSec * speed)
+                    // Photo clip playback: timeline duration already accounts for clip.speed, so 1s wall clock = 1s timeline
+                    isClipSwitching = false
+                    if (exoPlayer.isPlaying) {
+                        try { exoPlayer.playWhenReady = false; exoPlayer.pause() } catch (_: Throwable) {}
+                    }
+                    val nextTime = currentTimeSec + dtSec
                     if (nextTime >= curSpan.timelineEndSec) {
-                        val nextSpan = timelineSpans.getOrNull(curSpanIdx + 1)
-                        if (nextSpan != null) {
-                            val nextClip = nextSpan.clip
-                            selectedId = nextClip.id
-                            currentTimeSec = nextSpan.timelineStartSec
-                            isClipSwitching = true
-                            ensureClipLoadedInPlayer(
-                                clip = nextClip,
-                                targetMediaSec = nextClip.trimStartSec,
-                                shouldPlay = true,
-                                seamlessTransition = true
-                            )
-                        } else {
-                            if (isAutoReplay) {
-                                seekToGlobalTime(0f, autoPlay = true)
-                            } else {
-                                currentTimeSec = totalDurationSec
-                                isPlaying = false
-                                exoPlayer.pause()
-                                if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
-                            }
-                        }
+                        advanceToNextOrEnd()
                     } else {
                         currentTimeSec = nextTime
                     }
@@ -2076,96 +2165,60 @@ fun FinalCutProVideoEditorScreen(
                     val speed = clip.speed.coerceAtLeast(0.1f)
                     val playerState = exoPlayer.playbackState
                     val isPlayerPlaying = exoPlayer.isPlaying
-                    val isPlayerReadyForClip = !isClipSwitching && loadedClipId == clip.id && playerState == Player.STATE_READY
+                    if (loadedClipId != clip.id || loadedClipUri != clip.uri || exoPlayer.mediaItemCount == 0) {
+                        // Ensure the current video clip is actually loaded in ExoPlayer (e.g., after returning from photo or idle)
+                        val timelineOffset = (currentTimeSec - curSpan.timelineStartSec).coerceIn(0f, curSpan.durationSec)
+                        val targetMediaSec = (clip.trimStartSec + timelineOffset * speed).coerceIn(clip.trimStartSec, clip.trimEndSec)
+                        latestEnsureClipLoaded(clip, targetMediaSec, true, true, true)
+                        return@withFrameNanos
+                    }
                     if (isClipSwitching) {
-                        // ExoPlayer is loading/buffering next clip: advance playhead monotonically on display clock so it NEVER freezes
-                        if (isPlayerPlaying && playerState == Player.STATE_READY && loadedClipId == clip.id) {
-                            isClipSwitching = false
-                        } else {
-                            val nextTime = currentTimeSec + (dtSec * speed)
-                            currentTimeSec = nextTime.coerceAtMost(curSpan.timelineEndSec)
-                            if (exoPlayer.playWhenReady && playerState == Player.STATE_READY && !exoPlayer.isPlaying) {
+                        // Wait cleanly for ExoPlayer to prime the switched clip without running the playhead ahead & snapping back
+                        val switchElapsedMs = SystemClock.uptimeMillis() - clipSwitchStartUptimeMs
+                        if (playerState == Player.STATE_READY) {
+                            if (exoPlayer.playWhenReady && !isPlayerPlaying) {
                                 exoPlayer.play()
                             }
-                            return@withFrameNanos
+                            if (isPlayerPlaying || switchElapsedMs > 180L) {
+                                isClipSwitching = false
+                            }
+                        } else if (playerState == Player.STATE_ENDED || switchElapsedMs > 2500L) {
+                            isClipSwitching = false
+                            advanceToNextOrEnd()
+                        } else if (playerState == Player.STATE_IDLE) {
+                            exoPlayer.prepare()
+                            exoPlayer.playWhenReady = true
                         }
+                        return@withFrameNanos
                     }
                     val playerPosSec = exoPlayer.currentPosition / 1000f
                     val boundaryThreshold = (0.04f * speed).coerceIn(0.02f, 0.08f)
-                    if (isPlayerReadyForClip && isPlayerPlaying) {
-                        val currentGlobalSec = getGlobalTimeForMedia(curSpan, playerPosSec)
+                    if (playerState == Player.STATE_READY && isPlayerPlaying) {
+                        val mediaOffset = (playerPosSec - clip.trimStartSec).coerceAtLeast(0f)
+                        val currentGlobalSec = (curSpan.timelineStartSec + (mediaOffset / speed)).coerceIn(0f, totalDurNow)
                         val isAtBoundary = (playerPosSec >= clip.trimEndSec - boundaryThreshold && playerPosSec >= clip.trimStartSec - 0.1f) ||
                                 (currentGlobalSec >= curSpan.timelineEndSec - boundaryThreshold)
                         if (isAtBoundary) {
-                            // Reached cut boundary! Seamlessly transition to next clip
-                            val nextSpan = timelineSpans.getOrNull(curSpanIdx + 1)
-                            if (nextSpan != null) {
-                                val nextClip = nextSpan.clip
-                                selectedId = nextClip.id
-                                currentTimeSec = nextSpan.timelineStartSec
-                                isClipSwitching = true
-                                ensureClipLoadedInPlayer(
-                                    clip = nextClip,
-                                    targetMediaSec = nextClip.trimStartSec,
-                                    shouldPlay = true,
-                                    seamlessTransition = true
-                                )
-                            } else {
-                                if (isAutoReplay) {
-                                    seekToGlobalTime(0f, autoPlay = true)
-                                } else {
-                                    currentTimeSec = totalDurationSec
-                                    isPlaying = false
-                                    exoPlayer.pause()
-                                    if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
-                                }
-                            }
+                            advanceToNextOrEnd()
                         } else {
-                            // Hardware Clock Smooth Pacing with Soft Convergence
-                            val steppedTime = currentTimeSec + (dtSec * speed)
+                            // Hardware Clock Smooth Pacing (1s real time = 1s timeline time)
+                            val steppedTime = currentTimeSec + dtSec
                             val drift = currentGlobalSec - steppedTime
                             val convergedTime = if (abs(drift) > 0.25f) {
                                 currentGlobalSec
                             } else {
-                                steppedTime + (drift * 0.18f)
+                                steppedTime + (drift * 0.22f)
                             }
                             currentTimeSec = convergedTime.coerceIn(curSpan.timelineStartSec, curSpan.timelineEndSec)
                         }
-                    } else if (playerState == Player.STATE_ENDED && !isClipSwitching && loadedClipId == clip.id) {
-                        // Media reached end of file before timeline span end
-                        val nextSpan = timelineSpans.getOrNull(curSpanIdx + 1)
-                        if (nextSpan != null) {
-                            val nextClip = nextSpan.clip
-                            selectedId = nextClip.id
-                            currentTimeSec = nextSpan.timelineStartSec
-                            isClipSwitching = true
-                            ensureClipLoadedInPlayer(
-                                clip = nextClip,
-                                targetMediaSec = nextClip.trimStartSec,
-                                shouldPlay = true,
-                                seamlessTransition = true
-                            )
-                        } else {
-                            if (isAutoReplay) {
-                                seekToGlobalTime(0f, autoPlay = true)
-                            } else {
-                                currentTimeSec = totalDurationSec
-                                isPlaying = false
-                                exoPlayer.pause()
-                                if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
-                            }
-                        }
-                    } else {
-                        // Player is preparing or buffering: keep playhead advancing smoothly on display clock
-                        val steppedTime = currentTimeSec + (dtSec * speed)
-                        currentTimeSec = steppedTime.coerceIn(curSpan.timelineStartSec, curSpan.timelineEndSec)
-                        if (!exoPlayer.isPlaying && exoPlayer.playWhenReady && playerState == Player.STATE_READY) {
-                            exoPlayer.play()
-                        }
+                    } else if (playerState == Player.STATE_ENDED) {
+                        advanceToNextOrEnd()
+                    } else if (playerState == Player.STATE_READY && exoPlayer.playWhenReady && !isPlayerPlaying) {
+                        exoPlayer.play()
                     }
                 }
                 // Master soundtrack synchronization & dynamic tempo smoothing (Rock-solid, glitch-free audio)
-                val soundtrack = customAudio
+                val soundtrack = latestCustomAudio
                 if (soundtrack != null && isPlaying) {
                     val audioState = customAudioPlayer.playbackState
                     val nowUptime = SystemClock.uptimeMillis()
@@ -2624,6 +2677,7 @@ fun FinalCutProVideoEditorScreen(
                 val currentSelectedId by rememberUpdatedState(selectedId)
                 val currentIsPlaying by rememberUpdatedState(isPlaying)
                 val currentTotalDuration by rememberUpdatedState(totalDurationSec)
+                val currentTogglePlayback by rememberUpdatedState<() -> Boolean>({ togglePlayback() })
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -2702,6 +2756,9 @@ fun FinalCutProVideoEditorScreen(
                         timeSec = clipElapsedSec,
                         progress = clipFrac
                     )
+                    val isCurrentClipPhoto = remember(activeClip?.uri) {
+                        activeClip?.let { isClipPhoto(it) } ?: false
+                    }
                     AndroidView(
                         factory = { ctx ->
                             val aspectRatioLayout = AspectRatioFrameLayout(ctx).apply {
@@ -2709,6 +2766,10 @@ fun FinalCutProVideoEditorScreen(
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                 isClickable = false
                                 isFocusable = false
+                                val vs = exoPlayer.videoSize
+                                if (vs.width > 0 && vs.height > 0) {
+                                    setAspectRatio((vs.width * vs.pixelWidthHeightRatio) / vs.height)
+                                }
                             }
                             aspectRatioLayoutRef = aspectRatioLayout
                             val textureView = TextureView(ctx).apply {
@@ -2734,6 +2795,7 @@ fun FinalCutProVideoEditorScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
+                                alpha = if (isCurrentClipPhoto) 0f else 1f
                                 val baseScaleX = if (activeClip?.isMirrored == true) -activeScale else activeScale
                                 scaleX = baseScaleX * animTransforms.scale
                                 scaleY = activeScale * animTransforms.scale
@@ -2746,9 +2808,6 @@ fun FinalCutProVideoEditorScreen(
                             }
                     )
                     // Photo Overlay for Image Clips
-                    val isCurrentClipPhoto = remember(activeClip?.uri) {
-                        activeClip?.let { isClipPhoto(it) } ?: false
-                    }
                     if (isCurrentClipPhoto && activeClip != null) {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
@@ -2913,26 +2972,9 @@ fun FinalCutProVideoEditorScreen(
                                                     if (isExporting) return@launch
                                                     kotlinx.coroutines.delay(260L)
                                                     if (isExporting) return@launch
-                                                    val isAtEnd = currentTotalDuration > 0f && currentTimeSec >= currentTotalDuration - 0.08f
-                                                    if (isAtEnd) {
-                                                        seekToGlobalTime(0f, autoPlay = true)
-                                                        triggerOverlayFlash(true)
-                                                    } else {
-                                                        val nextPlay = !currentIsPlaying
-                                                        if (nextPlay) {
-                                                            if (exoPlayer.playbackState == Player.STATE_IDLE || exoPlayer.playbackState == Player.STATE_ENDED) {
-                                                                exoPlayer.prepare()
-                                                            }
-                                                            exoPlayer.play()
-                                                            isPlaying = true
-                                                            triggerOverlayFlash(true)
-                                                        } else {
-                                                            exoPlayer.pause()
-                                                            isPlaying = false
-                                                            triggerOverlayFlash(false)
-                                                        }
-                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    }
+                                                    val nowPlaying = currentTogglePlayback()
+                                                    triggerOverlayFlash(nowPlaying)
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 }
                                             }
                                         }
@@ -3412,19 +3454,7 @@ fun FinalCutProVideoEditorScreen(
                                         onPlayToggle = {
                                             if (!isExporting) {
                                                 SoundManager.playTap(context)
-                                                val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
-                                                if (isAtEnd) {
-                                                    seekToGlobalTime(0f, autoPlay = true)
-                                                } else {
-                                                    val nextPlaying = !isPlaying
-                                                    if (nextPlaying) {
-                                                        isPlaying = true
-                                                        exoPlayer.play()
-                                                    } else {
-                                                        isPlaying = false
-                                                        exoPlayer.pause()
-                                                    }
-                                                }
+                                                togglePlayback()
                                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                             }
                                         },
