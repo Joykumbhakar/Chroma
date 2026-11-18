@@ -130,35 +130,35 @@ class ChatViewModel : ViewModel() {
     val mutedChatIds: StateFlow<Set<String>> = _mutedChatIds.asStateFlow()
 
     init {
-        // Immediately load recent chats from local storage so conversation list appears on Frame 0 offline
-        try {
-            val cachedChats = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedRecentChats(
-                com.chroma.studio.ChromaApp.instance
-            )
-            if (cachedChats.isNotEmpty()) {
-                _recentChats.value = cachedChats
-                _isLoadingChats.value = false
-            }
-        } catch (_: Exception) {}
-
         val initialUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         val initialUid = initialUser?.uid
         if (!initialUid.isNullOrBlank()) {
-            currentAuthUserId = initialUid
+            // Immediately load recent chats strictly scoped to this UID for Frame 0 offline launch
+            try {
+                val cachedChats = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedRecentChats(
+                    com.chroma.studio.ChromaApp.instance,
+                    initialUid
+                )
+                if (cachedChats.isNotEmpty()) {
+                    _recentChats.value = cachedChats
+                    _isLoadingChats.value = false
+                }
+            } catch (_: Exception) {}
             reloadForUser(initialUid)
         } else {
+            _recentChats.value = emptyList()
             _isLoadingChats.value = false
         }
 
         authStateListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { auth ->
             val newUid = auth.currentUser?.uid
-            if (newUid != currentAuthUserId) {
-                val oldUid = currentAuthUserId
-                currentAuthUserId = newUid
+            val oldUid = currentAuthUserId
+            if (newUid != oldUid) {
+                if (oldUid != null) {
+                    resetForLogout()
+                }
                 if (!newUid.isNullOrBlank()) {
                     reloadForUser(newUid)
-                } else if (oldUid != null) {
-                    resetForLogout()
                 }
             }
         }
@@ -279,29 +279,29 @@ class ChatViewModel : ViewModel() {
         chatsJob = viewModelScope.launch {
             _isLoadingChats.value = true
             try {
-                repository.observeRecentChats(currentUid).collect { chats ->
-                    if (chats.isNotEmpty()) {
-                        _recentChats.value = chats
-                        _isLoadingChats.value = false
-                        try {
-                            com.chroma.studio.chat.data.ChatLocalCacheManager.saveRecentChats(
-                                com.chroma.studio.ChromaApp.instance,
-                                chats
-                            )
-                        } catch (_: Exception) {}
-                    } else if (_recentChats.value.isEmpty()) {
-                        _recentChats.value = emptyList()
-                        _isLoadingChats.value = false
-                    }
+                repository.observeRecentChats(currentUid).collect { rawChats ->
+                    // Strictly isolate rooms to the active user; never leak another account's chats
+                    if (currentAuthUserId != null && currentAuthUserId != currentUid) return@collect
+                    val chats = rawChats.filter { currentUid in it.participants }
+                    _recentChats.value = chats
+                    _isLoadingChats.value = false
+                    try {
+                        com.chroma.studio.chat.data.ChatLocalCacheManager.saveRecentChats(
+                            com.chroma.studio.ChromaApp.instance,
+                            chats,
+                            currentUid
+                        )
+                    } catch (_: Exception) {}
 
                     // Pre-load top recent chat messages into memory cache in background (0ms open)
-                    try {
-                        com.chroma.studio.chat.data.ChatLocalCacheManager.preloadRooms(
-                            com.chroma.studio.ChromaApp.instance,
-                            chats.map { it.id }
-                        )
-                    } catch (e: Exception) {
-                        // ignore
+                    if (chats.isNotEmpty()) {
+                        try {
+                            com.chroma.studio.chat.data.ChatLocalCacheManager.preloadRooms(
+                                com.chroma.studio.ChromaApp.instance,
+                                chats.map { it.id },
+                                currentUid
+                            )
+                        } catch (_: Exception) {}
                     }
 
                     // Asynchronously fetch profiles for all chat participants
@@ -338,14 +338,24 @@ class ChatViewModel : ViewModel() {
             return
         }
 
-        val isSameUser = currentAuthUserId == uid
-        val isAlreadyObserving = chatsJob?.isActive == true && _recentChats.value.isNotEmpty()
-        if (isSameUser && isAlreadyObserving) {
+        if (currentAuthUserId != null && currentAuthUserId != uid) {
+            // Switching directly from one account to another — wipe all previous account state first
+            resetForLogout()
+        } else if (currentAuthUserId == uid && chatsJob?.isActive == true) {
             return
         }
 
         currentAuthUserId = uid
         com.chroma.studio.ChatStateManager.setCurrentUserId(uid)
+
+        // Seed only this user's isolated cache (empty list if fresh account) so old account data never lingers
+        val scopedCached = try {
+            com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedRecentChats(
+                com.chroma.studio.ChromaApp.instance,
+                uid
+            )
+        } catch (_: Exception) { emptyList() }
+        _recentChats.value = scopedCached
 
         observeChats(uid)
         loadStories()
@@ -425,7 +435,7 @@ class ChatViewModel : ViewModel() {
         _mutedChatIds.value = emptySet()
 
         repository.clearCaches()
-        com.chroma.studio.chat.data.ChatLocalCacheManager.clearMemoryCache()
+        com.chroma.studio.chat.data.ChatLocalCacheManager.clearAllOnLogout(com.chroma.studio.ChromaApp.instance)
         com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = null
         com.chroma.studio.ChatStateManager.clearActiveChat()
         com.chroma.studio.ChatStateManager.setCurrentUserId(null)

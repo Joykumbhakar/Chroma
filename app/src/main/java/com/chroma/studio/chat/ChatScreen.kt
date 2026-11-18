@@ -321,7 +321,16 @@ private fun ChatScreenContent(
 
 
 
-    val currentFirebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+    var authUserState by remember { mutableStateOf(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser) }
+    DisposableEffect(Unit) {
+        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { a ->
+            authUserState = a.currentUser
+        }
+        auth.addAuthStateListener(listener)
+        onDispose { auth.removeAuthStateListener(listener) }
+    }
+    val currentFirebaseUser = authUserState
 
     val currentUid = currentFirebaseUser?.uid ?: ""
 
@@ -426,7 +435,12 @@ private fun ChatScreenContent(
 
 
 
-    val recentRooms by (chatViewModel?.recentChats?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
+    val allRecentRooms by (chatViewModel?.recentChats?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
+    // Defense-in-depth: never render rooms that do not belong to the currently logged-in account
+    val recentRooms = remember(allRecentRooms, currentUid) {
+        if (currentUid.isBlank()) emptyList()
+        else allRecentRooms.filter { currentUid in it.participants }
+    }
 
     val isOtherOnline by (chatViewModel?.isOtherUserOnline?.collectAsState() ?: remember { mutableStateOf(false) })
 
@@ -439,10 +453,16 @@ private fun ChatScreenContent(
     val mutedChatIds by (chatViewModel?.mutedChatIds?.collectAsState() ?: remember { mutableStateOf(emptySet()) })
     val blockedUserIds by (chatViewModel?.blockedUserIds?.collectAsState() ?: remember { mutableStateOf(emptySet()) })
 
-    // Ensure chats are actively observed when ChatScreen is displayed for the current user
+    // Ensure chats are actively observed and UI resets cleanly whenever the logged-in account changes
     LaunchedEffect(currentUid) {
+        if (effectiveRoomId == null) {
+            isInsideChat = false
+            activeChatId = ""
+        }
         if (currentUid.isNotBlank()) {
             chatViewModel?.reloadForUser(currentUid)
+        } else {
+            chatViewModel?.resetForLogout()
         }
     }
 
@@ -1005,7 +1025,7 @@ private fun ChatScreenContent(
             chatSecurityPrefs.getStringSet("locked_chat_ids", emptySet())?.toSet() ?: emptySet()
         )
     }
-    var unlockedChatSessionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var unlockedChatSessionIds by remember(currentUid) { mutableStateOf<Set<String>>(emptySet()) }
     var isAppScreenLockEnabled by remember {
         mutableStateOf(chatSecurityPrefs.getBoolean("chat_screen_lock_enabled", false))
     }

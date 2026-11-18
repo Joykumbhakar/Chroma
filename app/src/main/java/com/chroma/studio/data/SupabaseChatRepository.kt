@@ -513,7 +513,8 @@ class SupabaseChatRepository {
                 if (e != null) {
                     Log.w("SupabaseChatRepository", "Listen failed for chats (offline/error): ${e.message}")
                     val cached = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedRecentChats(
-                        com.chroma.studio.ChromaApp.instance
+                        com.chroma.studio.ChromaApp.instance,
+                        uid
                     )
                     if (cached.isNotEmpty()) {
                         trySend(cached)
@@ -521,7 +522,9 @@ class SupabaseChatRepository {
                     return@addSnapshotListener
                 }
 
-                val rawChats = snapshot?.documents?.mapNotNull { it.toObject(ChatRoom::class.java) } ?: emptyList()
+                val rawChats = snapshot?.documents?.mapNotNull { it.toObject(ChatRoom::class.java) }
+                    ?.filter { uid in it.participants }
+                    ?: emptyList()
                 for (chat in rawChats) {
                     roomParticipantsCache[chat.id] = chat.participants
                     val dAt = chat.deletedAt[uid] ?: 0L
@@ -558,7 +561,8 @@ class SupabaseChatRepository {
                     Log.w("SupabaseChatRepository", "Listen failed for messages in room $roomId (offline/error): ${e.message}")
                     val cached = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedMessages(
                         com.chroma.studio.ChromaApp.instance,
-                        roomId
+                        roomId,
+                        currentUid
                     )
                     if (cached.isNotEmpty()) {
                         trySend(cached)

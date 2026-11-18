@@ -1837,6 +1837,7 @@ private fun UserProfileSettingsAndSignOutSheets(
                 if (onLogout != null) {
                     onLogout()
                 } else {
+                    com.chroma.studio.chat.data.ChatLocalCacheManager.clearAllOnLogout(context)
                     onRequireLogin()
                     scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                         try {
