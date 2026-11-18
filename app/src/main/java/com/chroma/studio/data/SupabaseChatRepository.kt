@@ -516,7 +516,7 @@ class SupabaseChatRepository {
                     if (cached.isNotEmpty()) {
                         trySend(cached)
                     }
-                    close(e)
+                    close()
                     return@addSnapshotListener
                 }
 
@@ -562,7 +562,7 @@ class SupabaseChatRepository {
                     if (cached.isNotEmpty()) {
                         trySend(cached)
                     }
-                    close(e)
+                    close()
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {

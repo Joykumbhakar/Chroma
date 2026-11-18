@@ -8,6 +8,7 @@ import java.util.UUID
 // ──────────────────────────────────────────────────────
 // Social Features / Firestore Models
 // ──────────────────────────────────────────────────────
+@com.google.firebase.firestore.IgnoreExtraProperties
 @Immutable
 data class UserProfile(
     val uid: String = "",
@@ -393,6 +394,7 @@ data class FlashComment(
     val isError: Boolean = false
 )
 
+@com.google.firebase.firestore.IgnoreExtraProperties
 data class FlashVideo(
     val id: String = "",
     val creatorId: String = "",

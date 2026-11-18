@@ -5388,17 +5388,11 @@ private fun ChatScreenContent(
 
                     chats = listOf(newGroupChat) + chats
 
-                    activeChatId = newGroupId
-
-                    isInsideChat = true
-
                     isCreateGroupModalOpen = false
 
                     SoundManager.playSend()
 
                     showToast("Group \"$groupName\" created")
-
-
 
                     if (chatViewModel != null) {
 
@@ -5411,6 +5405,12 @@ private fun ChatScreenContent(
                             isInsideChat = true
 
                         }
+
+                    } else {
+
+                        activeChatId = newGroupId
+
+                        isInsideChat = true
 
                     }
 

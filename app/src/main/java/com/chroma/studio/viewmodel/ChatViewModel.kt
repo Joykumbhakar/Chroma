@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import com.google.firebase.database.FirebaseDatabase
@@ -111,6 +112,7 @@ class ChatViewModel : ViewModel() {
     private var chatsJob: Job? = null
     private var messagesJob: Job? = null
     private var storiesJob: Job? = null
+    private val pendingRoomCreations = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Deferred<ChatRoom?>>()
     private var onlineStatusListener: ValueEventListener? = null
     private var currentOtherUserId: String? = null
     private var authStateListener: com.google.firebase.auth.FirebaseAuth.AuthStateListener? = null
@@ -372,6 +374,8 @@ class ChatViewModel : ViewModel() {
         messagesJob = null
         storiesJob?.cancel()
         storiesJob = null
+        pendingRoomCreations.values.forEach { it.cancel() }
+        pendingRoomCreations.clear()
 
         currentOtherUserId?.let {
             onlineStatusListener?.let { listener ->
@@ -443,24 +447,35 @@ class ChatViewModel : ViewModel() {
             _recentChats.value = currentChats
         }
 
+        // Start Firestore room creation BEFORE opening chat so observeMessages() awaits
+        // parent room existence and never races Firestore rules with PERMISSION_DENIED.
+        val creationDeferred = viewModelScope.async {
+            try {
+                val realRoom = repository.getOrCreateChatRoom(otherUserId)
+                if (realRoom != null) {
+                    val updatedChats = _recentChats.value.toMutableList()
+                    val idx = updatedChats.indexOfFirst { it.id == roomId }
+                    if (idx != -1) {
+                        updatedChats[idx] = realRoom
+                    } else {
+                        updatedChats.add(0, realRoom)
+                    }
+                    _recentChats.value = updatedChats
+                }
+                realRoom
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                android.util.Log.w("ChatViewModel", "startChat room creation error for $roomId", e)
+                null
+            } finally {
+                pendingRoomCreations.remove(roomId)
+            }
+        }
+        pendingRoomCreations[roomId] = creationDeferred
+
         openChat(roomId)
         onRoomReady(roomId)
         fetchProfilesForUsers(listOf(currentUser.uid, otherUserId))
-
-        // Fetch profiles immediately & do real creation in background
-        viewModelScope.launch {
-            val realRoom = repository.getOrCreateChatRoom(otherUserId)
-            if (realRoom != null) {
-                val updatedChats = _recentChats.value.toMutableList()
-                val idx = updatedChats.indexOfFirst { it.id == roomId }
-                if (idx != -1) {
-                    updatedChats[idx] = realRoom
-                } else {
-                    updatedChats.add(0, realRoom)
-                }
-                _recentChats.value = updatedChats
-            }
-        }
     }
 
     fun openChat(roomId: String) {
@@ -519,7 +534,12 @@ class ChatViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            repository.markAsRead(roomId)
+            try {
+                pendingRoomCreations[roomId]?.await()
+            } catch (_: Exception) {}
+            try {
+                repository.markAsRead(roomId)
+            } catch (_: Exception) {}
             try {
                 val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                 if (currentUid != null) {
@@ -575,13 +595,24 @@ class ChatViewModel : ViewModel() {
         currentChats.add(0, optimisticRoom)
         _recentChats.value = currentChats
 
+        // Start Firestore group creation BEFORE opening chat so observeMessages() awaits
+        // parent room document write before attaching the messages subcollection listener.
+        val creationDeferred = viewModelScope.async {
+            try {
+                repository.createGroup(groupName, groupDescription, participantIds, imageUrl, roomId, onlyAdminsCanPost)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                android.util.Log.w("ChatViewModel", "createGroup error for $roomId", e)
+                null
+            } finally {
+                pendingRoomCreations.remove(roomId)
+            }
+        }
+        pendingRoomCreations[roomId] = creationDeferred
+
         openChat(roomId)
         onRoomReady(roomId)
         fetchProfilesForUsers(allUsers)
-
-        viewModelScope.launch {
-            repository.createGroup(groupName, groupDescription, participantIds, imageUrl, roomId, onlyAdminsCanPost)
-        }
     }
 
     fun createGroup(
@@ -629,50 +660,62 @@ class ChatViewModel : ViewModel() {
     private fun observeMessages(roomId: String) {
         messagesJob?.cancel()
         messagesJob = viewModelScope.launch {
-            repository.observeMessages(roomId, messageLimit).collect { msgs ->
-                // CRITICAL OFFLINE PROTECTION:
-                // Only update server messages if new messages arrived from server or Firestore cache.
-                // Never wipe out non-empty cached messages if an empty list arrives during offline transitions.
-                if (msgs.isNotEmpty()) {
-                    _serverMessages.value = msgs
-                    // WhatsApp-grade immediate eviction of typing indicator on message arrival
-                    val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                    if (currentUserId != null) {
-                        val otherSenders = msgs.map { it.senderId }.filter { it != currentUserId }.toSet()
-                        otherSenders.forEach { senderId ->
-                            evictUserTypingActivity(roomId, senderId)
-                        }
-
-                        // Auto-mark incoming messages as read when user is actively viewing this room, or delivered otherwise
-                        if (_activeRoomId.value == roomId) {
-                            val hasUnreadFromOther = msgs.any { it.senderId != currentUserId && !it.isRead }
-                            if (hasUnreadFromOther) {
-                                launch(Dispatchers.IO) {
-                                    repository.markAsRead(roomId)
-                                }
-                            }
-                        } else {
-                            val hasUndeliveredFromOther = msgs.any { it.senderId != currentUserId && !it.isDelivered }
-                            if (hasUndeliveredFromOther) {
-                                launch(Dispatchers.IO) {
-                                    repository.markAsDelivered(roomId)
-                                }
-                            }
-                        }
-                    }
-                    // Asynchronously save to local offline cache so next open is instant and media is cached
-                    try {
-                        com.chroma.studio.chat.data.ChatLocalCacheManager.saveMessages(
-                            com.chroma.studio.ChromaApp.instance,
-                            roomId,
-                            msgs
-                        )
-                    } catch (e: Exception) {
-                        // ignore
-                    }
-                } else if (_serverMessages.value.isEmpty()) {
-                    _serverMessages.value = emptyList()
+            try {
+                // Wait for any in-flight room creation (new group or DM) to finish writing
+                // chats/{roomId} to Firestore before attaching the messages subcollection listener.
+                try {
+                    pendingRoomCreations[roomId]?.await()
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                 }
+                repository.observeMessages(roomId, messageLimit).collect { msgs ->
+                    // CRITICAL OFFLINE PROTECTION:
+                    // Only update server messages if new messages arrived from server or Firestore cache.
+                    // Never wipe out non-empty cached messages if an empty list arrives during offline transitions.
+                    if (msgs.isNotEmpty()) {
+                        _serverMessages.value = msgs
+                        // WhatsApp-grade immediate eviction of typing indicator on message arrival
+                        val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                        if (currentUserId != null) {
+                            val otherSenders = msgs.map { it.senderId }.filter { it != currentUserId }.toSet()
+                            otherSenders.forEach { senderId ->
+                                evictUserTypingActivity(roomId, senderId)
+                            }
+
+                            // Auto-mark incoming messages as read when user is actively viewing this room, or delivered otherwise
+                            if (_activeRoomId.value == roomId) {
+                                val hasUnreadFromOther = msgs.any { it.senderId != currentUserId && !it.isRead }
+                                if (hasUnreadFromOther) {
+                                    launch(Dispatchers.IO) {
+                                        repository.markAsRead(roomId)
+                                    }
+                                }
+                            } else {
+                                val hasUndeliveredFromOther = msgs.any { it.senderId != currentUserId && !it.isDelivered }
+                                if (hasUndeliveredFromOther) {
+                                    launch(Dispatchers.IO) {
+                                        repository.markAsDelivered(roomId)
+                                    }
+                                }
+                            }
+                        }
+                        // Asynchronously save to local offline cache so next open is instant and media is cached
+                        try {
+                            com.chroma.studio.chat.data.ChatLocalCacheManager.saveMessages(
+                                com.chroma.studio.ChromaApp.instance,
+                                roomId,
+                                msgs
+                            )
+                        } catch (e: Exception) {
+                            // ignore
+                        }
+                    } else if (_serverMessages.value.isEmpty()) {
+                        _serverMessages.value = emptyList()
+                    }
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                android.util.Log.w("ChatViewModel", "observeMessages error for room $roomId: ${e.message}")
             }
         }
     }
@@ -757,6 +800,7 @@ class ChatViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
+            try { pendingRoomCreations[roomId]?.await() } catch (_: Exception) {}
             val success = repository.sendMessage(
                 roomId = roomId,
                 text = messageText,
@@ -843,6 +887,7 @@ class ChatViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
+            try { pendingRoomCreations[roomId]?.await() } catch (_: Exception) {}
             val success = repository.sendMessage(
                 roomId = roomId,
                 text = text,
