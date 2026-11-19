@@ -12882,44 +12882,30 @@ fun FcpExportSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(oneUiBlue),
-                                contentAlignment = Alignment.Center
+                        Column {
+                            Text(
+                                text = "Export & Render",
+                                fontSize = 19.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.textMain
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                OscellionNotificationBadge(size = 22.dp, tint = Color.White)
-                            }
-                            Column {
-                                Text(
-                                    text = "Export & Render",
-                                    fontSize = 19.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.textMain
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(oneUiBlue)
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .clip(CircleShape)
-                                            .background(oneUiBlue)
-                                    )
-                                    Text(
-                                        text = "H.264 / AAC · Studio Encoder",
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = colors.textMuted
-                                    )
-                                }
+                                Text(
+                                    text = "H.264 / AAC · Studio Encoder",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textMuted
+                                )
                             }
                         }
                         Box(

@@ -1223,33 +1223,14 @@ private fun OneUiOnboardingTopBar(
                     )
                 }
             } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(activeAccent),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Lucide.Sparkles,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                    Text(
-                        text = "CHROMA STUDIO",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color.White else Color(0xFF0F172A),
-                        letterSpacing = 0.8.sp,
-                        fontFamily = InterFontFamily
-                    )
-                }
+                Text(
+                    text = "CHROMA STUDIO",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDark) Color.White else Color(0xFF0F172A),
+                    letterSpacing = 0.8.sp,
+                    fontFamily = InterFontFamily
+                )
             }
 
             // Step Indicator Text

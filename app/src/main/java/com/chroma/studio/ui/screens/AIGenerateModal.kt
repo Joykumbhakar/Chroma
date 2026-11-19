@@ -111,11 +111,6 @@ fun AIGenerateModal(
                 .imePadding()
                 .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
-                Apple3DGraphicIcon(
-                    id = Apple3DGraphicId.NEURAL_CPU,
-                    modifier = Modifier.size(54.dp)
-                )
-
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,

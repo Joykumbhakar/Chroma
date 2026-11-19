@@ -63,11 +63,7 @@ fun ShareToDiscoverDialog(
                 .imePadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-                Apple3DGraphicIcon(
-                    id = Apple3DGraphicId.NETWORK_GLOBE,
-                    modifier = Modifier.size(54.dp)
-                )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(8.dp))
                 Text("Share to Discover", color = colors.textMain, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 Text(

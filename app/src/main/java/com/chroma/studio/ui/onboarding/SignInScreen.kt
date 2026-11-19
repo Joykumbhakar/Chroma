@@ -274,37 +274,9 @@ fun SignInScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 28.dp, bottom = 26.dp),
+                            .padding(top = 36.dp, bottom = 26.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Luminous Brand Emblem
-                        Box(
-                            modifier = Modifier
-                                .size(54.dp)
-                                .shadow(
-                                    elevation = 10.dp,
-                                    shape = RoundedCornerShape(16.dp),
-                                    ambientColor = Color(0x332563EB),
-                                    spotColor = Color(0x4D2563EB)
-                                )
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(Color(0xFF38BDF8), Color(0xFF2563EB), Color(0xFF4F46E5))
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Sparkles,
-                                contentDescription = "Chroma Studio",
-                                tint = Color.White,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
                         Text(
                             text = "Sign In",
                             fontSize = 32.sp,

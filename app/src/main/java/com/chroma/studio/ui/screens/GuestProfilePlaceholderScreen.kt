@@ -60,27 +60,7 @@ fun GuestProfilePlaceholderScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Glowing Icon Header
-            Box(
-                modifier = Modifier
-                    .size(88.dp)
-                    .shadow(16.dp, CircleShape, spotColor = accentBlue.copy(alpha = 0.35f))
-                    .clip(CircleShape)
-                    .background(
-                        if (isDark) Color(0xFF1C1E26) else Color.White
-                    )
-                    .border(2.dp, accentGradient, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Lucide.Sparkles,
-                    contentDescription = null,
-                    tint = accentBlue,
-                    modifier = Modifier.size(42.dp)
-                )
-            }
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Mode Badge
             Box(

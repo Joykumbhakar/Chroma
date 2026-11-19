@@ -129,33 +129,16 @@ fun WelcomeScreen(
                     verticalArrangement = Arrangement.SpaceBetween,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // ── 1. BESPOKE BRAND EMBLEM & CLEAN TITLE HEADER ─────────────
+                    // ── 1. CLEAN ONE UI TITLE HEADER ─────────────────────────────
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 16.dp, bottom = 12.dp),
+                            .padding(top = 32.dp, bottom = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Clean One UI Brand Squircle Emblem
                         val oneUiBlue = Color(0xFF0381FE)
                         val iconContainerBg = if (isDark) oneUiBlue.copy(alpha = 0.18f) else oneUiBlue.copy(alpha = 0.10f)
                         val dividerColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFECEFF4)
-                        Box(
-                            modifier = Modifier
-                                .size(62.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(oneUiBlue),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Sparkles,
-                                contentDescription = "Chroma Studio",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-
-                        Spacer(Modifier.height(16.dp))
 
                         Text(
                             text = buildAnnotatedString {
