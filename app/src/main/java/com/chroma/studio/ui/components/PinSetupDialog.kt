@@ -81,6 +81,7 @@ fun PinSetupDialog(
         scope.launch {
             isError = true
             errorMessage = msg
+            SoundManager.playLockError()
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             shakeAnim.animateTo(
                 targetValue = 0f,
@@ -111,6 +112,7 @@ fun PinSetupDialog(
 
     fun onDigitPress(digit: String) {
         if (isError) return
+        SoundManager.playLockKeyTap(context)
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
 
         if (step == SetupStep.ENTER_PIN) {
@@ -132,7 +134,7 @@ fun PinSetupDialog(
                     if (next == firstPin) {
                         SecurityPinManager.setPin(context, next)
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        SoundManager.playReaction()
+                        SoundManager.playLockSuccess(context)
                         ToastManager.showToast(if (isChangingExisting) "PIN updated successfully" else "PIN set up successfully")
                         onSuccess()
                     } else {
@@ -145,6 +147,7 @@ fun PinSetupDialog(
 
     fun onDeletePress() {
         if (isError) return
+        SoundManager.playLockKeyTap(context)
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         if (step == SetupStep.ENTER_PIN) {
             if (firstPin.isNotEmpty()) firstPin = firstPin.dropLast(1)

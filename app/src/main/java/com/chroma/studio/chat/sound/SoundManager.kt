@@ -93,6 +93,50 @@ object SoundManager {
         // Disabled: Keep UI taps silent
     }
 
+    /** Crisp tactile keyboard tap sound for PIN dial pad */
+    fun playLockKeyTap(context: Context? = null) {
+        if (!isSoundsEnabled) return
+        if (soundPool == null && context != null) {
+            init(context)
+        }
+        val pool = soundPool
+        if (pool != null && tapSoundId != 0 && (isPoolLoaded || loadedSoundIds.contains(tapSoundId))) {
+            pool.play(tapSoundId, 0.55f, 0.55f, 1, 0, 1.0f)
+        } else {
+            playTone(frequency = 1200.0, durationMs = 15, amplitude = 0.2f)
+        }
+    }
+
+    /** Dual warning buzz for wrong PIN / failed unlock attempts */
+    fun playLockError() {
+        if (!isSoundsEnabled) return
+        scope.launch {
+            playTone(frequency = 180.0, durationMs = 90, amplitude = 0.5f)
+            kotlinx.coroutines.delay(100)
+            playTone(frequency = 140.0, durationMs = 120, amplitude = 0.55f)
+        }
+    }
+
+    /** Harmonious crystal chime for successful unlock */
+    fun playLockSuccess(context: Context? = null) {
+        if (!isSoundsEnabled) return
+        if (soundPool == null && context != null) {
+            init(context)
+        }
+        val pool = soundPool
+        if (pool != null && dynamicIslandSoundId != 0 && (isPoolLoaded || loadedSoundIds.contains(dynamicIslandSoundId))) {
+            pool.play(dynamicIslandSoundId, 0.85f, 0.85f, 1, 0, 1.0f)
+        } else {
+            scope.launch {
+                playTone(frequency = 523.25, durationMs = 80, amplitude = 0.35f) // C5
+                kotlinx.coroutines.delay(80)
+                playTone(frequency = 659.25, durationMs = 80, amplitude = 0.35f) // E5
+                kotlinx.coroutines.delay(80)
+                playTone(frequency = 783.99, durationMs = 140, amplitude = 0.4f)  // G5
+            }
+        }
+    }
+
     fun playDynamicIsland(context: Context? = null) {
         if (!isSoundsEnabled) return
         if (soundPool == null && context != null) {
