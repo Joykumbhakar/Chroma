@@ -138,24 +138,9 @@ private fun AuthenticatedRoute(
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
+        // Immediately dismiss the system placeholder so the primary cinematic reveal animation runs seamlessly from cold start
         splashScreen.setOnExitAnimationListener { splashScreenViewProvider ->
-            val splashView = splashScreenViewProvider.view
-            splashView.setBackgroundResource(R.drawable.splash_bg_gradient)
-            val alphaAnim = android.animation.ObjectAnimator.ofFloat(splashView, android.view.View.ALPHA, 1f, 0f)
-            val scaleXAnim = android.animation.ObjectAnimator.ofFloat(splashView, android.view.View.SCALE_X, 1f, 1.04f)
-            val scaleYAnim = android.animation.ObjectAnimator.ofFloat(splashView, android.view.View.SCALE_Y, 1f, 1.04f)
-
-            val animatorSet = android.animation.AnimatorSet().apply {
-                playTogether(alphaAnim, scaleXAnim, scaleYAnim)
-                duration = 320L
-                interpolator = android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f)
-                addListener(object : android.animation.AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: android.animation.Animator) {
-                        splashScreenViewProvider.remove()
-                    }
-                })
-            }
-            animatorSet.start()
+            splashScreenViewProvider.remove()
         }
         super.onCreate(savedInstanceState)
         com.chroma.studio.chat.sound.SoundManager.init(this)
@@ -2425,7 +2410,7 @@ private fun AuthenticatedRoute(
                 )
             }
 
-            // ── Native Compose GhostFibers Splash Screen ──
+            // ── Primary Cinematic Oscellion Logo Reveal Splash Screen ──
             var showComposeSplash by remember { mutableStateOf(true) }
 
             // ── App-Wide Biometric Passkey Lock Enforcement (Settings -> Security) ──

@@ -1,6 +1,5 @@
 package com.chroma.studio.ui.screens
 
-import android.graphics.PathMeasure
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
@@ -21,37 +20,36 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.BlendMode as ComposeBlendMode
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.chroma.studio.R
-import com.chroma.studio.ui.components.GhostFibers
-import com.chroma.studio.ui.components.GhostFibersConfig
 import com.chroma.studio.ui.components.OscellionBrand
 import kotlinx.coroutines.launch
 
 /**
- * Official Cinematic Oscellion Splash Screen.
- * Faithful implementation of variation 2:
+ * Official Primary Oscellion Cinematic Splash Screen.
+ * Exact 1:1 realization of oscellion_reveal_variation_v2.html:
  * "LIQUID APERTURE + PRECISION BEVEL IGNITION + MASKED SHEEN"
  *
  * Sequence:
- * 1. Camera Pull-Back: 1.06x -> 1.0x subtle settle
- * 2. Emblem Aperture Glide: Center emergence (-42° -> +4° -> 0°), scaling (0.35x -> 1.16x -> 1.12x), then glides to the left
- * 3. Perimeter Wireframe Trace: Precision 2-pass path trace ignition
- * 4. Progressive Bevel Ignition: Top-left highlight, bottom-right depth, and metallic face fade in
- * 5. Directional Wordmark Reveal: "scellion" unmasks from left to right, tracking and sliding into position
- * 6. Continuous Specular Light Sweep: Diagonal metallic sheen sweeps across emblem and letters
+ * 1. Studio Canvas: Pure pitch-black studio background (#000000). Zero ghost fibers or clutter.
+ * 2. Subtle Camera Pull-Back: 1.06x -> 1.0x subtle settle (0ms - 2400ms, cubic-bezier(0.16, 1, 0.3, 1))
+ * 3. Emblem Aperture Glide: Center emergence (-42° -> +4° -> 0°), scaling (0.35x -> 1.16x -> 1.12x),
+ *    then glides left to settle alongside "scellion" (0ms - 2200ms, cubic-bezier(0.22, 1, 0.36, 1))
+ * 4. Perimeter Wireframe Trace: Precision 2-pass stroke trace ignition (80ms - 1230ms, cubic-bezier(0.4, 0, 0.2, 1))
+ * 5. Progressive Bevel Ignition: Top-left highlight, bottom-right depth, and metallic face fade in (420ms - 1160ms)
+ * 6. Directional Wordmark Reveal: "scellion" unmasks from left to right, tracking and sliding into position (960ms - 1860ms)
+ * 7. Continuous Specular Light Sweep: Diagonal metallic sheen sweeps sequentially across emblem and letters (1560ms - 2560ms)
+ * 8. Responsive Geometry: Fluidly responsive across all phones, tablets, foldables, portrait & landscape.
  */
 @Composable
 fun OscellionSplashScreen(
     onSplashFinished: () -> Unit,
     modifier: Modifier = Modifier,
-    durationMillis: Long = 3000L
+    durationMillis: Long = 2850L
 ) {
     val coroutineScope = rememberCoroutineScope()
     val animTime = remember { Animatable(0f) }
@@ -73,7 +71,7 @@ fun OscellionSplashScreen(
 
     val t = animTime.value
 
-    // Easing curves matching CSS keyframes
+    // Exact CSS cubic-bezier easing curves
     val easeDecel = remember { CubicBezierEasing(0.16f, 1.0f, 0.3f, 1.0f) }
     val easeAperture = remember { CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f) }
     val easeTrace = remember { CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f) }
@@ -88,31 +86,31 @@ fun OscellionSplashScreen(
     val emblemRotation: Float
     val emblemGlideProgress: Float // 0f = optical center, 1f = settled on left
 
-    if (t < 396f) { // 0% - 18%
+    if (t < 396f) { // 0% - 18% (0ms - 396ms)
         val f = (t / 396f).coerceIn(0f, 1f)
         emblemOpacity = f
         emblemScale = 0.35f + (1.16f - 0.35f) * f
         emblemRotation = -42f + 46f * f
         emblemGlideProgress = 0f
-    } else if (t < 748f) { // 18% - 34%
+    } else if (t < 748f) { // 18% - 34% (396ms - 748ms)
         val f = ((t - 396f) / 352f).coerceIn(0f, 1f)
         emblemOpacity = 1f
         emblemScale = 1.16f - 0.04f * f
         emblemRotation = 4f - 4f * f
         emblemGlideProgress = 0f
-    } else if (t < 968f) { // 34% - 44%
+    } else if (t < 968f) { // 34% - 44% (748ms - 968ms)
         emblemOpacity = 1f
         emblemScale = 1.12f
         emblemRotation = 0f
         emblemGlideProgress = 0f
-    } else if (t < 1804f) { // 44% - 82% (Glide to left)
+    } else if (t < 1804f) { // 44% - 82% (968ms - 1804ms) Glide left
         val f = ((t - 968f) / 836f).coerceIn(0f, 1f)
         val ease = easeAperture.transform(f)
         emblemOpacity = 1f
         emblemScale = 1.12f - 0.12f * ease
         emblemRotation = 0f
         emblemGlideProgress = ease
-    } else { // 82% - 100%
+    } else { // 82% - 100% (1804ms - 2200ms+)
         emblemOpacity = 1f
         emblemScale = 1.0f
         emblemRotation = 0f
@@ -142,21 +140,21 @@ fun OscellionSplashScreen(
 
     // ─── 5. WORDMARK REVEAL (960ms - 1860ms) ───────────────────
     val wordmarkRevealProgress: Float
-    val wordmarkSlideX: Float
+    val wordmarkSlideNorm: Float
     val wordmarkAlpha: Float
     if (t < 960f) {
         wordmarkRevealProgress = 0f
-        wordmarkSlideX = -22f
+        wordmarkSlideNorm = 1f
         wordmarkAlpha = 0f
     } else if (t < 1860f) {
         val f = ((t - 960f) / 900f).coerceIn(0f, 1f)
         val ease = easeDecel.transform(f)
         wordmarkRevealProgress = ease
-        wordmarkSlideX = -22f * (1f - ease)
-        wordmarkAlpha = (ease * 1.25f).coerceIn(0f, 1f)
+        wordmarkSlideNorm = 1f - ease
+        wordmarkAlpha = (f * 5f).coerceIn(0f, 1f) // Settles opacity quickly by 20%
     } else {
         wordmarkRevealProgress = 1f
-        wordmarkSlideX = 0f
+        wordmarkSlideNorm = 0f
         wordmarkAlpha = 1f
     }
 
@@ -185,17 +183,8 @@ fun OscellionSplashScreen(
         wordmarkSheenAlpha = 0f
     }
 
-    // Dimensions
-    val lockupHeight = 58.dp
-    val emblemWidth = lockupHeight * (98f / 95f) // ~60dp
-    val wordmarkWidth = lockupHeight * (356f / 95f) // ~217dp
-    val totalLockupWidth = emblemWidth + wordmarkWidth // ~277dp
-
-    // At start (emblemGlideProgress = 0), emblem is at center of lockup:
-    val centerOffsetDp = wordmarkWidth / 2f
-    val currentGlideOffsetDp = centerOffsetDp * (1f - emblemGlideProgress)
-
-    Box(
+    // ─── PURE PITCH-BLACK STUDIO CANVAS & RESPONSIVE CONTAINER ──
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
@@ -205,40 +194,27 @@ fun OscellionSplashScreen(
             ) { startAnimation() },
         contentAlignment = Alignment.Center
     ) {
-        // Deep cyber ribbon atmospheric background
-        GhostFibers(
-            modifier = Modifier.fillMaxSize(),
-            config = GhostFibersConfig(
-                glowColor = Color(0xFF001550),
-                lineColor = Color(0xFF0A3075),
-                secondaryColor = Color(0xFF001F60),
-                layers = 2,
-                twist = 1.0f,
-                threads = 48,
-                depthOfField = 0.85f,
-                particles = 0.35f,
-                sparkle = 0.35f,
-                glow = 0.65f,
-                brightness = 0.75f,
-                intro = true
-            )
-        )
+        val screenW = maxWidth
+        val screenH = maxHeight
+        val isLandscape = screenW > screenH
+        val referenceDim = if (isLandscape) screenH * 0.82f else screenW
 
-        // Subtle ambient radial glow behind logo lockup
-        Box(
-            modifier = Modifier
-                .size(340.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.08f * (topHighlightAlpha + mainFaceAlpha) * 0.5f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
+        // Fluid responsive sizing: clamps between 240dp on compact screens up to 380dp on large displays
+        val targetLockupWidth = (referenceDim * 0.74f).coerceIn(240.dp, 380.dp)
+        val scaleRatio = targetLockupWidth.value / 454f
 
-        // Master lockup container with subtle camera scale settle
+        val lockupHeight = (95f * scaleRatio).dp
+        val emblemWidth = lockupHeight * (740f / 660f)
+        val wordmarkWidth = lockupHeight * (356f / 95f)
+        val gap = (-4f * scaleRatio).dp
+        val totalLockupWidth = emblemWidth + wordmarkWidth + gap
+
+        // Precision optical center offset: emblem is perfectly centered at start, then glides into lockup
+        val centerOffsetDp = (wordmarkWidth + gap) / 2f
+        val currentGlideOffsetDp = centerOffsetDp * (1f - emblemGlideProgress)
+        val wordmarkSlideX = (-22f * scaleRatio * wordmarkSlideNorm).dp
+
+        // Master brand lockup container with subtle camera scale settle
         Row(
             modifier = Modifier
                 .width(totalLockupWidth)
@@ -263,7 +239,6 @@ fun OscellionSplashScreen(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                // Vector Canvas Emblem with Wireframe Trace + Bevel Ignition + Light Sheen
                 EmblemVectorCanvas(
                     modifier = Modifier.fillMaxSize(),
                     wireframeProgress = wireframeProgress,
@@ -276,15 +251,16 @@ fun OscellionSplashScreen(
                 )
             }
 
+            Spacer(modifier = Modifier.width(gap))
+
             // ─── WORDMARK ("scellion") ─────────────────────────────────
             Box(
                 modifier = Modifier
                     .width(wordmarkWidth)
                     .height(lockupHeight)
                     .graphicsLayer {
-                        translationX = wordmarkSlideX.dp.toPx()
+                        translationX = wordmarkSlideX.toPx()
                         alpha = wordmarkAlpha
-                        // Directional left-to-right unmasking clip
                         clip = true
                         shape = GenericShape { size, _ ->
                             val revealW = size.width * wordmarkRevealProgress
@@ -293,7 +269,7 @@ fun OscellionSplashScreen(
                     },
                 contentAlignment = Alignment.CenterStart
             ) {
-                // Render crisp metallic wordmark
+                // High-resolution metallic wordmark
                 Image(
                     painter = painterResource(R.drawable.oscellion_wordmark),
                     contentDescription = null,
@@ -312,7 +288,7 @@ fun OscellionSplashScreen(
                                 val sheenBrush = Brush.linearGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.White.copy(alpha = 0.85f * wordmarkSheenAlpha),
+                                        Color.White.copy(alpha = 0.88f * wordmarkSheenAlpha),
                                         Color.Transparent
                                     ),
                                     start = Offset(sweepX - 45.dp.toPx(), 0f),
@@ -329,8 +305,12 @@ fun OscellionSplashScreen(
 
 /**
  * Precision Vector Canvas for the Oscellion Emblem.
- * Draws SVG path geometry, 2-pass wireframe perimeter trace, 3-layer beveled ignition,
- * and masked specular light sheen bar.
+ * Faithfully mirrors the SVG structure from oscellion_reveal_variation_v2.html:
+ * viewBox: 100 180 740 660
+ * - 2-pass wireframe perimeter trace ignition
+ * - 3-layer bevel ignition (top-left highlight, bottom-right depth, vertical silver gradient face)
+ * - Inner specular rim stroke
+ * - Masked diagonal specular sheen sweep
  */
 @Composable
 private fun EmblemVectorCanvas(
@@ -349,7 +329,8 @@ private fun EmblemVectorCanvas(
         }
     }
 
-    // Cached metallic face gradient
+    // Exact vertical white-to-silver gradient from HTML specification:
+    // 0%: #FFFFFF, 48%: #F7F7F9, 82%: #D4D4DA, 100%: #A8A8B0
     val faceGradient = remember {
         Brush.verticalGradient(
             listOf(
@@ -374,7 +355,7 @@ private fun EmblemVectorCanvas(
 
             // ─── 1. SOLID BEVEL LAYERS (PROGRESSIVE IGNITION) ────────
             if (bottomDepthAlpha > 0f) {
-                // Bottom-right crisp dark bevel edge (+7px in 1024-space)
+                // Bottom-right crisp dark bevel edge (+7px in viewBox space)
                 canvas.save()
                 canvas.translate(7f, 7f)
                 val depthPaint = Paint().apply {
@@ -387,7 +368,7 @@ private fun EmblemVectorCanvas(
             }
 
             if (topHighlightAlpha > 0f) {
-                // Top-left crisp bright bevel edge (-7px in 1024-space)
+                // Top-left crisp bright bevel edge (-7px in viewBox space)
                 canvas.save()
                 canvas.translate(-7f, -7f)
                 val highlightPaint = Paint().apply {
