@@ -374,7 +374,7 @@ fun OscellionIncomingShareSheet(
                             title = "Studio Video & Motion Editor",
                             subtitle = "Color grade, trim, layer effects & music",
                             icon = Lucide.Video,
-                            iconTint = Color(0xFF8B5CF6),
+                            iconTint = Color(0xFF0381FE),
                             textMain = textMain,
                             textMuted = textMuted,
                             onClick = {

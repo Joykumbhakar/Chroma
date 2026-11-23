@@ -243,7 +243,7 @@ fun StoryAnalyticsModal(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .background(Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFFAF52DE)))),
+                                            .background(Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF0056B3)))),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
@@ -346,7 +346,7 @@ fun StoryAnalyticsModal(
                         value = "0",
                         badgeText = "Direct DMs",
                         badgeColor = colors.textMuted,
-                        icon = { LucideMessageSquare(tint = Color(0xFFAF52DE), size = 14.dp) },
+                        icon = { LucideMessageSquare(tint = Color(0xFF0381FE), size = 14.dp) },
                         modifier = Modifier.weight(1f)
                     )
                 }

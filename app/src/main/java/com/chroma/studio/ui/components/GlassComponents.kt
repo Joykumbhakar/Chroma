@@ -430,7 +430,7 @@ fun PrimaryGradientButton(
 enum class ChromaPillVariant {
     Blue,      // Liquid Glass Primary Blue (#4DA6FF -> #0A84FF -> #0051D5)
     Secondary, // Liquid Glass Secondary White / Specular (#FFFFFF -> #F4F7FB -> #DFE8F3)
-    Purple,    // Creative Neon Violet (#A855F7 -> #7C3AED -> #581C87)
+    Purple,    // Creative Cobalt / Brand Blue (#0381FE -> #0066D6 -> #004BBB)
     Emerald,   // Success Mint Green (#34D399 -> #059669 -> #065F46)
     Amber,     // Radiant Orange/Gold (#FB923C -> #EA580C -> #9A3412)
     Rose,      // Vivid Crimson/Red (#FB7185 -> #E11D48 -> #881337)
@@ -476,13 +476,13 @@ object ChromaPillColors {
     val PurpleBorder = Brush.linearGradient(
         listOf(
             Color.White.copy(alpha = 0.92f),
-            Color(0xFFD8B4FE).copy(alpha = 0.65f),
-            Color(0xFFF3E8FF).copy(alpha = 0.85f)
+            Color(0xFFBAE6FD).copy(alpha = 0.65f),
+            Color(0xFFE0F2FE).copy(alpha = 0.85f)
         ),
         start = androidx.compose.ui.geometry.Offset.Zero,
         end = androidx.compose.ui.geometry.Offset.Infinite
     )
-    val PurpleBody = Brush.verticalGradient(listOf(Color(0xFFA855F7), Color(0xFF7C3AED), Color(0xFF581C87)))
+    val PurpleBody = Brush.verticalGradient(listOf(Color(0xFF0381FE), Color(0xFF0066D6), Color(0xFF004BBB)))
 
     val EmeraldBorder = Brush.linearGradient(
         listOf(

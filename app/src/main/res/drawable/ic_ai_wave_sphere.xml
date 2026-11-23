@@ -5,7 +5,7 @@
     android:viewportWidth="48"
     android:viewportHeight="48">
 
-    <!-- 1. Purple Gradient Circular Background Badge -->
+    <!-- 1. Brand Blue Gradient Circular Background Badge -->
     <path
         android:pathData="M 24,24 m -22,0 a 22,22 0 1,0 44,0 a 22,22 0 1,0 -44,0">
         <aapt:attr name="android:fillColor">
@@ -15,9 +15,9 @@
                 android:startY="6"
                 android:endX="40"
                 android:endY="42">
-                <item android:offset="0.0" android:color="#8A2BE2" />
-                <item android:offset="0.5" android:color="#6E11E9" />
-                <item android:offset="1.0" android:color="#4A00E0" />
+                <item android:offset="0.0" android:color="#0381FE" />
+                <item android:offset="0.5" android:color="#0066D6" />
+                <item android:offset="1.0" android:color="#004BBB" />
             </gradient>
         </aapt:attr>
     </path>

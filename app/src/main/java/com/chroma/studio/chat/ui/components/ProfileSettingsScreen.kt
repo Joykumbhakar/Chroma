@@ -339,7 +339,7 @@ fun ProfileSettingsScreen(
 
                     // Message Animation Style Row
                     SettingsActionRow(
-                        icon = { LucideSparkles(tint = Color(0xFFAF52DE), size = 18.dp) },
+                        icon = { LucideSparkles(tint = Color(0xFF0381FE), size = 18.dp) },
                         title = "Arrival Animation",
                         value = currentAnimationStyle.title.substringBefore(" ("),
                         onClick = { onOpenAppearanceSettings() }

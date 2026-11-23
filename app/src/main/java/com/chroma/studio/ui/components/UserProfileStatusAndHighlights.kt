@@ -343,11 +343,11 @@ fun UserProfileHighlightsSection(
 
     val highlightGradients = remember {
         listOf(
-            listOf(Color(0xFF0381FE), Color(0xFF5856D6)),
+            listOf(Color(0xFF0381FE), Color(0xFF0052B4)),
             listOf(Color(0xFFFF2D55), Color(0xFFFF9500)),
             listOf(Color(0xFF34C759), Color(0xFF0381FE)),
-            listOf(Color(0xFFAF52DE), Color(0xFFFF2D55)),
-            listOf(Color(0xFF5856D6), Color(0xFF00C7BE))
+            listOf(Color(0xFF0284C7), Color(0xFF38BDF8)),
+            listOf(Color(0xFF0072DE), Color(0xFF00C7BE))
         )
     }
 

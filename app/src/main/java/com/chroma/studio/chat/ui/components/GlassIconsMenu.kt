@@ -78,9 +78,9 @@ import kotlin.math.sqrt
 class GlassGradient(val from: Color, val to: Color) {
     companion object {
         val Blue = GlassGradient(Color(0xFF569DFB), Color(0xFF1949E6))
-        val Purple = GlassGradient(Color(0xFFBF72F3), Color(0xFF6F34D5))
+        val Purple = GlassGradient(Color(0xFF38BDF8), Color(0xFF0381FE))
         val Red = GlassGradient(Color(0xFFFB606F), Color(0xFFE7235D))
-        val Indigo = GlassGradient(Color(0xFF7780F8), Color(0xFF4E3FD5))
+        val Indigo = GlassGradient(Color(0xFF60A5FA), Color(0xFF0052B4))
         val Orange = GlassGradient(Color(0xFFFFB83D), Color(0xFFF8651B))
         val Green = GlassGradient(Color(0xFF3CD77F), Color(0xFF109E73))
         val Teal = GlassGradient(Color(0xFF35DDE9), Color(0xFF108EBC))

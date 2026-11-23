@@ -420,11 +420,11 @@ fun ChatHeader(
                                     Icon(
                                         imageVector = Lucide.Palette,
                                         contentDescription = null,
-                                        tint = Color(0xFFAF52DE),
+                                        tint = Color(0xFF0381FE),
                                         modifier = Modifier.size(16.dp)
                                     )
                                 },
-                                iconBgColor = Color(0xFFAF52DE).copy(alpha = 0.14f),
+                                iconBgColor = Color(0xFF0381FE).copy(alpha = 0.14f),
                                 trailingContent = {
                                     AiWaveSphereIcon(modifier = Modifier.size(15.dp))
                                 },

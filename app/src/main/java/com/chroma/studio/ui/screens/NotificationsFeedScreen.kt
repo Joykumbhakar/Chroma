@@ -283,7 +283,7 @@ private fun NotifAvatarWithBadge(
 
         NotificationActionType.MESSAGE     -> Triple(Color(0xFFDBEAFE), Color(0xFF2563EB), Lucide.Send)
 
-        NotificationActionType.REMIX       -> Triple(Color(0xFFEDE9FE), Color(0xFF7C3AED), Lucide.Sparkles)
+        NotificationActionType.REMIX       -> Triple(Color(0xFFE0F2FE), Color(0xFF0381FE), Lucide.Sparkles)
 
         NotificationActionType.MENTION     -> Triple(Color(0xFFE0F2FE), Color(0xFF0284C7), Lucide.AtSign)
 

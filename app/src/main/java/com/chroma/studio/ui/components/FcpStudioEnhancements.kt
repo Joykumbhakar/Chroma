@@ -768,7 +768,7 @@ val BuiltInGraphicStickers = listOf(
     FcpGraphicStickerPreset("4k", "4K HDR", "ULTRA HD", Color(0xFF00E5FF), Lucide.Sparkles),
     FcpGraphicStickerPreset("new", "NEW", "FEATURED", Color(0xFF10B981), Lucide.Zap),
     FcpGraphicStickerPreset("pro", "PRO", "STUDIO CUT", Color(0xFFF59E0B), Lucide.Film),
-    FcpGraphicStickerPreset("cinema", "CINEMA", "2.39:1 SCOPE", Color(0xFF8B5CF6), Lucide.Film)
+    FcpGraphicStickerPreset("cinema", "CINEMA", "2.39:1 SCOPE", Color(0xFF0381FE), Lucide.Film)
 )
 
 /**

@@ -69,7 +69,7 @@ object AppleGradients {
     val Blue = Brush.verticalGradient(listOf(Color(0xFF2997FF), Color(0xFF0071E3)))
     val BlueHorizontal = Brush.horizontalGradient(listOf(Color(0xFF2997FF), Color(0xFF0071E3)))
     val Orange = Brush.verticalGradient(listOf(Color(0xFFFF9F0A), Color(0xFFFF6900)))
-    val Purple = Brush.verticalGradient(listOf(Color(0xFF5E5CE6), Color(0xFF4845D2)))
+    val Purple = Brush.verticalGradient(listOf(Color(0xFF0381FE), Color(0xFF0051D5)))
     val Green = Brush.verticalGradient(listOf(Color(0xFF30D158), Color(0xFF248A3D)))
     val Teal = Brush.verticalGradient(listOf(Color(0xFF64D2FF), Color(0xFF0091D2)))
     val Pink = Brush.verticalGradient(listOf(Color(0xFFFF375F), Color(0xFFD70035)))

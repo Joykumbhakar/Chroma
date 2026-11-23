@@ -79,9 +79,9 @@ fun StoryEditorModal(
     val gradients = remember {
         listOf(
             StoryGradientPreset("Ocean Blue", listOf(Color(0xFF0381FE), Color(0xFF005ECB), Color(0xFF003882))),
-            StoryGradientPreset("Sunset Glow", listOf(Color(0xFFFF5E3A), Color(0xFFFF2A68), Color(0xFF9B51E0))),
-            StoryGradientPreset("Cyberpunk Neon", listOf(Color(0xFF8B5CF6), Color(0xFFEC4899), Color(0xFF3B82F6))),
-            StoryGradientPreset("Midnight Nebula", listOf(Color(0xFF181B34), Color(0xFF241C48), Color(0xFF0F172A))),
+            StoryGradientPreset("Sunset Glow", listOf(Color(0xFFFF5E3A), Color(0xFFFF2A68), Color(0xFFFF8A00))),
+            StoryGradientPreset("Cyberpunk Neon", listOf(Color(0xFF0072DE), Color(0xFF0381FE), Color(0xFF06B6D4))),
+            StoryGradientPreset("Midnight Nebula", listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF0284C7))),
             StoryGradientPreset("Emerald Focus", listOf(Color(0xFF059669), Color(0xFF10B981), Color(0xFF047857))),
             StoryGradientPreset("Rose Gold", listOf(Color(0xFFFB7185), Color(0xFFF43F5E), Color(0xFF881337))),
             StoryGradientPreset("Warm Amber", listOf(Color(0xFFF59E0B), Color(0xFFEA580C), Color(0xFF7C2D12))),

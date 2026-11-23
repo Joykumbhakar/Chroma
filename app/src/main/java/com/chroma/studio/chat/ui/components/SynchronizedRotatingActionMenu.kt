@@ -104,15 +104,15 @@ enum class ActionMenuOption(
         label = "Poll",
         bgStops = listOf(
             Color(0xFAFFFFFF),
-            Color(0xF0F5F3FF),
-            Color(0xE6EDE9FE)
+            Color(0xF0F0F9FF),
+            Color(0xE6E0F2FE)
         ),
         borderStops = listOf(
             Color(0xFFFFFFFF),
-            Color(0x99C4B5FD),
-            Color(0x578B5CF6)
+            Color(0x99BAE6FD),
+            Color(0x570381FE)
         ),
-        shadowColor = Color(0x297C3AED)
+        shadowColor = Color(0x290284C7)
     ),
     STICKER(
         label = "Sticker",
@@ -789,7 +789,7 @@ private fun DrawScope.drawPoll3DGraphic() {
     // 3D Frosted Plinth Base
     drawRoundRect(
         brush = Brush.linearGradient(
-            colors = listOf(Color(0xFFDDD6FE), Color(0xFFA78BFA)),
+            colors = listOf(Color(0xFFBAE6FD), Color(0xFF60A5FA)),
             start = Offset(3.2f * s, 18.3f * s),
             end = Offset(20.8f * s, 20.5f * s)
         ),
@@ -800,10 +800,10 @@ private fun DrawScope.drawPoll3DGraphic() {
 
     val barCorner = CornerRadius(1.6f * s, 1.6f * s)
 
-    // Column 1 (Left - Lavender 3D Bar)
+    // Column 1 (Left - Cyan/Sky 3D Bar)
     drawRoundRect(
         brush = Brush.linearGradient(
-            colors = listOf(Color(0xFFC4B5FD), Color(0xFF8B5CF6), Color(0xFF5B21B6)),
+            colors = listOf(Color(0xFF7DD3FC), Color(0xFF0284C7), Color(0xFF0369A1)),
             start = Offset(4.5f * s, 11.2f * s),
             end = Offset(8.6f * s, 19.4f * s)
         ),
@@ -817,10 +817,10 @@ private fun DrawScope.drawPoll3DGraphic() {
         size = Size(2.5f * s, 0.9f * s)
     )
 
-    // Column 2 (Center Hero - Deep Royal Violet 3D Bar)
+    // Column 2 (Center Hero - Deep Brand Blue 3D Bar)
     drawRoundRect(
         brush = Brush.linearGradient(
-            colors = listOf(Color(0xFFA78BFA), Color(0xFF7C3AED), Color(0xFF4C1D95)),
+            colors = listOf(Color(0xFF60A5FA), Color(0xFF0381FE), Color(0xFF0052B4)),
             start = Offset(9.95f * s, 4.2f * s),
             end = Offset(14.05f * s, 19.4f * s)
         ),

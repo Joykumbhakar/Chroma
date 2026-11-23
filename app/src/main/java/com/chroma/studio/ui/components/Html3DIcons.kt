@@ -319,11 +319,11 @@ object ThreeDIconHtml {
 
     <svg class="absolute w-0 h-0 overflow-hidden" aria-hidden="true">
         <defs>
-            <!-- Background Frame Gradient (Deep Indigo / Space vibe for contrast) -->
+            <!-- Background Frame Gradient (Deep Slate Blue vibe for contrast) -->
             <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#2E1065" /> <!-- Deep Purple -->
-                <stop offset="50%" stop-color="#1E1B4B" /> <!-- Dark Indigo -->
-                <stop offset="100%" stop-color="#0F172A" /> <!-- Slate Black -->
+                <stop offset="0%" stop-color="#0A2540" /> <!-- Deep Blue -->
+                <stop offset="50%" stop-color="#0F172A" /> <!-- Dark Slate -->
+                <stop offset="100%" stop-color="#020617" /> <!-- Slate Black -->
             </linearGradient>
 
             <!-- Front Lightning Bolt Gradient (Electric Yellow) -->
@@ -341,8 +341,8 @@ object ThreeDIconHtml {
 
             <!-- Radial Background Glow behind the bolt -->
             <radialGradient id="aura-glow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stop-color="#8B5CF6" stop-opacity="0.6" />
-                <stop offset="100%" stop-color="#8B5CF6" stop-opacity="0" />
+                <stop offset="0%" stop-color="#0381FE" stop-opacity="0.6" />
+                <stop offset="100%" stop-color="#0381FE" stop-opacity="0" />
             </radialGradient>
 
             <!-- Glass Reflection Highlight for the frame -->
@@ -424,7 +424,7 @@ object ThreeDIconHtml {
             <!-- Layer 7: Front Floating Border Frame & Glass Shine -->
             <svg class="layer l-border pointer-events-none" viewBox="0 0 256 256">
                 <!-- Floating border defining the original outline shape -->
-                <rect x="30" y="30" width="196" height="196" rx="42" fill="none" stroke="#8B5CF6" stroke-width="6" opacity="0.4" />
+                <rect x="30" y="30" width="196" height="196" rx="42" fill="none" stroke="#0381FE" stroke-width="6" opacity="0.4" />
                 <rect x="30" y="30" width="196" height="196" rx="42" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.6" />
                 
                 <!-- Subtle internal glass highlight -->
@@ -538,7 +538,7 @@ object ThreeDIconHtml {
             <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stop-color="#831843" /> <!-- Pink 900 -->
                 <stop offset="50%" stop-color="#4C0519" /> <!-- Rose 950 -->
-                <stop offset="100%" stop-color="#2E1065" /> <!-- Violet 900 -->
+                <stop offset="100%" stop-color="#0A2540" /> <!-- Navy 900 -->
             </linearGradient>
 
             <!-- Front Icon Gradient (Vibrant Pink to Golden Yellow for trust/warmth) -->

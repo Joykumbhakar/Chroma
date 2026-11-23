@@ -808,11 +808,11 @@ fun getGlobePalette(style: com.chroma.studio.chat.data.VoiceGlobeStyleType): Glo
             waveColor = Color(0xFF38BDF8)
         )
         com.chroma.studio.chat.data.VoiceGlobeStyleType.CHROMATIC_3D -> GlobePalette(
-            coreColors = listOf(Color(0xFFD8B4FE), Color(0xFF9333EA), Color(0xFF6B21A8), Color(0xFF2E1065)),
-            blob1 = listOf(Color(0xFFC084FC).copy(alpha = 0.85f), Color(0xFF8B5CF6).copy(alpha = 0f)),
-            blob2 = listOf(Color(0xFFFFFFFF).copy(alpha = 0.75f), Color(0xFFF3E8FF).copy(alpha = 0f)),
-            blob3 = listOf(Color(0xFFE879F9).copy(alpha = 0.7f), Color.Transparent),
-            waveColor = Color(0xFFC084FC)
+            coreColors = listOf(Color(0xFFBAE6FD), Color(0xFF0381FE), Color(0xFF0052B4), Color(0xFF081A36)),
+            blob1 = listOf(Color(0xFF38BDF8).copy(alpha = 0.85f), Color(0xFF0381FE).copy(alpha = 0f)),
+            blob2 = listOf(Color(0xFFFFFFFF).copy(alpha = 0.75f), Color(0xFFE0F2FE).copy(alpha = 0f)),
+            blob3 = listOf(Color(0xFF60A5FA).copy(alpha = 0.7f), Color.Transparent),
+            waveColor = Color(0xFF38BDF8)
         )
         com.chroma.studio.chat.data.VoiceGlobeStyleType.AURORA_PULSE -> GlobePalette(
             coreColors = listOf(Color(0xFFF472B6), Color(0xFFDB2777), Color(0xFF9D174D), Color(0xFF500724)),

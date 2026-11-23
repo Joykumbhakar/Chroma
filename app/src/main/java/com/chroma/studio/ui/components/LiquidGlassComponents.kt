@@ -621,17 +621,17 @@ object LiquidGlassProgressGradients {
             Color(0xFF0051D5)
         )
     )
-    // Poll 3D Shader 1 (Violet)
+    // Poll 3D Shader 1 (Azure Blue)
     val PollViolet = Brush.horizontalGradient(
-        0.00f to Color(0xFFC4B5FD),
-        0.45f to Color(0xFF8B5CF6),
-        1.00f to Color(0xFF5B21B6)
+        0.00f to Color(0xFFBAE6FD),
+        0.45f to Color(0xFF38BDF8),
+        1.00f to Color(0xFF0284C7)
     )
-    // Poll 3D Shader 2 (Indigo)
+    // Poll 3D Shader 2 (Deep Cobalt Blue)
     val PollIndigo = Brush.horizontalGradient(
-        0.00f to Color(0xFFA78BFA),
-        0.45f to Color(0xFF7C3AED),
-        1.00f to Color(0xFF4C1D95)
+        0.00f to Color(0xFF93C5FD),
+        0.45f to Color(0xFF0381FE),
+        1.00f to Color(0xFF0052B4)
     )
     // Poll 3D Shader 3 (Pink / Rose)
     val PollPink = Brush.horizontalGradient(

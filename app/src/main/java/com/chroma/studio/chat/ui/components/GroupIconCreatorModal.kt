@@ -54,11 +54,11 @@ data class GroupIconGradient(
 val defaultGroupGradients = listOf(
     GroupIconGradient("ocean", "Ocean Blue", listOf(Color(0xFF0381FE), Color(0xFF00C6FF))),
     GroupIconGradient("sunset", "Sunset Coral", listOf(Color(0xFFFF5E3A), Color(0xFFFF2A68))),
-    GroupIconGradient("amethyst", "Amethyst Spark", listOf(Color(0xFF8B5CF6), Color(0xFFC084FC))),
+    GroupIconGradient("amethyst", "Ocean Spark", listOf(Color(0xFF0381FE), Color(0xFF38BDF8))),
     GroupIconGradient("emerald", "Emerald Mint", listOf(Color(0xFF10B981), Color(0xFF059669))),
-    GroupIconGradient("midnight", "Midnight Glow", listOf(Color(0xFF1E1B4B), Color(0xFF4F46E5))),
+    GroupIconGradient("midnight", "Midnight Glow", listOf(Color(0xFF0F172A), Color(0xFF1E40AF))),
     GroupIconGradient("golden", "Golden Amber", listOf(Color(0xFFF59E0B), Color(0xFFFBBF24))),
-    GroupIconGradient("berry", "Berry Purple", listOf(Color(0xFFD946EF), Color(0xFF8B5CF6))),
+    GroupIconGradient("berry", "Glacier Blue", listOf(Color(0xFF0284C7), Color(0xFF38BDF8))),
     GroupIconGradient("ruby", "Ruby Crimson", listOf(Color(0xFFEF4444), Color(0xFF991B1B))),
     GroupIconGradient("teal", "Teal Aqua", listOf(Color(0xFF14B8A6), Color(0xFF06B6D4))),
     GroupIconGradient("titanium", "Dark Titanium", listOf(Color(0xFF27272A), Color(0xFF09090B)))

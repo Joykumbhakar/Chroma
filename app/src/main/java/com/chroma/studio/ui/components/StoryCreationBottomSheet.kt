@@ -119,7 +119,7 @@ fun StoryCreationBottomSheet(
                 StoryCreationOptionRow(
                     icon = Lucide.Type,
                     iconGradient = Brush.linearGradient(
-                        colors = listOf(Color(0xFFAF52DE), Color(0xFFFF2D55))
+                        colors = listOf(Color(0xFF0381FE), Color(0xFF0072DE))
                     ),
                     title = "Text Story",
                     subtitle = "Design a status with gradient & typography",

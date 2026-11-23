@@ -227,9 +227,9 @@ fun UserProfileHeroSection(
                         isUploading -> Brush.sweepGradient(
                             listOf(
                                 Color(0xFF0381FE),
-                                Color(0xFFAF52DE),
-                                Color(0xFFFF2D55),
-                                Color(0xFFFF9500),
+                                Color(0xFF38BDF8),
+                                Color(0xFF0284C7),
+                                Color(0xFF0052B4),
                                 Color(0xFF0381FE)
                             )
                         )
@@ -1637,7 +1637,7 @@ fun ProfileAvatarActionBottomSheet(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(999.dp))
-                                .background(Brush.linearGradient(listOf(Color(0xFFFF2D55), Color(0xFFAF52DE))))
+                                .background(Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE))))
                                 .padding(horizontal = 9.dp, vertical = 3.5.dp)
                         ) {
                             Text(

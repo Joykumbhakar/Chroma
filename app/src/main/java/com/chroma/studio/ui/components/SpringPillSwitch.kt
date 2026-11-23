@@ -199,10 +199,10 @@ data class PillSwitchColors(
                 thumbColor = Color.White
             )
 
-        /** Card 01: Indigo / Purple Accent (#E3E3E6 -> #6155F5) */
+        /** Card 01: Cobalt / Brand Blue Accent (#E3E3E6 -> #0381FE) */
         val Indigo = PillSwitchColors(
             offTrackColor = Color(0xFFE3E3E6),
-            onTrackColor = Color(0xFF6155F5),
+            onTrackColor = Color(0xFF0381FE),
             thumbColor = Color.White
         )
 
@@ -1006,10 +1006,10 @@ fun SpringToggleShowcaseScreen(
                     }
                 }
 
-                // CARD 01: Indigo Accent Variant
+                // CARD 01: Cobalt Accent Variant
                 ReferenceCardSection(
-                    title = "01 — Indigo Accent Variant",
-                    hexSubtitle = "#E3E3E6 → #6155F5"
+                    title = "01 — Cobalt Accent Variant",
+                    hexSubtitle = "#E3E3E6 → #0381FE"
                 ) {
                     LightGroupedToggleCard(
                         topState = swIndigo1,

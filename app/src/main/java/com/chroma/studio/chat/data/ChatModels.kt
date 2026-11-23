@@ -174,7 +174,7 @@ data class ChatConversation(
 
 enum class AccentColorType(val title: String, val color: Color, val hoverColor: Color, val subtleColor: Color) {
     BLUE("Blue", Color(0xFF0078FE), Color(0xFF005ECB), Color(0x1F0078FE)),
-    PURPLE("Purple", Color(0xFF8B5CF6), Color(0xFF7C3AED), Color(0x1F8B5CF6)),
+    PURPLE("Cobalt", Color(0xFF0381FE), Color(0xFF0052B4), Color(0x1F0381FE)),
     EMERALD("Emerald", Color(0xFF10B981), Color(0xFF059669), Color(0x1F10B981)),
     ROSE("Rose", Color(0xFFF43F5E), Color(0xFFE11D48), Color(0x1FF43F5E)),
     AMBER("Amber", Color(0xFFF59E0B), Color(0xFFD97706), Color(0x24F59E0B))
@@ -469,9 +469,9 @@ enum class VoiceGlobeStyleType(
     ),
     CHROMATIC_3D(
         id = "chromatic_3d",
-        title = "Cosmic Amethyst",
-        description = "Royal purple and violet plasma orb with celestial pulse",
-        previewGradient = listOf(Color(0xFFC084FC), Color(0xFF8B5CF6), Color(0xFF3B0764))
+        title = "Cosmic Azure",
+        description = "Deep azure and electric blue plasma orb with celestial pulse",
+        previewGradient = listOf(Color(0xFF38BDF8), Color(0xFF0381FE), Color(0xFF0A2540))
     ),
     AURORA_PULSE(
         id = "aurora_pulse",

@@ -162,7 +162,7 @@ fun AccountConfirmationScreen(
                                     listOf(
                                         Color(0xFF38BDF8),
                                         Color(0xFF2563EB),
-                                        Color(0xFF9333EA),
+                                        Color(0xFF0381FE),
                                         Color(0xFF38BDF8)
                                     )
                                 )

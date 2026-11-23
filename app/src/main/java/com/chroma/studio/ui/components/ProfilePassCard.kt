@@ -104,11 +104,11 @@ data class GradientPreset(
 
 val CHROMA_GRADIENT_PRESETS = listOf(
     GradientPreset("Obsidian Stealth", listOf(Color(0xFF141416), Color(0xFF222228), Color(0xFF0C0C0E))),
-    GradientPreset("Cosmic Indigo", listOf(Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF4338CA))),
+    GradientPreset("Cosmic Sapphire", listOf(Color(0xFF0F172A), Color(0xFF1E40AF), Color(0xFF3B82F6))),
     GradientPreset("Pacific Titanium", listOf(Color(0xFF0A2540), Color(0xFF0284C7), Color(0xFF0EA5E9))),
     GradientPreset("Emerald Luxury", listOf(Color(0xFF064E3B), Color(0xFF047857), Color(0xFF10B981))),
     GradientPreset("Midnight Royal", listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF334155))),
-    GradientPreset("Sunset Radiance", listOf(Color(0xFF4C1D95), Color(0xFF9333EA), Color(0xFFF43F5E))),
+    GradientPreset("Ocean Radiance", listOf(Color(0xFF0A2540), Color(0xFF0381FE), Color(0xFF38BDF8))),
     GradientPreset("Golden Amber", listOf(Color(0xFF451A03), Color(0xFF92400E), Color(0xFFD97706))),
     GradientPreset("Studio Minimal", listOf(Color(0xFFF8FAFC), Color(0xFFEEF2F6), Color(0xFFE2E8F0)))
 )
@@ -120,7 +120,7 @@ val QR_COLOR_PRESETS = listOf(
     Color(0xFF34C759), // Mint Green
     Color(0xFFFF9500), // Sunset Amber
     Color(0xFFFF2D55), // Crimson
-    Color(0xFF5856D6), // Deep Indigo
+    Color(0xFF0072DE), // Brand Cobalt
     Color(0xFF32ADE6)  // Cyan
 )
 

@@ -73,11 +73,11 @@ object ChatWallpaperPresets {
     val gradientPresets = listOf(
         "sunset" to listOf(Color(0xFFFF5E3A), Color(0xFFFF2A68), Color(0xFFFF9500)),
         "ocean" to listOf(Color(0xFF00C6FF), Color(0xFF0072FF), Color(0xFF0A84FF)),
-        "aurora" to listOf(Color(0xFF30D158), Color(0xFF0A84FF), Color(0xFF5E5CE6)),
-        "cosmic" to listOf(Color(0xFFBF5AF2), Color(0xFFFF2D55), Color(0xFF5856D6)),
+        "aurora" to listOf(Color(0xFF30D158), Color(0xFF0A84FF), Color(0xFF0051D5)),
+        "cosmic" to listOf(Color(0xFF38BDF8), Color(0xFF0381FE), Color(0xFF0A2540)),
         "emerald" to listOf(Color(0xFF34C759), Color(0xFF30B0C7), Color(0xFF00C7BE)),
         "midnight" to listOf(Color(0xFF1C1C1E), Color(0xFF2C2C2E), Color(0xFF3A3A3C)),
-        "lavender" to listOf(Color(0xFFAF52DE), Color(0xFF5E5CE6), Color(0xFF64D2FF)),
+        "lavender" to listOf(Color(0xFF93C5FD), Color(0xFF0381FE), Color(0xFF64D2FF)),
         "golden" to listOf(Color(0xFFFF9F0A), Color(0xFFFFD60A), Color(0xFFFF375F))
     )
 }

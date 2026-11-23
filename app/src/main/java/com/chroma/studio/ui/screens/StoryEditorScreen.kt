@@ -106,7 +106,7 @@ val StoryGradientThemes = listOf(
     StoryGradientTheme(
         id = "oceanic",
         name = "Deep Abyss",
-        colors = listOf(Color(0xFF03001E), Color(0xFF7303C0), Color(0xFFEC38BC), Color(0xFFFDEFF9)),
+        colors = listOf(Color(0xFF03001E), Color(0xFF0A2540), Color(0xFF0381FE), Color(0xFFE0F2FE)),
         defaultTextColor = Color.White
     ),
     StoryGradientTheme(
@@ -1023,7 +1023,7 @@ fun StoryEditorScreen(
                             }
 
                             if (isHighlight) {
-                                listOf("#FFD60A", "#34C759", "#5AC8FA", "#FF2D55", "#AF52DE").forEach { hex ->
+                                listOf("#FFD60A", "#34C759", "#5AC8FA", "#FF2D55", "#0381FE").forEach { hex ->
                                     HighlightColorDot(hex = hex, isSelected = highlightColorHex == hex) {
                                         highlightColorHex = hex
                                     }
@@ -1128,7 +1128,7 @@ fun StoryEditorScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text("Color:", fontSize = 10.5.sp, color = themeColors.textMuted)
-                                listOf("#FFFFFF", "#111827", "#FF3B30", "#34C759", "#007AFF", "#FFCC00", "#FF2D55", "#AF52DE", "#5AC8FA").forEach { hex ->
+                                listOf("#FFFFFF", "#111827", "#FF3B30", "#34C759", "#007AFF", "#FFCC00", "#FF2D55", "#0381FE", "#5AC8FA").forEach { hex ->
                                     val color = try { Color(AndroidColor.parseColor(hex)) } catch (e: Exception) { Color.White }
                                     Box(
                                         modifier = Modifier

@@ -260,10 +260,10 @@ private fun DraftCardItem(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF8B5CF6).copy(alpha = 0.15f))
+                                .background(Color(0xFF0381FE).copy(alpha = 0.15f))
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
-                            Text("Likes hidden", color = Color(0xFF8B5CF6), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                            Text("Likes hidden", color = Color(0xFF0381FE), fontSize = 10.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }

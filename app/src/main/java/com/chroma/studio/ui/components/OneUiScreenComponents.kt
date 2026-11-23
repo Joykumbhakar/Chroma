@@ -428,9 +428,9 @@ fun getAppleCleanIconGradient(baseColor: Color): List<Color> {
     if (r > 0.85f && g > 0.70f && b < 0.25f) {
         return listOf(Color(0xFFFFD60A), Color(0xFFCC8400))
     }
-    // Purple / Violet family (e.g. 0xFFAF52DE, 0xFFBF5AF2, 0xFF8B5CF6)
+    // Purple / Violet family mapped to professional blue
     if (r in 0.45f..0.85f && g < 0.45f && b > 0.70f) {
-        return listOf(Color(0xFFBF5AF2), Color(0xFF6E28A0))
+        return listOf(Color(0xFF0381FE), Color(0xFF0052B4))
     }
     // Pink / Magenta family (e.g. 0xFFFF2D55, 0xFFEC4899)
     if (r > 0.85f && g < 0.35f && b in 0.30f..0.60f) {
@@ -440,9 +440,9 @@ fun getAppleCleanIconGradient(baseColor: Color): List<Color> {
     if (b > 0.75f && g > 0.65f) {
         return listOf(Color(0xFF64D2FF), Color(0xFF0073A8))
     }
-    // Indigo family (e.g. 0xFF5856D6, 0xFF6366F1)
+    // Indigo family mapped to clean deep blue
     if (b > 0.70f && r in 0.30f..0.55f && g < 0.45f) {
-        return listOf(Color(0xFF5E5CE6), Color(0xFF3330A2))
+        return listOf(Color(0xFF007AFF), Color(0xFF0040DD))
     }
     // Gray / Neutral family (e.g. 0xFF8E8E93, 0xFF6B7280)
     if (kotlin.math.abs(r - g) < 0.08f && kotlin.math.abs(g - b) < 0.08f) {

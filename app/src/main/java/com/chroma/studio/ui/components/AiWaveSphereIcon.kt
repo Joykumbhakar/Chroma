@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Custom AI Wave Sphere Graphic matching the user specification:
- * - Purple-to-violet linear gradient circular badge (#8A2BE2 -> #6E11E9 -> #4A00E0)
+ * - Brand Blue linear gradient circular badge (#0381FE -> #0066D6 -> #004BBB)
  * - Crisp white outer ring (radius 14 on 48-unit viewport, stroke width 2.2)
  * - Three flowing sinusoidal wave strokes clipped inside radius 13 sphere (stroke width 2.2, round cap/join)
  */
@@ -34,11 +34,11 @@ val AiWaveSphereVector: ImageVector by lazy {
         viewportWidth = 48f,
         viewportHeight = 48f
     ).apply {
-        // 1. Purple Gradient Circular Background Badge
+        // 1. Brand Blue Gradient Circular Background Badge
         addPath(
             pathData = PathParser().parsePathString("M 24,24 m -22,0 a 22,22 0 1,0 44,0 a 22,22 0 1,0 -44,0").toNodes(),
             fill = Brush.linearGradient(
-                colors = listOf(Color(0xFF8A2BE2), Color(0xFF6E11E9), Color(0xFF4A00E0)),
+                colors = listOf(Color(0xFF0381FE), Color(0xFF0066D6), Color(0xFF004BBB)),
                 start = Offset(8f, 6f),
                 end = Offset(40f, 42f)
             )
@@ -91,9 +91,9 @@ fun AiWaveSphereIcon(
         val cx = size.width / 2f
         val cy = size.height / 2f
 
-        // 1. Purple Gradient Circular Background Badge
+        // 1. Brand Blue Gradient Circular Background Badge
         val grad = Brush.linearGradient(
-            colors = listOf(Color(0xFF8A2BE2), Color(0xFF6E11E9), Color(0xFF4A00E0)),
+            colors = listOf(Color(0xFF0381FE), Color(0xFF0066D6), Color(0xFF004BBB)),
             start = Offset(cx - 16f * scale, cy - 18f * scale),
             end = Offset(cx + 16f * scale, cy + 18f * scale)
         )

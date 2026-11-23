@@ -946,7 +946,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                                 )
                                                 LoginFeatureRow(
                                                     icon = Lucide.Zap,
-                                                    iconGradient = listOf(Color(0xFFFF2D55), Color(0xFFA855F7)),
+                                                    iconGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE)),
                                                     title = "Instant Stories",
                                                     subtitle = "Share daily status, audio waveforms, and community art"
                                                 )

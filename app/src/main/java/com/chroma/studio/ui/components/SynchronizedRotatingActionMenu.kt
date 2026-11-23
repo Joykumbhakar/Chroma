@@ -145,8 +145,8 @@ private fun getThemeForAction(type: ActionMenuType): GlassOptionTheme {
                 1.00f to Color(0x526366F1)
             ),
             iconGradientStops = arrayOf(
-                0.00f to Color(0xFF2563EB),
-                1.00f to Color(0xFF7C3AED)
+                0.00f to Color(0xFF0381FE),
+                1.00f to Color(0xFF0052B4)
             )
         )
 
@@ -204,18 +204,18 @@ private fun getThemeForAction(type: ActionMenuType): GlassOptionTheme {
         ActionMenuType.AI_GENERATOR -> GlassOptionTheme(
             fillStops = arrayOf(
                 0.00f to Color(0xFAFFFFFF), // rgba(255, 255, 255, 0.98)
-                0.52f to Color(0xEBF5F3FF), // rgba(245, 243, 255, 0.92)
-                1.00f to Color(0xE0EDE9FE)  // rgba(237, 233, 254, 0.88)
+                0.52f to Color(0xEBF0F9FF), // rgba(240, 249, 255, 0.92)
+                1.00f to Color(0xE0E0F2FE)  // rgba(224, 242, 254, 0.88)
             ),
             borderStops = arrayOf(
                 0.00f to Color(0xFFFFFFFF), // rgba(255, 255, 255, 1.0)
-                0.52f to Color(0x94C4B5FD), // rgba(196, 181, 253, 0.58)
-                1.00f to Color(0x528B5CF6)  // rgba(139, 92, 246, 0.32)
+                0.52f to Color(0x94BAE6FD), // rgba(186, 230, 253, 0.58)
+                1.00f to Color(0x520381FE)  // rgba(3, 129, 254, 0.32)
             ),
             iconGradientStops = arrayOf(
-                0.00f to Color(0xFF8B5CF6),
-                0.50f to Color(0xFF6D28D9),
-                1.00f to Color(0xFFEC4899)
+                0.00f to Color(0xFF0381FE),
+                0.50f to Color(0xFF0066D6),
+                1.00f to Color(0xFF004BBB)
             )
         )
     }
@@ -848,15 +848,15 @@ private fun ActionNodeIcon(
                 }
             }
 
-            // 5. AI Generator (Purple Gradient Wave Sphere Graphic)
+            // 5. AI Generator (Brand Blue Gradient Wave Sphere Graphic)
             ActionMenuType.AI_GENERATOR -> {
                 val scale = size.minDimension / 48f
                 val cx = size.width / 2f
                 val cy = size.height / 2f
 
-                // 1. Purple Gradient Circular Background Badge
+                // 1. Brand Blue Gradient Circular Background Badge
                 val grad = Brush.linearGradient(
-                    colors = listOf(Color(0xFF8A2BE2), Color(0xFF6E11E9), Color(0xFF4A00E0)),
+                    colors = listOf(Color(0xFF0381FE), Color(0xFF0066D6), Color(0xFF004BBB)),
                     start = Offset(cx - 16f * scale, cy - 18f * scale),
                     end = Offset(cx + 16f * scale, cy + 18f * scale)
                 )

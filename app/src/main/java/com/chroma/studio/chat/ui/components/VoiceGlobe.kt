@@ -63,8 +63,8 @@ data class OpticalVoiceGlobePalette(
     val chromaticRimColors: List<Color> = listOf(
         Color(0xD9FFFFFF),
         Color(0x9938BDF8),
-        Color(0x80818CF8),
-        Color(0x73C084FC),
+        Color(0x8060A5FA),
+        Color(0x7338BDF8),
         Color(0x9938BDF8),
         Color(0xD9FFFFFF)
     )
@@ -116,23 +116,23 @@ fun getOpticalVoiceGlobePalette(globeStyle: VoiceGlobeStyleType, isDark: Boolean
             }
         }
         VoiceGlobeStyleType.CHROMATIC_3D -> OpticalVoiceGlobePalette(
-            accentColor = Color(0xFF8B5CF6),
+            accentColor = Color(0xFF0381FE),
             orbCoreStops = listOf(
-                0.00f to Color(0xFFE9D5FF),
-                0.38f to Color(0xFFC084FC),
-                0.74f to Color(0xFF8B5CF6),
-                1.00f to Color(0xFF3B0764)
+                0.00f to Color(0xFFE0F2FE),
+                0.38f to Color(0xFF38BDF8),
+                0.74f to Color(0xFF0381FE),
+                1.00f to Color(0xFF0A2540)
             ),
-            c1Inner = Color(0xFFC084FC),
-            c1Outer = Color(0xFF8B5CF6),
+            c1Inner = Color(0xFF38BDF8),
+            c1Outer = Color(0xFF0381FE),
             c2Inner = Color.White,
-            c2Outer = Color(0xFFF3E8FF),
-            c3Inner = Color(0xFFA855F7),
+            c2Outer = Color(0xFFE0F2FE),
+            c3Inner = Color(0xFF0284C7),
             c3Outer = Color.Transparent,
-            c4Inner = Color(0xFF7C3AED),
-            c4Outer = Color(0xFF3B0764),
-            causticColor = Color(0xFFA855F7),
-            waveColor = Color(0xFF8B5CF6)
+            c4Inner = Color(0xFF0052B4),
+            c4Outer = Color(0xFF0A2540),
+            causticColor = Color(0xFF38BDF8),
+            waveColor = Color(0xFF0381FE)
         )
         VoiceGlobeStyleType.AURORA_PULSE -> OpticalVoiceGlobePalette(
             accentColor = Color(0xFFEC4899),
@@ -658,7 +658,7 @@ fun LiquidGlassVoiceOrb(
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color(0xFFA855F7).copy(alpha = 0.28f * voiceAmplitude),
+                                Color(0xFF0381FE).copy(alpha = 0.28f * voiceAmplitude),
                                 Color(0xFF38BDF8).copy(alpha = 0.18f * voiceAmplitude),
                                 Color.Transparent
                             ),

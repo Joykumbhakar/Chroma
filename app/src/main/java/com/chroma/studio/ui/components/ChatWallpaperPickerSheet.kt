@@ -164,7 +164,7 @@ fun ChatWallpaperPickerSheet(
                         ChatTheme.OCEAN -> listOf(Color(0xFF00C6FF), Color(0xFF0072FF))
                         ChatTheme.SUNSET -> listOf(Color(0xFFFF5E3A), Color(0xFFFF2A68))
                         ChatTheme.EMERALD -> listOf(Color(0xFF34C759), Color(0xFF00C7BE))
-                        ChatTheme.LAVENDER -> listOf(Color(0xFFAF52DE), Color(0xFF5E5CE6))
+                        ChatTheme.LAVENDER -> listOf(Color(0xFF38BDF8), Color(0xFF0381FE))
                         ChatTheme.MONOCHROME -> listOf(Color(0xFF3A3A3C), Color(0xFF1C1C1E))
                         else -> listOf(Color(0xFF0381FE), Color(0xFF005CE6))
                     }

@@ -2873,7 +2873,7 @@ fun AppleSavedWorksGraphic(
                 // Band 2: Royal Indigo / Amethyst Gradient (Shader Filter Layer)
                 drawRoundRect(
                     brush = Brush.horizontalGradient(
-                        listOf(Color(0xFF6C5CE7), Color(0xFFAF52DE), Color(0xFFFF2D55))
+                        listOf(Color(0xFF0381FE), Color(0xFF0072DE), Color(0xFF38BDF8))
                     ),
                     topLeft = Offset(26f, 45.5f),
                     size = Size(36f, 7f),

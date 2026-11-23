@@ -204,7 +204,7 @@ fun GalaxyAiSparkleIcon(
         Brush.linearGradient(
             colors = listOf(
                 Color(0xFF0381FE), // Blue
-                Color(0xFFA855F7), // Purple
+                Color(0xFF0072DE), // Brand Cobalt
                 Color(0xFF06B6D4), // Cyan
                 Color(0xFF22C55E)  // Emerald
             ),
@@ -252,7 +252,7 @@ fun GalaxyAiSearchButton(
         Brush.linearGradient(
             colors = listOf(
                 Color(0xFF0381FE),
-                Color(0xFFA855F7),
+                Color(0xFF0072DE),
                 Color(0xFF06B6D4),
                 Color(0xFF22C55E)
             )
@@ -261,7 +261,7 @@ fun GalaxyAiSearchButton(
     val bgBrush = if (isDark) {
         Brush.linearGradient(
             listOf(
-                Color(0xFFA855F7).copy(alpha = 0.18f),
+                Color(0xFF0381FE).copy(alpha = 0.18f),
                 Color(0xFF22C55E).copy(alpha = 0.18f)
             )
         )
@@ -318,7 +318,7 @@ fun GalaxyAiAuroraSearchBar(
             Brush.linearGradient(
                 listOf(
                     Color(0xFF60A5FA),
-                    Color(0xFFC084FC),
+                    Color(0xFF38BDF8),
                     Color(0xFF22D3EE),
                     Color(0xFF4ADE80)
                 )
@@ -327,7 +327,7 @@ fun GalaxyAiAuroraSearchBar(
             Brush.linearGradient(
                 listOf(
                     Color(0xFF3871E0),
-                    Color(0xFFA855F7),
+                    Color(0xFF0381FE),
                     Color(0xFF06B6D4),
                     Color(0xFF22C55E)
                 )
@@ -338,7 +338,7 @@ fun GalaxyAiAuroraSearchBar(
             Brush.linearGradient(
                 listOf(
                     Color(0xFF0381FE),
-                    Color(0xFF9333EA),
+                    Color(0xFF0284C7),
                     Color(0xFF0891B2),
                     Color(0xFF059669)
                 )
@@ -347,7 +347,7 @@ fun GalaxyAiAuroraSearchBar(
             Brush.linearGradient(
                 listOf(
                     Color(0xFF3871E0),
-                    Color(0xFFA855F7),
+                    Color(0xFF0381FE),
                     Color(0xFF06B6D4),
                     Color(0xFF10B981)
                 )
@@ -375,7 +375,7 @@ fun GalaxyAiAuroraSearchBar(
         Brush.linearGradient(
             listOf(
                 Color.White.copy(alpha = 0.24f),
-                Color(0xFFA855F7).copy(alpha = 0.18f)
+                Color(0xFF0381FE).copy(alpha = 0.18f)
             )
         )
     } else {
@@ -638,7 +638,7 @@ fun OneUiSearchBarPill(
                         Brush.linearGradient(
                             listOf(
                                 accentColor.copy(alpha = 0.16f),
-                                Color(0xFFA855F7).copy(alpha = 0.16f)
+                                Color(0xFF0072DE).copy(alpha = 0.16f)
                             )
                         )
                     )
@@ -3033,7 +3033,7 @@ fun ExploreQuickLookSheet(
                                     Icon(
                                         imageVector = rememberLucideHeartHandshakeIcon(
                                             isRemixed = false,
-                                            strokeColor = Color(0xFF8B5CF6),
+                                            strokeColor = Color(0xFF0381FE),
                                             heartFillColor = null
                                         ),
                                         contentDescription = null,

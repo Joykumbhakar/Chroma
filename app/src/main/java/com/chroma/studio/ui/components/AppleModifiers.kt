@@ -153,7 +153,7 @@ val IosAvatarGradients = listOf(
     listOf(Color(0xFF475569), Color(0xFF1E293B)), // Slate Blue
     listOf(Color(0xFF166534), Color(0xFF14532D)), // Executive Forest
     listOf(Color(0xFF7F1D1D), Color(0xFF450A0A)), // Burgundy Board
-    listOf(Color(0xFF581C87), Color(0xFF3B0764)), // Deep Purple
+    listOf(Color(0xFF0F2B48), Color(0xFF081829)), // Deep Navy
     listOf(Color(0xFF0F766E), Color(0xFF042F2E)), // Teal Pro
     listOf(Color(0xFF3F3F46), Color(0xFF18181B)), // Charcoal
     listOf(Color(0xFF9A3412), Color(0xFF431407)), // Bronze Exec
@@ -161,7 +161,7 @@ val IosAvatarGradients = listOf(
     listOf(Color(0xFF2563EB), Color(0xFF1E3A8A)), // Royal Blue
     listOf(Color(0xFF059669), Color(0xFF064E3B)), // Emerald Focus
     listOf(Color(0xFFBE123C), Color(0xFF881337)), // Crimson Velvet
-    listOf(Color(0xFF7E22CE), Color(0xFF4C1D95)), // Amethyst Dark
+    listOf(Color(0xFF1D4ED8), Color(0xFF1E3A8A)), // Cobalt Dark
     listOf(Color(0xFF451A03), Color(0xFF291002)), // Dark Mocha
     listOf(Color(0xFF0369A1), Color(0xFF082F49)), // Ocean Depth
     listOf(Color(0xFF312E81), Color(0xFF1E1B4B)), // Sapphire Night
@@ -357,7 +357,7 @@ val AppleStatusOnlyFriendGradient = listOf(
 
 val AppleStatusVibrantGradient = listOf(
     Color(0xFFFF2D55), // Hot Rose / Coral
-    Color(0xFFAF52DE), // Royal Violet
+    Color(0xFF0072DE), // Brand Cobalt
     Color(0xFF0381FE), // Apple Blue
     Color(0xFF00C6FF), // Bright Cyan
     Color(0xFFFF9500), // Amber
@@ -426,9 +426,9 @@ fun AppleStatusAvatar(
             isUploading -> Brush.sweepGradient(
                 listOf(
                     Color(0xFF0381FE),
-                    Color(0xFFAF52DE),
-                    Color(0xFFFF2D55),
-                    Color(0xFFFF9500),
+                    Color(0xFF0072DE),
+                    Color(0xFF38BDF8),
+                    Color(0xFF0052B4),
                     Color(0xFF0381FE)
                 )
             )

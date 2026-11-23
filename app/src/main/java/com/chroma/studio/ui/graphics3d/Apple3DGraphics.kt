@@ -1326,7 +1326,7 @@ private fun DrawScope.drawApple3DGraphicNormalized(id: Apple3DGraphicId, p: Floa
 
                 // Band 2: Royal Indigo / Amethyst Gradient (Shader Filter Layer)
                 drawRoundRect(
-                    brush = Brush.horizontalGradient(listOf(Color(0xFF5856D6), Color(0xFFAF52DE))),
+                    brush = Brush.horizontalGradient(listOf(Color(0xFF0381FE), Color(0xFF0052B4))),
                     topLeft = Offset(26f, 46f),
                     size = Size(35f, 6.5f),
                     cornerRadius = CornerRadius(3.25f, 3.25f)

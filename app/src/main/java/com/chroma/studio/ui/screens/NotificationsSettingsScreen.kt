@@ -248,7 +248,7 @@ fun NotificationsSettingsScreen(
                             title = "Remixes & Asset Re-use",
                             subtitle = "Alerts when creators remix your audio tracks or video transitions",
                             icon = LucideFilled.Sparkles,
-                            iconColor = Color(0xFF8B5CF6),
+                            iconColor = Color(0xFF0381FE),
                             checked = notifRemixes,
                             onCheckedChange = {
                                 SoundManager.playReaction()

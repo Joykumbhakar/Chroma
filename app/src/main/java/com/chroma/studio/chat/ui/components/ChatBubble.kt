@@ -2322,7 +2322,7 @@ fun PollCard(
                         .background(
                             if (isOutgoing) Color.White.copy(alpha = 0.20f)
                             else if (poll.isClosed) Color(0xFFFF9500).copy(alpha = 0.15f)
-                            else if (poll.isAnonymous) Color(0xFF8B5CF6).copy(alpha = 0.15f)
+                            else if (poll.isAnonymous) Color(0xFF0381FE).copy(alpha = 0.15f)
                             else colors.iosBlue.copy(alpha = 0.15f)
                         ),
                     contentAlignment = Alignment.Center
@@ -2336,7 +2336,7 @@ fun PollCard(
                         Icon(
                             imageVector = Lucide.ChartColumn,
                             contentDescription = null,
-                            tint = if (isOutgoing) Color.White else (if (poll.isAnonymous) Color(0xFF8B5CF6) else colors.iosBlue),
+                            tint = if (isOutgoing) Color.White else (if (poll.isAnonymous) Color(0xFF0381FE) else colors.iosBlue),
                             modifier = Modifier.size(13.dp)
                         )
                     }
@@ -2352,7 +2352,7 @@ fun PollCard(
                     letterSpacing = 0.6.sp,
                     color = when {
                         poll.isClosed -> if (isOutgoing) Color.White.copy(alpha = 0.95f) else Color(0xFFFF9500)
-                        poll.isAnonymous -> if (isOutgoing) Color.White.copy(alpha = 0.95f) else Color(0xFF8B5CF6)
+                        poll.isAnonymous -> if (isOutgoing) Color.White.copy(alpha = 0.95f) else Color(0xFF0381FE)
                         else -> if (isOutgoing) Color.White.copy(alpha = 0.95f) else colors.iosBlue
                     }
                 )
@@ -3677,14 +3677,14 @@ private fun resolveBaseBubbleVisual(
                     shape = shape,
                     background = SolidColor(Color(0xFF0A0A10)),
                     borderWidth = 1.dp,
-                    borderColor = Color(0xFFA855F7),
-                    borderBrush = Brush.verticalGradient(listOf(Color(0xFFC084FC), Color(0xFF7E22CE))),
+                    borderColor = Color(0xFF0381FE),
+                    borderBrush = Brush.verticalGradient(listOf(Color(0xFF60A5FA), Color(0xFF0381FE))),
                     elevation = 3.dp,
-                    ambientColor = Color(0x25A855F7),
-                    spotColor = Color(0x35A855F7),
-                    textColor = Color(0xFFF3E8FF),
-                    mentionColor = Color(0xFFC084FC),
-                    timeColor = Color(0xFFA855F7).copy(alpha = 0.8f),
+                    ambientColor = Color(0x250381FE),
+                    spotColor = Color(0x350381FE),
+                    textColor = Color(0xFFEFF6FF),
+                    mentionColor = Color(0xFF60A5FA),
+                    timeColor = Color(0xFF0381FE).copy(alpha = 0.8f),
                     fontFamily = null,
                     fontWeight = FontWeight.Medium,
                     hasTopSpecular = false
@@ -4619,7 +4619,7 @@ fun FileStackCluster(
                 "PDF" -> Color(0xFFFF3B30)
                 "DOC", "DOCX" -> Color(0xFF0381FE)
                 "XLS", "XLSX", "CSV" -> Color(0xFF34C759)
-                "ZIP", "RAR", "7Z" -> Color(0xFFAF52DE)
+                "ZIP", "RAR", "7Z" -> Color(0xFF0284C7)
                 "APK" -> Color(0xFFFF9500)
                 else -> colors.iosBlue
             }

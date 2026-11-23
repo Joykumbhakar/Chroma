@@ -4892,8 +4892,8 @@ fun AppearanceSettingsModal(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         val palette = listOf(
-                                            Color(0xFF0078FE), // iOS Blue
-                                            Color(0xFF8B5CF6), // Purple
+                                            Color(0xFF0381FE), // Blue
+                                            Color(0xFF0052B4), // Cobalt
                                             Color(0xFF10B981), // Emerald
                                             Color(0xFFF59E0B), // Amber
                                             Color(0xFFF43F5E), // Rose

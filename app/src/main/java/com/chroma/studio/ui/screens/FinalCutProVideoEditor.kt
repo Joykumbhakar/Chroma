@@ -7156,7 +7156,7 @@ private fun EffectsTabContent(
                             isBipolar = false,
                             formatValue = { "f/${String.format("%.1f", it)}" },
                             onValueChange = onBokehChange,
-                            gradientColors = listOf(Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFF06B6D4))
+                            gradientColors = listOf(Color(0xFF0381FE), Color(0xFF0072DE), Color(0xFF06B6D4))
                         )
                     }
                 }
@@ -8508,7 +8508,7 @@ private fun FcpColorControlRow(
                 Color(0xFFFFB800), // Amber Gold
                 Color(0xFF06B6D4), // Cyan
                 Color(0xFFF43F5E), // Coral
-                Color(0xFFA855F7), // Purple
+                Color(0xFF0381FE), // Blue
                 Color(0xFF10B981), // Emerald
                 Color(0xFFF59E0B), // Warm Gold
                 Color(0xFF0F172A)  // Dark Slate

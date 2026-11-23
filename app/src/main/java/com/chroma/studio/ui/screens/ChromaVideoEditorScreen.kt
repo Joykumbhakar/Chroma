@@ -326,12 +326,12 @@ fun AppIconBox(
     val brush = remember(backgroundColor) {
         when (backgroundColor.value) {
             0xFF0381FEuL -> Brush.verticalGradient(listOf(Color(0xFF44A6FF), Color(0xFF0381FE))) // Blue
-            0xFF5856D6uL -> Brush.verticalGradient(listOf(Color(0xFF7868E6), Color(0xFF5856D6))) // Indigo
+            0xFF5856D6uL -> Brush.verticalGradient(listOf(Color(0xFF60A5FA), Color(0xFF0072DE))) // Deep Blue
             0xFF34C759uL -> Brush.verticalGradient(listOf(Color(0xFF4CD964), Color(0xFF34C759))) // Green
             0xFFFF9500uL -> Brush.verticalGradient(listOf(Color(0xFFFFB340), Color(0xFFFF9500))) // Orange
             0xFFFF3B30uL -> Brush.verticalGradient(listOf(Color(0xFFFF665A), Color(0xFFFF3B30))) // Red
             0xFF8E8E93uL -> Brush.verticalGradient(listOf(Color(0xFFA3AAB2), Color(0xFF8E8E93))) // Silver
-            0xFFAF52DEuL -> Brush.verticalGradient(listOf(Color(0xFFC973F0), Color(0xFFAF52DE))) // Purple
+            0xFFAF52DEuL -> Brush.verticalGradient(listOf(Color(0xFF38BDF8), Color(0xFF0381FE))) // Sky to Blue
             0xFF30B0C7uL -> Brush.verticalGradient(listOf(Color(0xFF5AC8FA), Color(0xFF30B0C7))) // Teal
             else -> Brush.verticalGradient(listOf(backgroundColor, backgroundColor))
         }

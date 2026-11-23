@@ -312,9 +312,9 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                                 width = 2.dp,
                                 brush = androidx.compose.ui.graphics.Brush.linearGradient(
                                     colors = listOf(
-                                        Color(0xFF8B5CF6), // Purple
-                                        Color(0xFFD946EF), // Fuchsia
-                                        Color(0xFFF43F5E)  // Rose
+                                        Color(0xFF0381FE), // Brand Blue
+                                        Color(0xFF0072DE), // Cobalt
+                                        Color(0xFF38BDF8)  // Sky
                                     )
                                 ),
                                 shape = RoundedCornerShape(22.dp)

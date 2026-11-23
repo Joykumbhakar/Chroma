@@ -41,8 +41,8 @@ private val COLOR_PRESETS = listOf(
     Color(0xFFFF2D55), // Pink/Red
     Color(0xFF34C759), // Green
     Color(0xFFFF9500), // Orange
-    Color(0xFFAF52DE), // Purple
-    Color(0xFF5856D6), // Indigo
+    Color(0xFF0072DE), // Cobalt Blue
+    Color(0xFF0284C7), // Sky Blue
     Color(0xFF00C7BE), // Teal
     Color(0xFFFF3B30)  // Coral
 )

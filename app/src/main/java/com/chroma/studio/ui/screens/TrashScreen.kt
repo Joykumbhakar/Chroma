@@ -97,7 +97,7 @@ fun TrashScreen(
     )
 
     val selectIconGradient = Brush.linearGradient(
-        listOf(Color(0xFF38BDF8), Color(0xFF6366F1), Color(0xFFA855F7))
+        listOf(Color(0xFF38BDF8), Color(0xFF0381FE), Color(0xFF0052B4))
     )
     val restoreIconGradient = Brush.linearGradient(
         listOf(Color(0xFF34D399), Color(0xFF06B6D4), Color(0xFF0381FE))

@@ -376,7 +376,7 @@ fun CustomFileManagerModal(
                             "PDF" -> Color(0xFFFF3B30)
                             "DOC", "DOCX" -> Color(0xFF0381FE)
                             "XLS", "XLSX", "CSV" -> Color(0xFF34C759)
-                            "ZIP", "RAR", "7Z" -> Color(0xFFAF52DE)
+                            "ZIP", "RAR", "7Z" -> Color(0xFF0284C7)
                             "APK" -> Color(0xFFFF9500)
                             "MP3", "WAV", "M4A" -> Color(0xFFE11D48)
                             else -> colors.iosBlue

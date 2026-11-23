@@ -47,8 +47,8 @@ val VerifiedBadgeGoldGradient = listOf(
 
 val VerifiedBadgeChromaGradient = listOf(
     Color(0xFF00F5FF),
-    Color(0xFF7C3AED),
-    Color(0xFFFF2E93)
+    Color(0xFF0381FE),
+    Color(0xFF0052B4)
 )
 
 val VerifiedBadgeSilverGradient = listOf(
@@ -121,7 +121,7 @@ fun VerifiedBadge(
         badgeColor?.copy(alpha = 0.35f) ?: when (tier) {
             VerifiedBadgeTier.BLUE -> Color(0xFF0381FE).copy(alpha = 0.35f)
             VerifiedBadgeTier.GOLD -> Color(0xFFFFA500).copy(alpha = 0.35f)
-            VerifiedBadgeTier.CHROMA -> Color(0xFF7C3AED).copy(alpha = 0.35f)
+            VerifiedBadgeTier.CHROMA -> Color(0xFF0381FE).copy(alpha = 0.35f)
             VerifiedBadgeTier.SILVER -> Color(0xFF94A3B8).copy(alpha = 0.35f)
         }
     }

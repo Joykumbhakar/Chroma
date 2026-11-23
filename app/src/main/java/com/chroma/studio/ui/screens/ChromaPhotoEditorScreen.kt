@@ -285,13 +285,13 @@ enum class StudioPhotoPreset(
             GOLDEN_HOUR -> listOf(Color(0xFFD97706), Color(0xFFFBBF24))
             COOL_SLATE -> listOf(Color(0xFF0284C7), Color(0xFF38BDF8))
             EMERALD -> listOf(Color(0xFF047857), Color(0xFF10B981))
-            SOFT_FADE -> listOf(Color(0xFF8B5CF6), Color(0xFFA78BFA))
+            SOFT_FADE -> listOf(Color(0xFF0381FE), Color(0xFF60A5FA))
             SEPIA_VINTAGE -> listOf(Color(0xFF78350F), Color(0xFFB45309))
             PASTEL_MIST -> listOf(Color(0xFFF472B6), Color(0xFFFBCFE8))
             CHROME -> listOf(Color(0xFF475569), Color(0xFF94A3B8))
-            CYBERPUNK -> listOf(Color(0xFF7C3AED), Color(0xFFEC4899))
+            CYBERPUNK -> listOf(Color(0xFF0072DE), Color(0xFF06B6D4))
             CLEAN_HDR -> listOf(Color(0xFF1D4ED8), Color(0xFF60A5FA))
-            RETRO_80S -> listOf(Color(0xFF9333EA), Color(0xFFF43F5E))
+            RETRO_80S -> listOf(Color(0xFF0381FE), Color(0xFF38BDF8))
         }
 
     val colorMatrix: FloatArray?
@@ -1814,7 +1814,7 @@ private fun PhotoPreviewArea(
                     }
                     if (state.frameStyle == PhotoFrameStyle.NEON_GLOW) {
                         drawRect(
-                            brush = Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFFAF52DE), Color(0xFFFF2D55))),
+                            brush = Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE), Color(0xFF38BDF8))),
                             style = Stroke(width = 5.dp.toPx())
                         )
                     }
@@ -2506,8 +2506,8 @@ private fun PhotoHorizontalToolbar(
         ToolItem(Lucide.Crop, "Crop", Color(0xFF0381FE), { onOpenTool(PhotoEditorTool.CROP) }),
         ToolItem(Lucide.SlidersHorizontal, "Filter", Color(0xFFFF9500), { onOpenTool(PhotoEditorTool.FILTER) }),
         ToolItem(Lucide.Settings2, "Adjust", Color(0xFF34C759), { onOpenTool(PhotoEditorTool.ADJUST) }),
-        ToolItem(Lucide.Activity, "Curves", Color(0xFF5856D6), { onOpenTool(PhotoEditorTool.CURVES) }, requiresClip = false),
-        ToolItem(Lucide.Palette, "Color Mix", Color(0xFFAF52DE), { onOpenTool(PhotoEditorTool.COLOR_MIX) }),
+        ToolItem(Lucide.Activity, "Curves", Color(0xFF0072DE), { onOpenTool(PhotoEditorTool.CURVES) }, requiresClip = false),
+        ToolItem(Lucide.Palette, "Color Mix", Color(0xFF0381FE), { onOpenTool(PhotoEditorTool.COLOR_MIX) }),
         ToolItem(Lucide.Sparkles, "Effects", Color(0xFFFF2D55), { onOpenTool(PhotoEditorTool.EFFECTS) }, requiresClip = false),
         ToolItem(Lucide.Type, "Text", Color(0xFFFF3B30), { onOpenTool(PhotoEditorTool.TEXT) }, requiresClip = false),
         ToolItem(Lucide.Sticker, "Stickers", Color(0xFFEC4899), { onOpenTool(PhotoEditorTool.STICKERS) }, requiresClip = false),
@@ -3494,7 +3494,7 @@ private fun PhotoTextEditorPanel(clip: Clip, viewModel: ChromaPhotoEditorViewMod
         Color.White, Color.Black,
         Color(0xFFFF3B30), Color(0xFFFF9500),
         Color(0xFFFFCC00), Color(0xFF34C759),
-        Color(0xFF0381FE), Color(0xFFAF52DE),
+        Color(0xFF0381FE), Color(0xFF0072DE),
         Color(0xFFFF2D55), Color(0xFF5AC8FA),
         Color(0xFFFF6B35), Color(0xFF10B981)
     )
@@ -3939,9 +3939,9 @@ private fun PhotoMarkupPanel(
     val colors = LocalOscellionColors.current
     val swatches = listOf(
         Color(0xFF0381FE), Color(0xFFFF2D55), Color(0xFF34C759),
-        Color(0xFFFFCC00), Color(0xFFAF52DE), Color.White,
+        Color(0xFFFFCC00), Color(0xFF0072DE), Color.White,
         Color.Black, Color(0xFF00E5FF), Color(0xFFFF9500),
-        Color(0xFFFF5252), Color(0xFF7C4DFF), Color(0xFF69F0AE)
+        Color(0xFFFF5252), Color(0xFF0381FE), Color(0xFF69F0AE)
     )
 
     Column(
@@ -4161,7 +4161,7 @@ private fun AddPhotoMediaSheet(
 
             val options = listOf(
                 MediaOption(Lucide.Image, "Image Overlay", "Add a PIP photo or PNG texture", Color(0xFF34C759)),
-                MediaOption(Lucide.AlignLeft, "Text Layer", "Add typography overlay", Color(0xFFAF52DE)),
+                MediaOption(Lucide.AlignLeft, "Text Layer", "Add typography overlay", Color(0xFF0381FE)),
                 MediaOption(Lucide.Layers, "Sticker", "Add a PNG sticker overlay", Color(0xFFFF9500)),
                 MediaOption(Lucide.Brush, "Markup Brush", "Draw freehand or neon strokes", Color(0xFF30B0C7))
             )

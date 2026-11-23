@@ -482,7 +482,7 @@ private fun ShareRoomItem(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(CircleShape)
-                            .background(if (room.isGroup) Color(0xFF8B5CF6) else Color(0xFF0381FE)),
+                            .background(if (room.isGroup) Color(0xFF0072DE) else Color(0xFF0381FE)),
                         contentAlignment = Alignment.Center
                     ) {
                         if (room.isGroup) {
