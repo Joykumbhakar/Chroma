@@ -49,17 +49,20 @@ import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 
 /**
- * Pixel-perfect Login & Sign Up Screen for Oscellion.
- * Built using the Oscellion Design System & Brand Identity:
- * - 3D Character Hero on frosted obsidian/titanium glass sphere with floating media badges
- * - Smooth dynamic gradient blending into the app's canvas background
- * - Luminous Oscellion brand gradient title and subtitle
- * - "Continue with Google" glossy pill with multicolor Google logo and arrow
- * - Subtle "OR" horizontal divider
- * - Dynamic system tokenized input fields (Username & Password) with visibility toggle
- * - Mode switch between "Create an Account" and "Sign In"
- * - "Continue without Account" frosted secondary pill button
- * - Legal disclaimer footer with clickable "Terms & Conditions" and "Privacy Policy" links
+ * Compact, Professional Login & Sign Up Screen for Oscellion.
+ *
+ * Design Guidelines:
+ * - Fits completely on a single viewport without scrolling on standard mobile screens.
+ * - Uses strictly professional Oscellion brand identity palette (Azure, Brand Blue #0381FE, Deep Royal #0072DE).
+ * - Zero purple/violet gradients.
+ * - Balanced, compact vertical rhythm:
+ *     1. Hero section: 180dp with smooth background fade
+ *     2. Branding: Crisp "Welcome to" & professional blue gradient "Oscellion"
+ *     3. Continue with Google: 48dp crisp white pill
+ *     4. Inputs: 46dp compact pill fields with design system tokens
+ *     5. Primary action: 48dp professional blue gradient button
+ *     6. Secondary action: 46dp frosted glass pill button
+ *     7. Footer legal: 11.5sp compact disclaimer
  */
 @Composable
 fun WelcomeScreen(
@@ -159,16 +162,16 @@ fun WelcomeScreen(
             .fillMaxSize()
             .background(colors.bg)
     ) {
-        // Ambient Brand Glow behind Hero
+        // Ambient Brand Blue Glow behind Hero (Strictly professional blue, zero purple)
         Box(
             modifier = Modifier
-                .size(380.dp)
-                .offset(x = (-60).dp, y = (-70).dp)
+                .size(320.dp)
+                .offset(x = (-50).dp, y = (-50).dp)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            colors.primary.copy(alpha = if (isDark) 0.22f else 0.12f),
-                            colors.primaryDark.copy(alpha = if (isDark) 0.08f else 0.04f),
+                            colors.primary.copy(alpha = if (isDark) 0.18f else 0.08f),
+                            colors.primaryDark.copy(alpha = if (isDark) 0.06f else 0.02f),
                             Color.Transparent
                         )
                     ),
@@ -185,11 +188,11 @@ fun WelcomeScreen(
                 .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ─── 1. HERO 3D CHARACTER SECTION ─────────────────────────────
+            // ─── 1. COMPACT HERO 3D CHARACTER SECTION ────────────────────
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(350.dp)
+                    .height(185.dp)
             ) {
                 Image(
                     painter = painterResource(R.drawable.hero_oscellion_auth),
@@ -198,18 +201,17 @@ fun WelcomeScreen(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Smooth bottom gradient overlay fading into the design system background color
+                // Smooth bottom gradient overlay fading into the canvas background
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(130.dp)
+                        .height(75.dp)
                         .align(Alignment.BottomCenter)
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    colors.bg.copy(alpha = 0.45f),
-                                    colors.bg.copy(alpha = 0.85f),
+                                    colors.bg.copy(alpha = 0.55f),
                                     colors.bg
                                 )
                             )
@@ -217,51 +219,51 @@ fun WelcomeScreen(
                 )
             }
 
-            // ─── 2. HEADLINE & BRANDING ──────────────────────────────────
+            // ─── 2. HEADLINE & BRANDING (PROFESSIONAL BRAND BLUE) ────────
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
+                    .padding(horizontal = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "Welcome to",
-                    fontSize = 18.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.textMain,
-                    letterSpacing = (-0.3).sp,
+                    letterSpacing = (-0.2).sp,
                     fontFamily = InterFontFamily
                 )
-                Spacer(Modifier.height(1.dp))
+
                 Text(
                     text = "Oscellion",
-                    fontSize = 40.sp,
+                    fontSize = 32.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = (-0.8).sp,
+                    letterSpacing = (-0.6).sp,
                     style = TextStyle(
                         brush = Brush.horizontalGradient(
                             colors = listOf(
-                                Color(0xFF38B6FF),
-                                colors.primary,
-                                Color(0xFF7C3AED),
-                                Color(0xFFA855F7)
+                                Color(0xFF38B6FF),   // Crisp Sky Azure
+                                colors.primaryHover, // Vibrant Azure Blue
+                                colors.primary,      // Official Brand Blue (#0381FE)
+                                colors.primaryDark   // Deep Royal Blue (#0072DE)
                             )
                         )
                     ),
                     fontFamily = InterFontFamily
                 )
-                Spacer(Modifier.height(4.dp))
+
                 Text(
                     text = "Create • Share • Explore",
-                    fontSize = 13.5.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.Medium,
                     color = colors.textMuted,
-                    letterSpacing = 0.5.sp,
+                    letterSpacing = 0.4.sp,
                     fontFamily = InterFontFamily
                 )
             }
 
-            Spacer(Modifier.height(26.dp))
+            Spacer(Modifier.height(12.dp))
 
             // ─── 3. FORM CONTROLS & ACTION BUTTONS ───────────────────────
             Column(
@@ -270,17 +272,17 @@ fun WelcomeScreen(
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Continue with Google Button (Crisp White Pill)
+                // Continue with Google Button (Crisp White Pill - 48dp Compact)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .height(48.dp)
                         .graphicsLayer {
                             scaleX = googleScale
                             scaleY = googleScale
                         }
                         .clip(RoundedCornerShape(colors.pillCornerRadius))
-                        .background(if (isDark) Color.White else Color.White)
+                        .background(Color.White)
                         .clickable(
                             enabled = !googleLoading,
                             interactionSource = googleInteraction,
@@ -292,14 +294,14 @@ fun WelcomeScreen(
                             if (isDark) Color.Transparent else Color(0xFFE2E8F0),
                             RoundedCornerShape(colors.pillCornerRadius)
                         )
-                        .padding(horizontal = 18.dp),
+                        .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (googleLoading) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
+                            modifier = Modifier.size(20.dp),
                             color = Color(0xFF0F172A),
-                            strokeWidth = 2.4.dp
+                            strokeWidth = 2.2.dp
                         )
                     } else {
                         Row(
@@ -309,22 +311,22 @@ fun WelcomeScreen(
                             Image(
                                 painter = painterResource(R.drawable.ic_google_logo),
                                 contentDescription = "Google Logo",
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(20.dp)
                             )
 
-                            Spacer(Modifier.width(14.dp))
+                            Spacer(Modifier.width(12.dp))
 
                             Box(
                                 modifier = Modifier
                                     .width(1.dp)
-                                    .height(24.dp)
+                                    .height(20.dp)
                                     .background(Color(0xFFE2E8F0))
                             )
 
                             Text(
                                 text = "Continue with Google",
                                 color = Color(0xFF0F172A),
-                                fontSize = 15.5.sp,
+                                fontSize = 14.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = InterFontFamily,
                                 modifier = Modifier
@@ -337,17 +339,17 @@ fun WelcomeScreen(
                                 imageVector = Lucide.ArrowRight,
                                 contentDescription = null,
                                 tint = Color(0xFF0F172A),
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
                 }
 
-                // OR Divider
+                // OR Divider (Tight Vertical Margin)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 14.dp),
+                        .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -359,10 +361,10 @@ fun WelcomeScreen(
                     Text(
                         text = "OR",
                         color = colors.textMuted,
-                        fontSize = 12.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.2.sp,
-                        modifier = Modifier.padding(horizontal = 14.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp),
                         fontFamily = InterFontFamily
                     )
                     Box(
@@ -373,15 +375,15 @@ fun WelcomeScreen(
                     )
                 }
 
-                // Username Input Field (Design System Tokenized)
+                // Username Input Field (46dp Compact)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .height(46.dp)
                         .clip(RoundedCornerShape(colors.pillCornerRadius))
                         .background(colors.inputBg)
                         .border(1.dp, colors.inputBorder, RoundedCornerShape(colors.pillCornerRadius))
-                        .padding(horizontal = 18.dp),
+                        .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     Row(
@@ -392,17 +394,17 @@ fun WelcomeScreen(
                             imageVector = Lucide.User,
                             contentDescription = null,
                             tint = colors.textMuted,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
 
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(10.dp))
 
                         Box(modifier = Modifier.weight(1f)) {
                             if (username.isEmpty()) {
                                 Text(
                                     text = "Username",
                                     color = colors.textMuted.copy(alpha = 0.7f),
-                                    fontSize = 15.sp,
+                                    fontSize = 14.sp,
                                     fontFamily = InterFontFamily
                                 )
                             }
@@ -412,7 +414,7 @@ fun WelcomeScreen(
                                 singleLine = true,
                                 textStyle = TextStyle(
                                     color = colors.textMain,
-                                    fontSize = 15.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     fontFamily = InterFontFamily
                                 ),
@@ -430,17 +432,17 @@ fun WelcomeScreen(
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
 
-                // Password Input Field (Design System Tokenized)
+                // Password Input Field (46dp Compact)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .height(46.dp)
                         .clip(RoundedCornerShape(colors.pillCornerRadius))
                         .background(colors.inputBg)
                         .border(1.dp, colors.inputBorder, RoundedCornerShape(colors.pillCornerRadius))
-                        .padding(horizontal = 18.dp),
+                        .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     Row(
@@ -451,17 +453,17 @@ fun WelcomeScreen(
                             imageVector = Lucide.Lock,
                             contentDescription = null,
                             tint = colors.textMuted,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
 
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(10.dp))
 
                         Box(modifier = Modifier.weight(1f)) {
                             if (password.isEmpty()) {
                                 Text(
                                     text = "Password",
                                     color = colors.textMuted.copy(alpha = 0.7f),
-                                    fontSize = 15.sp,
+                                    fontSize = 14.sp,
                                     fontFamily = InterFontFamily
                                 )
                             }
@@ -472,7 +474,7 @@ fun WelcomeScreen(
                                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                 textStyle = TextStyle(
                                     color = colors.textMain,
-                                    fontSize = 15.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     fontFamily = InterFontFamily
                                 ),
@@ -493,7 +495,7 @@ fun WelcomeScreen(
                             contentDescription = if (passwordVisible) "Hide password" else "Show password",
                             tint = colors.textMuted,
                             modifier = Modifier
-                                .size(20.dp)
+                                .size(18.dp)
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null
@@ -502,30 +504,30 @@ fun WelcomeScreen(
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(10.dp))
 
-                // Primary Button ("Create an Account" / "Sign In")
+                // Primary Button ("Create an Account" / "Sign In" - Professional Blue Gradient)
                 val primaryGradient = Brush.horizontalGradient(
                     colors = listOf(
-                        colors.primaryHover,
-                        colors.primary,
-                        colors.primaryDark
+                        colors.primaryHover, // Azure Blue (#3E91FF)
+                        colors.primary,      // Brand Blue (#0381FE)
+                        colors.primaryDark   // Deep Royal Blue (#0072DE)
                     )
                 )
 
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .height(48.dp)
                         .graphicsLayer {
                             scaleX = primaryScale
                             scaleY = primaryScale
                         }
                         .shadow(
-                            elevation = 12.dp,
+                            elevation = 8.dp,
                             shape = CircleShape,
-                            ambientColor = colors.primary.copy(alpha = 0.35f),
-                            spotColor = colors.primary.copy(alpha = 0.55f)
+                            ambientColor = colors.primary.copy(alpha = 0.25f),
+                            spotColor = colors.primary.copy(alpha = 0.45f)
                         )
                         .clip(RoundedCornerShape(colors.pillCornerRadius))
                         .background(primaryGradient)
@@ -535,14 +537,14 @@ fun WelcomeScreen(
                             indication = null,
                             onClick = { handlePrimarySubmit() }
                         )
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = 18.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     if (isSubmitting) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
+                            modifier = Modifier.size(20.dp),
                             color = colors.onPrimary,
-                            strokeWidth = 2.4.dp
+                            strokeWidth = 2.2.dp
                         )
                     } else {
                         Row(
@@ -553,7 +555,7 @@ fun WelcomeScreen(
                             Text(
                                 text = if (isSignUpMode) "Create an Account" else "Sign In",
                                 color = colors.onPrimary,
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = InterFontFamily,
                                 modifier = Modifier.weight(1f),
@@ -564,13 +566,13 @@ fun WelcomeScreen(
                                 imageVector = Lucide.ArrowRight,
                                 contentDescription = null,
                                 tint = colors.onPrimary,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
 
                 // Mode Switch Link ("Already have an account? Sign In" / "Need an account? Create an Account")
                 Row(
@@ -579,31 +581,31 @@ fun WelcomeScreen(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { isSignUpMode = !isSignUpMode }
-                        .padding(vertical = 4.dp),
+                        .padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = if (isSignUpMode) "Already have an account? " else "Need a new account? ",
                         color = colors.textMuted,
-                        fontSize = 13.sp,
+                        fontSize = 12.5.sp,
                         fontFamily = InterFontFamily
                     )
                     Text(
                         text = if (isSignUpMode) "Sign In" else "Create an Account",
                         color = colors.primary,
-                        fontSize = 13.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = InterFontFamily
                     )
                 }
 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
 
-                // Continue without Account Button (Frosted Obsidian Secondary Pill)
+                // Continue without Account Button (46dp Compact Frosted Pill)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .height(46.dp)
                         .graphicsLayer {
                             scaleX = guestScale
                             scaleY = guestScale
@@ -616,7 +618,7 @@ fun WelcomeScreen(
                             indication = null,
                             onClick = onExploreGuest
                         )
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = 18.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(
@@ -627,7 +629,7 @@ fun WelcomeScreen(
                         Text(
                             text = "Continue without Account",
                             color = colors.textMain,
-                            fontSize = 15.5.sp,
+                            fontSize = 14.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = InterFontFamily,
                             modifier = Modifier.weight(1f),
@@ -638,30 +640,30 @@ fun WelcomeScreen(
                             imageVector = Lucide.ChevronRight,
                             contentDescription = null,
                             tint = colors.textMain,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
 
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(8.dp))
 
-                // ─── 4. LEGAL DISCLAIMER FOOTER ──────────────────────────────
+                // ─── 4. LEGAL DISCLAIMER FOOTER (COMPACT) ────────────────────
                 val termsText = buildAnnotatedString {
                     withStyle(
                         SpanStyle(
                             color = colors.textMuted,
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             fontFamily = InterFontFamily
                         )
                     ) {
-                        append("By continuing, you agree to our\n")
+                        append("By continuing, you agree to our ")
                     }
 
                     pushStringAnnotation(tag = "TERMS", annotation = "terms")
                     withStyle(
                         SpanStyle(
                             color = colors.primary,
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             textDecoration = TextDecoration.Underline,
                             fontFamily = InterFontFamily
@@ -674,7 +676,7 @@ fun WelcomeScreen(
                     withStyle(
                         SpanStyle(
                             color = colors.textMuted,
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             fontFamily = InterFontFamily
                         )
                     ) {
@@ -685,7 +687,7 @@ fun WelcomeScreen(
                     withStyle(
                         SpanStyle(
                             color = colors.primary,
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             textDecoration = TextDecoration.Underline,
                             fontFamily = InterFontFamily
@@ -705,7 +707,7 @@ fun WelcomeScreen(
                             .firstOrNull()?.let { onTerms() }
                     },
                     style = TextStyle(textAlign = TextAlign.Center),
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
         }
