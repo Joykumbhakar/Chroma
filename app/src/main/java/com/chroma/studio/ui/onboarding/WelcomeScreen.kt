@@ -182,92 +182,90 @@ fun WelcomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
                 .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ─── 1. HERO 3D CHARACTER SECTION (PROPORTIONAL FIT & FILL) ──
+            // ─── 1. HERO 3D CHARACTER SECTION (DEVICE WIDTH = IMAGE WIDTH, NO STRETCHING) ──
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(215.dp),
-                contentAlignment = Alignment.Center
             ) {
                 Image(
                     painter = painterResource(R.drawable.hero_oscellion_auth),
                     contentDescription = "Oscellion Hero Character",
-                    contentScale = ContentScale.Fit,
-                    alignment = Alignment.Center,
+                    contentScale = ContentScale.FillWidth,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(215.dp)
+                        .aspectRatio(888f / 1024f)
                 )
 
                 // Smooth bottom gradient overlay fading into the canvas background
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(55.dp)
+                        .height(115.dp)
                         .align(Alignment.BottomCenter)
                         .background(
                             Brush.verticalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    colors.bg.copy(alpha = 0.55f),
+                                    colors.bg.copy(alpha = 0.45f),
+                                    colors.bg.copy(alpha = 0.85f),
                                     colors.bg
                                 )
                             )
                         )
                 )
-            }
 
-            // ─── 2. HEADLINE & BRANDING (PROFESSIONAL BRAND BLUE) ────────
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Welcome to",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textMain,
-                    letterSpacing = (-0.2).sp,
-                    fontFamily = InterFontFamily
-                )
+                // ─── 2. HEADLINE & BRANDING (PROFESSIONAL BRAND BLUE OVERLAID ON SPHERE) ────
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Welcome to",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textMain,
+                        letterSpacing = (-0.2).sp,
+                        fontFamily = InterFontFamily
+                    )
 
-                Text(
-                    text = "Oscellion",
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = (-0.6).sp,
-                    style = TextStyle(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color(0xFF38B6FF),   // Crisp Sky Azure
-                                colors.primaryHover, // Vibrant Azure Blue
-                                colors.primary,      // Official Brand Blue (#0381FE)
-                                colors.primaryDark   // Deep Royal Blue (#0072DE)
+                    Text(
+                        text = "Oscellion",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = (-0.6).sp,
+                        style = TextStyle(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(
+                                    Color(0xFF38B6FF),   // Crisp Sky Azure
+                                    colors.primaryHover, // Vibrant Azure Blue
+                                    colors.primary,      // Official Brand Blue (#0381FE)
+                                    colors.primaryDark   // Deep Royal Blue (#0072DE)
+                                )
                             )
-                        )
-                    ),
-                    fontFamily = InterFontFamily
-                )
+                        ),
+                        fontFamily = InterFontFamily
+                    )
 
-                Text(
-                    text = "Create • Share • Explore",
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.textMuted,
-                    letterSpacing = 0.4.sp,
-                    fontFamily = InterFontFamily
-                )
+                    Text(
+                        text = "Create • Share • Explore",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textMuted,
+                        letterSpacing = 0.4.sp,
+                        fontFamily = InterFontFamily
+                    )
+                }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
 
             // ─── 3. FORM CONTROLS & ACTION BUTTONS ───────────────────────
             Column(
