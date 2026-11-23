@@ -158,6 +158,59 @@ fun WelcomeScreen(
         }
     }
 
+    // ─── LEGAL DISCLAIMER ANNOTATED STRING ────────────────────────────
+    val termsText = remember(colors) {
+        buildAnnotatedString {
+            withStyle(
+                SpanStyle(
+                    color = colors.textMuted,
+                    fontSize = 11.5.sp,
+                    fontFamily = InterFontFamily
+                )
+            ) {
+                append("By continuing, you agree to our ")
+            }
+
+            pushStringAnnotation(tag = "TERMS", annotation = "terms")
+            withStyle(
+                SpanStyle(
+                    color = colors.primary,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textDecoration = TextDecoration.Underline,
+                    fontFamily = InterFontFamily
+                )
+            ) {
+                append("Terms & Conditions")
+            }
+            pop()
+
+            withStyle(
+                SpanStyle(
+                    color = colors.textMuted,
+                    fontSize = 11.5.sp,
+                    fontFamily = InterFontFamily
+                )
+            ) {
+                append(" and ")
+            }
+
+            pushStringAnnotation(tag = "PRIVACY", annotation = "privacy")
+            withStyle(
+                SpanStyle(
+                    color = colors.primary,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textDecoration = TextDecoration.Underline,
+                    fontFamily = InterFontFamily
+                )
+            ) {
+                append("Privacy Policy")
+            }
+            pop()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -183,9 +236,8 @@ fun WelcomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .navigationBarsPadding()
-                .imePadding()
-                .verticalScroll(scrollState),
+                .verticalScroll(scrollState)
+                .imePadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // ─── 1. HERO 3D CHARACTER SECTION (DEVICE WIDTH = IMAGE WIDTH, NO STRETCHING) ──
@@ -640,72 +692,43 @@ fun WelcomeScreen(
                         )
                     }
                 }
-
-                Spacer(Modifier.height(8.dp))
-
-                // ─── 4. LEGAL DISCLAIMER FOOTER (COMPACT) ────────────────────
-                val termsText = buildAnnotatedString {
-                    withStyle(
-                        SpanStyle(
-                            color = colors.textMuted,
-                            fontSize = 11.5.sp,
-                            fontFamily = InterFontFamily
-                        )
-                    ) {
-                        append("By continuing, you agree to our ")
-                    }
-
-                    pushStringAnnotation(tag = "TERMS", annotation = "terms")
-                    withStyle(
-                        SpanStyle(
-                            color = colors.primary,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            textDecoration = TextDecoration.Underline,
-                            fontFamily = InterFontFamily
-                        )
-                    ) {
-                        append("Terms & Conditions")
-                    }
-                    pop()
-
-                    withStyle(
-                        SpanStyle(
-                            color = colors.textMuted,
-                            fontSize = 11.5.sp,
-                            fontFamily = InterFontFamily
-                        )
-                    ) {
-                        append(" and ")
-                    }
-
-                    pushStringAnnotation(tag = "PRIVACY", annotation = "privacy")
-                    withStyle(
-                        SpanStyle(
-                            color = colors.primary,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            textDecoration = TextDecoration.Underline,
-                            fontFamily = InterFontFamily
-                        )
-                    ) {
-                        append("Privacy Policy")
-                    }
-                    pop()
-                }
-
-                ClickableText(
-                    text = termsText,
-                    onClick = { offset ->
-                        termsText.getStringAnnotations(tag = "TERMS", start = offset, end = offset)
-                            .firstOrNull()?.let { onTerms() }
-                        termsText.getStringAnnotations(tag = "PRIVACY", start = offset, end = offset)
-                            .firstOrNull()?.let { onTerms() }
-                    },
-                    style = TextStyle(textAlign = TextAlign.Center),
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
             }
+
+            // Clearance spacing so scrollable content isn't obscured by the bottom snapped footer
+            Spacer(Modifier.height(52.dp))
+            Spacer(Modifier.navigationBarsPadding())
+        }
+
+        // ─── 4. LEGAL DISCLAIMER FOOTER (ALWAYS SNAPPED TO BOTTOM END) ───
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            colors.bg.copy(alpha = 0.85f),
+                            colors.bg,
+                            colors.bg
+                        )
+                    )
+                )
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp)
+                .padding(top = 10.dp, bottom = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            ClickableText(
+                text = termsText,
+                onClick = { offset ->
+                    termsText.getStringAnnotations(tag = "TERMS", start = offset, end = offset)
+                        .firstOrNull()?.let { onTerms() }
+                    termsText.getStringAnnotations(tag = "PRIVACY", start = offset, end = offset)
+                        .firstOrNull()?.let { onTerms() }
+                },
+                style = TextStyle(textAlign = TextAlign.Center)
+            )
         }
     }
 }
