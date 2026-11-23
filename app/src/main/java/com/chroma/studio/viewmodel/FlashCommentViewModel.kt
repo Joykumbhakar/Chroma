@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 enum class CommentSortOrder {
     TOP_COMMENTS,
@@ -25,6 +26,12 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
     private val repository = FlashRepository()
     private val auth = FirebaseAuth.getInstance()
     private val mutationCoordinator = OptimisticMutationCoordinator(viewModelScope)
+
+    // Per-video comment cache to prevent cross-video flashes during vertical scrolling
+    private val videoCommentsCache = ConcurrentHashMap<String, List<FlashComment>>()
+
+    private val _currentVideoId = MutableStateFlow("")
+    val currentVideoId: StateFlow<String> = _currentVideoId.asStateFlow()
 
     private val _comments = MutableStateFlow<List<FlashComment>>(emptyList())
     val comments: StateFlow<List<FlashComment>> = _comments.asStateFlow()
@@ -42,26 +49,59 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun loadComments(videoId: String) {
+        if (videoId.isBlank()) return
+
         commentsJob?.cancel()
-        commentsJob = viewModelScope.launch {
+        _currentVideoId.value = videoId
+
+        // Immediate cache hit: avoid showing previous video's comments or blank state
+        val cached = videoCommentsCache[videoId]
+        if (cached != null) {
+            _comments.value = cached
+            _isLoading.value = false
+        } else {
+            _comments.value = emptyList()
             _isLoading.value = true
+        }
+
+        commentsJob = viewModelScope.launch {
             try {
                 repository.observeComments(videoId).collect { serverComments ->
-                    val pending = _comments.value.filter { it.isPending || it.isError }
+                    if (_currentVideoId.value != videoId) return@collect
+
+                    // Keep active pending and error comments belonging specifically to this video
+                    val currentList = _comments.value
+                    val pending = currentList.filter { (it.isPending || it.isError) && it.videoId == videoId }
                     val serverIds = serverComments.map { it.id }.toSet()
                     val activePending = pending.filter { it.id !in serverIds }
-                    _comments.value = serverComments + activePending
+
+                    val activeTopPending = activePending.filter { it.replyToCommentId.isNullOrBlank() }
+                    val activeChildPending = activePending.filter { !it.replyToCommentId.isNullOrBlank() }
+
+                    val merged = activeTopPending + serverComments + activeChildPending
+                    _comments.value = merged
+                    videoCommentsCache[videoId] = merged
                     _isLoading.value = false
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                _comments.value = emptyList()
-                _isLoading.value = false
+                if (_currentVideoId.value == videoId) {
+                    if (videoCommentsCache[videoId] == null) {
+                        _comments.value = emptyList()
+                    }
+                    _isLoading.value = false
+                }
             }
         }
     }
 
-    fun addComment(videoId: String, text: String, replyToId: String? = null, replyFlashUrl: String? = null) {
+    fun addComment(
+        videoId: String,
+        text: String,
+        replyToId: String? = null,
+        replyToUsername: String? = null,
+        replyFlashUrl: String? = null
+    ) {
         if (text.isBlank() && replyFlashUrl == null) return
         val user = auth.currentUser ?: return
 
@@ -75,24 +115,35 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
             displayName = user.displayName ?: rawHandle,
             avatarUrl = user.photoUrl?.toString().orEmpty(),
             verified = false,
-            text = text,
+            text = text.trim(),
             timestamp = System.currentTimeMillis(),
             replyToCommentId = replyToId,
+            replyToUsername = replyToUsername,
             replyFlashVideoUrl = replyFlashUrl,
             isPending = true,
             isError = false
         )
 
         // 1. Immediately render in UI
-        _comments.value = _comments.value + optimisticComment
+        if (replyToId.isNullOrBlank()) {
+            // Top-level comment: prepend immediately so user sees it at the top
+            _comments.value = listOf(optimisticComment) + _comments.value
+        } else {
+            // Reply: append and bump parent reply count optimistically
+            _comments.value = _comments.value.map {
+                if (it.id == replyToId) it.copy(replyCount = it.replyCount + 1) else it
+            } + optimisticComment
+        }
+        videoCommentsCache[videoId] = _comments.value
 
         // 2. Synchronize in background
         viewModelScope.launch {
             try {
                 val serverComment = repository.addComment(
                     videoId = videoId,
-                    text = text,
+                    text = text.trim(),
                     replyToCommentId = replyToId,
+                    replyToUsername = replyToUsername,
                     replyFlashVideoUrl = replyFlashUrl,
                     preGeneratedId = tempId
                 )
@@ -100,12 +151,14 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
                 _comments.value = _comments.value.map {
                     if (it.id == tempId) serverComment.copy(isPending = false, isError = false) else it
                 }
+                videoCommentsCache[videoId] = _comments.value
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 // 4. Mark as failed with retry action
                 _comments.value = _comments.value.map {
                     if (it.id == tempId) it.copy(isPending = false, isError = true) else it
                 }
+                videoCommentsCache[videoId] = _comments.value
                 ToastManager.showToast("Couldn't post comment. Tap to retry.")
             }
         }
@@ -115,6 +168,7 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
         _comments.value = _comments.value.map {
             if (it.id == comment.id) it.copy(isPending = true, isError = false) else it
         }
+        videoCommentsCache[comment.videoId] = _comments.value
 
         viewModelScope.launch {
             try {
@@ -122,17 +176,20 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
                     videoId = comment.videoId,
                     text = comment.text,
                     replyToCommentId = comment.replyToCommentId,
+                    replyToUsername = comment.replyToUsername,
                     replyFlashVideoUrl = comment.replyFlashVideoUrl,
                     preGeneratedId = comment.id
                 )
                 _comments.value = _comments.value.map {
                     if (it.id == comment.id) serverComment.copy(isPending = false, isError = false) else it
                 }
+                videoCommentsCache[comment.videoId] = _comments.value
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 _comments.value = _comments.value.map {
                     if (it.id == comment.id) it.copy(isPending = false, isError = true) else it
                 }
+                videoCommentsCache[comment.videoId] = _comments.value
                 ToastManager.showToast("Retry failed. Please check your connection.")
             }
         }
@@ -160,12 +217,19 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
                         )
                     } else c
                 }
+                videoCommentsCache[comment.videoId] = _comments.value
             },
             performServerSync = { nextLiked ->
-                repository.setCommentLike(commentId, userId, nextLiked)
+                repository.setCommentLike(
+                    commentId = commentId,
+                    videoId = comment.videoId,
+                    userId = userId,
+                    targetLiked = nextLiked
+                )
             },
             onRollback = {
                 _comments.value = prevComments
+                videoCommentsCache[comment.videoId] = prevComments
             },
             onError = {
                 ToastManager.showToast("Could not update comment like.")
@@ -197,12 +261,19 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
                         )
                     } else c
                 }
+                videoCommentsCache[comment.videoId] = _comments.value
             },
             performServerSync = { nextDisliked ->
-                repository.setCommentDislike(commentId, userId, nextDisliked)
+                repository.setCommentDislike(
+                    commentId = commentId,
+                    videoId = comment.videoId,
+                    userId = userId,
+                    targetDisliked = nextDisliked
+                )
             },
             onRollback = {
                 _comments.value = prevComments
+                videoCommentsCache[comment.videoId] = prevComments
             },
             onError = {
                 ToastManager.showToast("Could not update dislike.")
@@ -223,11 +294,13 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
                 c
             }
         }
+        videoCommentsCache[videoId] = _comments.value
 
         viewModelScope.launch {
             val success = repository.setCommentPinned(comment.id, videoId, targetPinned)
             if (!success) {
                 _comments.value = prevComments
+                videoCommentsCache[videoId] = prevComments
                 ToastManager.showToast("Failed to update pin.")
             } else {
                 ToastManager.showToast(if (targetPinned) "Comment pinned" else "Comment unpinned")
@@ -242,11 +315,17 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
         _comments.value = _comments.value.map { c ->
             if (c.id == comment.id) c.copy(isCreatorHearted = targetHearted) else c
         }
+        videoCommentsCache[comment.videoId] = _comments.value
 
         viewModelScope.launch {
-            val success = repository.setCommentCreatorHeart(comment.id, targetHearted)
+            val success = repository.setCommentCreatorHeart(
+                commentId = comment.id,
+                videoId = comment.videoId,
+                isHearted = targetHearted
+            )
             if (!success) {
                 _comments.value = prevComments
+                videoCommentsCache[comment.videoId] = prevComments
                 ToastManager.showToast("Failed to heart comment.")
             }
         }
@@ -254,12 +333,25 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
 
     fun deleteComment(comment: FlashComment) {
         val prevComments = _comments.value
-        _comments.value = _comments.value.filter { it.id != comment.id && it.replyToCommentId != comment.id }
+        // Optimistically remove comment and any nested replies, and decrement parent replyCount if replying
+        _comments.value = _comments.value.filter { it.id != comment.id && it.replyToCommentId != comment.id }.map { c ->
+            if (!comment.replyToCommentId.isNullOrBlank() && c.id == comment.replyToCommentId) {
+                c.copy(replyCount = maxOf(0, c.replyCount - 1))
+            } else {
+                c
+            }
+        }
+        videoCommentsCache[comment.videoId] = _comments.value
 
         viewModelScope.launch {
-            val success = repository.deleteComment(comment.id, comment.videoId)
+            val success = repository.deleteComment(
+                commentId = comment.id,
+                videoId = comment.videoId,
+                replyToCommentId = comment.replyToCommentId
+            )
             if (!success) {
                 _comments.value = prevComments
+                videoCommentsCache[comment.videoId] = prevComments
                 ToastManager.showToast("Failed to delete comment.")
             } else {
                 ToastManager.showToast("Comment deleted.")

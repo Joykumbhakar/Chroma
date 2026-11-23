@@ -371,36 +371,58 @@ class FlashRepository {
 
     // ── Comments ─────────────────────────────────────────────────────────────
 
-    /** Real-time Flow of comments for a video or community post. */
+    /** Real-time Flow of comments for a video, reading from subcollection with legacy root fallback. */
     fun observeComments(videoId: String): Flow<List<com.chroma.studio.model.FlashComment>> = callbackFlow {
         if (videoId.isBlank()) {
             trySend(emptyList())
             close()
             return@callbackFlow
         }
-        val registration = db.collection("flash_comments")
-            .whereEqualTo("videoId", videoId)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.w("FlashRepository", "Comments snapshot listener error for $videoId", error)
-                    return@addSnapshotListener
-                }
-                if (snapshot != null) {
-                    val list = snapshot.toObjects(com.chroma.studio.model.FlashComment::class.java)
-                        .sortedBy { it.timestamp }
-                    trySend(list)
-                }
+
+        // Subcollection listener: flash_videos/{videoId}/comments
+        val subcollection = collection.document(videoId).collection("comments")
+        val registration = subcollection.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.w("FlashRepository", "Subcollection comments listener error for $videoId", error)
             }
+            if (snapshot != null && !snapshot.isEmpty) {
+                val list = snapshot.toObjects(com.chroma.studio.model.FlashComment::class.java)
+                    .sortedBy { it.timestamp }
+                trySend(list)
+            } else {
+                // If subcollection has no comments yet, check legacy flash_comments collection
+                db.collection("flash_comments")
+                    .whereEqualTo("videoId", videoId)
+                    .get()
+                    .addOnSuccessListener { legacySnap ->
+                        if (legacySnap != null && !legacySnap.isEmpty) {
+                            val list = legacySnap.toObjects(com.chroma.studio.model.FlashComment::class.java)
+                                .sortedBy { it.timestamp }
+                            trySend(list)
+                        } else {
+                            trySend(emptyList())
+                        }
+                    }
+                    .addOnFailureListener {
+                        trySend(emptyList())
+                    }
+            }
+        }
         awaitClose { registration.remove() }
     }
 
     suspend fun getComments(videoId: String): List<com.chroma.studio.model.FlashComment> {
         return try {
-            val snapshot = db.collection("flash_comments")
-                .whereEqualTo("videoId", videoId)
-                .get().await()
-            snapshot.toObjects(com.chroma.studio.model.FlashComment::class.java)
-                .sortedBy { it.timestamp }
+            val subSnap = collection.document(videoId).collection("comments").get().await()
+            if (!subSnap.isEmpty) {
+                subSnap.toObjects(com.chroma.studio.model.FlashComment::class.java).sortedBy { it.timestamp }
+            } else {
+                val snapshot = db.collection("flash_comments")
+                    .whereEqualTo("videoId", videoId)
+                    .get().await()
+                snapshot.toObjects(com.chroma.studio.model.FlashComment::class.java)
+                    .sortedBy { it.timestamp }
+            }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("FlashRepository", "Error fetching comments", e)
@@ -412,6 +434,7 @@ class FlashRepository {
         videoId: String,
         text: String,
         replyToCommentId: String? = null,
+        replyToUsername: String? = null,
         replyFlashVideoUrl: String? = null,
         preGeneratedId: String? = null
     ): com.chroma.studio.model.FlashComment {
@@ -425,39 +448,47 @@ class FlashRepository {
         val username = if (!rawUsername.isNullOrBlank()) rawUsername else (user.displayName?.replace(" ", "")?.lowercase() ?: "user_${user.uid.take(5)}")
         val displayName = if (!rawDisplayName.isNullOrBlank()) rawDisplayName else (user.displayName ?: username)
 
-        val docRef = if (!preGeneratedId.isNullOrBlank()) {
-            db.collection("flash_comments").document(preGeneratedId)
-        } else {
-            db.collection("flash_comments").document()
-        }
+        val commentId = if (!preGeneratedId.isNullOrBlank()) preGeneratedId else java.util.UUID.randomUUID().toString()
+
         val comment = com.chroma.studio.model.FlashComment(
-            id = docRef.id,
+            id = commentId,
             videoId = videoId,
             userId = user.uid,
             username = username,
             displayName = displayName,
             avatarUrl = avatarUrl,
             verified = verified,
-            text = text,
+            text = text.trim(),
             timestamp = System.currentTimeMillis(),
             replyToCommentId = replyToCommentId,
+            replyToUsername = replyToUsername,
             replyFlashVideoUrl = replyFlashVideoUrl
         )
-        docRef.set(comment).await()
-        
-        // Increment comment count on flash_videos
-        try {
-            collection.document(videoId).update("commentCount", FieldValue.increment(1)).await()
-        } catch (e: Exception) {
-            Log.e("FlashRepository", "Error incrementing flash comment count", e)
+
+        // Perfect Database Structure:
+        // 1. Primary subcollection: flash_videos/{videoId}/comments/{commentId}
+        // 2. Dual-synced root collection: flash_comments/{commentId} for cross-feature queries
+        val batch = db.batch()
+        val subDocRef = collection.document(videoId).collection("comments").document(commentId)
+        val rootDocRef = db.collection("flash_comments").document(commentId)
+        batch.set(subDocRef, comment)
+        batch.set(rootDocRef, comment)
+
+        // Increment reply count on parent comment if replying
+        if (!replyToCommentId.isNullOrBlank()) {
+            val parentSubRef = collection.document(videoId).collection("comments").document(replyToCommentId)
+            val parentRootRef = db.collection("flash_comments").document(replyToCommentId)
+            batch.update(parentSubRef, "replyCount", FieldValue.increment(1))
+            batch.update(parentRootRef, "replyCount", FieldValue.increment(1))
         }
 
-        // Increment comment count on community_works
+        // Atomically increment commentCount on the video document
+        batch.update(collection.document(videoId), "commentCount", FieldValue.increment(1))
         try {
-            db.collection("community_works").document(videoId).update("commentsCount", FieldValue.increment(1)).await()
-        } catch (e: Exception) {
-            Log.e("FlashRepository", "Error incrementing community_works comment count", e)
-        }
+            batch.update(db.collection("community_works").document(videoId), "commentsCount", FieldValue.increment(1))
+        } catch (_: Exception) {}
+
+        batch.commit().await()
 
         // Dispatch real notification to video creator
         try {
@@ -479,7 +510,8 @@ class FlashRepository {
         // Dispatch reply notification if replying to a comment
         if (!replyToCommentId.isNullOrBlank()) {
             try {
-                val parentDoc = db.collection("flash_comments").document(replyToCommentId).get().await()
+                val parentDoc = subDocRef.get().await().takeIf { it.exists() }
+                    ?: rootDocRef.get().await()
                 val parentAuthorId = parentDoc.getString("userId")
                 if (!parentAuthorId.isNullOrBlank() && parentAuthorId != user.uid) {
                     val videoDoc = collection.document(videoId).get().await()
@@ -523,49 +555,45 @@ class FlashRepository {
                 }
             }
         } catch (_: Exception) {}
-        
+
         return comment
     }
 
-    suspend fun setCommentLike(commentId: String, userId: String, targetLiked: Boolean): Boolean {
+    suspend fun setCommentLike(commentId: String, videoId: String = "", userId: String, targetLiked: Boolean): Boolean {
         return try {
-            val docRef = db.collection("flash_comments").document(commentId)
-            db.runTransaction { transaction ->
-                val snapshot = transaction.get(docRef)
-                val likedBy = snapshot.get("likedBy") as? List<String> ?: emptyList()
-                val currentLikes = snapshot.getLong("likesCount") ?: 0L
-                val alreadyLiked = likedBy.contains(userId)
+            val rootDoc = db.collection("flash_comments").document(commentId)
+            val subDoc = if (videoId.isNotBlank()) collection.document(videoId).collection("comments").document(commentId) else null
 
-                if (alreadyLiked == targetLiked) {
-                    return@runTransaction true // idempotent success
-                }
+            val updates = if (targetLiked) {
+                mapOf(
+                    "likedBy" to FieldValue.arrayUnion(userId),
+                    "dislikedBy" to FieldValue.arrayRemove(userId),
+                    "likesCount" to FieldValue.increment(1)
+                )
+            } else {
+                mapOf(
+                    "likedBy" to FieldValue.arrayRemove(userId),
+                    "likesCount" to FieldValue.increment(-1)
+                )
+            }
 
-                if (targetLiked) {
-                    transaction.update(
-                        docRef,
-                        "likedBy", FieldValue.arrayUnion(userId),
-                        "likesCount", FieldValue.increment(1)
-                    )
-                } else {
-                    transaction.update(
-                        docRef,
-                        "likedBy", FieldValue.arrayRemove(userId),
-                        "likesCount", if (currentLikes <= 1L) 0L else FieldValue.increment(-1)
-                    )
-                }
-                true
-            }.await()
+            val batch = db.batch()
+            batch.update(rootDoc, updates)
+            if (subDoc != null) {
+                batch.update(subDoc, updates)
+            }
+            batch.commit().await()
 
             if (targetLiked) {
                 try {
-                    val commentDoc = docRef.get().await()
+                    val commentDoc = rootDoc.get().await()
                     val authorId = commentDoc.getString("userId")
                     val commentText = commentDoc.getString("text") ?: ""
-                    val videoId = commentDoc.getString("videoId") ?: ""
+                    val targetVideoId = videoId.ifBlank { commentDoc.getString("videoId") ?: "" }
                     if (!authorId.isNullOrBlank() && authorId != userId) {
                         var thumb: String? = null
-                        if (videoId.isNotBlank()) {
-                            val videoDoc = collection.document(videoId).get().await()
+                        if (targetVideoId.isNotBlank()) {
+                            val videoDoc = collection.document(targetVideoId).get().await()
                             thumb = videoDoc.getString("thumbnailUrl")
                         }
                         NotificationDispatcher.sendNotification(
@@ -574,7 +602,7 @@ class FlashRepository {
                             actionText = "liked your comment",
                             detailText = commentText,
                             targetPreviewUrl = thumb,
-                            targetId = videoId.ifBlank { commentId }
+                            targetId = targetVideoId.ifBlank { commentId }
                         )
                     }
                 } catch (e: Exception) {
@@ -589,16 +617,13 @@ class FlashRepository {
         }
     }
 
-    suspend fun toggleCommentLike(commentId: String, userId: String): Boolean {
+    suspend fun toggleCommentLike(commentId: String, videoId: String = "", userId: String): Boolean {
         return try {
             val docRef = db.collection("flash_comments").document(commentId)
-            val isLiked = db.runTransaction { transaction ->
-                val snapshot = transaction.get(docRef)
-                val likedBy = snapshot.get("likedBy") as? List<String> ?: emptyList()
-                val alreadyLiked = likedBy.contains(userId)
-                !alreadyLiked
-            }.await()
-            setCommentLike(commentId, userId, isLiked)
+            val snapshot = docRef.get().await()
+            val likedBy = snapshot.get("likedBy") as? List<String> ?: emptyList()
+            val isLiked = !likedBy.contains(userId)
+            setCommentLike(commentId, videoId, userId, isLiked)
             isLiked
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -607,32 +632,29 @@ class FlashRepository {
         }
     }
 
-    suspend fun setCommentDislike(commentId: String, userId: String, targetDisliked: Boolean): Boolean {
+    suspend fun setCommentDislike(commentId: String, videoId: String = "", userId: String, targetDisliked: Boolean): Boolean {
         return try {
-            val docRef = db.collection("flash_comments").document(commentId)
-            db.runTransaction { transaction ->
-                val snapshot = transaction.get(docRef)
-                val dislikedBy = snapshot.get("dislikedBy") as? List<String> ?: emptyList()
-                val alreadyDisliked = dislikedBy.contains(userId)
+            val rootDoc = db.collection("flash_comments").document(commentId)
+            val subDoc = if (videoId.isNotBlank()) collection.document(videoId).collection("comments").document(commentId) else null
 
-                if (alreadyDisliked == targetDisliked) {
-                    return@runTransaction true
-                }
+            val updates = if (targetDisliked) {
+                mapOf(
+                    "dislikedBy" to FieldValue.arrayUnion(userId),
+                    "likedBy" to FieldValue.arrayRemove(userId)
+                )
+            } else {
+                mapOf(
+                    "dislikedBy" to FieldValue.arrayRemove(userId)
+                )
+            }
 
-                if (targetDisliked) {
-                    transaction.update(
-                        docRef,
-                        "dislikedBy", FieldValue.arrayUnion(userId),
-                        "likedBy", FieldValue.arrayRemove(userId)
-                    )
-                } else {
-                    transaction.update(
-                        docRef,
-                        "dislikedBy", FieldValue.arrayRemove(userId)
-                    )
-                }
-                true
-            }.await()
+            val batch = db.batch()
+            batch.update(rootDoc, updates)
+            if (subDoc != null) {
+                batch.update(subDoc, updates)
+            }
+            batch.commit().await()
+            true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("FlashRepository", "setCommentDislike error", e)
@@ -642,20 +664,26 @@ class FlashRepository {
 
     suspend fun setCommentPinned(commentId: String, videoId: String, isPinned: Boolean): Boolean {
         return try {
-            val commentsRef = db.collection("flash_comments")
-            if (isPinned) {
-                val currentPinned = commentsRef.whereEqualTo("videoId", videoId).whereEqualTo("isPinned", true).get().await()
-                val batch = db.batch()
+            val rootColl = db.collection("flash_comments")
+            val subColl = if (videoId.isNotBlank()) collection.document(videoId).collection("comments") else null
+
+            val batch = db.batch()
+            if (isPinned && videoId.isNotBlank()) {
+                val currentPinned = rootColl.whereEqualTo("videoId", videoId).whereEqualTo("isPinned", true).get().await()
                 for (doc in currentPinned.documents) {
                     if (doc.id != commentId) {
                         batch.update(doc.reference, "isPinned", false)
+                        if (subColl != null) {
+                            batch.update(subColl.document(doc.id), "isPinned", false)
+                        }
                     }
                 }
-                batch.update(commentsRef.document(commentId), "isPinned", true)
-                batch.commit().await()
-            } else {
-                commentsRef.document(commentId).update("isPinned", false).await()
             }
+            batch.update(rootColl.document(commentId), "isPinned", isPinned)
+            if (subColl != null) {
+                batch.update(subColl.document(commentId), "isPinned", isPinned)
+            }
+            batch.commit().await()
             true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -664,9 +692,14 @@ class FlashRepository {
         }
     }
 
-    suspend fun setCommentCreatorHeart(commentId: String, isHearted: Boolean): Boolean {
+    suspend fun setCommentCreatorHeart(commentId: String, videoId: String = "", isHearted: Boolean): Boolean {
         return try {
-            db.collection("flash_comments").document(commentId).update("isCreatorHearted", isHearted).await()
+            val batch = db.batch()
+            batch.update(db.collection("flash_comments").document(commentId), "isCreatorHearted", isHearted)
+            if (videoId.isNotBlank()) {
+                batch.update(collection.document(videoId).collection("comments").document(commentId), "isCreatorHearted", isHearted)
+            }
+            batch.commit().await()
             true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -675,15 +708,24 @@ class FlashRepository {
         }
     }
 
-    suspend fun deleteComment(commentId: String, videoId: String): Boolean {
+    suspend fun deleteComment(commentId: String, videoId: String, replyToCommentId: String? = null): Boolean {
         return try {
-            db.collection("flash_comments").document(commentId).delete().await()
+            val batch = db.batch()
+            batch.delete(db.collection("flash_comments").document(commentId))
+            if (videoId.isNotBlank()) {
+                batch.delete(collection.document(videoId).collection("comments").document(commentId))
+                batch.update(collection.document(videoId), "commentCount", FieldValue.increment(-1))
+            }
+            if (!replyToCommentId.isNullOrBlank() && videoId.isNotBlank()) {
+                val parentSubRef = collection.document(videoId).collection("comments").document(replyToCommentId)
+                val parentRootRef = db.collection("flash_comments").document(replyToCommentId)
+                batch.update(parentSubRef, "replyCount", FieldValue.increment(-1))
+                batch.update(parentRootRef, "replyCount", FieldValue.increment(-1))
+            }
             try {
-                collection.document(videoId).update("commentCount", FieldValue.increment(-1)).await()
+                batch.update(db.collection("community_works").document(videoId), "commentsCount", FieldValue.increment(-1))
             } catch (_: Exception) {}
-            try {
-                db.collection("community_works").document(videoId).update("commentsCount", FieldValue.increment(-1)).await()
-            } catch (_: Exception) {}
+            batch.commit().await()
             true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

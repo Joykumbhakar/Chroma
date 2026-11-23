@@ -396,6 +396,8 @@ data class FlashComment(
     @set:com.google.firebase.firestore.PropertyName("isCreatorHearted")
     var isCreatorHearted: Boolean = false,
     val replyToCommentId: String? = null,
+    val replyToUsername: String? = null,
+    val replyCount: Int = 0,
     val replyFlashVideoUrl: String? = null,
     val isPending: Boolean = false,
     val isError: Boolean = false

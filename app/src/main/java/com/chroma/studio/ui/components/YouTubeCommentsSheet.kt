@@ -1,6 +1,9 @@
 package com.chroma.studio.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,6 +15,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -22,12 +26,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -38,6 +48,7 @@ import com.chroma.studio.viewmodel.CommentSortOrder
 import com.chroma.studio.viewmodel.FlashCommentViewModel
 import com.composables.icons.lucide.*
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.launch
 
 /**
  * Flagship YouTube-Grade Comments Bottom Sheet.
@@ -74,14 +85,14 @@ fun YouTubeCommentsSheet(
     val colors = LocalOscellionColors.current
     val isDark = colors.isDark
 
-    // YouTube exact palette tokens
-    val sheetBg = if (isDark) Color(0xFF0F0F0F) else Color.White
+    // YouTube exact palette tokens with Oscellion brand identity
+    val sheetBg = if (isDark) Color(0xFF0F0F12) else Color.White
     val textPrimary = if (isDark) Color(0xFFF1F1F1) else Color(0xFF0F0F0F)
     val textSecondary = if (isDark) Color(0xFFAAAAAA) else Color(0xFF606060)
-    val dividerColor = if (isDark) Color(0xFF272727) else Color(0xFFE5E7EB)
-    val surfaceBg = if (isDark) Color(0xFF272727) else Color(0xFFF3F4F6)
-    val ytBlue = if (isDark) Color(0xFF3EA6FF) else Color(0xFF065FD4)
-    val dragHandleColor = if (isDark) Color(0xFF3F3F3F) else Color(0xFFD1D5DB)
+    val dividerColor = if (isDark) Color(0xFF27272A) else Color(0xFFE5E7EB)
+    val surfaceBg = if (isDark) Color(0xFF202025) else Color(0xFFF3F4F6)
+    val ytBlue = Color(0xFF0381FE) // Official Oscellion Blue
+    val dragHandleColor = if (isDark) Color(0xFF3F3F46) else Color(0xFFD1D5DB)
 
     val comments by commentVm.comments.collectAsState()
     val sortOrder by commentVm.sortOrder.collectAsState()
@@ -94,6 +105,8 @@ fun YouTubeCommentsSheet(
     var commentPendingDelete by remember { mutableStateOf<FlashComment?>(null) }
     val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid }
     val focusRequester = remember { FocusRequester() }
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(targetId) {
         commentVm.loadComments(targetId)
@@ -105,12 +118,14 @@ fun YouTubeCommentsSheet(
             .groupBy { it.replyToCommentId!! }
     }
 
+    // Sort top-level comments: ALWAYS prioritize pinned first, then pending comments (optimistic UI), then likes/timestamp
     val topLevelComments = remember(comments, sortOrder) {
         val parents = comments.filter { it.replyToCommentId.isNullOrBlank() }
         when (sortOrder) {
             CommentSortOrder.TOP_COMMENTS -> {
                 parents.sortedWith(
                     compareByDescending<FlashComment> { it.isPinned }
+                        .thenByDescending { it.isPending }
                         .thenByDescending { it.likesCount }
                         .thenByDescending { it.timestamp }
                 )
@@ -118,6 +133,7 @@ fun YouTubeCommentsSheet(
             CommentSortOrder.NEWEST_FIRST -> {
                 parents.sortedWith(
                     compareByDescending<FlashComment> { it.isPinned }
+                        .thenByDescending { it.isPending }
                         .thenByDescending { it.timestamp }
                 )
             }
@@ -309,6 +325,7 @@ fun YouTubeCommentsSheet(
                 }
             } else {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
                 ) {
@@ -465,14 +482,20 @@ fun YouTubeCommentsSheet(
                                         return@IconButton
                                     }
                                     val parentTargetId = replyingToComment?.id
+                                    val parentTargetUsername = replyingToComment?.username
                                     commentVm.addComment(
                                         videoId = targetId,
                                         text = commentText.trim(),
-                                        replyToId = parentTargetId
+                                        replyToId = parentTargetId,
+                                        replyToUsername = parentTargetUsername
                                     )
                                     onCommentCountChanged(1)
                                     if (parentTargetId != null) {
                                         expandedThreads[parentTargetId] = true
+                                    } else {
+                                        coroutineScope.launch {
+                                            listState.animateScrollToItem(0)
+                                        }
                                     }
                                     commentText = ""
                                     replyingToComment = null
@@ -542,12 +565,13 @@ fun YouTubeCommentCard(
     isChildReply: Boolean = false
 ) {
     val clipboard = LocalClipboardManager.current
+    val haptic = LocalHapticFeedback.current
     val colors = LocalOscellionColors.current
     val isDark = colors.isDark
 
     val textPrimary = if (isDark) Color(0xFFF1F1F1) else Color(0xFF0F0F0F)
     val textSecondary = if (isDark) Color(0xFFAAAAAA) else Color(0xFF606060)
-    val ytBlue = if (isDark) Color(0xFF3EA6FF) else Color(0xFF065FD4)
+    val ytBlue = Color(0xFF0381FE) // Oscellion Blue
     val creatorBadgeBg = if (isDark) Color(0xFF27272A) else Color(0xFFE5E7EB)
     val creatorBadgeText = if (isDark) Color.White else Color(0xFF1F2937)
 
@@ -560,6 +584,16 @@ fun YouTubeCommentCard(
     val isVideoAuthor = currentUserId != null && currentUserId == creatorId
     val isCommentAuthor = currentUserId != null && currentUserId == comment.userId
     val isCommentByVideoAuthor = comment.userId == creatorId
+
+    // Interactive scale bounce animation for like button
+    val likeScale by animateFloatAsState(
+        targetValue = if (isLiked) 1.25f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "likeBounce"
+    )
 
     Column(modifier = Modifier.fillMaxWidth()) {
         // 1. Pinned comment indicator (YouTube Signature)
@@ -645,20 +679,39 @@ fun YouTubeCommentCard(
                     Spacer(Modifier.width(4.dp))
 
                     if (comment.isPending) {
-                        Text(
-                            text = "Sending...",
-                            color = ytBlue,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                color = ytBlue,
+                                strokeWidth = 1.5.dp,
+                                modifier = Modifier.size(9.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "Posting...",
+                                color = ytBlue,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     } else if (comment.isError) {
-                        Text(
-                            text = "Failed • Tap to retry",
-                            color = Color(0xFFFF3B30),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.clickable { onRetry(comment) }
-                        )
+                        ) {
+                            Icon(
+                                imageVector = Lucide.CircleAlert,
+                                contentDescription = null,
+                                tint = Color(0xFFFF3B30),
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Spacer(Modifier.width(3.dp))
+                            Text(
+                                text = "Failed • Tap to retry",
+                                color = Color(0xFFFF3B30),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     } else {
                         Text(
                             text = android.text.format.DateUtils.getRelativeTimeSpanString(
@@ -672,10 +725,36 @@ fun YouTubeCommentCard(
                     }
                 }
 
-                // Comment Text with Read More / Show Less expansion
+                // Comment Text with @mentions highlighting and Read More / Show Less expansion
                 Spacer(Modifier.height(3.dp))
+                val displayText = remember(comment.text, comment.replyToUsername, isChildReply) {
+                    val baseText = comment.text
+                    if (isChildReply && !comment.replyToUsername.isNullOrBlank() && !baseText.startsWith("@${comment.replyToUsername}")) {
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(color = ytBlue, fontWeight = FontWeight.SemiBold)) {
+                                append("@${comment.replyToUsername} ")
+                            }
+                            append(baseText)
+                        }
+                    } else {
+                        buildAnnotatedString {
+                            val parts = baseText.split(" ")
+                            parts.forEachIndexed { index, part ->
+                                if (part.startsWith("@") && part.length > 1) {
+                                    withStyle(SpanStyle(color = ytBlue, fontWeight = FontWeight.SemiBold)) {
+                                        append(part)
+                                    }
+                                } else {
+                                    append(part)
+                                }
+                                if (index < parts.size - 1) append(" ")
+                            }
+                        }
+                    }
+                }
+
                 Text(
-                    text = comment.text,
+                    text = displayText,
                     color = if (comment.isError) Color(0xFF9CA3AF) else textPrimary,
                     fontSize = 13.5.sp,
                     lineHeight = 18.sp,
@@ -711,14 +790,22 @@ fun YouTubeCommentCard(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .clip(RoundedCornerShape(14.dp))
-                            .clickable { onToggleLike(comment.id) }
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onToggleLike(comment.id)
+                            }
                             .padding(horizontal = 6.dp, vertical = 4.dp)
                     ) {
                         Icon(
                             imageVector = if (isLiked) ChromaIcons.ThumbsUpFilled else Lucide.ThumbsUp,
                             contentDescription = "Like",
-                            tint = if (isLiked) (if (isDark) Color.White else Color(0xFF0F0F0F)) else textSecondary,
-                            modifier = Modifier.size(15.dp)
+                            tint = if (isLiked) ytBlue else textSecondary,
+                            modifier = Modifier
+                                .size(15.dp)
+                                .graphicsLayer {
+                                    scaleX = likeScale
+                                    scaleY = likeScale
+                                }
                         )
                         if (comment.likesCount > 0) {
                             Spacer(Modifier.width(4.dp))
@@ -726,7 +813,7 @@ fun YouTubeCommentCard(
                                 text = formatCount(comment.likesCount),
                                 fontSize = 11.5.sp,
                                 fontWeight = if (isLiked) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isLiked) textPrimary else textSecondary
+                                color = if (isLiked) ytBlue else textSecondary
                             )
                         }
                     }
@@ -737,7 +824,10 @@ fun YouTubeCommentCard(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(14.dp))
-                            .clickable { onToggleDislike(comment.id) }
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onToggleDislike(comment.id)
+                            }
                             .padding(horizontal = 6.dp, vertical = 4.dp)
                     ) {
                         Icon(
@@ -768,7 +858,7 @@ fun YouTubeCommentCard(
                                     modifier = Modifier
                                         .size(15.dp)
                                         .align(Alignment.TopStart)
-                                )
+                                    )
                                 AsyncImage(
                                     model = displayHeartAvatar,
                                     contentDescription = null,
@@ -909,7 +999,7 @@ fun YouTubeCommentCard(
 
         // 4. Threaded Nested Replies Accordion (YouTube Signature)
         if (replies.isNotEmpty() && !isChildReply) {
-            val replyCount = replies.size
+            val replyCount = maxOf(replies.size, comment.replyCount)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
@@ -943,7 +1033,10 @@ fun YouTubeCommentCard(
                         .fillMaxWidth()
                         .padding(start = 38.dp, top = 4.dp)
                 ) {
-                    replies.sortedBy { it.timestamp }.forEach { childReply ->
+                    replies.sortedWith(
+                        compareBy<FlashComment> { it.timestamp }
+                            .thenBy { it.isPending }
+                    ).forEach { childReply ->
                         YouTubeCommentCard(
                             comment = childReply,
                             targetId = targetId,
