@@ -80,12 +80,12 @@ fun OneUiCollapsingHeaderLayout(
         }
     }
 
-    val screenBgColor = if (!isDark) Color(0xFFFAFAFA) else Color(0xFF080808)
-    val cardBorderColor = if (!isDark) Color.Black.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.07f)
-    val dividerColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
-    val textDark = if (!isDark) Color(0xFF000000) else Color(0xFFFAFAFA)
-    val textMuted = if (!isDark) Color(0xFF71717A) else Color(0xFF8E8E93)
-    val activeAccent = if (gradientStyle == OneUiGradientStyle.SOLID) Color(0xFF0381FE) else gradientStyle.primaryColor
+    val screenBgColor = colors.bg
+    val cardBorderColor = colors.cardBorder
+    val dividerColor = colors.cardBorderSubtle
+    val textDark = colors.textMain
+    val textMuted = colors.textMuted
+    val activeAccent = if (gradientStyle == OneUiGradientStyle.SOLID) colors.primary else gradientStyle.primaryColor
 
     // One UI Collapsing Engine
     val maxCollapsePx = remember(density, expandedHeightDp) { with(density) { expandedHeightDp.toPx() } }
@@ -365,17 +365,18 @@ fun OneUiSquircleSearchBar(
     placeholder: String = "Search...",
     onClear: () -> Unit = { onQueryChange("") }
 ) {
-    val isDark = LocalOscellionColors.current.isDark
-    val cardBorderColor = if (!isDark) Color.Black.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.07f)
-    val textDark = if (!isDark) Color(0xFF000000) else Color(0xFFFAFAFA)
-    val textMuted = if (!isDark) Color(0xFF71717A) else Color(0xFF8E8E93)
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+    val cardBorderColor = colors.cardBorderSubtle
+    val textDark = colors.textMain
+    val textMuted = colors.textMuted
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(46.dp)
             .clip(RoundedCornerShape(22.dp))
-            .background(if (!isDark) Color(0xFFE9E9EE) else Color(0xFF1E1E22))
+            .background(colors.inputBg)
             .border(1.dp, cardBorderColor, RoundedCornerShape(22.dp))
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.CenterStart
@@ -410,7 +411,7 @@ fun OneUiSquircleSearchBar(
                         color = textDark,
                         fontWeight = FontWeight.Normal
                     ),
-                    cursorBrush = SolidColor(if (!isDark) Color(0xFF0381FE) else Color(0xFF0381FE)),
+                    cursorBrush = SolidColor(colors.primary),
                     modifier = Modifier.fillMaxWidth()
                 )
             }

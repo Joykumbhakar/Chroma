@@ -392,7 +392,8 @@ fun ChatListScreen(
                 val chatAvatar = chat.avatarUrl ?: profile?.avatarUrl
                 val unread = chat.unreadCount[uid] ?: 0
                 val isMuted = mutedChatIds.contains(chat.id)
-                val isOnline = false // Wire up to actual online presence if available
+                val otherPresence = otherUserId?.let { com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(it) }
+                val isOnline = otherPresence?.online == true
 
                 Row(
                     modifier = Modifier

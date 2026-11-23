@@ -32,7 +32,7 @@ import com.composables.icons.lucide.Lucide
 fun ChromaScreenHeader(
     title: String,
     badgeText: String? = null,
-    badgeColor: Color = Color(0xFF0381FE),
+    badgeColor: Color = Color.Unspecified,
     showBrandLogo: Boolean = false,
     showBackButton: Boolean = false,
     circularBackButton: Boolean = true,
@@ -43,104 +43,118 @@ fun ChromaScreenHeader(
     actions: @Composable (RowScope.() -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
+    val effectiveBadgeColor = if (badgeColor != Color.Unspecified) badgeColor else colors.primary
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .background(colors.bg.copy(alpha = 0.94f))
-            .border(0.5.dp, colors.glassBorder)
-            .padding(top = statusBarTop + 6.dp, bottom = 10.dp, start = 16.dp, end = 16.dp)
     ) {
-        if (isSearchExpanded && searchContent != null) {
-            searchContent()
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Left: Back button + Brand Title & Badge
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = statusBarTop + 6.dp, bottom = 10.dp, start = 16.dp, end = 16.dp)
+        ) {
+            if (isSearchExpanded && searchContent != null) {
+                searchContent()
+            } else {
                 Row(
-                    modifier = Modifier.weight(1f, fill = false),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (showBackButton && onBack != null) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clickable { onBack() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.ChevronLeft,
-                                contentDescription = "Back",
-                                tint = colors.textMain,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-
+                    // Left: Back button + Brand Title & Badge
                     Row(
+                        modifier = Modifier.weight(1f, fill = false),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (title.equals("Oscellion", ignoreCase = true) || showBrandLogo) {
-                            OscellionWebLogo(
-                                modifier = Modifier.size(24.dp),
-                                size = 24.dp
-                            )
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Text(
-                                text = title,
-                                fontSize = 23.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = colors.textMain,
-                                letterSpacing = (-0.5).sp
-                            )
-                            Text(
-                                text = ".",
-                                fontSize = 23.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = badgeColor
-                            )
-                        }
-
-                        if (!badgeText.isNullOrBlank()) {
-                            Spacer(Modifier.width(4.dp))
+                        if (showBackButton && onBack != null) {
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(badgeColor.copy(alpha = 0.12f))
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                                    .size(36.dp)
+                                    .clickable { onBack() },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = badgeText,
-                                    color = badgeColor,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                Icon(
+                                    imageVector = Lucide.ChevronLeft,
+                                    contentDescription = "Back",
+                                    tint = colors.textMain,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
-                    }
-                }
 
-                // Right: Action items
-                if (actions != null) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        actions()
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (title.equals("Oscellion", ignoreCase = true) || showBrandLogo) {
+                                OscellionWebLogo(
+                                    modifier = Modifier.size(24.dp),
+                                    size = 24.dp
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = title,
+                                    fontSize = 23.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = colors.textMain,
+                                    letterSpacing = (-0.5).sp
+                                )
+                                Text(
+                                    text = ".",
+                                    fontSize = 23.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = effectiveBadgeColor
+                                )
+                            }
+
+                            if (!badgeText.isNullOrBlank()) {
+                                Spacer(Modifier.width(4.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(effectiveBadgeColor.copy(alpha = 0.12f))
+                                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = badgeText,
+                                        color = effectiveBadgeColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Right: Action items
+                    if (actions != null) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            actions()
+                        }
                     }
                 }
             }
         }
+
+        // Hairline bottom divider
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .align(Alignment.BottomCenter)
+                .background(colors.cardBorderSubtle)
+        )
     }
 }
 
@@ -174,10 +188,10 @@ fun ChromaHeaderActionButton(
                     .size(if (badgeCount > 9) 16.dp else 8.5.dp)
                     .align(Alignment.TopEnd)
                     .offset(x = (-3.5).dp, y = 3.5.dp)
-                    .background(if (colors.isDark) Color(0xFF16161A) else Color.White, CircleShape)
+                    .background(colors.cardSurface, CircleShape)
                     .padding(1.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFFF3B30)),
+                    .background(colors.error),
                 contentAlignment = Alignment.Center
             ) {
                 if (badgeCount > 9) {
@@ -201,10 +215,12 @@ fun ChromaHeaderActionButton(
     text: String,
     icon: ImageVector? = null,
     enabled: Boolean = true,
-    accentColor: Color = Color(0xFF0381FE),
+    accentColor: Color = Color.Unspecified,
     isLoading: Boolean = false,
     onClick: () -> Unit
 ) {
+    val colors = LocalOscellionColors.current
+    val effectiveAccent = if (accentColor != Color.Unspecified) accentColor else colors.primary
     val thinAppleBorder = remember {
         Brush.verticalGradient(
             listOf(
@@ -213,13 +229,13 @@ fun ChromaHeaderActionButton(
             )
         )
     }
-    val btnShape = RoundedCornerShape(10.dp)
+    val btnShape = RoundedCornerShape(colors.buttonCornerRadius)
 
     Box(
         modifier = Modifier
             .height(36.dp)
             .clip(btnShape)
-            .background(if (enabled && !isLoading) accentColor else Color.Gray.copy(alpha = 0.35f))
+            .background(if (enabled && !isLoading) effectiveAccent else colors.textMuted.copy(alpha = 0.35f))
             .border(
                 width = 0.5.dp,
                 brush = if (enabled && !isLoading) thinAppleBorder else SolidColor(Color.White.copy(alpha = 0.12f)),

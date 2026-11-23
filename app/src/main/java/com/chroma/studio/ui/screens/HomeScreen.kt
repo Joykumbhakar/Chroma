@@ -1138,8 +1138,7 @@ fun HomeScreen(
                         .clipToBounds()
                         .background(
                             if (topBarBackdropAlpha > 0.01f) {
-                                if (colors.isDark) Color(0xFF000000).copy(alpha = 0.92f * topBarBackdropAlpha)
-                                else Color(0xFF0A1128).copy(alpha = 0.92f * topBarBackdropAlpha)
+                                colors.bg.copy(alpha = 0.94f * topBarBackdropAlpha)
                             } else {
                                 Color.Transparent
                             }
@@ -1148,7 +1147,7 @@ fun HomeScreen(
                             if (topBarBackdropAlpha > 0.1f) {
                                 val stroke = 0.5.dp.toPx()
                                 drawLine(
-                                    color = Color.White.copy(alpha = 0.10f * topBarBackdropAlpha),
+                                    color = colors.cardBorderSubtle.copy(alpha = topBarBackdropAlpha),
                                     start = Offset(0f, size.height - stroke / 2f),
                                     end = Offset(size.width, size.height - stroke / 2f),
                                     strokeWidth = stroke

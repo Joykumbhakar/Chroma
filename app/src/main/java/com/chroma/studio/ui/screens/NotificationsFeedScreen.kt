@@ -561,7 +561,7 @@ private fun SwipeableNotificationCard(
 
                     .graphicsLayer { alpha = rightAlpha }
 
-                    .background(Color(0xFFFF3B30))
+                    .background(colors.error)
 
                     .padding(horizontal = 16.dp),
 
@@ -661,9 +661,9 @@ private fun SwipeableNotificationCard(
 
                         .clip(RoundedCornerShape(8.dp))
 
-                        .background(Color(0xFFFF3B30).copy(alpha = 0.15f))
+                        .background(colors.error.copy(alpha = 0.15f))
 
-                        .border(1.dp, Color(0xFFFF3B30).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .border(1.dp, colors.error.copy(alpha = 0.4f), RoundedCornerShape(colors.chipCornerRadius))
 
                         .clickable { onSwipeRightRemove(notification) }
 
@@ -679,7 +679,7 @@ private fun SwipeableNotificationCard(
 
                         contentDescription = "Delete",
 
-                        tint = Color(0xFFFF3B30),
+                        tint = colors.error,
 
                         modifier = Modifier.size(15.dp)
 

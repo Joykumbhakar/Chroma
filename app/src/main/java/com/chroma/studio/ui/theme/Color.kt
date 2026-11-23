@@ -1,10 +1,14 @@
 package com.chroma.studio.ui.theme
 
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 /**
- * Direct port and implementation of the Samsung One UI Design Guidelines color palette (Pages 62-63, 86).
- * Incorporates professional, accessible, and high-contrast color tokens for Light and Dark modes.
+ * Direct port and implementation of the Samsung One UI & Apple Liquid Glass Design Guidelines.
+ * Incorporates professional, accessible, high-contrast and centralized design tokens for the entire app.
+ * Modifying any token here propagates immediately to every component, screen, and feature.
  */
 data class OscellionPalette(
     val bg: Color,
@@ -30,8 +34,42 @@ data class OscellionPalette(
 
     // Official Samsung One UI Semantic Tokens (Guide Page 62)
     val primaryDark: Color = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE),
-    val colorControlActive: Color = Color(0xFF3E91FF)
-)
+    val colorControlActive: Color = Color(0xFF3E91FF),
+
+    // Unified Real-Time Online Presence Tokens
+    val onlineStatus: Color = if (isDark) Color(0xFF30D158) else Color(0xFF34C759),
+    val offlineStatus: Color = if (isDark) Color(0xFF8E8E93) else Color(0xFFA1A1AA),
+    val statusRingBorder: Color = if (isDark) Color(0xFF141416) else Color(0xFFFFFFFF),
+
+    // Unified Card & Surface Tokens
+    val cardSurface: Color = if (isDark) Color(0xFF16181F) else Color(0xFFFFFFFF),
+    val cardSurfaceElevated: Color = if (isDark) Color(0xFF1E222D) else Color(0xFFF8FAFC),
+    val cardBorder: Color = if (isDark) Color(0x1FFFFFFF) else Color(0xFFE2E8F0),
+    val cardBorderSubtle: Color = if (isDark) Color(0x12FFFFFF) else Color(0x0F000000),
+
+    // Unified Shape Radii Tokens
+    val cardCornerRadius: Dp = 22.dp,
+    val buttonCornerRadius: Dp = 14.dp,
+    val chipCornerRadius: Dp = 10.dp,
+    val pillCornerRadius: Dp = 9999.dp,
+    val sheetCornerRadius: Dp = 26.dp,
+
+    // Input & Search Field Tokens
+    val inputBg: Color = if (isDark) Color(0xFF1C1F26) else Color(0xFFF1F5F9),
+    val inputBorder: Color = if (isDark) Color(0x28FFFFFF) else Color(0xFFE2E8F0),
+
+    // Avatar Styling Tokens
+    val avatarBorder: Color = if (isDark) Color(0x30FFFFFF) else Color(0x18000000)
+) {
+    val primaryGradient: Brush
+        get() = Brush.verticalGradient(
+            listOf(
+                primaryHover,
+                primary,
+                primaryDark
+            )
+        )
+}
 
 // ---- Samsung One UI Light Theme (Page 62) ----
 val LightPalette = OscellionPalette(
@@ -50,7 +88,22 @@ val LightPalette = OscellionPalette(
     warning = Color(0xFFF59E0B),
     isDark = false,
     primaryDark = Color(0xFF0072DE),
-    colorControlActive = Color(0xFF3E91FF)
+    colorControlActive = Color(0xFF3E91FF),
+    onlineStatus = Color(0xFF34C759),
+    offlineStatus = Color(0xFFA1A1AA),
+    statusRingBorder = Color(0xFFFFFFFF),
+    cardSurface = Color(0xFFFFFFFF),
+    cardSurfaceElevated = Color(0xFFF8FAFC),
+    cardBorder = Color(0xFFE2E8F0),
+    cardBorderSubtle = Color(0x0F000000),
+    cardCornerRadius = 22.dp,
+    buttonCornerRadius = 14.dp,
+    chipCornerRadius = 10.dp,
+    pillCornerRadius = 9999.dp,
+    sheetCornerRadius = 26.dp,
+    inputBg = Color(0xFFF1F5F9),
+    inputBorder = Color(0xFFE2E8F0),
+    avatarBorder = Color(0x18000000)
 )
 
 // ---- Samsung One UI Dark Theme (Page 62) ----
@@ -70,7 +123,22 @@ val DarkPalette = OscellionPalette(
     warning = Color(0xFFF59E0B),
     isDark = true,
     primaryDark = Color(0xFF3E91FF),
-    colorControlActive = Color(0xFF3E91FF)
+    colorControlActive = Color(0xFF3E91FF),
+    onlineStatus = Color(0xFF30D158),
+    offlineStatus = Color(0xFF8E8E93),
+    statusRingBorder = Color(0xFF141416),
+    cardSurface = Color(0xFF16181F),
+    cardSurfaceElevated = Color(0xFF1E222D),
+    cardBorder = Color(0x1FFFFFFF),
+    cardBorderSubtle = Color(0x12FFFFFF),
+    cardCornerRadius = 22.dp,
+    buttonCornerRadius = 14.dp,
+    chipCornerRadius = 10.dp,
+    pillCornerRadius = 9999.dp,
+    sheetCornerRadius = 26.dp,
+    inputBg = Color(0xFF1C1F26),
+    inputBorder = Color(0x28FFFFFF),
+    avatarBorder = Color(0x30FFFFFF)
 )
 
 // Radii (--radius-sm/md/lg/pill) as dp values, used across components

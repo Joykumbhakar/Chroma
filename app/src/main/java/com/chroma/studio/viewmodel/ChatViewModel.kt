@@ -1715,26 +1715,68 @@ class ChatViewModel : ViewModel() {
     var callManager: com.chroma.studio.webrtc.CallManager? = null
         private set
 
+    val incomingCall: kotlinx.coroutines.flow.StateFlow<com.chroma.studio.webrtc.CallModel?>
+        get() = callManager?.incomingCall ?: kotlinx.coroutines.flow.MutableStateFlow<com.chroma.studio.webrtc.CallModel?>(null)
+
+    val activeCall: kotlinx.coroutines.flow.StateFlow<com.chroma.studio.webrtc.CallModel?>
+        get() = callManager?.activeCall ?: kotlinx.coroutines.flow.MutableStateFlow<com.chroma.studio.webrtc.CallModel?>(null)
+
+    val callState: kotlinx.coroutines.flow.StateFlow<com.chroma.studio.webrtc.CallState>
+        get() = callManager?.callState ?: kotlinx.coroutines.flow.MutableStateFlow<com.chroma.studio.webrtc.CallState>(com.chroma.studio.webrtc.CallState.IDLE)
+
+    val callDurationSec: kotlinx.coroutines.flow.StateFlow<Int>
+        get() = callManager?.callDurationSec ?: kotlinx.coroutines.flow.MutableStateFlow(0)
+
     fun initializeCallManager(context: android.content.Context) {
         if (callManager == null) {
-            callManager = com.chroma.studio.webrtc.CallManager(context.applicationContext, repository)
+            val mgr = com.chroma.studio.webrtc.CallManager(context.applicationContext)
+            callManager = mgr
+            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            if (!uid.isNullOrBlank()) {
+                mgr.startListeningForIncomingCalls(uid)
+            }
         }
     }
 
-    fun startCall(roomId: String) {
-        callManager?.startCall(roomId)
+    fun startCall(
+        roomId: String,
+        otherUserId: String,
+        otherUserName: String,
+        otherUserAvatar: String,
+        isVideo: Boolean
+    ) {
+        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
+        val currentProfile = userProfiles.value[user.uid]
+        callManager?.startCall(
+            roomId = roomId,
+            callerId = user.uid,
+            callerName = currentProfile?.displayName ?: user.displayName ?: "User",
+            callerAvatar = currentProfile?.avatarUrl ?: "",
+            calleeId = otherUserId,
+            calleeName = otherUserName,
+            calleeAvatar = otherUserAvatar,
+            isVideo = isVideo
+        )
     }
 
-    fun answerCall(roomId: String) {
-        callManager?.answerCall(roomId)
+    fun answerCall(call: com.chroma.studio.webrtc.CallModel) {
+        callManager?.answerCall(call)
     }
 
-    fun toggleMute(muted: Boolean) {
-        callManager?.setMicrophoneMute(muted)
+    fun rejectCall(call: com.chroma.studio.webrtc.CallModel) {
+        callManager?.rejectCall(call)
     }
 
-    fun toggleCamera(enabled: Boolean) {
-        callManager?.setCameraEnabled(enabled)
+    fun toggleMute(): Boolean {
+        return callManager?.toggleMicrophone() ?: false
+    }
+
+    fun toggleCamera(): Boolean {
+        return callManager?.toggleCamera() ?: false
+    }
+
+    fun toggleSpeaker(): Boolean {
+        return callManager?.toggleSpeaker() ?: false
     }
 
     fun switchCamera() {

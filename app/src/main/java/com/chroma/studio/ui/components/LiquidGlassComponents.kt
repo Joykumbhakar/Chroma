@@ -110,18 +110,24 @@ object LiquidGlassTokens {
 @Composable
 fun LiquidGlassCard(
     modifier: Modifier = Modifier,
-    backgroundColor: Color = LiquidGlassTokens.SurfaceCard,
-    borderColor: Color = LiquidGlassTokens.BorderFlat,
-    cornerRadius: Dp = LiquidGlassTokens.CardCornerRadius,
-    shape: Shape = RoundedCornerShape(cornerRadius),
+    backgroundColor: Color = Color.Unspecified,
+    borderColor: Color = Color.Unspecified,
+    cornerRadius: Dp = Dp.Unspecified,
+    shape: Shape? = null,
     contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val colors = LocalOscellionColors.current
+    val resolvedBg = if (backgroundColor != Color.Unspecified) backgroundColor else colors.cardSurface
+    val resolvedBorder = if (borderColor != Color.Unspecified) borderColor else colors.cardBorder
+    val resolvedRadius = if (cornerRadius != Dp.Unspecified) cornerRadius else colors.cardCornerRadius
+    val resolvedShape = shape ?: RoundedCornerShape(resolvedRadius)
+
     Surface(
         modifier = modifier,
-        shape = shape,
-        color = backgroundColor,
-        border = BorderStroke(1.dp, borderColor)
+        shape = resolvedShape,
+        color = resolvedBg,
+        border = BorderStroke(1.dp, resolvedBorder)
     ) {
         Column(
             modifier = Modifier.padding(contentPadding),
@@ -141,9 +147,11 @@ fun LiquidGlassPrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isSmall: Boolean = false,
-    shape: Shape = CircleShape,
+    shape: Shape? = null,
     content: @Composable RowScope.() -> Unit
 ) {
+    val colors = LocalOscellionColors.current
+    val resolvedShape = shape ?: RoundedCornerShape(colors.buttonCornerRadius)
     val height = if (isSmall) 34.dp else 42.dp
     val horizontalPadding = if (isSmall) 14.dp else 20.dp
 
@@ -158,16 +166,16 @@ fun LiquidGlassPrimaryButton(
 
     val bgColor by animateColorAsState(
         targetValue = when {
-            !enabled -> Color(0xFF94A3B8)
-            isPressed -> Color(0xFF0066D6)
-            else -> Color(0xFF0381FE)
+            !enabled -> colors.textMuted.copy(alpha = 0.5f)
+            isPressed -> colors.primaryHover
+            else -> colors.primary
         },
         animationSpec = tween(140),
         label = "btnBgColor"
     )
 
     // Shiny diagonal specular glass border (top-left highlight -> translucent -> bottom-right rim)
-    val thinAppleBorder = remember {
+    val thinAppleBorder = remember(colors.isDark) {
         Brush.linearGradient(
             listOf(
                 Color.White.copy(alpha = 0.92f),
@@ -183,12 +191,12 @@ fun LiquidGlassPrimaryButton(
         modifier = modifier
             .scale(scale)
             .defaultMinSize(minHeight = height)
-            .clip(shape)
+            .clip(resolvedShape)
             .background(bgColor)
             .border(
                 width = 0.5.dp,
                 brush = if (enabled) thinAppleBorder else SolidColor(Color.White.copy(alpha = 0.12f)),
-                shape = shape
+                shape = resolvedShape
             )
             .clickable(
                 enabled = enabled,
@@ -262,9 +270,11 @@ fun LiquidGlassSecondaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isSmall: Boolean = false,
-    shape: Shape = CircleShape,
+    shape: Shape? = null,
     content: @Composable RowScope.() -> Unit
 ) {
+    val colors = LocalOscellionColors.current
+    val resolvedShape = shape ?: RoundedCornerShape(colors.buttonCornerRadius)
     val height = if (isSmall) 34.dp else 42.dp
     val horizontalPadding = if (isSmall) 14.dp else 20.dp
 
@@ -277,7 +287,7 @@ fun LiquidGlassSecondaryButton(
         label = "secBtnScale"
     )
 
-    val isDark = isAppInDark
+    val isDark = colors.isDark
     val secBg = when {
         !enabled -> if (isDark) Color(0x10FFFFFF) else Color(0xFFE2E8F0)
         isPressed -> if (isDark) Color(0x30FFFFFF) else Color(0xFFE5E5EA)
@@ -289,7 +299,7 @@ fun LiquidGlassSecondaryButton(
         Brush.linearGradient(
             listOf(
                 Color.White.copy(alpha = 0.85f),
-                Color(0xFF94A3B8).copy(alpha = 0.20f),
+                colors.textMuted.copy(alpha = 0.20f),
                 Color.White.copy(alpha = 0.55f)
             ),
             start = Offset.Zero,
@@ -299,25 +309,25 @@ fun LiquidGlassSecondaryButton(
         Brush.linearGradient(
             listOf(
                 Color.White.copy(alpha = 0.98f),
-                Color(0xFF0381FE).copy(alpha = 0.25f),
-                Color(0xFF93C5FD).copy(alpha = 0.65f)
+                colors.primary.copy(alpha = 0.25f),
+                colors.primaryDark.copy(alpha = 0.65f)
             ),
             start = Offset.Zero,
             end = Offset.Infinite
         )
     }
-    val contentColor = if (isDark) Color.White else Color(0xFF1C1C1E)
+    val contentColor = colors.textMain
 
     Box(
         modifier = modifier
             .scale(scale)
             .defaultMinSize(minHeight = height)
-            .clip(shape)
+            .clip(resolvedShape)
             .background(secBg)
             .border(
                 width = 0.5.dp,
                 brush = thinBorderBrush,
-                shape = shape
+                shape = resolvedShape
             )
             .clickable(
                 enabled = enabled,
@@ -1106,15 +1116,19 @@ fun LiquidGlassToggle(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    activeTrackColor: Color = Color(0xFF34C759),
-    inactiveTrackColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE5E5EA)
+    activeTrackColor: Color = Color.Unspecified,
+    inactiveTrackColor: Color = Color.Unspecified
 ) {
+    val colors = LocalOscellionColors.current
+    val effectiveActive = if (activeTrackColor != Color.Unspecified) activeTrackColor else colors.onlineStatus
+    val effectiveInactive = if (inactiveTrackColor != Color.Unspecified) inactiveTrackColor else colors.cardBorderSubtle
+
     AppleSwitch(
         checked = checked,
         onCheckedChange = onCheckedChange,
         modifier = modifier,
-        activeTrackColor = activeTrackColor,
-        inactiveTrackColor = inactiveTrackColor
+        activeTrackColor = effectiveActive,
+        inactiveTrackColor = effectiveInactive
     )
 }
 
@@ -1133,16 +1147,20 @@ fun LiquidGlassSlider(
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     modifier: Modifier = Modifier,
     steps: Int = 0,
-    activeColor: Color = Color(0xFF0381FE),
-    inactiveColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE5E5EA),
+    activeColor: Color = Color.Unspecified,
+    inactiveColor: Color = Color.Unspecified,
     trackHeight: Dp = 6.dp
 ) {
+    val colors = LocalOscellionColors.current
+    val effectiveActive = if (activeColor != Color.Unspecified) activeColor else colors.primary
+    val effectiveInactive = if (inactiveColor != Color.Unspecified) inactiveColor else colors.cardBorderSubtle
+
     AppleSlider(
         value = value,
         onValueChange = onValueChange,
         valueRange = valueRange,
         steps = steps,
-        gradientColors = listOf(activeColor, activeColor),
+        gradientColors = listOf(effectiveActive, effectiveActive),
         trackHeight = trackHeight,
         modifier = modifier
     )
@@ -1151,7 +1169,7 @@ fun LiquidGlassSlider(
 /**
  * Liquid Glass Bottom Sheet Drawer
  * Real Google Material 3 ModalBottomSheet with native gestures and velocity physics,
- * styled with Apple/Liquid Glass rounded top corners (24.dp), tactile drag pill, and clean surfaces.
+ * styled with Apple/Liquid Glass rounded top corners (sheetCornerRadius), tactile drag pill, and clean surfaces.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1159,27 +1177,32 @@ fun LiquidGlassBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-    containerColor: Color = if (isAppInDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF),
-    contentColor: Color = if (isAppInDark) Color.White else Color(0xFF0F172A),
+    containerColor: Color = Color.Unspecified,
+    contentColor: Color = Color.Unspecified,
     dragHandle: @Composable (() -> Unit)? = {
+        val colors = LocalOscellionColors.current
         Box(
             modifier = Modifier
                 .padding(top = 10.dp, bottom = 8.dp)
                 .width(36.dp)
                 .height(5.dp)
-                .clip(RoundedCornerShape(9999.dp))
-                .background(if (isAppInDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.2f))
+                .clip(RoundedCornerShape(colors.pillCornerRadius))
+                .background(colors.textMuted.copy(alpha = 0.35f))
         )
     },
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val colors = LocalOscellionColors.current
+    val effectiveContainer = if (containerColor != Color.Unspecified) containerColor else colors.cardSurface
+    val effectiveContent = if (contentColor != Color.Unspecified) contentColor else colors.textMain
+
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        containerColor = containerColor,
-        contentColor = contentColor,
+        shape = RoundedCornerShape(topStart = colors.sheetCornerRadius, topEnd = colors.sheetCornerRadius),
+        containerColor = effectiveContainer,
+        contentColor = effectiveContent,
         scrimColor = Color.Black.copy(alpha = 0.45f),
         tonalElevation = 0.dp,
         dragHandle = dragHandle,

@@ -99,6 +99,8 @@ import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.*
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.chroma.studio.ui.theme.LightPalette
+import com.chroma.studio.ui.theme.DarkPalette
 import com.chroma.studio.ui.theme.ChromaIcons
 import com.chroma.studio.viewmodel.DiscoverViewModel
 import com.composables.icons.lucide.*
@@ -107,15 +109,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// ── One UI Design Tokens ──────────────────────────────────────────────────────
-private val OneUiBlueLight = Color(0xFF0381FE)
-private val OneUiBlueDark = Color(0xFF0381FE)
-private val OneUiSurfaceLight = Color(0xFFF2F2F7)
-private val OneUiSurfaceDark = Color(0xFF000000)
-private val OneUiCardLight = Color(0xFFFFFFFF)
-private val OneUiCardDark = Color(0xFF1C1C1E)
-private val OneUiPillLight = Color(0xFFE5E5EA)
-private val OneUiPillDark = Color(0xFF2C2C2E)
+// ── One UI Design Tokens (Delegated to OscellionPalette tokens) ──────────────────────────────────────────────────────
+private val OneUiBlueLight get() = LightPalette.primary
+private val OneUiBlueDark get() = DarkPalette.primary
+private val OneUiSurfaceLight get() = LightPalette.cardSurfaceElevated
+private val OneUiSurfaceDark get() = DarkPalette.bg
+private val OneUiCardLight get() = LightPalette.cardSurface
+private val OneUiCardDark get() = DarkPalette.cardSurface
+private val OneUiPillLight get() = LightPalette.inputBg
+private val OneUiPillDark get() = DarkPalette.inputBg
 
 /**
  * Apple-style Specular Glass Rim Border Brush.

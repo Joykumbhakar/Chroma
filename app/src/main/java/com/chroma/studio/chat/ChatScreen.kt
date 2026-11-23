@@ -2,6 +2,7 @@ package com.chroma.studio.chat
 
 import com.chroma.studio.R
 import com.chroma.studio.chat.util.findActivity
+import com.chroma.studio.webrtc.CallState
 
 
 
@@ -1739,14 +1740,47 @@ private fun ChatScreenContent(
 
 
     // Calling State
-
     var isCallBannerActive by remember { mutableStateOf(false) }
-
     var isFullCallModalOpen by remember { mutableStateOf(false) }
-
     var activeCallType by remember { mutableStateOf("Audio Call") }
-
     var callDurationSeconds by remember { mutableIntStateOf(0) }
+
+    val defaultCallState = remember { kotlinx.coroutines.flow.MutableStateFlow(CallState.IDLE) }
+    val rtcCallState by (chatViewModel?.callState ?: defaultCallState).collectAsState()
+    val defaultDuration = remember { kotlinx.coroutines.flow.MutableStateFlow(0) }
+    val rtcDuration by (chatViewModel?.callDurationSec ?: defaultDuration).collectAsState()
+
+    LaunchedEffect(rtcCallState) {
+        if (rtcCallState == CallState.ENDED) {
+            isCallBannerActive = false
+            isFullCallModalOpen = false
+        }
+    }
+    LaunchedEffect(rtcDuration) {
+        if (rtcDuration > 0) {
+            callDurationSeconds = rtcDuration
+        }
+    }
+    LaunchedEffect(currentUid) {
+        if (currentUid.isNotBlank()) {
+            chatViewModel?.initializeCallManager(context)
+        }
+    }
+
+    val callActions = com.chroma.studio.chat.ui.components.rememberChatCallActions(
+        context = context,
+        chatViewModel = chatViewModel,
+        currentUid = currentUid,
+        activeChatId = activeChatId,
+        showToast = { showToast(it) },
+        showIsland = { title, desc, type -> showIsland(title, desc, type) },
+        onCallUiOpened = { callType ->
+            activeCallType = callType
+            isCallBannerActive = true
+            isFullCallModalOpen = true
+            callDurationSeconds = 0
+        }
+    )
 
 
 
@@ -2216,10 +2250,7 @@ private fun ChatScreenContent(
                     },
                     onStartCall = { chat, callType ->
                         activeChatId = chat.id
-                        activeCallType = callType
-                        isCallBannerActive = true
-                        isFullCallModalOpen = true
-                        SoundManager.playRing()
+                        callActions.startCall(chat, callType.contains("Video", ignoreCase = true))
                     },
                     lockedChatIds = lockedChatIds,
                     pinnedChatIds = pinnedChatIds,
@@ -2406,17 +2437,8 @@ private fun ChatScreenContent(
             },
 
             onStartCall = { chat, callType ->
-
                 activeChatId = chat.id
-
-                activeCallType = callType
-
-                isCallBannerActive = true
-
-                isFullCallModalOpen = true
-
-                SoundManager.playRing()
-
+                callActions.startCall(chat, callType.contains("Video", ignoreCase = true))
             },
 
             lockedChatIds = lockedChatIds,
@@ -3032,22 +3054,10 @@ private fun ChatScreenContent(
                                 onSearchQueryChange = { searchInsideQuery = it },
 
                                 onAudioCallClick = {
-                                    activeCallType = "Audio Call"
-                                    isCallBannerActive = true
-                                    isFullCallModalOpen = true
-                                    callDurationSeconds = 0
-                                    chatViewModel?.initializeCallManager(context)
-                                    chatViewModel?.startCall(activeChatId)
-                                    SoundManager.playRing()
+                                    callActions.startAudioCall(activeChat)
                                 },
                                 onVideoCallClick = {
-                                    activeCallType = "Video Call"
-                                    isCallBannerActive = true
-                                    isFullCallModalOpen = true
-                                    callDurationSeconds = 0
-                                    chatViewModel?.initializeCallManager(context)
-                                    chatViewModel?.startCall(activeChatId)
-                                    SoundManager.playRing()
+                                    callActions.startVideoCall(activeChat)
                                 },
 
                                 onAppearanceToggle = onAppearanceToggle,
@@ -3821,31 +3831,12 @@ private fun ChatScreenContent(
                 onClose = { isContactDrawerOpen = false },
 
                 onAudioCall = {
-
                     isContactDrawerOpen = false
-
-                    activeCallType = "Audio Call"
-
-                    isCallBannerActive = true
-
-                    isFullCallModalOpen = true
-
-                    SoundManager.playRing()
-
+                    callActions.startAudioCall(activeChat)
                 },
-
                 onVideoCall = {
-
                     isContactDrawerOpen = false
-
-                    activeCallType = "Video Call"
-
-                    isCallBannerActive = true
-
-                    isFullCallModalOpen = true
-
-                    SoundManager.playRing()
-
+                    callActions.startVideoCall(activeChat)
                 },
 
                 onSearchMessages = {
@@ -4391,51 +4382,28 @@ private fun ChatScreenContent(
 
         }
 
-        // Fullscreen Call Modal
-
-        AnimatedVisibility(
-
-            visible = isFullCallModalOpen,
-
-            enter = slideInVertically(initialOffsetY = { it }, animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(animationSpec = tween(220)),
-
-            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(180)) + fadeOut(animationSpec = tween(180))
-
-        ) {
-
-            var isMicMuted by remember { mutableStateOf(false) }
-            var isCamEnabled by remember { mutableStateOf(activeCallType.contains("Video", ignoreCase = true)) }
-            var isSpeakerOn by remember { mutableStateOf(activeCallType.contains("Video", ignoreCase = true)) }
-
-            FullCallModal(
-                chat = activeChat,
-                callType = activeCallType,
-                callDurationSec = callDurationSeconds,
-                onToggleMic = {
-                    isMicMuted = !isMicMuted
-                    chatViewModel?.toggleMute(isMicMuted)
-                    showToast(if (isMicMuted) "Microphone muted" else "Microphone unmuted")
-                },
-                onToggleCam = {
-                    isCamEnabled = !isCamEnabled
-                    chatViewModel?.toggleCamera(isCamEnabled)
-                    showToast(if (isCamEnabled) "Camera enabled" else "Camera disabled")
-                },
-                onToggleSpeaker = {
-                    isSpeakerOn = !isSpeakerOn
-                    val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
-                    audioManager?.isSpeakerphoneOn = isSpeakerOn
-                    showToast(if (isSpeakerOn) "Speaker on" else "Earpiece active")
-                },
-                onHangup = {
-                    isCallBannerActive = false
-                    isFullCallModalOpen = false
-                    chatViewModel?.endCall()
-                    showToast("Call ended")
-                }
-            )
-
-        }
+        // Call Overlays (Fullscreen Call Modal & Incoming Call Overlay)
+        com.chroma.studio.chat.ui.components.ChatCallOverlays(
+            context = context,
+            chatViewModel = chatViewModel,
+            activeChat = activeChat,
+            activeCallType = activeCallType,
+            isFullCallModalOpen = isFullCallModalOpen,
+            callDurationSeconds = callDurationSeconds,
+            onCallUiOpened = { callType ->
+                activeCallType = callType
+                isCallBannerActive = true
+                isFullCallModalOpen = true
+                callDurationSeconds = 0
+            },
+            onHangup = {
+                isCallBannerActive = false
+                isFullCallModalOpen = false
+                chatViewModel?.endCall()
+                showToast("Call ended")
+            },
+            showToast = { showToast(it) }
+        )
 
 
 

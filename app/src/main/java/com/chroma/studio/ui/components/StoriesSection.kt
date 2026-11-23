@@ -238,7 +238,8 @@ fun StoriesSection(
                 val firstName = displayName.split(Regex("\\s+")).firstOrNull() ?: displayName
                 val avatarUrl = profile.avatarUrl
                 val isSeen = storyGroup.allSeen
-                val isOnline = profile.online
+                val presence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(profile.uid)
+                val isOnline = (presence.online || profile.online) && profile.showOnlineStatus
                 val hasStories = storyGroup.stories.isNotEmpty()
 
                 val itemInteractionSource = remember { MutableInteractionSource() }

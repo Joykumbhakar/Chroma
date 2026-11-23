@@ -35,6 +35,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chroma.studio.R
 import com.chroma.studio.data.ChatSettingsManager
+import com.chroma.studio.data.OnlineStatusManager
 import com.chroma.studio.ui.components.*
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.ChatViewModel
@@ -83,7 +84,7 @@ fun GroupInfoScreen(
 
     if (room == null || !room.isGroup) {
         Box(
-            modifier = Modifier.fillMaxSize().background(Color(0xFFF2F3F8)),
+            modifier = Modifier.fillMaxSize().background(colors.bg),
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator(color = colors.primary, modifier = Modifier.size(36.dp))
@@ -132,7 +133,7 @@ fun GroupInfoScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF2F3F8))
+            .background(colors.bg)
     ) {
         AuroraBackground()
 
@@ -148,9 +149,9 @@ fun GroupInfoScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White)
-                        .border(0.5.dp, if (colors.isDark) Color(0x2EFFFFFF) else Color(0x1F000000), RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(colors.cardCornerRadius))
+                        .background(colors.cardSurface)
+                        .border(0.5.dp, colors.cardBorder, RoundedCornerShape(colors.cardCornerRadius))
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -173,7 +174,7 @@ fun GroupInfoScreen(
                                     .size(28.dp)
                                     .shadow(3.dp, CircleShape)
                                     .clip(CircleShape)
-                                    .background(if (colors.isDark) Color(0xFF2C2C2E) else Color.White)
+                                    .background(colors.cardSurfaceElevated)
                                     .border(2.dp, colors.bg, CircleShape)
                                     .clickable { imagePickerLauncher.launch("image/*") },
                                 contentAlignment = Alignment.Center
@@ -181,7 +182,7 @@ fun GroupInfoScreen(
                                 Icon(
                                     Lucide.Camera,
                                     contentDescription = "Change Photo",
-                                    tint = Color(0xFF0381FE),
+                                    tint = colors.primary,
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
@@ -204,7 +205,7 @@ fun GroupInfoScreen(
                         if (isAdmin && !isLeft && !isClosed) {
                             Spacer(Modifier.width(6.dp))
                             IconButton(onClick = { showEditNameDialog = true }, modifier = Modifier.size(28.dp)) {
-                                Icon(Lucide.Pencil, "Edit", tint = Color(0xFF0381FE), modifier = Modifier.size(15.dp))
+                                Icon(Lucide.Pencil, "Edit", tint = colors.primary, modifier = Modifier.size(15.dp))
                             }
                         }
                     }
@@ -214,7 +215,7 @@ fun GroupInfoScreen(
                     Text(
                         text = "Group · ${room.participants.size} participants",
                         fontSize = 13.sp,
-                        color = Color(0xFF8E8E93)
+                        color = colors.textMuted
                     )
 
                     // Group Description
@@ -223,8 +224,8 @@ fun GroupInfoScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (colors.isDark) Color(0x26FFFFFF) else Color(0x0A000000))
+                                .clip(RoundedCornerShape(colors.chipCornerRadius))
+                                .background(colors.inputBg)
                                 .clickable(enabled = isAdmin && !isLeft && !isClosed) {
                                     newGroupDesc = room.groupDescription ?: ""
                                     showEditDescDialog = true
@@ -234,7 +235,7 @@ fun GroupInfoScreen(
                             if (room.groupDescription.isNullOrBlank()) {
                                 Text(
                                     text = "Add a group description...",
-                                    color = Color(0xFF8E8E93),
+                                    color = colors.textMuted,
                                     fontSize = 13.sp,
                                     lineHeight = 18.sp,
                                     modifier = Modifier.fillMaxWidth(),
@@ -268,15 +269,15 @@ fun GroupInfoScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(70.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White)
-                                    .border(0.5.dp, if (colors.isDark) Color(0x2EFFFFFF) else Color(0x1F000000), RoundedCornerShape(14.dp))
+                                    .clip(RoundedCornerShape(colors.buttonCornerRadius))
+                                    .background(colors.cardSurface)
+                                    .border(0.5.dp, colors.cardBorder, RoundedCornerShape(colors.buttonCornerRadius))
                                     .clickable { showAddMemberDialog = true }
                                     .padding(8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Lucide.UserPlus, null, tint = Color(0xFF0381FE), modifier = Modifier.size(20.dp))
+                                    Icon(Lucide.UserPlus, null, tint = colors.primary, modifier = Modifier.size(20.dp))
                                     Spacer(Modifier.height(4.dp))
                                     Text("Add", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                 }
@@ -288,9 +289,9 @@ fun GroupInfoScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(70.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White)
-                                .border(0.5.dp, if (colors.isDark) Color(0x2EFFFFFF) else Color(0x1F000000), RoundedCornerShape(14.dp))
+                                .clip(RoundedCornerShape(colors.buttonCornerRadius))
+                                .background(colors.cardSurface)
+                                .border(0.5.dp, colors.cardBorder, RoundedCornerShape(colors.buttonCornerRadius))
                                 .clickable { chatViewModel.muteChat(roomId, !isMuted) }
                                 .padding(8.dp),
                             contentAlignment = Alignment.Center
@@ -299,7 +300,7 @@ fun GroupInfoScreen(
                                 Icon(
                                     if (isMuted) Lucide.BellOff else Lucide.Bell,
                                     null,
-                                    tint = if (isMuted) Color(0xFFFF9F0A) else Color(0xFF0381FE),
+                                    tint = if (isMuted) colors.warning else colors.primary,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(Modifier.height(4.dp))
@@ -312,15 +313,15 @@ fun GroupInfoScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(70.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White)
-                                .border(0.5.dp, if (colors.isDark) Color(0x2EFFFFFF) else Color(0x1F000000), RoundedCornerShape(14.dp))
+                                .clip(RoundedCornerShape(colors.buttonCornerRadius))
+                                .background(colors.cardSurface)
+                                .border(0.5.dp, colors.cardBorder, RoundedCornerShape(colors.buttonCornerRadius))
                                 .clickable { showWallpaperPicker = true }
                                 .padding(8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Lucide.Palette, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(20.dp))
+                                Icon(Lucide.Palette, null, tint = colors.primaryHover, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.height(4.dp))
                                 Text("Wallpaper", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
@@ -337,10 +338,10 @@ fun GroupInfoScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
-                            .studioBevel(cornerRadius = 14.dp, borderWidth = 0.5.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White)
-                            .border(0.5.dp, if (colors.isDark) Color(0x2EFFFFFF) else Color(0x1F000000), RoundedCornerShape(14.dp))
+                            .studioBevel(cornerRadius = colors.cardCornerRadius, borderWidth = 0.5.dp)
+                            .clip(RoundedCornerShape(colors.cardCornerRadius))
+                            .background(colors.cardSurface)
+                            .border(0.5.dp, colors.cardBorder, RoundedCornerShape(colors.cardCornerRadius))
                             .padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
                         Row(
@@ -352,7 +353,7 @@ fun GroupInfoScreen(
                                 Icon(
                                     Lucide.ShieldCheck,
                                     contentDescription = null,
-                                    tint = Color(0xFF0381FE),
+                                    tint = colors.primary,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(Modifier.width(12.dp))
@@ -365,7 +366,7 @@ fun GroupInfoScreen(
                                     )
                                     Text(
                                         text = if (room.onlyAdminsCanPost) "Only admins can send messages" else "All members can send messages",
-                                        color = Color(0xFF8E8E93),
+                                        color = colors.textMuted,
                                         fontSize = 12.sp
                                     )
                                 }
@@ -385,7 +386,7 @@ fun GroupInfoScreen(
             item {
                 Text(
                     text = "${room.participants.size} MEMBERS",
-                    color = Color(0xFF8E8E93),
+                    color = colors.textMuted,
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.5.sp,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
@@ -398,9 +399,9 @@ fun GroupInfoScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White)
-                        .border(0.5.dp, if (colors.isDark) Color(0x2EFFFFFF) else Color(0x1F000000), RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(colors.cardCornerRadius))
+                        .background(colors.cardSurface)
+                        .border(0.5.dp, colors.cardBorder, RoundedCornerShape(colors.cardCornerRadius))
                         .padding(vertical = 4.dp)
                 ) {
                     Column {
@@ -408,11 +409,12 @@ fun GroupInfoScreen(
                             val profile = userProfiles[userId]
                             val isMemberAdmin = room.admins.contains(userId)
                             val isMe = userId == currentUser.uid
+                            val isMemberOnline = OnlineStatusManager.isUserOnline(userId)
 
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(colors.chipCornerRadius))
                                     .clickable { onNavigateToProfile(userId) }
                                     .padding(horizontal = 16.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -421,6 +423,7 @@ fun GroupInfoScreen(
                                     name = profile?.displayName ?: "User",
                                     avatarUrl = profile?.avatarUrl ?: "",
                                     size = 46.dp,
+                                    isOnline = isMemberOnline,
                                     gender = profile?.gender
                                 )
 
@@ -430,7 +433,7 @@ fun GroupInfoScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             text = if (isMe) "${profile?.displayName ?: "You"} (You)" else profile?.displayName ?: "Member",
-                                            color = Color(0xFF1C1C1E),
+                                            color = colors.textMain,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 15.sp
                                         )
@@ -442,7 +445,7 @@ fun GroupInfoScreen(
                                     if (profile?.username?.isNotBlank() == true) {
                                         Text(
                                             text = "@${profile.username}",
-                                            color = Color(0xFF8E8E93),
+                                            color = colors.textMuted,
                                             fontSize = 12.sp
                                         )
                                     }
@@ -452,12 +455,12 @@ fun GroupInfoScreen(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF0381FE).copy(alpha = 0.12f))
+                                            .background(colors.primary.copy(alpha = 0.12f))
                                             .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
                                         Text(
                                             text = "Admin",
-                                            color = Color(0xFF0381FE),
+                                            color = colors.primary,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -468,21 +471,21 @@ fun GroupInfoScreen(
                                     var expanded by remember { mutableStateOf(false) }
                                     Box {
                                         IconButton(onClick = { expanded = true }, modifier = Modifier.size(32.dp)) {
-                                            Icon(Lucide.Menu, "Options", tint = Color(0xFF8E8E93), modifier = Modifier.size(18.dp))
+                                            Icon(Lucide.Menu, "Options", tint = colors.textMuted, modifier = Modifier.size(18.dp))
                                         }
                                         DropdownMenu(
                                             expanded = expanded,
                                             onDismissRequest = { expanded = false },
                                             modifier = Modifier
-                                                .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.15f))
-                                                .clip(RoundedCornerShape(24.dp))
-                                                .background(Color.White)
-                                                .border(0.5.dp, Color(0x18000000), RoundedCornerShape(24.dp))
+                                                .shadow(16.dp, RoundedCornerShape(colors.cardCornerRadius), ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.15f))
+                                                .clip(RoundedCornerShape(colors.cardCornerRadius))
+                                                .background(colors.cardSurface)
+                                                .border(0.5.dp, colors.cardBorder, RoundedCornerShape(colors.cardCornerRadius))
                                         ) {
                                             if (!isMemberAdmin) {
                                                 DropdownMenuItem(
-                                                    text = { Text("Make Group Admin", color = Color(0xFF1C1C1E)) },
-                                                    leadingIcon = { Icon(Lucide.ShieldCheck, null, tint = Color(0xFF0381FE)) },
+                                                    text = { Text("Make Group Admin", color = colors.textMain) },
+                                                    leadingIcon = { Icon(Lucide.ShieldCheck, null, tint = colors.primary) },
                                                     onClick = {
                                                         chatViewModel.makeAdmin(room.id, userId)
                                                         expanded = false
@@ -490,8 +493,8 @@ fun GroupInfoScreen(
                                                 )
                                             } else {
                                                 DropdownMenuItem(
-                                                    text = { Text("Remove Admin Rights", color = Color(0xFFFF9F0A)) },
-                                                    leadingIcon = { Icon(Lucide.ShieldMinus, null, tint = Color(0xFFFF9F0A)) },
+                                                    text = { Text("Remove Admin Rights", color = colors.warning) },
+                                                    leadingIcon = { Icon(Lucide.ShieldMinus, null, tint = colors.warning) },
                                                     onClick = {
                                                         chatViewModel.demoteAdmin(room.id, userId)
                                                         expanded = false
@@ -499,8 +502,8 @@ fun GroupInfoScreen(
                                                 )
                                             }
                                             DropdownMenuItem(
-                                                text = { Text("Remove from Group", color = Color(0xFFFF3B30)) },
-                                                leadingIcon = { Icon(Lucide.UserMinus, null, tint = Color(0xFFFF3B30)) },
+                                                text = { Text("Remove from Group", color = colors.error) },
+                                                leadingIcon = { Icon(Lucide.UserMinus, null, tint = colors.error) },
                                                 onClick = {
                                                     chatViewModel.removeParticipant(room.id, userId)
                                                     expanded = false
@@ -513,7 +516,7 @@ fun GroupInfoScreen(
 
                             if (index < room.participants.size - 1) {
                                 HorizontalDivider(
-                                    color = Color(0x14000000),
+                                    color = colors.cardBorderSubtle,
                                     modifier = Modifier.padding(start = 72.dp, end = 16.dp)
                                 )
                             }
@@ -530,9 +533,9 @@ fun GroupInfoScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White)
-                            .border(0.5.dp, if (colors.isDark) Color(0x2EFFFFFF) else Color(0x1F000000), RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(colors.buttonCornerRadius))
+                            .background(colors.cardSurface)
+                            .border(0.5.dp, colors.cardBorder, RoundedCornerShape(colors.buttonCornerRadius))
                             .clickable {
                                 showLeaveGroupConfirm = true
                             }
@@ -540,9 +543,9 @@ fun GroupInfoScreen(
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Lucide.LogOut, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(20.dp))
+                            Icon(Lucide.LogOut, null, tint = colors.error, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(12.dp))
-                            Text("Exit Group", color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text("Exit Group", color = colors.error, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
                     }
                 }
@@ -594,9 +597,9 @@ fun GroupInfoScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (colors.isDark) Color(0x33FFFFFF) else Color(0x14000000))
-                        .border(0.5.dp, if (colors.isDark) Color(0x33FFFFFF) else Color(0x24000000), RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(colors.chipCornerRadius))
+                        .background(colors.inputBg)
+                        .border(0.5.dp, colors.inputBorder, RoundedCornerShape(colors.chipCornerRadius))
                         .padding(horizontal = 10.dp, vertical = 8.dp)
                 ) {
                     androidx.compose.foundation.text.BasicTextField(
@@ -605,7 +608,7 @@ fun GroupInfoScreen(
                         singleLine = true,
                         textStyle = androidx.compose.ui.text.TextStyle(
                             fontSize = 14.sp,
-                            color = if (colors.isDark) Color.White else Color.Black
+                            color = colors.textMain
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -633,9 +636,9 @@ fun GroupInfoScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 60.dp, max = 150.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (colors.isDark) Color(0x33FFFFFF) else Color(0x14000000))
-                        .border(0.5.dp, if (colors.isDark) Color(0x33FFFFFF) else Color(0x24000000), RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(colors.chipCornerRadius))
+                        .background(colors.inputBg)
+                        .border(0.5.dp, colors.inputBorder, RoundedCornerShape(colors.chipCornerRadius))
                         .padding(horizontal = 10.dp, vertical = 8.dp)
                 ) {
                     androidx.compose.foundation.text.BasicTextField(
@@ -644,7 +647,7 @@ fun GroupInfoScreen(
                         singleLine = false,
                         textStyle = androidx.compose.ui.text.TextStyle(
                             fontSize = 14.sp,
-                            color = if (colors.isDark) Color.White else Color.Black
+                            color = colors.textMain
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -715,9 +718,9 @@ fun GroupInfoScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (colors.isDark) Color(0x33FFFFFF) else Color(0x14000000))
-                            .border(0.5.dp, if (colors.isDark) Color(0x33FFFFFF) else Color(0x24000000), RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(colors.chipCornerRadius))
+                            .background(colors.inputBg)
+                            .border(0.5.dp, colors.inputBorder, RoundedCornerShape(colors.chipCornerRadius))
                             .padding(horizontal = 10.dp, vertical = 8.dp)
                     ) {
                         androidx.compose.foundation.text.BasicTextField(
@@ -726,11 +729,11 @@ fun GroupInfoScreen(
                             singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 fontSize = 14.sp,
-                                color = if (colors.isDark) Color.White else Color.Black
+                                color = colors.textMain
                             ),
                             decorationBox = { inner ->
                                 if (addMemberSearch.isEmpty()) {
-                                    Text("Search users...", color = Color(0xFF8E8E93), fontSize = 14.sp)
+                                    Text("Search users...", color = colors.textMuted, fontSize = 14.sp)
                                 }
                                 inner()
                             },
@@ -742,11 +745,11 @@ fun GroupInfoScreen(
                     
                     if (isSearching) {
                         Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color(0xFF0381FE), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = colors.primary, strokeWidth = 2.dp)
                         }
                     } else if (displayUsers.isEmpty()) {
                         Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
-                            Text(if (addMemberSearch.isNotEmpty()) "No users found" else "No contacts available", color = Color(0xFF8E8E93), fontSize = 14.sp)
+                            Text(if (addMemberSearch.isNotEmpty()) "No users found" else "No contacts available", color = colors.textMuted, fontSize = 14.sp)
                         }
                     } else {
                         LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
@@ -767,6 +770,7 @@ fun GroupInfoScreen(
                                         name = profile.displayName,
                                         avatarUrl = profile.avatarUrl,
                                         size = 36.dp,
+                                        isOnline = OnlineStatusManager.isUserOnline(profile.uid),
                                         gender = profile.gender
                                     )
                                     Column(modifier = Modifier.weight(1f)) {
@@ -774,19 +778,19 @@ fun GroupInfoScreen(
                                             profile.displayName.ifBlank { "User" },
                                             fontWeight = FontWeight.SemiBold,
                                             fontSize = 14.sp,
-                                            color = if (colors.isDark) Color.White else Color.Black
+                                            color = colors.textMain
                                         )
                                         if (profile.username.isNotBlank()) {
                                             Text(
                                                 "@${profile.username}",
                                                 fontSize = 12.sp,
-                                                color = Color(0xFF8E8E93),
+                                                color = colors.textMuted,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                         }
                                     }
-                                    Icon(Lucide.UserPlus, null, tint = Color(0xFF0381FE), modifier = Modifier.size(18.dp))
+                                    Icon(Lucide.UserPlus, null, tint = colors.primary, modifier = Modifier.size(18.dp))
                                 }
                             }
                         }

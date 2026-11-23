@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.ui.components.IosAvatarView
@@ -139,25 +140,29 @@ fun UserListScreen(
                 ) {
                     items(users, key = { it.uid }) { user ->
                         val isFollowingUser = globalFollowingIds.contains(user.uid) || com.chroma.studio.data.mutation.FollowingLocalStorageManager.isFollowing(user.uid)
+                        val presence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(user.uid)
+                        val isOnline = presence.online && user.showOnlineStatus
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onNavigateToUser(user.uid) },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Avatar
+                            // Avatar with Online Status
                             IosAvatarView(
                                 name = user.displayName,
                                 avatarUrl = user.avatarUrl.orEmpty(),
-                                size = 50.dp
+                                size = 50.dp,
+                                isOnline = isOnline
                             )
 
                             Spacer(modifier = Modifier.width(12.dp))
 
-                            // Name & Username
+                            // Name, Username & Online Status
                             Column(
                                 modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy((-2).dp)
+                                verticalArrangement = Arrangement.spacedBy((-1).dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
@@ -174,13 +179,36 @@ fun UserListScreen(
                                         VerifiedBadge(size = 15.dp)
                                     }
                                 }
-                                Text(
-                                    text = "@${user.username}",
-                                    color = colors.textMuted,
-                                    fontSize = 13.sp,
-                                    lineHeight = 15.sp,
-                                    maxLines = 1
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = "@${user.username}",
+                                        color = colors.textMuted,
+                                        fontSize = 13.sp,
+                                        lineHeight = 15.sp,
+                                        maxLines = 1
+                                    )
+                                    if (isOnline) {
+                                        Text("•", color = colors.onlineStatus, fontSize = 11.sp)
+                                        Text(
+                                            text = "Online",
+                                            color = colors.onlineStatus,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    } else if (presence.lastOnline != null && presence.lastOnline > 0L) {
+                                        Text("•", color = colors.textMuted.copy(alpha = 0.5f), fontSize = 11.sp)
+                                        Text(
+                                            text = com.chroma.studio.data.OnlineStatusManager.formatWhatsAppLastSeen(presence.lastOnline),
+                                            color = colors.textMuted.copy(alpha = 0.75f),
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
                             }
 
                             Spacer(modifier = Modifier.width(8.dp))

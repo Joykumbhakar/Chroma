@@ -867,10 +867,8 @@ fun UserProfileScreen(
     // Samsung One UI 7.0 Translucent Navigation Bar
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val isSysDark = colors.isDark
-    val topBarBg = if (isSysDark) Color(0xFF000000).copy(alpha = (scrollProgress * 0.94f).coerceIn(0f, 0.96f))
-                   else Color(0xFFF2F4F7).copy(alpha = (scrollProgress * 0.96f).coerceIn(0f, 0.98f))
-    val topBarBorder = if (isSysDark) Color(0xFF1F2430).copy(alpha = scrollProgress)
-                       else Color(0xFFE2E8F0).copy(alpha = scrollProgress)
+    val topBarBg = colors.bg.copy(alpha = (scrollProgress * 0.94f).coerceIn(0f, 0.96f))
+    val topBarBorder = colors.cardBorderSubtle.copy(alpha = scrollProgress)
 
     Box(
         modifier = Modifier
@@ -913,7 +911,7 @@ fun UserProfileScreen(
                     Icon(
                         Lucide.ChevronLeft,
                         contentDescription = "Back",
-                        tint = if (scrollProgress > 0.4f) (if (isSysDark) Color.White else Color(0xFF0F172A)) else Color.White,
+                        tint = if (scrollProgress > 0.4f) colors.textMain else Color.White,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -939,7 +937,7 @@ fun UserProfileScreen(
                     ) {
                         Text(
                             text = profile?.displayName ?: "",
-                            color = if (isSysDark) Color.White else Color(0xFF0F172A),
+                            color = colors.textMain,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 15.5.sp,
                             fontFamily = InterFontFamily,
@@ -950,7 +948,7 @@ fun UserProfileScreen(
                         )
                         Text(
                             text = "@${profile?.username ?: ""}",
-                            color = if (isSysDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                            color = colors.textMuted,
                             fontSize = 11.5.sp,
                             fontFamily = InterFontFamily,
                             lineHeight = 13.5.sp,
@@ -989,7 +987,7 @@ fun UserProfileScreen(
                         Icon(
                             Lucide.Pencil,
                             contentDescription = "Edit Banner",
-                            tint = if (isScrolled) (if (isSysDark) Color.White else Color(0xFF0F172A)) else Color.White,
+                            tint = if (isScrolled) colors.textMain else Color.White,
                             modifier = Modifier.size(17.dp)
                         )
                     }
@@ -1018,7 +1016,7 @@ fun UserProfileScreen(
                         Icon(
                             Lucide.Settings,
                             contentDescription = "Settings",
-                            tint = if (isScrolled) (if (isSysDark) Color.White else Color(0xFF0F172A)) else Color.White,
+                            tint = if (isScrolled) colors.textMain else Color.White,
                             modifier = Modifier.size(17.dp)
                         )
                     }
@@ -1037,7 +1035,7 @@ fun UserProfileScreen(
                         Icon(
                             Lucide.Share2,
                             contentDescription = "Share Card",
-                            tint = if (isScrolled) (if (isSysDark) Color.White else Color(0xFF0F172A)) else Color.White,
+                            tint = if (isScrolled) colors.textMain else Color.White,
                             modifier = Modifier.size(17.dp)
                         )
                     }
@@ -1056,7 +1054,7 @@ fun UserProfileScreen(
                         Icon(
                             Lucide.EllipsisVertical,
                             contentDescription = "More Options",
-                            tint = if (isScrolled) (if (isSysDark) Color.White else Color(0xFF0F172A)) else Color.White,
+                            tint = if (isScrolled) colors.textMain else Color.White,
                             modifier = Modifier.size(17.dp)
                         )
                     }

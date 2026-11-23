@@ -38,7 +38,24 @@ fun OscellionTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
         success = target.success,
         error = target.error,
         warning = target.warning,
-        isDark = darkTheme
+        isDark = darkTheme,
+        primaryDark = target.primaryDark,
+        colorControlActive = target.colorControlActive,
+        onlineStatus = animateColorAsState(target.onlineStatus, animSpec, label = "online").value,
+        offlineStatus = animateColorAsState(target.offlineStatus, animSpec, label = "offline").value,
+        statusRingBorder = animateColorAsState(target.statusRingBorder, animSpec, label = "statusRing").value,
+        cardSurface = animateColorAsState(target.cardSurface, animSpec, label = "cardSurface").value,
+        cardSurfaceElevated = animateColorAsState(target.cardSurfaceElevated, animSpec, label = "cardElevated").value,
+        cardBorder = animateColorAsState(target.cardBorder, animSpec, label = "cardBorder").value,
+        cardBorderSubtle = animateColorAsState(target.cardBorderSubtle, animSpec, label = "cardBorderSubtle").value,
+        cardCornerRadius = target.cardCornerRadius,
+        buttonCornerRadius = target.buttonCornerRadius,
+        chipCornerRadius = target.chipCornerRadius,
+        pillCornerRadius = target.pillCornerRadius,
+        sheetCornerRadius = target.sheetCornerRadius,
+        inputBg = animateColorAsState(target.inputBg, animSpec, label = "inputBg").value,
+        inputBorder = animateColorAsState(target.inputBorder, animSpec, label = "inputBorder").value,
+        avatarBorder = animateColorAsState(target.avatarBorder, animSpec, label = "avatarBorder").value
     )
 
     val materialColorScheme = if (darkTheme) {

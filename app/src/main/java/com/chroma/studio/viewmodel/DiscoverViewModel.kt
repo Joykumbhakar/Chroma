@@ -47,6 +47,9 @@ class DiscoverViewModel : ViewModel() {
     private val _isTrendingLoading = MutableStateFlow(false)
     val isTrendingLoading: StateFlow<Boolean> = _isTrendingLoading.asStateFlow()
 
+    private val _lastRefreshedTime = MutableStateFlow<Long>(System.currentTimeMillis())
+    val lastRefreshedTime: StateFlow<Long> = _lastRefreshedTime.asStateFlow()
+
     private var hasMoreWorks = true
 
     private val authStateListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { auth ->
@@ -66,6 +69,12 @@ class DiscoverViewModel : ViewModel() {
                 _likedWorkIds.value = cached
             }
         }
+        try {
+            val ctx = com.chroma.studio.ChromaApp.instance
+            val prefs = ctx.getSharedPreferences("chroma_community_prefs", android.content.Context.MODE_PRIVATE)
+            val savedTime = prefs.getLong("community_last_refresh_time", System.currentTimeMillis())
+            _lastRefreshedTime.value = savedTime
+        } catch (_: Exception) {}
         loadWorks()
         loadTrending()
         com.google.firebase.auth.FirebaseAuth.getInstance().addAuthStateListener(authStateListener)
@@ -198,6 +207,14 @@ class DiscoverViewModel : ViewModel() {
         viewModelScope.launch {
             if (isRefresh) {
                 _isRefreshing.value = true
+                val now = System.currentTimeMillis()
+                _lastRefreshedTime.value = now
+                try {
+                    val ctx = com.chroma.studio.ChromaApp.instance
+                    val prefs = ctx.getSharedPreferences("chroma_community_prefs", android.content.Context.MODE_PRIVATE)
+                    prefs.edit().putLong("community_last_refresh_time", now).apply()
+                } catch (_: Exception) {}
+                loadTrending()
             } else if (_works.value.isEmpty()) {
                 _isLoading.value = true
             }
@@ -217,7 +234,9 @@ class DiscoverViewModel : ViewModel() {
                     }
                 } else recentWorks
                 val pendingOptimistic = _works.value.filter { it.id.startsWith("temp_") }
-                val combined = (pendingOptimistic + reconciledRecent).distinctBy { it.id }
+                // Pull refresh presents refreshed creations in a randomized/shuffled order
+                val refreshedList = if (isRefresh) reconciledRecent.shuffled() else reconciledRecent
+                val combined = (pendingOptimistic + refreshedList).distinctBy { it.id }
                 _works.value = combined
 
                 if (!currentUid.isNullOrBlank()) {

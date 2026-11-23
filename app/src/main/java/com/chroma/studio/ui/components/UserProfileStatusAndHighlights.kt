@@ -95,6 +95,10 @@ fun UserProfileStatusSection(
 
     val statusCardBg = if (isDark) Color(0xFF181B22) else Color(0xFFF3F6FA)
 
+    // Real-time presence matching the chat / message screen
+    val presence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(userId)
+    val isUserOnline = presence.online && (profile?.showOnlineStatus != false)
+
     // Breathing glow animation for active dot
     val infiniteTransition = rememberInfiniteTransition(label = "onlinePulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -119,11 +123,10 @@ fun UserProfileStatusSection(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(7.5.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF029248).copy(alpha = pulseAlpha))
+            OnlineStatusDot(
+                isOnline = isUserOnline,
+                size = 7.5.dp,
+                showPulse = isUserOnline
             )
             Text(
                 text = if (statusText.isNotBlank()) {

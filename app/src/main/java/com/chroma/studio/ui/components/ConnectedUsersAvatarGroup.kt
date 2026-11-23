@@ -88,7 +88,7 @@ fun UserProfile.toConnectedUser(): ConnectedUser {
         username = username,
         avatarUrl = avatarUrl,
         initials = computedInitials,
-        isOnline = online
+        isOnline = com.chroma.studio.data.OnlineStatusManager.getUserPresence(uid).online || online
     )
 }
 
@@ -144,7 +144,7 @@ fun ConnectedUsersAvatarGroup(
     }
 
     // Separation border ring color matching current theme background
-    val ringBorderColor = if (colors.isDark) Color(0xFF121214) else Color.White
+    val ringBorderColor = colors.statusRingBorder
 
     Box(modifier = modifier) {
         Row(
@@ -328,17 +328,18 @@ private fun ConnectedUsersDropdownCard(
     onUserClick: (String) -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    val cardBg = if (colors.isDark) Color(0xFF1C1C1E) else Color.White
-    val cardBorder = if (colors.isDark) Color(0x30FFFFFF) else Color(0x14000000)
+    val cardBg = colors.cardSurface
+    val cardBorder = colors.cardBorder
+    val shape = RoundedCornerShape(colors.cardCornerRadius)
 
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = shape,
         color = cardBg,
         shadowElevation = 14.dp,
         modifier = Modifier
             .width(250.dp)
             .heightIn(max = 280.dp)
-            .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
+            .border(1.dp, cardBorder, shape)
     ) {
         Column(
             modifier = Modifier
@@ -354,11 +355,12 @@ private fun ConnectedUsersDropdownCard(
                         .padding(horizontal = 14.dp, vertical = 7.5.dp)
                 ) {
                     // Avatar with online status indicator
+                    val userPresence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(user.id)
                     IosAvatarView(
                         name = user.name,
                         avatarUrl = user.avatarUrl,
                         size = 34.dp,
-                        isOnline = user.isOnline
+                        isOnline = userPresence.online || user.isOnline
                     )
 
                     Spacer(Modifier.width(12.dp))

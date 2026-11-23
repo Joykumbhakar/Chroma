@@ -13,6 +13,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -22,6 +31,20 @@ object OnlineStatusManager {
     private const val TAG = "OnlineStatusManager"
     private const val RTDB_URL = "https://chromamelt-default-rtdb.asia-southeast1.firebasedatabase.app"
     private var connectedListener: ValueEventListener? = null
+
+    // Universal presence cache across the entire application (Chat, Profile, User List, Feed)
+    private val _presenceCache = MutableStateFlow<Map<String, UserPresence>>(emptyMap())
+    val presenceCache: StateFlow<Map<String, UserPresence>> = _presenceCache.asStateFlow()
+
+    fun getUserPresence(uid: String?): UserPresence {
+        if (uid.isNullOrBlank()) return UserPresence(false, null)
+        return _presenceCache.value[uid] ?: UserPresence(false, null)
+    }
+
+    fun isUserOnline(uid: String?): Boolean {
+        if (uid.isNullOrBlank()) return false
+        return _presenceCache.value[uid]?.online == true
+    }
     
     fun getDatabase(): FirebaseDatabase {
         return try {
@@ -91,10 +114,10 @@ object OnlineStatusManager {
 
     /**
      * Observes real-time online status and lastSeen for a single user.
-     * Returns a lambda to unsubscribe.
+     * Updates the universal presence cache and returns a lambda to unsubscribe.
      */
     fun observeUserPresence(uid: String, onUpdate: (UserPresence) -> Unit): () -> Unit {
-        if (FirebaseAuth.getInstance().currentUser == null) {
+        if (uid.isBlank() || FirebaseAuth.getInstance().currentUser == null) {
             return {}
         }
         val ref = getDatabase().getReference("users/$uid")
@@ -103,7 +126,9 @@ object OnlineStatusManager {
                 val isOnline = snapshot.child("online").getValue(Boolean::class.java) ?: false
                 val lastSeen = snapshot.child("lastOnline").getValue(Long::class.java)
                     ?: snapshot.child("lastSeen").getValue(Long::class.java)
-                onUpdate(UserPresence(online = isOnline, lastOnline = lastSeen))
+                val presence = UserPresence(online = isOnline, lastOnline = lastSeen)
+                _presenceCache.value = _presenceCache.value + (uid to presence)
+                onUpdate(presence)
             }
 
             override fun onCancelled(error: DatabaseError) {
@@ -112,6 +137,45 @@ object OnlineStatusManager {
         }
         ref.addValueEventListener(listener)
         return { ref.removeEventListener(listener) }
+    }
+
+    /**
+     * Composable that observes a user's real-time presence (online status & last seen timestamp)
+     * using the exact same Firebase Realtime Database status engine as the chat/message screen.
+     */
+    @Composable
+    fun rememberUserPresence(uid: String?): UserPresence {
+        if (uid.isNullOrBlank()) return UserPresence(false, null)
+        var presence by remember(uid) {
+            mutableStateOf(_presenceCache.value[uid] ?: UserPresence(false, null))
+        }
+        DisposableEffect(uid) {
+            val unsubscribe = observeUserPresence(uid) { updated ->
+                presence = updated
+            }
+            onDispose {
+                unsubscribe()
+            }
+        }
+        return presence
+    }
+
+    /**
+     * Composable returning whether a user is currently online.
+     */
+    @Composable
+    fun rememberIsUserOnline(uid: String?): Boolean {
+        return rememberUserPresence(uid).online
+    }
+
+    /**
+     * Batch presence observer for lists of users (e.g. Followers, Following, Stories).
+     */
+    fun observeUsersPresence(uids: Collection<String>): () -> Unit {
+        val cleanUids = uids.filter { it.isNotBlank() }.distinct()
+        if (cleanUids.isEmpty() || FirebaseAuth.getInstance().currentUser == null) return {}
+        val unsubscribes = cleanUids.map { observeUserPresence(it) {} }
+        return { unsubscribes.forEach { try { it() } catch (_: Exception) {} } }
     }
 
     /**

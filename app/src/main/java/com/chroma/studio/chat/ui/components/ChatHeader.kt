@@ -284,21 +284,51 @@ fun ChatHeader(
                             modifier = Modifier.size(19.dp)
                         )
                     }
+                    var showGroupCallUnavailableDialog by remember { mutableStateOf(false) }
+                    if (showGroupCallUnavailableDialog) {
+                        com.chroma.studio.ui.components.IosAlertDialog(
+                            title = "Feature isn't available at this time",
+                            message = "Group audio and video calling is not available at this time. Please use 1-to-1 direct calls.",
+                            confirmText = "Try again later",
+                            onConfirm = { showGroupCallUnavailableDialog = false },
+                            dismissText = null,
+                            onDismiss = { showGroupCallUnavailableDialog = false }
+                        )
+                    }
+
                     // Audio call
-                    IconButton(onClick = onAudioCallClick, modifier = Modifier.size(34.dp)) {
+                    IconButton(
+                        onClick = {
+                            if (activeChat.isGroup) {
+                                showGroupCallUnavailableDialog = true
+                            } else {
+                                onAudioCallClick()
+                            }
+                        },
+                        modifier = Modifier.size(34.dp)
+                    ) {
                         Icon(
                             imageVector = Lucide.Phone,
                             contentDescription = "Call",
-                            tint = colors.textDark,
+                            tint = if (activeChat.isGroup) colors.textDark.copy(alpha = 0.4f) else colors.textDark,
                             modifier = Modifier.size(19.dp)
                         )
                     }
                     // Video call
-                    IconButton(onClick = onVideoCallClick, modifier = Modifier.size(34.dp)) {
+                    IconButton(
+                        onClick = {
+                            if (activeChat.isGroup) {
+                                showGroupCallUnavailableDialog = true
+                            } else {
+                                onVideoCallClick()
+                            }
+                        },
+                        modifier = Modifier.size(34.dp)
+                    ) {
                         Icon(
                             imageVector = Lucide.Video,
                             contentDescription = "Video",
-                            tint = colors.textDark,
+                            tint = if (activeChat.isGroup) colors.textDark.copy(alpha = 0.4f) else colors.textDark,
                             modifier = Modifier.size(20.dp)
                         )
                     }

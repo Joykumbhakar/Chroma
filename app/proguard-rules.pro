@@ -16,6 +16,12 @@
 -keep class com.chroma.studio.model.** { *; }
 -keep class com.chroma.studio.data.CommunityWork { *; }
 -keep class com.chroma.studio.data.UserProfile { *; }
+-keep class com.chroma.studio.webrtc.CallModel { *; }
+-keep class com.chroma.studio.webrtc.IceCandidateModel { *; }
+
+# Keep WebRTC JNI and classes
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**
 
 # Keep Compose attributes and related
 -keepattributes *Annotation*

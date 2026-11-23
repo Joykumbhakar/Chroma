@@ -68,14 +68,15 @@ fun HazeSourceRoot(modifier: Modifier = Modifier, content: @Composable () -> Uni
 @Composable
 fun GlassPanel(
     modifier: Modifier = Modifier,
-    cornerRadius: Int = 16, // --radius-md
+    cornerRadius: Int = -1, // -1 resolves dynamically to LocalOscellionColors.current.cardCornerRadius
     backgroundColor: androidx.compose.ui.graphics.Color? = null,
     content: @Composable () -> Unit
 ) {
     val colors = LocalOscellionColors.current
     val hazeState = LocalHazeState.current
     val useBlur = rememberUseRealtimeBlur()
-    val shape = RoundedCornerShape(cornerRadius.dp)
+    val resolvedRadius = if (cornerRadius > 0) cornerRadius.dp else colors.cardCornerRadius
+    val shape = RoundedCornerShape(resolvedRadius)
     val resolvedBg = backgroundColor ?: if (useBlur) colors.glassBg else colors.glassBg.copy(alpha = maxOf(colors.glassBg.alpha, 0.94f))
 
     Box(

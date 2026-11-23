@@ -117,6 +117,10 @@ fun UserProfileHeroSection(
     val heroHazeState = remember { HazeState() }
     val presetBannerRes = remember(profile?.bannerUrl) { getBannerPresetDrawableRes(profile?.bannerUrl) }
 
+    // Real-time online presence matching the chat / message screen
+    val presence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(userId)
+    val isUserOnline = presence.online && (profile?.showOnlineStatus != false)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -265,7 +269,7 @@ fun UserProfileHeroSection(
                                 avatarUrl = profile?.avatarUrl.orEmpty(),
                                 size = 74.dp,
                                 gender = profile?.gender,
-                                isOnline = false,
+                                isOnline = isUserOnline,
                                 modifier = Modifier.fillMaxSize()
                             )
 
@@ -325,24 +329,23 @@ fun UserProfileHeroSection(
                                 avatarUrl = profile?.avatarUrl.orEmpty(),
                                 size = 78.dp,
                                 gender = profile?.gender,
-                                isOnline = false,
+                                isOnline = isUserOnline,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
                     }
                 }
 
-                // Online Status Indicator with Theme Border
-                if (profile?.online == true && profile?.showOnlineStatus == true) {
-                    Box(
+                // Online Status Indicator with Theme Border (Live RTDB Presence)
+                if (isUserOnline) {
+                    com.chroma.studio.ui.components.OnlineStatusDot(
+                        isOnline = true,
+                        size = 17.dp,
+                        showPulse = true,
+                        ringColor = colors.bg,
                         modifier = Modifier
-                            .size(17.dp)
                             .align(Alignment.BottomEnd)
                             .offset(x = (-2).dp, y = (-2).dp)
-                            .background(colors.bg, CircleShape)
-                            .padding(2.5.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF34C759))
                     )
                 }
             }
@@ -610,6 +613,24 @@ fun UserProfileBioDetailsSection(
                         modifier = Modifier.size(12.5.dp)
                     )
                 }
+
+                // Real-time presence status (Online / Last seen exactly matching Chat Screen)
+                val bioPresence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(userId)
+                val isBioOnline = bioPresence.online && (profile?.showOnlineStatus != false)
+                val liveStatusText = if (isBioOnline) {
+                    "Online"
+                } else if (bioPresence.lastOnline != null && bioPresence.lastOnline > 0L) {
+                    com.chroma.studio.data.OnlineStatusManager.formatWhatsAppLastSeen(bioPresence.lastOnline)
+                } else {
+                    "Offline"
+                }
+
+                com.chroma.studio.ui.components.OnlineStatusBadge(
+                    isOnline = isBioOnline,
+                    statusText = liveStatusText,
+                    compact = true,
+                    modifier = Modifier.padding(top = 2.dp, start = 2.dp)
+                )
             }
 
             // Sleek border-less Apple icon button for QR pass with spring touch feedback

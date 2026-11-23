@@ -166,6 +166,21 @@ rules_version = '2';
 //     Document ID: {configId}
 //     Fields:
 //       - Global configuration settings and flags (managed exclusively via Firebase Admin SDK / backend)
+//
+// 11. Collection: calls
+//     Document ID: {callId}
+//     Fields:
+//       - id: string (call session identifier)
+//       - callerId: string (UID of call initiator)
+//       - calleeId: string (UID of call recipient)
+//       - type: string ("audio" | "video")
+//       - status: string ("calling" | "ringing" | "accepted" | "rejected" | "ended" | "busy")
+//       - offer: map / string (WebRTC SDP offer)
+//       - answer: map / string (WebRTC SDP answer)
+//       - timestamp: number / timestamp
+//     Subcollections:
+//       - /calls/{callId}/callerCandidates/{candId} (ICE candidates from caller)
+//       - /calls/{callId}/calleeCandidates/{candId} (ICE candidates from callee)
 // ===============================================================
 
 service cloud.firestore {
@@ -184,6 +199,11 @@ service cloud.firestore {
 
     function areImmutableFieldsUnchanged(fields) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function isValidCallDoc(data) {
+      return (!('type' in data) || data.type in ['audio', 'video']) &&
+             (!('status' in data) || data.status in ['calling', 'ringing', 'accepted', 'rejected', 'ended', 'busy']);
     }
 
     // ===============================================================
@@ -414,6 +434,50 @@ service cloud.firestore {
     match /app_config/{configId} {
       allow read: if isAuthenticated();
       allow write: if false;
+    }
+
+    // ===============================================================
+    // 11. WebRTC Calls Collection
+    // ===============================================================
+    match /calls/{callId} {
+      // Authenticated caller or callee can read call metadata and signaling status
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.callerId ||
+        request.auth.uid == resource.data.calleeId
+      );
+
+      // Caller initiates the call session
+      allow create: if isAuthenticated() &&
+        request.auth.uid == request.resource.data.callerId &&
+        isValidCallDoc(request.resource.data);
+
+      // Either participant can update (accept, reject, end, answer SDP), protecting participant IDs
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.callerId ||
+        request.auth.uid == resource.data.calleeId
+      ) && areImmutableFieldsUnchanged(['callerId', 'calleeId'])
+        && isValidCallDoc(request.resource.data);
+
+      // Either participant can clean up / delete the call document
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.callerId ||
+        request.auth.uid == resource.data.calleeId
+      );
+
+      // Subcollections for ICE candidates exchange
+      match /callerCandidates/{candId} {
+        allow read, write: if isAuthenticated() && (
+          request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.callerId ||
+          request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.calleeId
+        );
+      }
+
+      match /calleeCandidates/{candId} {
+        allow read, write: if isAuthenticated() && (
+          request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.callerId ||
+          request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.calleeId
+        );
+      }
     }
   }
 }

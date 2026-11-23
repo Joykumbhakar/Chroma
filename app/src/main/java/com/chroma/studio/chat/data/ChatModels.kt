@@ -168,7 +168,9 @@ data class ChatConversation(
     val participantUids: List<String> = emptyList(),
     val admins: List<String> = emptyList(),
     val onlyAdminsCanPost: Boolean = false
-)
+) {
+    val isGroup: Boolean get() = type.equals("group", ignoreCase = true) || !members.isNullOrEmpty()
+}
 
 enum class AccentColorType(val title: String, val color: Color, val hoverColor: Color, val subtleColor: Color) {
     BLUE("Blue", Color(0xFF0078FE), Color(0xFF005ECB), Color(0x1F0078FE)),

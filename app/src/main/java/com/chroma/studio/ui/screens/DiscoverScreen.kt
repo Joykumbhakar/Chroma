@@ -380,10 +380,62 @@ enum class CommunitySortOrder(val label: String, val icon: ImageVector) {
 
 }
 
+@Composable
+private fun CommunityRefreshTimestamp(
+    lastRefreshedTimestamp: Long,
+    isRefreshing: Boolean,
+    isPulledPastThreshold: Boolean,
+    pullProgress: Float
+) {
+    val colors = LocalOscellionColors.current
+    val now = System.currentTimeMillis()
+    val diffMs = (now - lastRefreshedTimestamp).coerceAtLeast(0L)
+    val timeText = remember(lastRefreshedTimestamp, diffMs) {
+        when {
+            diffMs < 60_000L -> "Just now"
+            diffMs < 3600_000L -> "${diffMs / 60_000L}m ago"
+            diffMs < 86400_000L -> {
+                val sdf = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
+                "Today at ${sdf.format(java.util.Date(lastRefreshedTimestamp))}"
+            }
+            else -> {
+                val sdf = java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault())
+                sdf.format(java.util.Date(lastRefreshedTimestamp))
+            }
+        }
+    }
 
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(horizontal = 16.dp)
+    ) {
+        Text(
+            text = if (isRefreshing) {
+                "Refreshing community feed..."
+            } else if (isPulledPastThreshold) {
+                "Release to refresh"
+            } else {
+                "Pull down to refresh"
+            },
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = InterFontFamily,
+            color = colors.textMain,
+            letterSpacing = (-0.2).sp
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = "Last updated • $timeText",
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.Normal,
+            fontFamily = InterFontFamily,
+            color = if (colors.isDark) Color(0xFF8E8E93) else Color(0xFF636366),
+            letterSpacing = (-0.1).sp
+        )
+    }
+}
 
 @Composable
-
 fun DiscoverScreen(
 
     works: List<DiscoverPost>,
@@ -682,40 +734,168 @@ fun DiscoverScreen(
 
 
 
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    val prefs = remember(context) {
+        context.getSharedPreferences("chroma_community_prefs", Context.MODE_PRIVATE)
+    }
+    var lastRefreshedTimestamp by remember {
+        mutableLongStateOf(
+            discoverViewModel?.lastRefreshedTime?.value
+                ?: prefs.getLong("community_last_refresh_time", System.currentTimeMillis())
+        )
+    }
+
+    // Pull-to-refresh stretch and spring physics state
+    val refreshThresholdPx = with(density) { 72.dp.toPx() }
+    val maxStretchPx = with(density) { 130.dp.toPx() }
+    val refreshingHeightPx = with(density) { 68.dp.toPx() }
+    val pullDistanceAnim = remember { Animatable(0f) }
+    var pullOffsetY by remember { mutableFloatStateOf(0f) }
+    var hasHapticTriggeredForCurrentPull by remember { mutableStateOf(false) }
+
+    // Random order seed and slide-in from top animation state
+    var refreshRandomSeed by remember { mutableLongStateOf(0L) }
+    val slideInOffsetAnim = remember { Animatable(0f) }
+    val slideInAlphaAnim = remember { Animatable(1f) }
+    var wasRefreshing by remember { mutableStateOf(false) }
+
     fun triggerFeedRefresh() {
-
         if (isRefreshing) return
-
         coroutineScope.launch {
-
             showCreateMenu = false
-
-            refreshProgressAnim.snapTo(0f)
-
-            refreshProgressAnim.animateTo(
-
-                targetValue = 1f,
-
-                animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
-
+            hasHapticTriggeredForCurrentPull = false
+            refreshRandomSeed = System.currentTimeMillis()
+            pullDistanceAnim.animateTo(
+                refreshingHeightPx,
+                spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
             )
-
-            hasPendingNewDrops = false
-
-            onRefresh()
-
-            listState.animateScrollToItem(0)
-
-            kotlinx.coroutines.delay(120)
-
+            pullOffsetY = refreshingHeightPx
             refreshProgressAnim.snapTo(0f)
-
+            refreshProgressAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
+            )
+            hasPendingNewDrops = false
+            onRefresh()
+            listState.animateScrollToItem(0)
+            kotlinx.coroutines.delay(120)
+            refreshProgressAnim.snapTo(0f)
             com.chroma.studio.chat.sound.SoundManager.playRefresh(context)
-
             showToast("Feed refreshed • Synced latest creations")
-
         }
+    }
 
+    fun handlePullRelease() {
+        if (pullOffsetY >= refreshThresholdPx && !isRefreshing) {
+            triggerFeedRefresh()
+            coroutineScope.launch {
+                pullDistanceAnim.animateTo(
+                    refreshingHeightPx,
+                    spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
+                )
+                pullOffsetY = refreshingHeightPx
+            }
+        } else if (!isRefreshing) {
+            coroutineScope.launch {
+                pullDistanceAnim.animateTo(0f, tween(260, easing = FastOutSlowInEasing))
+                pullOffsetY = 0f
+                hasHapticTriggeredForCurrentPull = false
+            }
+        }
+    }
+
+    val nestedScrollConnection = remember(listState, isRefreshing) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < 0 && pullOffsetY > 0f) {
+                    val consumed = available.y.coerceAtLeast(-pullOffsetY)
+                    pullOffsetY += consumed
+                    coroutineScope.launch { pullDistanceAnim.snapTo(pullOffsetY) }
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                val isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+                if (available.y > 0 && isAtTop && !isRefreshing) {
+                    val damping = (1f - (pullOffsetY / maxStretchPx).coerceIn(0f, 0.85f)) * 0.45f
+                    val delta = available.y * damping
+                    pullOffsetY = (pullOffsetY + delta).coerceIn(0f, maxStretchPx)
+                    coroutineScope.launch { pullDistanceAnim.snapTo(pullOffsetY) }
+                    if (pullOffsetY >= refreshThresholdPx && !hasHapticTriggeredForCurrentPull) {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        hasHapticTriggeredForCurrentPull = true
+                    } else if (pullOffsetY < refreshThresholdPx) {
+                        hasHapticTriggeredForCurrentPull = false
+                    }
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pullOffsetY > 0f) {
+                    handlePullRelease()
+                    return Velocity.Zero
+                }
+                return Velocity.Zero
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                if (pullOffsetY > 0f) {
+                    handlePullRelease()
+                    return Velocity.Zero
+                }
+                return Velocity.Zero
+            }
+        }
+    }
+
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (!listState.isScrollInProgress && pullOffsetY > 0f && !isRefreshing) {
+            handlePullRelease()
+        }
+    }
+
+    LaunchedEffect(isRefreshing) {
+        if (wasRefreshing && !isRefreshing) {
+            val now = System.currentTimeMillis()
+            lastRefreshedTimestamp = now
+            prefs.edit().putLong("community_last_refresh_time", now).apply()
+
+            coroutineScope.launch {
+                pullDistanceAnim.animateTo(0f, tween(320, easing = FastOutSlowInEasing))
+                pullOffsetY = 0f
+                hasHapticTriggeredForCurrentPull = false
+            }
+
+            slideInOffsetAnim.snapTo(-140f)
+            slideInAlphaAnim.snapTo(0.15f)
+            coroutineScope.launch {
+                slideInAlphaAnim.animateTo(1f, tween(durationMillis = 380, easing = LinearOutSlowInEasing))
+            }
+            coroutineScope.launch {
+                slideInOffsetAnim.animateTo(
+                    targetValue = 0f,
+                    animationSpec = spring(
+                        dampingRatio = 0.74f,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                )
+            }
+        } else if (isRefreshing) {
+            if (pullDistanceAnim.value < refreshingHeightPx) {
+                pullDistanceAnim.animateTo(refreshingHeightPx, spring(stiffness = Spring.StiffnessMediumLow))
+                pullOffsetY = refreshingHeightPx
+            }
+        }
+        wasRefreshing = isRefreshing
     }
 
 
@@ -764,7 +944,7 @@ fun DiscoverScreen(
 
 
 
-    val filteredWorks = remember(works, searchQuery, selectedFeedTab, selectedSortOrder, qualifyingMasterworks, followingUserIds, savedWorkIds) {
+    val filteredWorks = remember(works, searchQuery, selectedFeedTab, selectedSortOrder, qualifyingMasterworks, followingUserIds, savedWorkIds, refreshRandomSeed) {
 
         val baseList = when (selectedFeedTab) {
 
@@ -810,7 +990,14 @@ fun DiscoverScreen(
 
         when (selectedSortOrder) {
 
-            CommunitySortOrder.LATEST -> searchFiltered.sortedByDescending { it.timestamp }
+            CommunitySortOrder.LATEST -> {
+                if (refreshRandomSeed != 0L && selectedFeedTab != CommunityFeedTab.SAVED) {
+                    val rng = java.util.Random(refreshRandomSeed)
+                    searchFiltered.shuffled(rng)
+                } else {
+                    searchFiltered.sortedByDescending { it.timestamp }
+                }
+            }
 
             CommunitySortOrder.TOP_LIKED -> searchFiltered.sortedByDescending { it.likesCount }
 
@@ -1070,37 +1257,56 @@ fun DiscoverScreen(
 
 
 
-            // Pull to Refresh / Active Refreshing Indicator
-
-            AnimatedVisibility(
-
-                visible = isRefreshing,
-
-                enter = expandVertically() + fadeIn(),
-
-                exit = shrinkVertically() + fadeOut()
-
-            ) {
-
+            // Pull to Refresh / Top Stretch Area with Spinner and Last Refreshed Time
+            val stretchHeightDp = with(density) { pullDistanceAnim.value.toDp() }
+            if (stretchHeightDp > 0.dp) {
                 Box(
-
                     modifier = Modifier
-
                         .fillMaxWidth()
-
-                        .padding(vertical = 6.dp),
-
+                        .height(stretchHeightDp)
+                        .clipToBounds(),
                     contentAlignment = Alignment.Center
-
                 ) {
+                    if (stretchHeightDp > 6.dp) {
+                        val pullProgress = (pullDistanceAnim.value / refreshThresholdPx).coerceIn(0f, 1f)
+                        val isPulledPast = pullDistanceAnim.value >= refreshThresholdPx
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .graphicsLayer {
+                                    val alphaProgress = (pullDistanceAnim.value / (refreshThresholdPx * 0.4f)).coerceIn(0f, 1f)
+                                    alpha = alphaProgress
+                                    val s = 0.85f + (0.15f * pullProgress)
+                                    scaleX = s
+                                    scaleY = s
+                                }
+                        ) {
+                            OscellionLoadingSpinner(
+                                color = Color(0xFF0381FE),
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .graphicsLayer {
+                                        if (!isRefreshing) {
+                                            rotationZ = pullProgress * 360f
+                                        }
+                                    }
+                            )
 
-                    OscellionLoadingSpinner(color = Color(0xFF0381FE), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
 
+                            CommunityRefreshTimestamp(
+                                lastRefreshedTimestamp = lastRefreshedTimestamp,
+                                isRefreshing = isRefreshing,
+                                isPulledPastThreshold = isPulledPast,
+                                pullProgress = pullProgress
+                            )
+                        }
+                    }
                 }
-
             }
-
-
 
             LazyColumn(
 
@@ -1108,7 +1314,7 @@ fun DiscoverScreen(
 
                 contentPadding = PaddingValues(top = 2.dp, bottom = 110.dp),
 
-                modifier = Modifier.fillMaxSize().clipToBounds()
+                modifier = Modifier.fillMaxSize().clipToBounds().nestedScroll(nestedScrollConnection)
 
             ) {
 
@@ -1242,27 +1448,45 @@ fun DiscoverScreen(
 
                     item(key = "trending_spotlight_reel") {
 
-                        CommunityTrendingSpotlightReel(
+                        Box(
 
-                            trendingWorks = qualifyingMasterworks,
+                            modifier = Modifier
 
-                            repository = repository,
+                                .fillMaxWidth()
 
-                            onWorkClick = { work ->
+                                .graphicsLayer {
 
-                                if (isVideoPost(work)) {
+                                    translationY = slideInOffsetAnim.value
 
-                                    onFlashVideoClick?.invoke(work.id)
-
-                                } else {
-
-                                    onAuthorClick(work.creatorId, work.id)
+                                    alpha = slideInAlphaAnim.value
 
                                 }
 
-                            }
+                        ) {
 
-                        )
+                            CommunityTrendingSpotlightReel(
+
+                                trendingWorks = qualifyingMasterworks,
+
+                                repository = repository,
+
+                                onWorkClick = { work ->
+
+                                    if (isVideoPost(work)) {
+
+                                        onFlashVideoClick?.invoke(work.id)
+
+                                    } else {
+
+                                        onAuthorClick(work.creatorId, work.id)
+
+                                    }
+
+                                }
+
+                            )
+
+                        }
 
                     }
 
@@ -1336,9 +1560,25 @@ fun DiscoverScreen(
 
                         ) { work ->
 
-                            val isFollowing = followingUserIds.contains(work.creatorId) || com.chroma.studio.data.mutation.FollowingLocalStorageManager.isFollowing(work.creatorId)
+                            Box(
 
-                            FeedPostCard(
+                                modifier = Modifier
+
+                                    .fillMaxWidth()
+
+                                    .graphicsLayer {
+
+                                        translationY = slideInOffsetAnim.value
+
+                                        alpha = slideInAlphaAnim.value
+
+                                    }
+
+                            ) {
+
+                                val isFollowing = followingUserIds.contains(work.creatorId) || com.chroma.studio.data.mutation.FollowingLocalStorageManager.isFollowing(work.creatorId)
+
+                                FeedPostCard(
 
                                 work = work,
 
@@ -1559,6 +1799,8 @@ fun DiscoverScreen(
                                 }
 
                             )
+
+                            }
 
                         }
 
@@ -4064,11 +4306,11 @@ fun CreatorFeedHeader(
 
     val isDark = colors.isDark
 
-    val headerBgColor = if (isDark) Color(0xFF000000) else Color.White
+    val headerBgColor = colors.bg
 
-    val textPrimary = if (isDark) Color.White else Color(0xFF0F172A)
+    val textPrimary = colors.textMain
 
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val textMuted = colors.textMuted
 
 
 
@@ -4134,7 +4376,7 @@ fun CreatorFeedHeader(
 
             // Brand Title & Feed/Sort Switcher: "Community ▾" (Apple-inspired interactive heading)
 
-            val activeBlue = Color(0xFF0381FE)
+            val activeBlue = colors.primary
 
             Box(
 
@@ -4556,13 +4798,13 @@ fun CreatorFeedHeader(
 
                                 .offset(x = (-4.5).dp, y = 4.5.dp)
 
-                                .background(if (colors.isDark) Color(0xFF16161A) else Color.White, CircleShape)
+                                .background(colors.cardSurface, CircleShape)
 
                                 .padding(1.5.dp)
 
                                 .clip(CircleShape)
 
-                                .background(Color(0xFFE11D48))
+                                .background(colors.error)
 
                         )
 
@@ -4618,7 +4860,7 @@ fun CreatorFeedHeader(
 
                                 .offset(x = (-4.5).dp, y = 4.5.dp)
 
-                                .background(if (colors.isDark) Color(0xFF16161A) else Color.White, CircleShape)
+                                .background(colors.cardSurface, CircleShape)
 
                                 .padding(1.5.dp)
 
@@ -5318,6 +5560,8 @@ private fun FeedPostHeader(
 
     isFollowingCreator: Boolean,
 
+    isOnline: Boolean = false,
+
     onAvatarClick: () -> Unit,
 
     onRemixTagClick: () -> Unit,
@@ -5365,6 +5609,8 @@ private fun FeedPostHeader(
             avatarUrl = avatarUrl,
 
             size = 34.dp,
+
+            isOnline = isOnline,
 
             modifier = Modifier.clickable { onAvatarClick() }
 
@@ -7453,7 +7699,8 @@ fun FeedPostCard(
 
     val isRemixPost = !work.remixedFromAuthorUsername.isNullOrEmpty()
 
-
+    val creatorPresence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(work.creatorId)
+    val isCreatorOnline = creatorPresence.online
 
     Column(
 
@@ -7461,7 +7708,7 @@ fun FeedPostCard(
 
             .fillMaxWidth()
 
-            .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
+            .background(colors.cardSurface)
 
             .padding(top = 2.dp)
 
@@ -7488,6 +7735,8 @@ fun FeedPostCard(
             isOwner = isOwner,
 
             isFollowingCreator = isFollowingCreator,
+
+            isOnline = isCreatorOnline,
 
             onAvatarClick = { modalState.showCreatorProfileModal = true },
 

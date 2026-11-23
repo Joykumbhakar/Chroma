@@ -182,18 +182,22 @@ fun AppleSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    activeTrackColor: Color = Color(0xFF0381FE),
-    inactiveTrackColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE9E9EA),
+    activeTrackColor: Color = Color.Unspecified,
+    inactiveTrackColor: Color = Color.Unspecified,
     hazeState: dev.chrisbanes.haze.HazeState? = null,
     trackWidth: Dp = 48.dp,
     trackHeight: Dp = 28.dp
 ) {
+    val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
+    val effectiveActiveTrack = if (activeTrackColor != Color.Unspecified) activeTrackColor else colors.primary
+    val effectiveInactiveTrack = if (inactiveTrackColor != Color.Unspecified) inactiveTrackColor else colors.cardBorderSubtle
+
     val haptic = LocalHapticFeedback.current
     val thumbSize = (trackHeight - 4.dp).coerceAtLeast(10.dp)
     val maxOffset = trackWidth - thumbSize - 2.dp
 
     val trackColor by animateColorAsState(
-        targetValue = if (checked) activeTrackColor else inactiveTrackColor,
+        targetValue = if (checked) effectiveActiveTrack else effectiveInactiveTrack,
         label = "appleSwitchTrackColor",
         animationSpec = tween(220)
     )

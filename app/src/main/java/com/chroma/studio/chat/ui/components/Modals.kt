@@ -838,6 +838,18 @@ private fun ContactInfoActionsRow(
     onMailClick: () -> Unit
 ) {
     val colors = LocalChatColors.current
+    var showGroupCallUnavailableDialog by remember { mutableStateOf(false) }
+    if (showGroupCallUnavailableDialog) {
+        com.chroma.studio.ui.components.IosAlertDialog(
+            title = "Feature isn't available at this time",
+            message = "Group audio and video calling is not available at this time. Please use 1-to-1 direct calls.",
+            confirmText = "Try again later",
+            onConfirm = { showGroupCallUnavailableDialog = false },
+            dismissText = null,
+            onDismiss = { showGroupCallUnavailableDialog = false }
+        )
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -850,13 +862,20 @@ private fun ContactInfoActionsRow(
                 .clip(RoundedCornerShape(14.dp))
                 .background(colors.cardBg)
                 .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
-                .clickable { onAudioCall() }
+                .clickable {
+                    if (isGroup) {
+                        showGroupCallUnavailableDialog = true
+                    } else {
+                        onAudioCall()
+                    }
+                }
                 .padding(vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            LucidePhone(tint = colors.iosBlue, size = 20.dp)
-            Text("audio", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
+            val audioTint = if (isGroup) colors.iosBlue.copy(alpha = 0.4f) else colors.iosBlue
+            LucidePhone(tint = audioTint, size = 20.dp)
+            Text("audio", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = audioTint)
         }
 
         Column(
@@ -865,13 +884,20 @@ private fun ContactInfoActionsRow(
                 .clip(RoundedCornerShape(14.dp))
                 .background(colors.cardBg)
                 .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
-                .clickable { onVideoCall() }
+                .clickable {
+                    if (isGroup) {
+                        showGroupCallUnavailableDialog = true
+                    } else {
+                        onVideoCall()
+                    }
+                }
                 .padding(vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            LucideVideo(tint = colors.iosBlue, size = 20.dp)
-            Text("video", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
+            val videoTint = if (isGroup) colors.iosBlue.copy(alpha = 0.4f) else colors.iosBlue
+            LucideVideo(tint = videoTint, size = 20.dp)
+            Text("video", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = videoTint)
         }
 
         Column(
@@ -2557,9 +2583,11 @@ fun FullCallModal(
     chat: ChatConversation,
     callType: String,
     callDurationSec: Int,
+    callManager: com.chroma.studio.webrtc.CallManager? = null,
     onToggleMic: () -> Unit,
     onToggleCam: () -> Unit,
     onToggleSpeaker: () -> Unit,
+    onSwitchCamera: () -> Unit = {},
     onHangup: () -> Unit
 ) {
     val min = callDurationSec / 60
@@ -2609,21 +2637,67 @@ fun FullCallModal(
                 )
             }
 
-            // In-Call Center Avatar / Video Poster
+            // In-Call Center Avatar / Real WebRTC Video
             if (isCamOn) {
                 Box(
                     modifier = Modifier
-                        .size(280.dp, 360.dp)
+                        .size(300.dp, 400.dp)
                         .clip(RoundedCornerShape(24.dp))
                         .background(Color(0xFF1C1C1E))
                         .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
                 ) {
-                    AsyncImage(
-                        model = chat.avatar.ifBlank { chat.banner },
-                        contentDescription = "Video feed",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    if (callManager?.webRTCClient != null) {
+                        // Remote Video Stream
+                        com.chroma.studio.webrtc.WebRTCVideoView(
+                            callManager = callManager,
+                            isLocal = false,
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        // Floating Local Camera PiP in top-right
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(10.dp)
+                                .size(88.dp, 120.dp)
+                                .shadow(8.dp, RoundedCornerShape(14.dp))
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF2C2C2E))
+                                .border(1.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+                        ) {
+                            com.chroma.studio.webrtc.WebRTCVideoView(
+                                callManager = callManager,
+                                isLocal = true,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            // Camera Flip button on PiP
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(4.dp)
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.65f))
+                                    .clickable { onSwitchCamera() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Lucide.RefreshCw,
+                                    contentDescription = "Flip",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        AsyncImage(
+                            model = chat.avatar.ifBlank { chat.banner },
+                            contentDescription = "Video feed",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
@@ -2635,16 +2709,22 @@ fun FullCallModal(
                     }
                 }
             } else {
-                Box(
-                    modifier = Modifier.size(130.dp),
-                    contentAlignment = Alignment.Center
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    com.chroma.studio.ui.components.IosAvatarView(
-                        name = chat.name,
-                        avatarUrl = chat.avatar,
-                        size = 130.dp,
-                        isOnline = chat.online
-                    )
+                    Box(
+                        modifier = Modifier.size(130.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        com.chroma.studio.ui.components.IosAvatarView(
+                            name = chat.name,
+                            avatarUrl = chat.avatar,
+                            size = 130.dp,
+                            isOnline = chat.online
+                        )
+                    }
+                    com.chroma.studio.ui.components.AppleDynamicWaveform(tint = Color(0xFF34C759))
                 }
             }
 
@@ -2654,9 +2734,9 @@ fun FullCallModal(
                 verticalArrangement = Arrangement.spacedBy(28.dp),
                 modifier = Modifier.padding(bottom = 16.dp)
             ) {
-                // Clean Active Call Controls (Mute, Speaker, Video)
+                // Clean Active Call Controls (Mute, Speaker, Video, Camera Flip)
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(32.dp),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AppleCallIconButton(
@@ -2686,6 +2766,16 @@ fun FullCallModal(
                         isActive = isCamOn,
                         onClick = { isCamOn = !isCamOn; onToggleCam() }
                     )
+                    if (isCamOn) {
+                        AppleCallIconButton(
+                            icon = {
+                                Icon(Lucide.RefreshCw, contentDescription = "Flip", tint = Color.White, modifier = Modifier.size(24.dp))
+                            },
+                            label = "flip",
+                            isActive = false,
+                            onClick = onSwitchCamera
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(8.dp))

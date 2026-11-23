@@ -98,10 +98,10 @@ fun CommunityOneUiHeader(
         }
     }
 
-    val screenBgColor = if (!isDark) Color(0xFFF8FAFC) else Color(0xFF000000)
-    val textDark = if (!isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
-    val textMuted = if (!isDark) Color(0xFF71717A) else Color(0xFF8E8E93)
-    val dividerColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
+    val screenBgColor = colors.bg
+    val textDark = colors.textMain
+    val textMuted = colors.textMuted
+    val dividerColor = colors.cardBorderSubtle
 
     val expandedHeightDp = 88.dp
     val currentExpandedHeightDp = expandedHeightDp * (1f - collapseProgress).coerceIn(0f, 1f)
@@ -220,10 +220,10 @@ fun CommunityOneUiHeader(
                                         .size(9.dp)
                                         .align(Alignment.TopEnd)
                                         .offset(x = (-4).dp, y = 4.dp)
-                                        .background(if (isDark) Color(0xFF16161A) else Color.White, CircleShape)
+                                        .background(colors.cardSurface, CircleShape)
                                         .padding(1.5.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFFE11D48))
+                                        .background(colors.error)
                                 )
                             }
                         }
@@ -239,7 +239,7 @@ fun CommunityOneUiHeader(
                             Icon(
                                 imageVector = Lucide.RotateCw,
                                 contentDescription = "Refresh Feed",
-                                tint = if (isRefreshing) Color(0xFF0381FE) else textDark,
+                                tint = if (isRefreshing) colors.primary else textDark,
                                 modifier = Modifier
                                     .size(18.dp)
                                     .rotate(refreshRotation)

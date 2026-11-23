@@ -88,8 +88,9 @@ fun OneUiViewingArea(
     height: Dp = 240.dp,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isAppInDark
-    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+    val screenBg = colors.bg
 
     Box(
         modifier = modifier
@@ -176,9 +177,9 @@ fun OneUiStickyTopBar(
     actions: @Composable RowScope.() -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val isDark = isAppInDark
-    val barBg = if (isDark) Color(0xFF000000).copy(alpha = 0.92f) else Color(0xFFF2F4F7).copy(alpha = 0.94f)
-    val textDark = if (isDark) Color.White else Color(0xFF0F172A)
+    val colors = LocalOscellionColors.current
+    val barBg = colors.bg.copy(alpha = if (colors.isDark) 0.92f else 0.94f)
+    val textDark = colors.textMain
 
     Surface(
         color = barBg,
@@ -305,25 +306,26 @@ fun Modifier.doubleEdgeGlassBorder(
 @Composable
 fun OneUiGlassCard(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 26.dp,
+    cornerRadius: Dp = Dp.Unspecified,
     backgroundColor: Color? = null,
     useDoubleEdgeGlassBorder: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = isAppInDark
-    val cardBg = backgroundColor ?: if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
+    val colors = LocalOscellionColors.current
+    val resolvedRadius = if (cornerRadius != Dp.Unspecified) cornerRadius else colors.cardCornerRadius
+    val cardBg = backgroundColor ?: colors.cardSurface
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(cornerRadius))
+            .clip(RoundedCornerShape(resolvedRadius))
             .background(cardBg)
             .then(
                 if (useDoubleEdgeGlassBorder) {
-                    Modifier.doubleEdgeGlassBorder(cornerRadius = cornerRadius)
+                    Modifier.doubleEdgeGlassBorder(cornerRadius = resolvedRadius)
                 } else {
-                    Modifier
+                    Modifier.border(1.dp, colors.cardBorder, RoundedCornerShape(resolvedRadius))
                 }
             )
             .padding(contentPadding),
@@ -332,20 +334,21 @@ fun OneUiGlassCard(
 }
 
 /**
- * Samsung One UI 7.0 Settings Group Container (26dp Squircle) with Iconic Double Edge Glass Border
+ * Samsung One UI 7.0 Settings Group Container with Iconic Double Edge Glass Border
  */
 @Composable
 fun OneUiSettingsGroup(
     title: String = "",
     header: String = title,
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 26.dp,
+    cornerRadius: Dp = Dp.Unspecified,
     useDoubleEdgeGlassBorder: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = isAppInDark
-    val cardBg = if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val colors = LocalOscellionColors.current
+    val resolvedRadius = if (cornerRadius != Dp.Unspecified) cornerRadius else colors.cardCornerRadius
+    val cardBg = colors.cardSurface
+    val textMuted = colors.textMuted
 
     val displayTitle = if (title.isNotEmpty()) title else header
 
@@ -365,13 +368,13 @@ fun OneUiSettingsGroup(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(cornerRadius))
+                .clip(RoundedCornerShape(resolvedRadius))
                 .background(cardBg)
                 .then(
                     if (useDoubleEdgeGlassBorder) {
-                        Modifier.doubleEdgeGlassBorder(cornerRadius = cornerRadius)
+                        Modifier.doubleEdgeGlassBorder(cornerRadius = resolvedRadius)
                     } else {
-                        Modifier.border(1.dp, if (isDark) Color(0xFF1F2430) else Color.Transparent, RoundedCornerShape(cornerRadius))
+                        Modifier.border(1.dp, colors.cardBorder, RoundedCornerShape(resolvedRadius))
                     }
                 ),
             content = content

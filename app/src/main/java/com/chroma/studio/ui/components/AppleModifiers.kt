@@ -325,6 +325,7 @@ fun IosAvatarView(
 
         // Online Status Dot
         if (!isGroup && isOnline) {
+            val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
             val dotSize = (size.value * 0.25f).coerceIn(9f, 14f).dp
             val borderWidth = (size.value * 0.04f).coerceIn(1.2f, 2f).dp
             Box(
@@ -332,10 +333,10 @@ fun IosAvatarView(
                     .size(dotSize)
                     .align(Alignment.BottomEnd)
                     .offset(x = (-1).dp, y = (-1).dp)
-                    .background(Color.White, CircleShape)
+                    .background(colors.statusRingBorder, CircleShape)
                     .padding(borderWidth)
                     .clip(CircleShape)
-                    .background(Color(0xFF34C759))
+                    .background(colors.onlineStatus)
             )
         }
     }
@@ -662,6 +663,7 @@ fun AppleStatusAvatar(
                 )
             }
         } else if (isOnline) {
+            val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
             // Online green indicator dot with clean gap border
             val dotSize = (size.value * 0.22f).coerceIn(12f, 15f).dp
             Box(
@@ -672,7 +674,7 @@ fun AppleStatusAvatar(
                     .background(gapColor, CircleShape)
                     .padding(2.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF34C759)),
+                    .background(colors.onlineStatus),
                 contentAlignment = Alignment.Center
             ) {
                 Box(

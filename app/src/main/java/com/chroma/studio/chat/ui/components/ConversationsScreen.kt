@@ -684,8 +684,7 @@ fun ConversationsScreen(
                         .fillMaxWidth()
                         .height(0.5.dp)
                         .background(
-                            (if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF2C2C2E))
-                                .copy(alpha = (collapseFraction * 0.88f).coerceIn(0f, 1f))
+                            colors.separator.copy(alpha = (collapseFraction * 0.88f).coerceIn(0f, 1f))
                         )
                 )
             }

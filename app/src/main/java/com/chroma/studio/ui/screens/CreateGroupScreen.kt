@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chroma.studio.model.UserProfile
+import com.chroma.studio.data.OnlineStatusManager
+import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.components.AuroraBackground
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
@@ -422,6 +424,8 @@ fun CreateGroupScreen(
 
 @Composable
 private fun UserSelectRow(user: UserProfile, isSelected: Boolean, onClick: () -> Unit) {
+    val colors = LocalOscellionColors.current
+    val isOnline = OnlineStatusManager.isUserOnline(user.uid)
     val scale by animateFloatAsState(
         targetValue = if (isSelected) 0.97f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -431,36 +435,32 @@ private fun UserSelectRow(user: UserProfile, isSelected: Boolean, onClick: () ->
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(colors.cardCornerRadius))
             .background(
-                if (isSelected) Color(0xFF0381FE).copy(alpha = 0.18f)
-                else Color.White.copy(alpha = 0.06f)
+                if (isSelected) colors.primary.copy(alpha = 0.18f)
+                else colors.cardSurface
             )
             .border(
-                width = if (isSelected) 1.dp else 0.dp,
-                color = if (isSelected) Color(0xFF0381FE).copy(alpha = 0.5f) else Color.Transparent,
-                shape = RoundedCornerShape(16.dp)
+                width = if (isSelected) 1.dp else 0.5.dp,
+                color = if (isSelected) colors.primary.copy(alpha = 0.5f) else colors.cardBorder,
+                shape = RoundedCornerShape(colors.cardCornerRadius)
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val context = LocalContext.current
-        // Avatar
-        if (user.avatarUrl.isNotBlank()) {
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(user.avatarUrl).crossfade(true).build(),
-                contentDescription = null,
-                modifier = Modifier.size(46.dp).clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Icon(Lucide.User, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(36.dp).padding(4.dp))
-        }
+        // Unified avatar with live presence
+        IosAvatarView(
+            name = user.displayName,
+            avatarUrl = user.avatarUrl,
+            size = 46.dp,
+            isOnline = isOnline,
+            gender = user.gender
+        )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(user.displayName, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("@${user.username}", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1)
+            Text(user.displayName, color = colors.textMain, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("@${user.username}", color = colors.textMuted, fontSize = 13.sp, maxLines = 1)
         }
         // Selection Checkbox
         LiquidGlassCheckbox(
@@ -473,27 +473,29 @@ private fun UserSelectRow(user: UserProfile, isSelected: Boolean, onClick: () ->
 
 @Composable
 private fun SelectedUserChip(user: UserProfile, onRemove: () -> Unit) {
-    val context = LocalContext.current
+    val colors = LocalOscellionColors.current
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF0381FE).copy(alpha = 0.25f))
-            .border(1.dp, Color(0xFF0381FE).copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(colors.pillCornerRadius))
+            .background(colors.primary.copy(alpha = 0.18f))
+            .border(1.dp, colors.primary.copy(alpha = 0.4f), RoundedCornerShape(colors.pillCornerRadius))
             .padding(start = 6.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (user.avatarUrl.isNotBlank()) {
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(user.avatarUrl).crossfade(true).build(),
-                contentDescription = null, modifier = Modifier.size(24.dp).clip(CircleShape), contentScale = ContentScale.Crop
-            )
-        } else {
-            Icon(Lucide.User, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
-        }
+        IosAvatarView(
+            name = user.displayName,
+            avatarUrl = user.avatarUrl,
+            size = 24.dp,
+            gender = user.gender
+        )
         Spacer(Modifier.width(6.dp))
-        Text(user.displayName.take(12), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(user.displayName.take(12), color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.width(6.dp))
-        Icon(Lucide.X, null, tint = Color.White.copy(alpha = 0.6f),
-            modifier = Modifier.size(14.dp).clickable(onClick = onRemove))
+        Icon(
+            Lucide.X,
+            null,
+            tint = colors.textMuted,
+            modifier = Modifier.size(14.dp).clickable(onClick = onRemove)
+        )
     }
 }
