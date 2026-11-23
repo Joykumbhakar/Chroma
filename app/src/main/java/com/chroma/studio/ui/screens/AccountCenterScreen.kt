@@ -543,8 +543,9 @@ fun AccountCenterScreen(
                         val showArchivesRow = matchesSearch("Archived", "Creatives", "restore")
                         val showActivityRow = matchesSearch("Activity", "Liked", "saved", "shared", "history")
                         val showAppearanceRow = matchesSearch("Appearance", "Themes", "Dark mode", "chat bubbles", "accent", "wallpaper")
+                        val showSwitchLabRow = onNavigateToSwitchLab != null && matchesSearch("Switch", "Toggle", "Lab", "Spring", "Physics")
 
-                        if (showProfileRow || showSecurityRow || showPrivacyRow || showNotifRow || showArchivesRow || showActivityRow || showAppearanceRow) {
+                        if (showProfileRow || showSecurityRow || showPrivacyRow || showNotifRow || showArchivesRow || showActivityRow || showAppearanceRow || showSwitchLabRow) {
                             OneUiSettingsCardGroup(
                                 title = "Core Preferences & Privacy",
                                 cardBgColor = cardBgColor,
@@ -644,6 +645,19 @@ fun AccountCenterScreen(
                                         textDark = textDark,
                                         textMuted = textMuted,
                                         onClick = { onNavigateToAppearance?.invoke() }
+                                    )
+                                }
+                                if (showSwitchLabRow) {
+                                    maybeDivider()
+                                    OneUiSettingsRow(
+                                        title = "Toggle Switch Lab",
+                                        subtitle = "Spring physics solver & live telemetry",
+                                        icon = LucideFilled.Sliders,
+                                        iconTint = Color(0xFF0055FF),
+                                        valueText = "Lab",
+                                        textDark = textDark,
+                                        textMuted = textMuted,
+                                        onClick = { onNavigateToSwitchLab.invoke() }
                                     )
                                 }
                             }

@@ -1415,7 +1415,8 @@ fun AppearanceSettingsScreen(
                         onNavigateToCornerGeometry = { currentSubScreen = AppearanceSubScreen.CORNER_GEOMETRY }
                     )
                     AppearanceSubScreen.SWITCH_LAB -> SpringToggleShowcaseScreen(
-                        onBack = { currentSubScreen = AppearanceSubScreen.MAIN }
+                        onBack = { currentSubScreen = AppearanceSubScreen.MAIN },
+                        isEmbedded = true
                     )
                 }
             }

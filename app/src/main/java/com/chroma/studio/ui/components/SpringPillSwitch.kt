@@ -6,6 +6,7 @@ import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,9 +59,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
-import com.composables.icons.lucide.ArrowLeft
-import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.*
 import kotlinx.coroutines.delay
 import kotlin.math.*
 
@@ -787,10 +788,10 @@ fun SpringPillSwitch(
  */
 @Composable
 fun SpringToggleShowcaseScreen(
-    onBack: (() -> Unit)? = null
+    onBack: (() -> Unit)? = null,
+    isEmbedded: Boolean = false
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = colors.isDark
     val context = LocalContext.current
     val config = AppSpringPhysics.globalConfig
     val view = LocalView.current
@@ -824,486 +825,855 @@ fun SpringToggleShowcaseScreen(
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = if (isDark) Color(0xFF0B0C10) else Color(0xFFF4F4F6)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars)
-        ) {
-            // Sticky Navigation Bar if onBack is provided
-            if (onBack != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+    val contentBlock: @Composable () -> Unit = {
+        ToggleShowcaseContent(
+            config = config,
+            activeToggle = activeToggle,
+            selectedPreset = selectedPreset,
+            history = history,
+            swIndigo1 = swIndigo1,
+            swIndigo2 = swIndigo2,
+            swGreen1 = swGreen1,
+            swGreen2 = swGreen2,
+            swSpec1 = swSpec1,
+            swSpec2 = swSpec2,
+            swBrand = swBrand,
+            onActiveToggleChanged = { activeToggle = it },
+            onPresetSelected = { preset ->
+                selectedPreset = preset
+                config.applyPreset(preset)
+                AppSpringPhysics.save(context)
+                activeToggle.toggle(withImpulse = true)
+                SoundManager.playReaction()
+            },
+            onConfigChanged = {
+                selectedPreset = null // custom manual tweak
+                AppSpringPhysics.save(context)
+            },
+            onBounceAll = {
+                allToggles.forEach { it.toggle(withImpulse = true) }
+                if (config.hapticsEnabled) {
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                        } else {
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        }
+                    } catch (_: Exception) {}
+                }
+                SoundManager.playReaction()
+            },
+            onResetAll = {
+                allToggles.forEach { it.resetToInitial() }
+                AppSpringPhysics.reset(context)
+                selectedPreset = SpringPreset.Snappy
+                SoundManager.playReaction()
+            }
+        )
+    }
+
+    if (!isEmbedded) {
+        OneUiCollapsingHeaderLayout(
+            title = "Toggle Switch Lab",
+            subtitle = "Spring physics solver & live telemetry",
+            onBack = onBack,
+            headerActions = {
+                Surface(
+                    onClick = {
+                        AppSpringPhysics.save(context)
+                        SoundManager.playReaction()
+                        onBack?.invoke()
+                    },
+                    shape = RoundedCornerShape(colors.buttonCornerRadius),
+                    color = colors.primary.copy(alpha = 0.14f)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                SoundManager.playReaction()
-                                onBack()
-                            }
-                            .padding(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Lucide.ArrowLeft,
-                            contentDescription = "Back",
-                            tint = if (isDark) Color.White else Color(0xFF0F172A),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "Settings",
-                            color = if (isDark) Color(0xFFA1A1AA) else Color(0xFF64748B),
-                            fontSize = 14.sp
-                        )
-                    }
-
-                    Text(
-                        text = "Toggle Switch Lab",
-                        color = if (isDark) Color.White else Color(0xFF0F172A),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
                     Text(
                         text = "Apply",
-                        color = Color(0xFF818CF8),
-                        fontSize = 14.sp,
+                        color = colors.primary,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                AppSpringPhysics.save(context)
-                                SoundManager.playReaction()
-                                onBack()
-                            }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                        fontFamily = InterFontFamily,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                     )
                 }
-                HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f), thickness = 0.5.dp)
             }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 18.dp, vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                // Header & Quick Action Bar
-                ShowcaseHeader(
-                    config = config,
-                    onBounceAll = {
-                        allToggles.forEachIndexed { index, t ->
-                            t.toggle(withImpulse = true)
-                        }
-                        if (config.hapticsEnabled) {
-                            try {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                                } else {
-                                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                                }
-                            } catch (_: Exception) {}
-                        }
-                        try {
-                            SoundManager.playReaction()
-                        } catch (_: Exception) {}
-                    },
-                    onResetAll = {
-                        allToggles.forEach { it.resetToInitial() }
-                        AppSpringPhysics.reset(context)
-                        selectedPreset = SpringPreset.Snappy
-                    },
-                    onConfigChanged = {
-                        AppSpringPhysics.save(context)
-                    }
-                )
-
-                // CARD 04: Spring Physics Lab & Live Telemetry (Placed First for Fast Tweaking)
-                ReferenceCardSection(
-                    title = "04 — Spring Physics Lab & Live Telemetry",
-                    hexSubtitle = "Active: ${activeToggle.label}",
-                    subtitleColor = Color(0xFF818CF8)
-                ) {
-                    SpringPhysicsLabCard(
-                        config = config,
-                        activeToggle = activeToggle,
-                        selectedPreset = selectedPreset,
-                        history = history,
-                        onSelectPreset = { preset ->
-                            selectedPreset = preset
-                            config.applyPreset(preset)
-                            AppSpringPhysics.save(context)
-                            activeToggle.toggle(withImpulse = true)
-                        },
-                        onValuesChanged = {
-                            selectedPreset = null // custom values
-                            AppSpringPhysics.save(context)
-                        }
-                    )
-                }
-
-                // CARD 05: In-App Brand Live Test Card (Brand Blue #0A84FF)
-                ReferenceCardSection(
-                    title = "05 — In-App Brand Settings Switch",
-                    hexSubtitle = "Unified Blue: #0A84FF",
-                    subtitleColor = Color(0xFF38BDF8)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(color = Color(0xFF18181B), shape = RoundedCornerShape(28.dp))
-                            .border(1.dp, Color.White.copy(alpha = 0.08f), shape = RoundedCornerShape(28.dp))
-                            .padding(horizontal = 20.dp, vertical = 18.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    activeToggle = swBrand
-                                    swBrand.toggle(withImpulse = true)
-                                },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(
-                                    text = "Allow High-Res Studio Remix",
-                                    color = Color.White,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = "Previewing live spring motion with unified #0A84FF",
-                                    color = Color(0xFFA1A1AA),
-                                    fontSize = 12.sp
-                                )
-                            }
-
-                            SpringPillSwitch(
-                                state = swBrand,
-                                colors = PillSwitchColors.Brand,
-                                config = config,
-                                trackWidth = 56.dp,
-                                trackHeight = 28.dp,
-                                onActivate = { activeToggle = it }
-                            )
-                        }
-                    }
-                }
-
-                // CARD 01: Cobalt Accent Variant
-                ReferenceCardSection(
-                    title = "01 — Cobalt Accent Variant",
-                    hexSubtitle = "#E3E3E6 → #0381FE"
-                ) {
-                    LightGroupedToggleCard(
-                        topState = swIndigo1,
-                        bottomState = swIndigo2,
-                        colors = PillSwitchColors.Indigo,
-                        config = config,
-                        onActivate = { activeToggle = it }
-                    )
-                }
-
-                // CARD 02: System Green Variant
-                ReferenceCardSection(
-                    title = "02 — System Green Variant",
-                    hexSubtitle = "#E3E3E6 → #2AD158"
-                ) {
-                    LightGroupedToggleCard(
-                        topState = swGreen1,
-                        bottomState = swGreen2,
-                        colors = PillSwitchColors.SystemGreen,
-                        config = config,
-                        onActivate = { activeToggle = it }
-                    )
-                }
-
-                // CARD 03: HIG Anatomy & I/O Labels Spec Card
-                ReferenceCardSection(
-                    title = "03 — HIG Anatomy & I/O Labels Spec",
-                    hexSubtitle = "#F6565C → #8C2522"
-                ) {
-                    HigCoralSpecCard(
-                        topState = swSpec1,
-                        bottomState = swSpec2,
-                        config = config,
-                        onActivate = { activeToggle = it }
-                    )
-                }
-
-                Spacer(Modifier.height(30.dp))
-            }
+        ) { _ ->
+            contentBlock()
+        }
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colors.bg)
+        ) {
+            contentBlock()
         }
     }
 }
 
 @Composable
-private fun ShowcaseHeader(
+private fun ToggleShowcaseContent(
+    config: SpringPhysicsConfig,
+    activeToggle: SpringToggleState,
+    selectedPreset: SpringPreset?,
+    history: List<Float>,
+    swIndigo1: SpringToggleState,
+    swIndigo2: SpringToggleState,
+    swGreen1: SpringToggleState,
+    swGreen2: SpringToggleState,
+    swSpec1: SpringToggleState,
+    swSpec2: SpringToggleState,
+    swBrand: SpringToggleState,
+    onActiveToggleChanged: (SpringToggleState) -> Unit,
+    onPresetSelected: (SpringPreset) -> Unit,
+    onConfigChanged: () -> Unit,
+    onBounceAll: () -> Unit,
+    onResetAll: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        // Hero Header & Quick Action Buttons
+        ShowcaseHeroCard(
+            config = config,
+            onBounceAll = onBounceAll,
+            onResetAll = onResetAll,
+            onConfigChanged = onConfigChanged
+        )
+
+        // 04: Live Oscilloscope Telemetry Panel
+        OneUiSettingsGroup(title = "04 — Live Oscilloscope & Telemetry") {
+            OscilloscopeTelemetrySection(
+                config = config,
+                activeToggle = activeToggle,
+                history = history
+            )
+        }
+
+        // Physics Controls: Presets + 4 Sliders
+        OneUiSettingsGroup(title = "Physics Controls & Presets") {
+            // Presets row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SpringPreset.entries.forEach { preset ->
+                    val isSelected = preset == selectedPreset
+                    Surface(
+                        onClick = { onPresetSelected(preset) },
+                        shape = CircleShape,
+                        color = if (isSelected) colors.primary.copy(alpha = 0.16f) else colors.cardSurfaceElevated,
+                        border = BorderStroke(
+                            1.dp,
+                            if (isSelected) colors.primary else colors.cardBorderSubtle
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = when (preset) {
+                                    SpringPreset.Snappy -> "Snappy"
+                                    SpringPreset.Bouncy -> "Bouncy"
+                                    SpringPreset.Liquid -> "Liquid"
+                                    SpringPreset.Critical -> "Critical"
+                                },
+                                color = if (isSelected) colors.primary else colors.textMuted,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                fontFamily = InterFontFamily,
+                                maxLines = 1,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+
+            OneUiSettingsDivider()
+
+            // 4 Dynamic Sliders using OneUiSettingsSliderRow
+            OneUiSettingsSliderRow(
+                title = "Stiffness (k)",
+                valueText = "${config.stiffness.roundToInt()} N/m",
+                valueTextColor = colors.primary,
+                icon = Lucide.Zap,
+                iconColor = colors.primary,
+                value = config.stiffness,
+                valueRange = 150f..1000f,
+                onValueChange = {
+                    config.stiffness = it
+                    onConfigChanged()
+                }
+            )
+
+            OneUiSettingsDivider()
+
+            OneUiSettingsSliderRow(
+                title = "Damping (c)",
+                valueText = "${config.damping.roundToInt()} Ns/m",
+                valueTextColor = Color(0xFF10B981),
+                icon = Lucide.Activity,
+                iconColor = Color(0xFF10B981),
+                value = config.damping,
+                valueRange = 8f..65f,
+                onValueChange = {
+                    config.damping = it
+                    onConfigChanged()
+                }
+            )
+
+            OneUiSettingsDivider()
+
+            OneUiSettingsSliderRow(
+                title = "Mass (m)",
+                valueText = "${"%.1f".format(config.mass)} kg",
+                valueTextColor = Color(0xFFF59E0B),
+                icon = Lucide.Layers,
+                iconColor = Color(0xFFF59E0B),
+                value = config.mass,
+                valueRange = 0.4f..3.0f,
+                onValueChange = {
+                    config.mass = it
+                    onConfigChanged()
+                }
+            )
+
+            OneUiSettingsDivider()
+
+            OneUiSettingsSliderRow(
+                title = "Zoom & Squish",
+                valueText = "${(config.squishFactor * 100).roundToInt()}%",
+                valueTextColor = Color(0xFF8B5CF6),
+                icon = Lucide.Maximize2,
+                iconColor = Color(0xFF8B5CF6),
+                value = config.squishFactor * 100f,
+                valueRange = 0f..200f,
+                onValueChange = {
+                    config.squishFactor = it / 100f
+                    onConfigChanged()
+                }
+            )
+        }
+
+        // 05: In-App Brand Settings Switch
+        OneUiSettingsGroup(title = "05 — In-App Brand Settings Switch") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onActiveToggleChanged(swBrand)
+                        swBrand.toggle(withImpulse = true)
+                        SoundManager.playReaction()
+                    }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    OneUiIconBadge(
+                        icon = Lucide.Sparkles,
+                        iconColor = colors.primary
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            text = "Allow High-Res Studio Remix",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textMain,
+                            fontFamily = InterFontFamily
+                        )
+                        Text(
+                            text = "Live spring motion with unified #0A84FF",
+                            fontSize = 12.sp,
+                            color = colors.textMuted,
+                            fontFamily = InterFontFamily
+                        )
+                    }
+                }
+
+                SpringPillSwitch(
+                    state = swBrand,
+                    colors = PillSwitchColors.Brand,
+                    config = config,
+                    trackWidth = 56.dp,
+                    trackHeight = 28.dp,
+                    onActivate = onActiveToggleChanged
+                )
+            }
+
+            OneUiSettingsDivider()
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onActiveToggleChanged(swIndigo2)
+                        swIndigo2.toggle(withImpulse = true)
+                        SoundManager.playReaction()
+                    }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    OneUiIconBadge(
+                        icon = Lucide.Zap,
+                        iconColor = Color(0xFF10B981)
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            text = "Kinetic Impulse Feedback",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textMain,
+                            fontFamily = InterFontFamily
+                        )
+                        Text(
+                            text = "Second-order Euler integration kickback",
+                            fontSize = 12.sp,
+                            color = colors.textMuted,
+                            fontFamily = InterFontFamily
+                        )
+                    }
+                }
+
+                SpringPillSwitch(
+                    state = swIndigo2,
+                    colors = PillSwitchColors.Brand,
+                    config = config,
+                    trackWidth = 56.dp,
+                    trackHeight = 28.dp,
+                    onActivate = onActiveToggleChanged
+                )
+            }
+        }
+
+        // 01: Cobalt Accent Variant
+        OneUiSettingsGroup(title = "01 — Cobalt Accent Variant (#0381FE)") {
+            ReferenceGroupedToggleRows(
+                topState = swIndigo1,
+                bottomState = swIndigo2,
+                colors = PillSwitchColors.Indigo,
+                config = config,
+                onActivate = onActiveToggleChanged
+            )
+        }
+
+        // 02: System Green Variant
+        OneUiSettingsGroup(title = "02 — System Green Variant (#2AD158)") {
+            ReferenceGroupedToggleRows(
+                topState = swGreen1,
+                bottomState = swGreen2,
+                colors = PillSwitchColors.SystemGreen,
+                config = config,
+                onActivate = onActiveToggleChanged
+            )
+        }
+
+        // 03: HIG Anatomy & I/O Labels Spec
+        OneUiSettingsGroup(title = "03 — HIG Anatomy & I/O Labels Spec") {
+            HigCoralSpecCard(
+                topState = swSpec1,
+                bottomState = swSpec2,
+                config = config,
+                onActivate = onActiveToggleChanged
+            )
+        }
+
+        Spacer(Modifier.height(36.dp))
+    }
+}
+
+@Composable
+private fun ShowcaseHeroCard(
     config: SpringPhysicsConfig,
     onBounceAll: () -> Unit,
     onResetAll: () -> Unit,
     onConfigChanged: () -> Unit
 ) {
-    Column(
+    val colors = LocalOscellionColors.current
+    val isSlowMo = config.timeScale < 1f
+
+    OneUiGlassCard(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(18.dp)
     ) {
-        // Status Badge
-        Row(
-            modifier = Modifier
-                .background(Color.White.copy(alpha = 0.06f), CircleShape)
-                .padding(horizontal = 12.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .background(Color(0xFF818CF8), CircleShape)
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Status Badge
+            Surface(
+                shape = CircleShape,
+                color = colors.primary.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.25f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .background(colors.primary, CircleShape)
+                    )
+                    Text(
+                        text = "REAL-TIME SPRING SOLVER • 60 FPS",
+                        color = colors.primary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        fontFamily = InterFontFamily
+                    )
+                }
+            }
+
             Text(
-                text = "Real-Time Second-Order Damped Spring Solver",
-                color = Color(0xFFA5B4FC),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
+                text = "Wide-Pill Toggle Switch & Spring Physics",
+                color = colors.textMain,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = InterFontFamily,
+                letterSpacing = (-0.4).sp
             )
-        }
 
-        Text(
-            text = "Wide-Pill Toggle Switch & Spring Physics",
-            color = Color.White,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = (-0.5).sp
-        )
+            Text(
+                text = "Click, press & hold, or drag & flick any switch below. Features kinetic momentum, elastic overshoot, press plumping, and velocity squish.",
+                color = colors.textMuted,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                fontFamily = InterFontFamily
+            )
 
-        Text(
-            text = "Click, press & hold, or drag & flick any switch below. Features elastic overshoot, press plumping, and velocity squish.",
-            color = Color(0xFFA1A1AA),
-            fontSize = 13.sp,
-            lineHeight = 18.sp
-        )
-
-        // Action Buttons Row (Matching exact HTML header actions)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = onBounceAll,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 13.dp, vertical = 8.dp)
+            // Action Buttons Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Bounce All", fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
-
-            val isSlowMo = config.timeScale < 1f
-            OutlinedButton(
-                onClick = {
-                    config.timeScale = if (isSlowMo) 1.0f else 0.25f
-                    onConfigChanged()
-                },
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = Color.White.copy(alpha = if (isSlowMo) 0.14f else 0.06f),
-                    contentColor = Color(0xFFE4E4E7)
-                ),
-                contentPadding = PaddingValues(horizontal = 11.dp, vertical = 8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .background(
-                            if (isSlowMo) Color(0xFFFBBF24) else Color(0xFF71717A),
-                            CircleShape
+                Surface(
+                    onClick = onBounceAll,
+                    shape = RoundedCornerShape(colors.buttonCornerRadius),
+                    color = colors.primary,
+                    modifier = Modifier.weight(1.15f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 9.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Sparkles,
+                            contentDescription = null,
+                            tint = colors.onPrimary,
+                            modifier = Modifier.size(15.dp)
                         )
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = if (isSlowMo) "Slow-Mo: 0.25x" else "Slow-Mo: OFF",
-                    fontSize = 12.sp
-                )
-            }
-
-            OutlinedButton(
-                onClick = {
-                    config.hapticsEnabled = !config.hapticsEnabled
-                    onConfigChanged()
-                },
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = Color.White.copy(alpha = if (config.hapticsEnabled) 0.10f else 0.04f),
-                    contentColor = Color(0xFFE4E4E7)
-                ),
-                contentPadding = PaddingValues(horizontal = 11.dp, vertical = 8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .background(
-                            if (config.hapticsEnabled) Color(0xFF34D399) else Color(0xFF71717A),
-                            CircleShape
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = "Bounce All",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.onPrimary,
+                            fontFamily = InterFontFamily
                         )
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = if (config.hapticsEnabled) "Haptic: ON" else "Haptic: OFF",
-                    fontSize = 12.sp
-                )
-            }
+                    }
+                }
 
-            OutlinedButton(
-                onClick = onResetAll,
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = Color.White.copy(alpha = 0.06f),
-                    contentColor = Color(0xFFE4E4E7)
-                ),
-                contentPadding = PaddingValues(horizontal = 11.dp, vertical = 8.dp)
-            ) {
-                Text("Reset", fontSize = 12.sp)
+                Surface(
+                    onClick = {
+                        config.timeScale = if (isSlowMo) 1.0f else 0.25f
+                        onConfigChanged()
+                    },
+                    shape = RoundedCornerShape(colors.buttonCornerRadius),
+                    color = colors.cardSurfaceElevated,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isSlowMo) Color(0xFFF59E0B) else colors.cardBorderSubtle
+                    ),
+                    modifier = Modifier.weight(1.3f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 9.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .background(
+                                    if (isSlowMo) Color(0xFFF59E0B) else colors.textMuted.copy(alpha = 0.5f),
+                                    CircleShape
+                                )
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (isSlowMo) "Slow-Mo: 0.25x" else "Slow-Mo: OFF",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isSlowMo) Color(0xFFF59E0B) else colors.textMain,
+                            fontFamily = InterFontFamily
+                        )
+                    }
+                }
+
+                Surface(
+                    onClick = {
+                        config.hapticsEnabled = !config.hapticsEnabled
+                        onConfigChanged()
+                    },
+                    shape = RoundedCornerShape(colors.buttonCornerRadius),
+                    color = colors.cardSurfaceElevated,
+                    border = BorderStroke(
+                        1.dp,
+                        if (config.hapticsEnabled) Color(0xFF10B981) else colors.cardBorderSubtle
+                    ),
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 9.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .background(
+                                    if (config.hapticsEnabled) Color(0xFF10B981) else colors.textMuted.copy(alpha = 0.5f),
+                                    CircleShape
+                                )
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (config.hapticsEnabled) "Haptic: ON" else "Haptic: OFF",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textMain,
+                            fontFamily = InterFontFamily
+                        )
+                    }
+                }
+
+                Surface(
+                    onClick = onResetAll,
+                    shape = RoundedCornerShape(colors.buttonCornerRadius),
+                    color = colors.cardSurfaceElevated,
+                    border = BorderStroke(1.dp, colors.cardBorderSubtle),
+                    modifier = Modifier.weight(0.9f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 9.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Lucide.RotateCcw,
+                            contentDescription = null,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "Reset",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textMain,
+                            fontFamily = InterFontFamily
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ReferenceCardSection(
-    title: String,
-    hexSubtitle: String,
-    subtitleColor: Color = Color(0xFFA1A1AA),
-    content: @Composable () -> Unit
+private fun OscilloscopeTelemetrySection(
+    config: SpringPhysicsConfig,
+    activeToggle: SpringToggleState,
+    history: List<Float>
 ) {
+    val colors = LocalOscellionColors.current
+
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Header info row
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = title,
-                color = Color(0xFFD4D4D8),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OneUiIconBadge(
+                    icon = Lucide.Activity,
+                    iconColor = colors.primary
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Text(
+                        text = "Active: ${activeToggle.label}",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textMain,
+                        fontFamily = InterFontFamily
+                    )
+                    Text(
+                        text = "Real-time displacement x(t) @ 60 FPS",
+                        fontSize = 12.sp,
+                        color = colors.textMuted,
+                        fontFamily = InterFontFamily
+                    )
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (activeToggle.checked) Color(0xFF10B981).copy(alpha = 0.14f) else colors.cardSurfaceElevated,
+                border = BorderStroke(1.dp, if (activeToggle.checked) Color(0xFF10B981).copy(alpha = 0.4f) else colors.cardBorderSubtle)
+            ) {
+                Text(
+                    text = if (activeToggle.checked) "STATE: ON" else "STATE: OFF",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (activeToggle.checked) Color(0xFF10B981) else colors.textMuted,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        // Numerical metrics row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            TelemetryValueChip(
+                label = "DISPLACEMENT",
+                value = "x: ${"%.3f".format(activeToggle.x)}",
+                valueColor = Color(0xFF10B981),
+                modifier = Modifier.weight(1f)
             )
-            Text(
-                text = hexSubtitle,
-                color = subtitleColor,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace
+            TelemetryValueChip(
+                label = "VELOCITY",
+                value = "v: ${"%.2f".format(activeToggle.v)}/s",
+                valueColor = colors.primary,
+                modifier = Modifier.weight(1f)
+            )
+            TelemetryValueChip(
+                label = "DAMPING RATIO",
+                value = "ζ: ${"%.2f".format(config.dampingRatio)}",
+                valueColor = Color(0xFFF59E0B),
+                modifier = Modifier.weight(1f)
             )
         }
-        content()
+
+        // Live Oscilloscope Canvas
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(104.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(colors.cardSurfaceElevated)
+                .border(1.dp, colors.cardBorderSubtle, RoundedCornerShape(16.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                fun mapY(v: Float): Float {
+                    val norm = (v - (-0.35f)) / 1.7f
+                    return size.height - norm * size.height
+                }
+
+                val dashEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+
+                listOf(0f, 1f).forEach { refVal ->
+                    val y = mapY(refVal)
+                    drawLine(
+                        color = colors.cardBorder,
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 1.dp.toPx(),
+                        pathEffect = dashEffect
+                    )
+                }
+
+                if (history.isNotEmpty()) {
+                    val wavePath = Path()
+                    val count = history.size
+                    for (i in 0 until count) {
+                        val px = (i.toFloat() / (count - 1).coerceAtLeast(1)) * size.width
+                        val py = mapY(history[i])
+                        if (i == 0) wavePath.moveTo(px, py) else wavePath.lineTo(px, py)
+                    }
+                    drawPath(
+                        path = wavePath,
+                        brush = Brush.horizontalGradient(
+                            listOf(
+                                colors.primary.copy(alpha = 0.40f),
+                                colors.primary
+                            )
+                        ),
+                        style = Stroke(
+                            width = 2.4.dp.toPx(),
+                            cap = StrokeCap.Round,
+                            join = StrokeJoin.Round
+                        )
+                    )
+
+                    val lastY = mapY(history.last())
+                    drawCircle(
+                        color = Color(0xFF10B981).copy(alpha = 0.28f),
+                        radius = 7.dp.toPx(),
+                        center = Offset(size.width - 4.dp.toPx(), lastY)
+                    )
+                    drawCircle(
+                        color = Color(0xFF10B981),
+                        radius = 3.5.dp.toPx(),
+                        center = Offset(size.width - 4.dp.toPx(), lastY)
+                    )
+                }
+            }
+        }
     }
 }
 
 @Composable
-fun LightGroupedToggleCard(
+private fun TelemetryValueChip(
+    label: String,
+    value: String,
+    valueColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalOscellionColors.current
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = colors.cardSurface,
+        border = BorderStroke(1.dp, colors.cardBorderSubtle)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = label,
+                fontSize = 9.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textMuted,
+                fontFamily = InterFontFamily,
+                maxLines = 1
+            )
+            Text(
+                text = value,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = valueColor,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReferenceGroupedToggleRows(
     topState: SpringToggleState,
     bottomState: SpringToggleState,
     colors: PillSwitchColors,
     config: SpringPhysicsConfig,
     onActivate: (SpringToggleState) -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(color = Color(0xFFF2F2F7), shape = RoundedCornerShape(42.dp))
-            .padding(horizontal = 26.dp, vertical = 28.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(color = Color.White, shape = RoundedCornerShape(30.dp))
-                .padding(horizontal = 26.dp, vertical = 4.dp)
-        ) {
-            GroupedToggleRow(
-                title = "Title",
-                state = topState,
-                colors = colors,
-                config = config,
-                onActivate = onActivate
-            )
+    GroupedToggleRow(
+        title = "Title",
+        subtitle = "Tap to toggle with momentum",
+        state = topState,
+        colors = colors,
+        config = config,
+        onActivate = onActivate
+    )
 
-            HorizontalDivider(
-                modifier = Modifier.fillMaxWidth(),
-                thickness = 1.dp,
-                color = Color(0xFFCECED2)
-            )
+    OneUiSettingsDivider()
 
-            GroupedToggleRow(
-                title = "Title",
-                state = bottomState,
-                colors = colors,
-                config = config,
-                onActivate = onActivate
-            )
-        }
-    }
+    GroupedToggleRow(
+        title = "Title",
+        subtitle = "Physics impulse enabled",
+        state = bottomState,
+        colors = colors,
+        config = config,
+        onActivate = onActivate
+    )
 }
 
 @Composable
 private fun GroupedToggleRow(
     title: String,
+    subtitle: String,
     state: SpringToggleState,
     colors: PillSwitchColors,
     config: SpringPhysicsConfig,
     onActivate: (SpringToggleState) -> Unit
 ) {
+    val themeColors = LocalOscellionColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(82.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
                 onActivate(state)
                 state.toggle(withImpulse = true)
-            },
+                SoundManager.playReaction()
+            }
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = title,
-            color = Color.Black,
-            fontSize = 25.sp,
-            fontWeight = FontWeight.Normal,
-            letterSpacing = (-0.5).sp
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = title,
+                color = themeColors.textMain,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = InterFontFamily,
+                letterSpacing = (-0.3).sp
+            )
+            Text(
+                text = subtitle,
+                color = themeColors.textMuted,
+                fontSize = 12.sp,
+                fontFamily = InterFontFamily
+            )
+        }
 
         SpringPillSwitch(
             state = state,
             colors = colors,
             config = config,
-            trackWidth = 98.dp,
-            trackHeight = 45.dp,
+            trackWidth = 84.dp,
+            trackHeight = 42.dp,
             onActivate = onActivate
         )
     }
@@ -1329,12 +1699,13 @@ fun HigCoralSpecCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(brush = coralGradient, shape = RoundedCornerShape(42.dp))
-            .padding(horizontal = 30.dp, vertical = 34.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(brush = coralGradient)
+            .padding(horizontal = 20.dp, vertical = 22.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             SpecToggleRow(
                 label = "Label",
@@ -1366,29 +1737,30 @@ private fun SpecToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(84.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
                 onActivate(state)
                 state.toggle(withImpulse = true)
+                SoundManager.playReaction()
             }
-            .padding(end = 14.dp),
+            .padding(end = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.width(155.dp),
+            modifier = Modifier.width(140.dp),
             contentAlignment = Alignment.BottomStart
         ) {
             Text(
                 text = label,
-                color = Color(0xFF8D2323),
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Normal,
-                letterSpacing = (-0.5).sp,
-                modifier = Modifier.padding(start = 18.dp, bottom = 2.dp)
+                color = Color(0xFF6B1515),
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = (-0.4).sp,
+                fontFamily = InterFontFamily,
+                modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
             )
 
             Canvas(
@@ -1397,7 +1769,7 @@ private fun SpecToggleRow(
                     .height(2.dp)
             ) {
                 drawLine(
-                    color = Color(0xFFA52222).copy(alpha = 0.48f),
+                    color = Color(0xFF8A1E1E).copy(alpha = 0.55f),
                     start = Offset(0f, 0f),
                     end = Offset(size.width, 0f),
                     strokeWidth = 2.dp.toPx(),
@@ -1411,12 +1783,12 @@ private fun SpecToggleRow(
                 Canvas(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .offset(y = (-16).dp)
-                        .width(98.dp)
-                        .height(11.dp)
+                        .offset(y = (-14).dp)
+                        .width(84.dp)
+                        .height(10.dp)
                 ) {
                     val stroke = 1.5.dp.toPx()
-                    val color = Color(0xFFD83A3A)
+                    val color = Color(0xFF8A1E1E)
                     val midY = size.height / 2f
                     drawLine(color, Offset(0f, 0f), Offset(0f, size.height), stroke)
                     drawLine(color, Offset(0f, midY), Offset(size.width, midY), stroke)
@@ -1426,12 +1798,12 @@ private fun SpecToggleRow(
                 Canvas(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .offset(x = 18.dp)
-                        .width(11.dp)
-                        .height(45.dp)
+                        .offset(x = 16.dp)
+                        .width(10.dp)
+                        .height(42.dp)
                 ) {
                     val stroke = 1.5.dp.toPx()
-                    val color = Color(0xFFD83A3A)
+                    val color = Color(0xFF8A1E1E)
                     val midX = size.width / 2f
                     drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), stroke)
                     drawLine(color, Offset(midX, 0f), Offset(midX, size.height), stroke)
@@ -1443,229 +1815,11 @@ private fun SpecToggleRow(
                 state = state,
                 colors = PillSwitchColors.HigSpecCoral,
                 config = config,
-                trackWidth = 98.dp,
-                trackHeight = 45.dp,
+                trackWidth = 84.dp,
+                trackHeight = 42.dp,
                 showIoLabels = true,
                 onActivate = onActivate
             )
         }
-    }
-}
-
-@Composable
-private fun SpringPhysicsLabCard(
-    config: SpringPhysicsConfig,
-    activeToggle: SpringToggleState,
-    selectedPreset: SpringPreset?,
-    history: List<Float>,
-    onSelectPreset: (SpringPreset) -> Unit,
-    onValuesChanged: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color(0xFF18181B), RoundedCornerShape(36.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(36.dp))
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Presets Selector (Matching HTML)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            SpringPreset.entries.forEach { preset ->
-                val isSelected = preset == selectedPreset
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(
-                            if (isSelected) Color(0xFF6366F1).copy(alpha = 0.25f)
-                            else Color.White.copy(alpha = 0.05f)
-                        )
-                        .clickable { onSelectPreset(preset) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = preset.title,
-                        color = if (isSelected) Color(0xFFA5B4FC) else Color(0xFFD4D4D8),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
-
-        // 4 Sliders matching HTML exact ranges
-        SpringSliderControl(
-            label = "Stiffness (k)",
-            valueText = "${config.stiffness.roundToInt()} N/m",
-            value = config.stiffness,
-            valueRange = 150f..1000f,
-            onValueChange = {
-                config.stiffness = it
-                onValuesChanged()
-            }
-        )
-
-        SpringSliderControl(
-            label = "Damping (c)",
-            valueText = "${config.damping.roundToInt()} Ns/m",
-            value = config.damping,
-            valueRange = 8f..65f,
-            onValueChange = {
-                config.damping = it
-                onValuesChanged()
-            }
-        )
-
-        SpringSliderControl(
-            label = "Mass (m)",
-            valueText = "${"%.1f".format(config.mass)} kg",
-            value = config.mass,
-            valueRange = 0.4f..3.0f,
-            onValueChange = {
-                config.mass = it
-                onValuesChanged()
-            }
-        )
-
-        SpringSliderControl(
-            label = "Zoom & Squish Intensity",
-            valueText = "${(config.squishFactor * 100).roundToInt()}%",
-            value = config.squishFactor * 100f,
-            valueRange = 0f..200f,
-            onValueChange = {
-                config.squishFactor = it / 100f
-                onValuesChanged()
-            }
-        )
-
-        // Real-Time Oscilloscope Telemetry Panel
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(18.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(18.dp))
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "DISPLACEMENT x(t)",
-                    color = Color(0xFFA1A1AA),
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "x: ${"%.3f".format(activeToggle.x)}",
-                        color = Color(0xFF34D399),
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "v: ${"%.2f".format(activeToggle.v)}/s",
-                        color = Color(0xFF818CF8),
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "ζ: ${"%.2f".format(config.dampingRatio)}",
-                        color = Color(0xFFFCD34D),
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
-
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(96.dp)
-            ) {
-                fun mapY(v: Float): Float {
-                    val norm = (v - (-0.35f)) / 1.7f
-                    return size.height - norm * size.height
-                }
-
-                val dashEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-                listOf(0f, 1f).forEach { refVal ->
-                    val y = mapY(refVal)
-                    drawLine(
-                        color = Color.White.copy(alpha = 0.12f),
-                        start = Offset(0f, y),
-                        end = Offset(size.width, y),
-                        strokeWidth = 1.dp.toPx(),
-                        pathEffect = dashEffect
-                    )
-                }
-
-                if (history.isNotEmpty()) {
-                    val wavePath = Path()
-                    val count = history.size
-                    for (i in 0 until count) {
-                        val px = (i.toFloat() / (count - 1).coerceAtLeast(1)) * size.width
-                        val py = mapY(history[i])
-                        if (i == 0) wavePath.moveTo(px, py) else wavePath.lineTo(px, py)
-                    }
-                    drawPath(
-                        path = wavePath,
-                        color = Color(0xFF818CF8),
-                        style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    )
-
-                    val lastY = mapY(history.last())
-                    drawCircle(
-                        color = Color(0xFF34D399),
-                        radius = 4.dp.toPx(),
-                        center = Offset(size.width - 4.dp.toPx(), lastY)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SpringSliderControl(
-    label: String,
-    valueText: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    onValueChange: (Float) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(text = label, color = Color(0xFFA1A1AA), fontSize = 12.sp)
-            Text(
-                text = valueText,
-                color = Color(0xFFA5B4FC),
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace
-            )
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = Color(0xFF6366F1),
-                inactiveTrackColor = Color.White.copy(alpha = 0.14f)
-            )
-        )
     }
 }
