@@ -357,10 +357,13 @@ fun OscellionLockScreen(
                     width = if (isWallpaperEditing) 1.5.dp else 0.dp,
                     color = Color.White.copy(alpha = 0.25f),
                     shape = RoundedCornerShape(screenCornerRadius)
-                )
+                ),
+            contentAlignment = Alignment.Center
         ) {
             AnimatedContent(
                 targetState = currentView,
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
                 transitionSpec = {
                     if (targetState == LockScreenView.PIN_ENTRY) {
                         (fadeIn(tween(260)) + slideInVertically(tween(260)) { it / 10 })
@@ -472,6 +475,7 @@ fun OscellionLockScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .widthIn(max = 334.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     // Primary Blue Gradient Pill Button: "Unlock with Biometric"
@@ -642,7 +646,7 @@ fun OscellionLockScreen(
                                 .fillMaxSize()
                                 .statusBarsPadding()
                                 .navigationBarsPadding()
-                                .padding(horizontal = 24.dp),
+                                .padding(horizontal = 16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
@@ -731,14 +735,15 @@ fun OscellionLockScreen(
                                     }
                                 }
 
-                                Spacer(Modifier.height(44.dp))
+                                Spacer(Modifier.height(36.dp))
 
-                                // 3x4 Uniform Frosted Keypad Grid (78dp circular buttons + Capsule Biometric Shortcut)
+                                // 3x4 Uniform Frosted Keypad Grid (Centered mathematically across all screens)
+                                val buttonSize = 75.dp
+                                val horizontalSpacing = 18.dp
+
                                 Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .widthIn(max = 296.dp),
-                                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                                    modifier = Modifier.wrapContentWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     val keypadRows = listOf(
@@ -749,12 +754,13 @@ fun OscellionLockScreen(
 
                                     for (row in keypadRows) {
                                         Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+                                            modifier = Modifier.wrapContentWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             for (key in row) {
                                                 GlassKeypadButton(
+                                                    size = buttonSize,
                                                     hazeState = hazeState,
                                                     enabled = lockoutSecondsRemaining == 0,
                                                     onClick = { onDigitEntered(key.digit) }
@@ -812,13 +818,13 @@ fun OscellionLockScreen(
 
                                     // Row 4: [Use Biometric] Capsule Pill | 0 Digit | [Delete] Backspace
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+                                        modifier = Modifier.wrapContentWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        // Left: Capsule Pill Button for Biometrics
+                                        // Left: Capsule Pill Button for Biometrics (Contained within buttonSize to guarantee center column alignment)
                                         Box(
-                                            modifier = Modifier.size(width = 78.dp, height = 78.dp),
+                                            modifier = Modifier.size(buttonSize),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             GlassCapsuleButton(
@@ -826,31 +832,31 @@ fun OscellionLockScreen(
                                                 enabled = lockoutSecondsRemaining == 0,
                                                 onClick = { triggerBiometricPrompt() },
                                                 modifier = Modifier
-                                                    .width(108.dp)
+                                                    .width(84.dp)
                                                     .height(48.dp)
                                             ) {
                                                 Row(
                                                     verticalAlignment = Alignment.CenterVertically,
                                                     horizontalArrangement = Arrangement.Center,
-                                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                                    modifier = Modifier.padding(horizontal = 6.dp)
                                                 ) {
                                                     Icon(
                                                         imageVector = Lucide.Fingerprint,
                                                         contentDescription = "Use Biometric",
                                                         tint = Color.White,
-                                                        modifier = Modifier.size(19.dp)
+                                                        modifier = Modifier.size(18.dp)
                                                     )
-                                                    Spacer(Modifier.width(6.dp))
+                                                    Spacer(Modifier.width(5.dp))
                                                     Box(
                                                         modifier = Modifier
                                                             .width(1.dp)
-                                                            .height(18.dp)
+                                                            .height(16.dp)
                                                             .background(Color.White.copy(alpha = 0.28f))
                                                     )
-                                                    Spacer(Modifier.width(6.dp))
+                                                    Spacer(Modifier.width(5.dp))
                                                     Text(
-                                                        text = "Use Biometric",
-                                                        fontSize = 10.5.sp,
+                                                        text = "Biometric",
+                                                        fontSize = 10.sp,
                                                         fontWeight = FontWeight.Medium,
                                                         color = Color.White,
                                                         fontFamily = InterFontFamily,
@@ -862,6 +868,7 @@ fun OscellionLockScreen(
 
                                         // Center: 0 Digit
                                         GlassKeypadButton(
+                                            size = buttonSize,
                                             hazeState = hazeState,
                                             enabled = lockoutSecondsRemaining == 0,
                                             onClick = { onDigitEntered("0") }
@@ -885,6 +892,7 @@ fun OscellionLockScreen(
 
                                         // Right: Backspace Button
                                         GlassKeypadButton(
+                                            size = buttonSize,
                                             hazeState = hazeState,
                                             enabled = lockoutSecondsRemaining == 0,
                                             onClick = { onPinDelete() }
@@ -1325,7 +1333,7 @@ private fun OscellionExactMorphScreen() {
                     val canvasSize = size.minDimension
                     val scaleFactor = canvasSize / 1024f
 
-                    scale(scaleFactor) {
+                    scale(scaleFactor, pivot = Offset.Zero) {
                         val centerOffset = Offset(512f, 512f)
                         val radius = 420f
 
@@ -1546,6 +1554,7 @@ private fun GlassCapsuleButton(
 @Composable
 private fun GlassKeypadButton(
     modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 75.dp,
     hazeState: HazeState? = null,
     enabled: Boolean = true,
     onClick: () -> Unit,
@@ -1562,7 +1571,7 @@ private fun GlassKeypadButton(
 
     Box(
         modifier = modifier
-            .size(78.dp)
+            .size(size)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
