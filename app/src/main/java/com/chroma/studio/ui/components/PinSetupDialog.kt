@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,18 +18,26 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.security.SecurityPinManager
+import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.Delete
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
@@ -42,8 +51,10 @@ private enum class SetupStep {
 
 /**
  * Flagship PIN Setup and Change Dialog.
- * Allows users to set up or change their 4-digit backup PIN with instant dot feedback,
- * confirmation validation, error shake, and haptic feedback.
+ * Uses identical design language and styling from e:\Design & 3D Assets\biometric_pin_lock_screen.html:
+ * - 4 rounded-square PIN boxes (46dp x 50dp, radius 14dp, active slot pulsing caret, 12dp white filled circle)
+ * - 3x4 uniform 78dp circular glass keypad buttons with specular glossy bevel
+ * - Smooth step animation and error shake feedback
  */
 @Composable
 fun PinSetupDialog(
@@ -61,10 +72,10 @@ fun PinSetupDialog(
     var isError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Shake animation on error
     val shakeAnim = remember { Animatable(0f) }
-
     val currentEnteredPin = if (step == SetupStep.ENTER_PIN) firstPin else confirmPin
+    val wallpaperUri = remember { SecurityPinManager.getWallpaperUri(context) }
+    val wallpaperDimming = remember { SecurityPinManager.getWallpaperDimming(context) }
 
     fun triggerError(msg: String) {
         scope.launch {
@@ -119,7 +130,6 @@ fun PinSetupDialog(
                 confirmPin = next
                 if (next.length == 4) {
                     if (next == firstPin) {
-                        // Success!
                         SecurityPinManager.setPin(context, next)
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         SoundManager.playReaction()
@@ -150,9 +160,21 @@ fun PinSetupDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF000000).copy(alpha = 0.95f)),
-            contentAlignment = Alignment.Center
+                .background(Color(0xFF030407))
         ) {
+            // Background Wallpaper + Dimming
+            AsyncImage(
+                model = wallpaperUri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = (wallpaperDimming + 0.15f).coerceAtMost(0.88f)))
+            )
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -162,7 +184,7 @@ fun PinSetupDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Top Header Row with Cancel Button
+                // Top Header Row with Close Button
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -172,9 +194,10 @@ fun PinSetupDialog(
                     IconButton(
                         onClick = onDismiss,
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF1C1C1E))
+                            .background(Color.White.copy(alpha = 0.12f))
+                            .border(0.75.dp, Color.White.copy(alpha = 0.20f), CircleShape)
                     ) {
                         Icon(
                             imageVector = Lucide.X,
@@ -185,10 +208,12 @@ fun PinSetupDialog(
                     }
                 }
 
-                // Center: Title, Subtitle, and 4 Dots Indicator
+                // Center: Title, Subtitle, and 4 Rounded-Square Boxes
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.offset(x = shakeAnim.value.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset(x = shakeAnim.value.dp)
                 ) {
                     AnimatedContent(
                         targetState = step,
@@ -202,75 +227,118 @@ fun PinSetupDialog(
                                 } else {
                                     "Confirm PIN"
                                 },
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 29.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 color = Color.White,
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
+                                letterSpacing = (-0.02).sp,
+                                fontFamily = InterFontFamily,
+                                style = TextStyle(
+                                    shadow = Shadow(
+                                        color = Color.Black.copy(alpha = 0.85f),
+                                        offset = Offset(0f, 2f),
+                                        blurRadius = 6f
+                                    )
+                                )
                             )
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(6.dp))
                             Text(
                                 text = errorMessage ?: if (currentStep == SetupStep.ENTER_PIN) {
                                     "Enter a 4-digit PIN for backup unlock"
                                 } else {
                                     "Re-enter your 4-digit PIN to confirm"
                                 },
-                                fontSize = 14.sp,
-                                color = if (errorMessage != null) Color(0xFFFF3B30) else Color(0xFF8E8E93),
-                                textAlign = TextAlign.Center
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = if (errorMessage != null) Color(0xFFEF4444) else Color(0xFFE5E7EB),
+                                textAlign = TextAlign.Center,
+                                fontFamily = InterFontFamily,
+                                style = TextStyle(
+                                    shadow = Shadow(
+                                        color = Color.Black.copy(alpha = 0.85f),
+                                        offset = Offset(0f, 1f),
+                                        blurRadius = 4f
+                                    )
+                                )
                             )
                         }
                     }
 
-                    Spacer(Modifier.height(36.dp))
+                    Spacer(Modifier.height(28.dp))
 
-                    // 4 Indicator Dots
+                    // 4 Rounded-Square Indicator Boxes (46dp x 50dp, radius 14dp)
+                    val infiniteCaret = rememberInfiniteTransition(label = "setupPinCaret")
+                    val caretAlpha by infiniteCaret.animateFloat(
+                        initialValue = 1f,
+                        targetValue = 0.25f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(550, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "caretAlpha"
+                    )
+
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(22.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         for (i in 0 until 4) {
                             val isFilled = i < currentEnteredPin.length
-                            val dotScale by animateFloatAsState(
-                                targetValue = if (isFilled) 1.15f else 1f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessLow
-                                ),
-                                label = "dotScale$i"
-                            )
+                            val isActive = i == currentEnteredPin.length && !isError
 
                             Box(
                                 modifier = Modifier
-                                    .size(16.dp)
-                                    .border(
-                                        width = 1.5.dp,
-                                        color = when {
-                                            isError -> Color(0xFFFF3B30)
-                                            isFilled -> Color.White
-                                            else -> Color(0xFF636366)
-                                        },
-                                        shape = CircleShape
-                                    )
-                                    .clip(CircleShape)
+                                    .size(width = 46.dp, height = 50.dp)
+                                    .clip(RoundedCornerShape(14.dp))
                                     .background(
                                         when {
-                                            isError -> Color(0xFFFF3B30)
-                                            isFilled -> Color.White
-                                            else -> Color.Transparent
+                                            isError -> Color(0xFFEF4444).copy(alpha = 0.18f)
+                                            isActive -> Color(0xFF3B82F6).copy(alpha = 0.14f)
+                                            isFilled -> Color.White.copy(alpha = 0.18f)
+                                            else -> Color.White.copy(alpha = 0.08f)
                                         }
                                     )
-                            )
+                                    .border(
+                                        width = 1.25.dp,
+                                        color = when {
+                                            isError -> Color(0xFFEF4444)
+                                            isActive -> Color(0xFF3B82F6)
+                                            isFilled -> Color.White.copy(alpha = 0.55f)
+                                            else -> Color.White.copy(alpha = 0.24f)
+                                        },
+                                        shape = RoundedCornerShape(14.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isFilled) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White)
+                                    )
+                                } else if (isActive) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(2.dp)
+                                            .height(20.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(Color(0xFF60A5FA).copy(alpha = caretAlpha))
+                                    )
+                                }
+                            }
                         }
                     }
                 }
 
-                // Bottom: Clean Keypad
+                // Bottom: 3x4 Uniform 78dp Circular Keypad
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .widthIn(max = 282.dp)
                         .padding(bottom = 32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     val keyRows = listOf(
                         listOf(PinKey("1", ""), PinKey("2", "ABC"), PinKey("3", "DEF")),
@@ -281,61 +349,71 @@ fun PinSetupDialog(
 
                     for (row in keyRows) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(0.85f),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(24.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             for (key in row) {
                                 if (key == null) {
-                                    Spacer(Modifier.size(76.dp))
+                                    Spacer(Modifier.size(78.dp))
                                 } else if (key.digit == "DEL") {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(76.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF1C1C1E))
-                                            .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) { onDeletePress() },
-                                        contentAlignment = Alignment.Center
+                                    SetupGlassKeypadButton(
+                                        onClick = { onDeletePress() }
                                     ) {
                                         Icon(
                                             imageVector = Lucide.Delete,
                                             contentDescription = "Delete",
                                             tint = Color.White,
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier.size(25.dp)
                                         )
                                     }
                                 } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(76.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF1C1C1E))
-                                            .border(1.dp, Color.White.copy(alpha = 0.08f), CircleShape)
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) { onDigitPress(key.digit) },
-                                        contentAlignment = Alignment.Center
+                                    SetupGlassKeypadButton(
+                                        onClick = { onDigitPress(key.digit) }
                                     ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
                                             Text(
                                                 text = key.digit,
-                                                fontSize = 30.sp,
+                                                fontSize = 28.sp,
                                                 fontWeight = FontWeight.Normal,
+                                                lineHeight = 28.sp,
                                                 color = Color.White,
-                                                lineHeight = 32.sp
+                                                fontFamily = InterFontFamily,
+                                                style = TextStyle(
+                                                    shadow = Shadow(
+                                                        color = Color.Black.copy(alpha = 0.85f),
+                                                        offset = Offset(0f, 1f),
+                                                        blurRadius = 3f
+                                                    )
+                                                )
                                             )
                                             if (key.letters.isNotBlank()) {
+                                                Spacer(Modifier.height(2.dp))
                                                 Text(
                                                     text = key.letters,
                                                     fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color(0xFF8E8E93),
-                                                    letterSpacing = 1.sp
+                                                    fontWeight = FontWeight.Medium,
+                                                    letterSpacing = 1.2.sp,
+                                                    color = Color(0xFFE5E7EB),
+                                                    fontFamily = InterFontFamily,
+                                                    style = TextStyle(
+                                                        shadow = Shadow(
+                                                            color = Color.Black.copy(alpha = 0.85f),
+                                                            offset = Offset(0f, 1f),
+                                                            blurRadius = 3f
+                                                        )
+                                                    )
+                                                )
+                                            } else {
+                                                Spacer(Modifier.height(2.dp))
+                                                Text(
+                                                    text = " ",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = Color.Transparent
                                                 )
                                             }
                                         }
@@ -347,6 +425,60 @@ fun PinSetupDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SetupGlassKeypadButton(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(stiffness = 500f, dampingRatio = 0.6f),
+        label = "setupGlassScale"
+    )
+
+    Box(
+        modifier = modifier
+            .size(78.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(CircleShape)
+            .background(
+                if (isPressed) Color.White.copy(alpha = 0.22f)
+                else Color.White.copy(alpha = 0.08f)
+            )
+            .border(
+                width = 0.75.dp,
+                brush = Brush.verticalGradient(
+                    colors = if (isPressed) listOf(
+                        Color.White.copy(alpha = 0.75f),
+                        Color.White.copy(alpha = 0.35f),
+                        Color.White.copy(alpha = 0.15f),
+                        Color.White.copy(alpha = 0.45f)
+                    ) else listOf(
+                        Color.White.copy(alpha = 0.58f),
+                        Color.White.copy(alpha = 0.12f),
+                        Color.White.copy(alpha = 0.04f),
+                        Color.White.copy(alpha = 0.24f)
+                    )
+                ),
+                shape = CircleShape
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
     }
 }
 

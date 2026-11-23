@@ -23,6 +23,11 @@ object SecurityPinManager {
     private const val KEY_APP_LOCK_ENABLED = "biometric_passkey_lock"
     private const val KEY_CHAT_LOCK_ENABLED = "chat_screen_lock_enabled"
     private const val KEY_BIOMETRIC_PREF = "app_lock_biometric_enabled"
+    private const val KEY_WALLPAPER_URI = "app_lock_wallpaper_uri"
+    private const val KEY_WALLPAPER_DIMMING = "app_lock_wallpaper_dimming"
+
+    const val DEFAULT_WALLPAPER = "file:///android_asset/wallpaper/wallpaper_2.jpg"
+    const val DEFAULT_DIMMING = 0.45f
 
     private val _isSessionUnlocked = MutableStateFlow(false)
     val isSessionUnlocked: StateFlow<Boolean> = _isSessionUnlocked.asStateFlow()
@@ -123,6 +128,26 @@ object SecurityPinManager {
     /** Locks the current session (e.g. when app goes to background). */
     fun lockSession() {
         _isSessionUnlocked.value = false
+    }
+
+    /** Returns the active lock screen wallpaper URI. */
+    fun getWallpaperUri(context: Context): String {
+        return getPrefs(context).getString(KEY_WALLPAPER_URI, DEFAULT_WALLPAPER) ?: DEFAULT_WALLPAPER
+    }
+
+    /** Updates the active lock screen wallpaper URI. */
+    fun setWallpaperUri(context: Context, uri: String) {
+        getPrefs(context).edit().putString(KEY_WALLPAPER_URI, uri).apply()
+    }
+
+    /** Returns the active lock screen dimming level (0.0f - 0.85f). */
+    fun getWallpaperDimming(context: Context): Float {
+        return getPrefs(context).getFloat(KEY_WALLPAPER_DIMMING, DEFAULT_DIMMING)
+    }
+
+    /** Updates the active lock screen dimming level. */
+    fun setWallpaperDimming(context: Context, dimming: Float) {
+        getPrefs(context).edit().putFloat(KEY_WALLPAPER_DIMMING, dimming.coerceIn(0f, 0.85f)).apply()
     }
 
     private fun hashPin(pin: String, saltBase64: String): String {
