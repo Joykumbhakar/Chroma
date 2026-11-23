@@ -52,6 +52,21 @@ fun SecurityScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var isDeletingAccount by remember { mutableStateOf(false) }
 
+    var showAppLockerScreen by remember { mutableStateOf(false) }
+    var appLockerCount by remember { mutableIntStateOf(com.chroma.studio.security.applock.AppLockerManager.getLockedCount(context)) }
+    var appLockerMasterEnabled by remember { mutableStateOf(com.chroma.studio.security.applock.AppLockerManager.isEnabled(context)) }
+
+    if (showAppLockerScreen) {
+        AppLockerScreen(
+            onBack = {
+                showAppLockerScreen = false
+                appLockerCount = com.chroma.studio.security.applock.AppLockerManager.getLockedCount(context)
+                appLockerMasterEnabled = com.chroma.studio.security.applock.AppLockerManager.isEnabled(context)
+            }
+        )
+        return
+    }
+
     LaunchedEffect(unrecognizedLogins) {
         hasChanges = (unrecognizedLogins != profile.unrecognizedLoginsEnabled)
     }
@@ -173,6 +188,20 @@ fun SecurityScreen(
                         valueText = if (hasPinConfigured) "Configured" else "Set Up",
                         onClick = {
                             showPinSetupDialog = true
+                        }
+                    )
+
+                    AppleSettingDivider()
+
+                    AppleSettingNavRow(
+                        title = "App Locker",
+                        subtitle = if (appLockerMasterEnabled && appLockerCount > 0) "$appLockerCount apps locked with Oscellion Lock Screen" else "Lock other apps on your device with PIN & Biometrics",
+                        icon = Lucide.ShieldCheck,
+                        iconGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE)),
+                        valueText = if (appLockerMasterEnabled) "$appLockerCount Locked" else "Configure",
+                        onClick = {
+                            SoundManager.playReaction()
+                            showAppLockerScreen = true
                         }
                     )
 

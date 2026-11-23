@@ -17,5 +17,14 @@
         <item name="postSplashScreenTheme">@style/Theme.Oscellion</item>
     </style>
 
+    <!-- Transparent theme for App Lock overlay activity -->
+    <style name="Theme.Oscellion.Transparent" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
 
 </resources>
