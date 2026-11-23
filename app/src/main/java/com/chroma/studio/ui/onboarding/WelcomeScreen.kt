@@ -1,844 +1,713 @@
 package com.chroma.studio.ui.onboarding
 
+import android.widget.Toast
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.R
 import com.chroma.studio.ui.theme.InterFontFamily
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
-import kotlinx.coroutines.launch
-
-val TheSignatureFont = FontFamily(Font(R.font.thesignature))
-
-enum class WelcomeFeatureDetailType {
-    CANVAS,
-    COMMUNITY,
-    ENCRYPTION
-}
 
 /**
- * Recreated Apple-grade Welcome / Onboarding Screen for Chroma Studio.
- * Faithfully matches the exact design from chroma_studio_onboarding_ui.html:
- * - Fluid silk wave gradient background with animated breathing curves
- * - Crisp "Chroma Studio" gradient typography
- * - Frosted white 32dp feature card with 3D pastel squircle icons:
- *     1. Creative Canvas (Pastel Blue Squircle with Palette)
- *     2. Global Community (Pastel Lavender Squircle with Community)
- *     3. Encrypted Messaging (Pastel Mint Squircle with Emerald Shield)
- * - Symmetrically aligned glossy pill action buttons:
- *     1. Continue with Google (Glossy Google Blue Gradient + White Badge + Right Translucent Chevron)
- *     2. Create a new account (Frosted White Glass + Blue UserPlus Icon + Chevron)
- *     3. Explore Studio as Guest (Frosted White Glass + Blue Sparkles Cluster + Chevron)
- * - Sign in with Email • Create Account footer links & legal terms
- * - Interactive feature detail modal sheets with live status preview cards
+ * Pixel-perfect Login & Sign Up Screen for Oscellion.
+ * Built using the Oscellion Design System & Brand Identity:
+ * - 3D Character Hero on frosted obsidian/titanium glass sphere with floating media badges
+ * - Smooth dynamic gradient blending into the app's canvas background
+ * - Luminous Oscellion brand gradient title and subtitle
+ * - "Continue with Google" glossy pill with multicolor Google logo and arrow
+ * - Subtle "OR" horizontal divider
+ * - Dynamic system tokenized input fields (Username & Password) with visibility toggle
+ * - Mode switch between "Create an Account" and "Sign In"
+ * - "Continue without Account" frosted secondary pill button
+ * - Legal disclaimer footer with clickable "Terms & Conditions" and "Privacy Policy" links
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WelcomeScreen(
-    savedAccountName: String?,
-    googleLoading: Boolean,
+    savedAccountName: String? = null,
+    googleLoading: Boolean = false,
     appleLoading: Boolean = false,
-    onContinueSaved: () -> Unit,
-    onGoogle: () -> Unit,
+    isSubmitting: Boolean = false,
+    onContinueSaved: () -> Unit = {},
+    onGoogle: () -> Unit = {},
     onApple: () -> Unit = {},
-    onCreateAccount: () -> Unit,
+    onCreateAccount: () -> Unit = {},
     onSignInExisting: () -> Unit = {},
     onExploreGuest: () -> Unit = {},
-    onTerms: () -> Unit
+    onTerms: () -> Unit = {},
+    onSignUpWithCredentials: ((username: String, password: String) -> Unit)? = null,
+    onSignInWithCredentials: ((username: String, password: String) -> Unit)? = null
 ) {
-    val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
+    val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val colors = LocalOscellionColors.current
     val isDark = colors.isDark
 
-    val textPrimary = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0A1122)
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF516079)
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var isSignUpMode by remember { mutableStateOf(true) }
 
-    var activeDetailSheet by remember { mutableStateOf<WelcomeFeatureDetailType?>(null) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scrollState = rememberScrollState()
+
+    // Google Button Animation
+    val googleInteraction = remember { MutableInteractionSource() }
+    val googlePressed by googleInteraction.collectIsPressedAsState()
+    val googleScale by animateFloatAsState(
+        targetValue = if (googlePressed) 0.975f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioLowBouncy),
+        label = "googleScale"
+    )
+
+    // Primary Button Animation
+    val primaryInteraction = remember { MutableInteractionSource() }
+    val primaryPressed by primaryInteraction.collectIsPressedAsState()
+    val primaryScale by animateFloatAsState(
+        targetValue = if (primaryPressed) 0.975f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioLowBouncy),
+        label = "primaryScale"
+    )
+
+    // Guest Button Animation
+    val guestInteraction = remember { MutableInteractionSource() }
+    val guestPressed by guestInteraction.collectIsPressedAsState()
+    val guestScale by animateFloatAsState(
+        targetValue = if (guestPressed) 0.975f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioLowBouncy),
+        label = "guestScale"
+    )
+
+    fun handlePrimarySubmit() {
+        val cleanUser = username.trim()
+        val cleanPass = password.trim()
+
+        if (cleanUser.isEmpty() && cleanPass.isEmpty()) {
+            if (isSignUpMode) {
+                onCreateAccount()
+            } else {
+                onSignInExisting()
+            }
+            return
+        }
+
+        if (cleanUser.length < 3) {
+            Toast.makeText(context, "Username must be at least 3 characters", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (cleanPass.length < 6) {
+            Toast.makeText(context, "Password must be at least 6 characters", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        focusManager.clearFocus()
+        if (isSignUpMode) {
+            if (onSignUpWithCredentials != null) {
+                onSignUpWithCredentials(cleanUser, cleanPass)
+            } else {
+                onCreateAccount()
+            }
+        } else {
+            if (onSignInWithCredentials != null) {
+                onSignInWithCredentials(cleanUser, cleanPass)
+            } else {
+                onSignInExisting()
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(colors.bg)
     ) {
-        // ── FLUID SILK WAVE BACKGROUND ──────────────────────────────────────────
-        ChromaSilkWaveBackground(isDark = isDark)
+        // Ambient Brand Glow behind Hero
+        Box(
+            modifier = Modifier
+                .size(380.dp)
+                .offset(x = (-60).dp, y = (-70).dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            colors.primary.copy(alpha = if (isDark) 0.22f else 0.12f),
+                            colors.primaryDark.copy(alpha = if (isDark) 0.08f else 0.04f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = CircleShape
+                )
+        )
 
-        BoxWithConstraints(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .imePadding()
+                .verticalScroll(scrollState),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            val screenHeight = maxHeight
-            val scrollState = rememberScrollState()
-
-            Column(
+            // ─── 1. HERO 3D CHARACTER SECTION ─────────────────────────────
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scrollState)
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxWidth()
+                    .height(350.dp)
             ) {
-                Column(
+                Image(
+                    painter = painterResource(R.drawable.hero_oscellion_auth),
+                    contentDescription = "Oscellion Hero Character",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Smooth bottom gradient overlay fading into the design system background color
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .defaultMinSize(minHeight = screenHeight - 20.dp),
-                    verticalArrangement = Arrangement.SpaceBetween,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // ── 1. CLEAN ONE UI TITLE HEADER ─────────────────────────────
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 32.dp, bottom = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        val oneUiBlue = Color(0xFF0381FE)
-                        val iconContainerBg = if (isDark) oneUiBlue.copy(alpha = 0.18f) else oneUiBlue.copy(alpha = 0.10f)
-                        val dividerColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFECEFF4)
-
-                        Text(
-                            text = buildAnnotatedString {
-                                append("Chroma ")
-                                withStyle(SpanStyle(color = oneUiBlue)) {
-                                    append("Studio")
-                                }
-                            },
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = textPrimary,
-                            letterSpacing = (-0.6).sp,
-                            textAlign = TextAlign.Center,
-                            fontFamily = InterFontFamily
-                        )
-
-                        Spacer(Modifier.height(6.dp))
-
-                        Text(
-                            text = "Where creativity meets community.",
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = textMuted,
-                            letterSpacing = (-0.2).sp,
-                            textAlign = TextAlign.Center,
-                            fontFamily = InterFontFamily
-                        )
-
-                        Spacer(Modifier.height(20.dp))
-
-                        // ── 2. CLEAN ONE UI FOCUS BLOCK FEATURE CARD ─────────────────
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(26.dp))
-                                .background(if (isDark) Color(0xFF17171A) else Color.White)
-                                .border(
-                                    1.dp,
-                                    if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB),
-                                    RoundedCornerShape(26.dp)
+                        .height(130.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    colors.bg.copy(alpha = 0.45f),
+                                    colors.bg.copy(alpha = 0.85f),
+                                    colors.bg
                                 )
-                                .padding(horizontal = 8.dp, vertical = 6.dp)
-                        ) {
-                            Column {
-                                // Row 1: Creative Canvas
-                                ChromaFeatureRow(
-                                    title = "Creative Canvas",
-                                    subtitle = "Multi-layer studio with real-time shader rendering",
-                                    iconBgColor = iconContainerBg,
-                                    iconVector = Lucide.Palette,
-                                    iconTint = oneUiBlue,
-                                    isDark = isDark,
-                                    onClick = { activeDetailSheet = WelcomeFeatureDetailType.CANVAS }
-                                )
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp)
-                                        .height(1.dp)
-                                        .background(dividerColor)
-                                )
-
-                                // Row 2: Global Community
-                                ChromaFeatureRow(
-                                    title = "Global Community",
-                                    subtitle = "Explore trending masterworks, video drops & remixes",
-                                    iconBgColor = iconContainerBg,
-                                    iconVector = Lucide.Users,
-                                    iconTint = oneUiBlue,
-                                    isDark = isDark,
-                                    onClick = { activeDetailSheet = WelcomeFeatureDetailType.COMMUNITY }
-                                )
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp)
-                                        .height(1.dp)
-                                        .background(dividerColor)
-                                )
-
-                                // Row 3: Encrypted Messaging
-                                ChromaFeatureRow(
-                                    title = "Encrypted Messaging",
-                                    subtitle = "End-to-end encrypted direct chats, audio & media",
-                                    iconBgColor = iconContainerBg,
-                                    iconVector = Lucide.ShieldCheck,
-                                    iconTint = oneUiBlue,
-                                    isDark = isDark,
-                                    onClick = { activeDetailSheet = WelcomeFeatureDetailType.ENCRYPTION }
-                                )
-                            }
-                        }
-                    }
-
-                    // ── 3. CLEAN & PROFESSIONAL ACTION BUTTONS ───────
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp, bottom = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Optional: Saved Account Quick Login
-                        if (!savedAccountName.isNullOrBlank()) {
-                            WelcomeQuickResumePill(
-                                accountName = savedAccountName,
-                                onClick = onContinueSaved
                             )
-                        }
-
-                        // Button 1: Continue with Google (Primary - Clean & Centered)
-                        GlossyGooglePillButton(
-                            text = "Continue with Google",
-                            loading = googleLoading,
-                            onClick = onGoogle
                         )
-
-                        // Button 2: Sign in with Email (Secondary - Frosted Glass Pill)
-                        GlossySecondaryPillButton(
-                            text = "Sign in with Email",
-                            iconVector = Lucide.Mail,
-                            isDark = isDark,
-                            onClick = onSignInExisting
-                        )
-
-                        // Subtle Divider with "or"
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(0.8.dp)
-                                    .background(if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0))
-                            )
-                            Text(
-                                text = "or",
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = textMuted
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(0.8.dp)
-                                    .background(if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0))
-                            )
-                        }
-
-                        // Button 3: Create a new account
-                        GlossySecondaryPillButton(
-                            text = "Create a new account",
-                            iconVector = Lucide.UserPlus,
-                            isDark = isDark,
-                            onClick = onCreateAccount
-                        )
-
-                        // Subtle "Explore Studio as Guest"
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(999.dp))
-                                .clickable(role = Role.Button, onClick = onExploreGuest)
-                                .padding(horizontal = 16.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Sparkles,
-                                contentDescription = null,
-                                tint = textMuted,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Text(
-                                text = "Explore Studio as Guest",
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = textMuted,
-                                letterSpacing = (-0.2).sp
-                            )
-                        }
-
-                        Spacer(Modifier.height(2.dp))
-
-                        // Terms and Privacy Policy Footer
-                        Text(
-                            text = buildAnnotatedString {
-                                append("By continuing, you agree to our ")
-                                withStyle(SpanStyle(color = Color(0xFF0B63F6), fontWeight = FontWeight.SemiBold)) {
-                                    append("Terms")
-                                }
-                                append(" and ")
-                                withStyle(SpanStyle(color = Color(0xFF0B63F6), fontWeight = FontWeight.SemiBold)) {
-                                    append("Privacy Policy")
-                                }
-                            },
-                            color = textMuted,
-                            fontSize = 12.sp,
-                            letterSpacing = (-0.2).sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable(role = Role.Button, onClick = onTerms)
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    // ── FEATURE DETAILS INTERACTIVE MODAL SHEET ─────────────────────────────
-    if (activeDetailSheet != null) {
-        val detail = activeDetailSheet!!
-        ModalBottomSheet(
-            onDismissRequest = { activeDetailSheet = null },
-            sheetState = sheetState,
-            containerColor = if (isDark) Color(0xFF131B2C) else Color(0xFFF9FBFF),
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-            dragHandle = {
-                Box(
-                    modifier = Modifier
-                        .padding(vertical = 12.dp)
-                        .width(42.dp)
-                        .height(4.5.dp)
-                        .clip(CircleShape)
-                        .background(if (isDark) Color(0x33FFFFFF) else Color(0xFFCBD5E1))
                 )
             }
-        ) {
-            WelcomeFeatureDetailSheetContent(
-                detailType = detail,
-                isDark = isDark,
-                onClose = { activeDetailSheet = null }
-            )
-        }
-    }
-}
 
-/**
- * Clean One UI solid neutral surface background — no distracting gradients or blobs.
- */
-@Composable
-private fun ChromaSilkWaveBackground(isDark: Boolean) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(if (isDark) Color(0xFF080808) else Color(0xFFF7F8FA))
-    )
-}
-
-/**
- * Clean One UI Feature Row with unified icon tile and subtle chevron.
- */
-@Composable
-private fun ChromaFeatureRow(
-    title: String,
-    subtitle: String,
-    iconBgColor: Color,
-    iconVector: ImageVector,
-    iconTint: Color,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val isPressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.985f else 1f,
-        animationSpec = spring(dampingRatio = 0.75f, stiffness = 500f),
-        label = "feature_row_press"
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        // Unified One UI Squircle Icon
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(iconBgColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = iconVector,
-                contentDescription = title,
-                tint = iconTint,
-                modifier = Modifier.size(21.dp)
-            )
-        }
-
-        // Text Content
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF111827),
-                letterSpacing = (-0.2).sp,
-                fontFamily = InterFontFamily
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.Normal,
-                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                lineHeight = 16.5.sp,
-                fontFamily = InterFontFamily
-            )
-        }
-
-        // Right Circular Chevron Button
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(CircleShape)
-                .background(if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Lucide.ChevronRight,
-                contentDescription = "Details",
-                tint = if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
-                modifier = Modifier.size(15.dp)
-            )
-        }
-    }
-}
-
-/**
- * Primary Solid One UI Blue Pill Button.
- */
-@Composable
-private fun GlossyGooglePillButton(
-    text: String,
-    loading: Boolean,
-    onClick: () -> Unit
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val isPressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 450f),
-        label = "google_press"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(54.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(RoundedCornerShape(999.dp))
-            .background(Color(0xFF0381FE))
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                enabled = !loading,
-                role = Role.Button,
-                onClick = onClick
-            )
-            .padding(horizontal = 16.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        if (loading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                color = Color.White,
-                strokeWidth = 2.2.dp
-            )
-        } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            // ─── 2. HEADLINE & BRANDING ──────────────────────────────────
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Text(
+                    text = "Welcome to",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textMain,
+                    letterSpacing = (-0.3).sp,
+                    fontFamily = InterFontFamily
+                )
+                Spacer(Modifier.height(1.dp))
+                Text(
+                    text = "Oscellion",
+                    fontSize = 40.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.8).sp,
+                    style = TextStyle(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xFF38B6FF),
+                                colors.primary,
+                                Color(0xFF7C3AED),
+                                Color(0xFFA855F7)
+                            )
+                        )
+                    ),
+                    fontFamily = InterFontFamily
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Create • Share • Explore",
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.textMuted,
+                    letterSpacing = 0.5.sp,
+                    fontFamily = InterFontFamily
+                )
+            }
+
+            Spacer(Modifier.height(26.dp))
+
+            // ─── 3. FORM CONTROLS & ACTION BUTTONS ───────────────────────
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Continue with Google Button (Crisp White Pill)
                 Box(
                     modifier = Modifier
-                        .size(26.dp)
-                        .clip(CircleShape)
-                        .background(Color.White),
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .graphicsLayer {
+                            scaleX = googleScale
+                            scaleY = googleScale
+                        }
+                        .clip(RoundedCornerShape(colors.pillCornerRadius))
+                        .background(if (isDark) Color.White else Color.White)
+                        .clickable(
+                            enabled = !googleLoading,
+                            interactionSource = googleInteraction,
+                            indication = null,
+                            onClick = onGoogle
+                        )
+                        .border(
+                            1.dp,
+                            if (isDark) Color.Transparent else Color(0xFFE2E8F0),
+                            RoundedCornerShape(colors.pillCornerRadius)
+                        )
+                        .padding(horizontal = 18.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_google_logo),
-                        contentDescription = "Google",
-                        modifier = Modifier.size(16.dp)
+                    if (googleLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = Color(0xFF0F172A),
+                            strokeWidth = 2.4.dp
+                        )
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Image(
+                                painter = painterResource(R.drawable.ic_google_logo),
+                                contentDescription = "Google Logo",
+                                modifier = Modifier.size(24.dp)
+                            )
+
+                            Spacer(Modifier.width(14.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(24.dp)
+                                    .background(Color(0xFFE2E8F0))
+                            )
+
+                            Text(
+                                text = "Continue with Google",
+                                color = Color(0xFF0F172A),
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = InterFontFamily,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 8.dp),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Icon(
+                                imageVector = Lucide.ArrowRight,
+                                contentDescription = null,
+                                tint = Color(0xFF0F172A),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                // OR Divider
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(1.dp)
+                            .background(colors.cardBorderSubtle)
+                    )
+                    Text(
+                        text = "OR",
+                        color = colors.textMuted,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                        fontFamily = InterFontFamily
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(1.dp)
+                            .background(colors.cardBorderSubtle)
                     )
                 }
 
-                Text(
-                    text = text,
-                    color = Color.White,
-                    fontSize = 15.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = (-0.2).sp,
-                    fontFamily = InterFontFamily
-                )
-            }
-        }
-    }
-}
-
-/**
- * Secondary Clean One UI Surface Pill Button.
- */
-@Composable
-private fun GlossySecondaryPillButton(
-    text: String,
-    iconVector: ImageVector,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val isPressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 450f),
-        label = "sec_press"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(RoundedCornerShape(999.dp))
-            .background(if (isDark) Color(0xFF17171A) else Color.White)
-            .border(
-                1.dp,
-                if (isDark) Color.White.copy(alpha = 0.10f) else Color(0xFFE5E7EB),
-                RoundedCornerShape(999.dp)
-            )
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                role = Role.Button,
-                onClick = onClick
-            )
-            .padding(horizontal = 16.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                imageVector = iconVector,
-                contentDescription = null,
-                tint = Color(0xFF0381FE),
-                modifier = Modifier.size(19.dp)
-            )
-
-            Text(
-                text = text,
-                color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF111827),
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-0.2).sp,
-                fontFamily = InterFontFamily
-            )
-        }
-    }
-}
-
-/**
- * High-prominence quick-resume pill for saved accounts.
- */
-@Composable
-private fun WelcomeQuickResumePill(
-    accountName: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    height: Dp = 54.dp
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.98f else 1f,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 450f),
-        label = "resume_press"
-    )
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(CircleShape)
-            .background(Color(0xFF0381FE))
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                role = Role.Button,
-                onClick = onClick
-            )
-            .padding(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.AccountCircle,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(22.dp)
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            text = "Continue as $accountName",
-            color = Color.White,
-            fontSize = 15.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = (-0.3).sp,
-            fontFamily = InterFontFamily
-        )
-    }
-}
-
-/**
- * Feature Details Modal Bottom Sheet Content matching the script data in HTML.
- */
-@Composable
-private fun WelcomeFeatureDetailSheetContent(
-    detailType: WelcomeFeatureDetailType,
-    isDark: Boolean,
-    onClose: () -> Unit
-) {
-    val title = when (detailType) {
-        WelcomeFeatureDetailType.CANVAS -> "Creative Canvas"
-        WelcomeFeatureDetailType.COMMUNITY -> "Global Community"
-        WelcomeFeatureDetailType.ENCRYPTION -> "Encrypted Messaging"
-    }
-    val subtitle = when (detailType) {
-        WelcomeFeatureDetailType.CANVAS -> "120Hz Real-Time Shader & Layer Engine"
-        WelcomeFeatureDetailType.COMMUNITY -> "Masterworks, Video Drops & Remixes"
-        WelcomeFeatureDetailType.ENCRYPTION -> "Zero-Knowledge Direct Collaboration"
-    }
-    val badge = when (detailType) {
-        WelcomeFeatureDetailType.CANVAS -> "GLSL + Metal/WebGPU"
-        WelcomeFeatureDetailType.COMMUNITY -> "24.8k Active Creators"
-        WelcomeFeatureDetailType.ENCRYPTION -> "X25519 + AES-256-GCM"
-    }
-    val body = when (detailType) {
-        WelcomeFeatureDetailType.CANVAS -> "Combine node-based procedural shaders, vector brushes, and non-destructive blend modes with zero latency."
-        WelcomeFeatureDetailType.COMMUNITY -> "Fork any open project on the discovery feed, inspect full layer trees, and publish your own interactive shader drops."
-        WelcomeFeatureDetailType.ENCRYPTION -> "Share uncompressed project files, voice notes, and direct messages protected by audited end-to-end encryption."
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        // Header Row: Title + Badge + Close button
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = title,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDark) Color(0xFFF1F5F9) else Color(0xFF0D1526),
-                    letterSpacing = (-0.4).sp,
-                    fontFamily = InterFontFamily
-                )
-                Text(
-                    text = subtitle,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF0B63F6),
-                    fontFamily = InterFontFamily
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(Color(0xFF0B63F6).copy(alpha = 0.12f))
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = badge,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0B63F6)
-                )
-            }
-        }
-
-        // Clean One UI preview banner
-        val oneUiBlue = Color(0xFF0381FE)
-        val previewLabel = when (detailType) {
-            WelcomeFeatureDetailType.CANVAS -> "Live Shader Pipeline Ready"
-            WelcomeFeatureDetailType.COMMUNITY -> "Global Discovery Feed"
-            WelcomeFeatureDetailType.ENCRYPTION -> "Device Keys Verified on Enclave"
-        }
-        val previewBadge = when (detailType) {
-            WelcomeFeatureDetailType.CANVAS -> "120 FPS"
-            WelcomeFeatureDetailType.COMMUNITY -> "+1,420 remixes today"
-            WelcomeFeatureDetailType.ENCRYPTION -> "E2EE"
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(if (isDark) Color(0xFF1E2430) else Color(0xFFEFF6FF))
-                .border(1.dp, oneUiBlue.copy(alpha = 0.22f), RoundedCornerShape(16.dp))
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+                // Username Input Field (Design System Tokenized)
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(oneUiBlue)
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(colors.pillCornerRadius))
+                        .background(colors.inputBg)
+                        .border(1.dp, colors.inputBorder, RoundedCornerShape(colors.pillCornerRadius))
+                        .padding(horizontal = 18.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Lucide.User,
+                            contentDescription = null,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (username.isEmpty()) {
+                                Text(
+                                    text = "Username",
+                                    color = colors.textMuted.copy(alpha = 0.7f),
+                                    fontSize = 15.sp,
+                                    fontFamily = InterFontFamily
+                                )
+                            }
+                            BasicTextField(
+                                value = username,
+                                onValueChange = { username = it },
+                                singleLine = true,
+                                textStyle = TextStyle(
+                                    color = colors.textMain,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = InterFontFamily
+                                ),
+                                cursorBrush = SolidColor(colors.primary),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Text,
+                                    imeAction = ImeAction.Next
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Password Input Field (Design System Tokenized)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(colors.pillCornerRadius))
+                        .background(colors.inputBg)
+                        .border(1.dp, colors.inputBorder, RoundedCornerShape(colors.pillCornerRadius))
+                        .padding(horizontal = 18.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Lock,
+                            contentDescription = null,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (password.isEmpty()) {
+                                Text(
+                                    text = "Password",
+                                    color = colors.textMuted.copy(alpha = 0.7f),
+                                    fontSize = 15.sp,
+                                    fontFamily = InterFontFamily
+                                )
+                            }
+                            BasicTextField(
+                                value = password,
+                                onValueChange = { password = it },
+                                singleLine = true,
+                                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                textStyle = TextStyle(
+                                    color = colors.textMain,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = InterFontFamily
+                                ),
+                                cursorBrush = SolidColor(colors.primary),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Password,
+                                    imeAction = ImeAction.Done
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = { handlePrimarySubmit() }
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        Icon(
+                            imageVector = if (passwordVisible) Lucide.EyeOff else Lucide.Eye,
+                            contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                            tint = colors.textMuted,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { passwordVisible = !passwordVisible }
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Primary Button ("Create an Account" / "Sign In")
+                val primaryGradient = Brush.horizontalGradient(
+                    colors = listOf(
+                        colors.primaryHover,
+                        colors.primary,
+                        colors.primaryDark
+                    )
                 )
-                Text(
-                    text = previewLabel,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .graphicsLayer {
+                            scaleX = primaryScale
+                            scaleY = primaryScale
+                        }
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = CircleShape,
+                            ambientColor = colors.primary.copy(alpha = 0.35f),
+                            spotColor = colors.primary.copy(alpha = 0.55f)
+                        )
+                        .clip(RoundedCornerShape(colors.pillCornerRadius))
+                        .background(primaryGradient)
+                        .clickable(
+                            enabled = !isSubmitting,
+                            interactionSource = primaryInteraction,
+                            indication = null,
+                            onClick = { handlePrimarySubmit() }
+                        )
+                        .padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = colors.onPrimary,
+                            strokeWidth = 2.4.dp
+                        )
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = if (isSignUpMode) "Create an Account" else "Sign In",
+                                color = colors.onPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = InterFontFamily,
+                                modifier = Modifier.weight(1f),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Icon(
+                                imageVector = Lucide.ArrowRight,
+                                contentDescription = null,
+                                tint = colors.onPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                // Mode Switch Link ("Already have an account? Sign In" / "Need an account? Create an Account")
+                Row(
+                    modifier = Modifier
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { isSignUpMode = !isSignUpMode }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isSignUpMode) "Already have an account? " else "Need a new account? ",
+                        color = colors.textMuted,
+                        fontSize = 13.sp,
+                        fontFamily = InterFontFamily
+                    )
+                    Text(
+                        text = if (isSignUpMode) "Sign In" else "Create an Account",
+                        color = colors.primary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = InterFontFamily
+                    )
+                }
+
+                Spacer(Modifier.height(6.dp))
+
+                // Continue without Account Button (Frosted Obsidian Secondary Pill)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .graphicsLayer {
+                            scaleX = guestScale
+                            scaleY = guestScale
+                        }
+                        .clip(RoundedCornerShape(colors.pillCornerRadius))
+                        .background(colors.glassBg.copy(alpha = 0.65f))
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(colors.pillCornerRadius))
+                        .clickable(
+                            interactionSource = guestInteraction,
+                            indication = null,
+                            onClick = onExploreGuest
+                        )
+                        .padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Continue without Account",
+                            color = colors.textMain,
+                            fontSize = 15.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = InterFontFamily,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center
+                        )
+
+                        Icon(
+                            imageVector = Lucide.ChevronRight,
+                            contentDescription = null,
+                            tint = colors.textMain,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // ─── 4. LEGAL DISCLAIMER FOOTER ──────────────────────────────
+                val termsText = buildAnnotatedString {
+                    withStyle(
+                        SpanStyle(
+                            color = colors.textMuted,
+                            fontSize = 12.sp,
+                            fontFamily = InterFontFamily
+                        )
+                    ) {
+                        append("By continuing, you agree to our\n")
+                    }
+
+                    pushStringAnnotation(tag = "TERMS", annotation = "terms")
+                    withStyle(
+                        SpanStyle(
+                            color = colors.primary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textDecoration = TextDecoration.Underline,
+                            fontFamily = InterFontFamily
+                        )
+                    ) {
+                        append("Terms & Conditions")
+                    }
+                    pop()
+
+                    withStyle(
+                        SpanStyle(
+                            color = colors.textMuted,
+                            fontSize = 12.sp,
+                            fontFamily = InterFontFamily
+                        )
+                    ) {
+                        append(" and ")
+                    }
+
+                    pushStringAnnotation(tag = "PRIVACY", annotation = "privacy")
+                    withStyle(
+                        SpanStyle(
+                            color = colors.primary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textDecoration = TextDecoration.Underline,
+                            fontFamily = InterFontFamily
+                        )
+                    ) {
+                        append("Privacy Policy")
+                    }
+                    pop()
+                }
+
+                ClickableText(
+                    text = termsText,
+                    onClick = { offset ->
+                        termsText.getStringAnnotations(tag = "TERMS", start = offset, end = offset)
+                            .firstOrNull()?.let { onTerms() }
+                        termsText.getStringAnnotations(tag = "PRIVACY", start = offset, end = offset)
+                            .firstOrNull()?.let { onTerms() }
+                    },
+                    style = TextStyle(textAlign = TextAlign.Center),
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
             }
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(oneUiBlue)
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            ) {
-                Text(previewBadge, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        // Body description
-        Text(
-            text = body,
-            fontSize = 14.sp,
-            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF5B687C),
-            lineHeight = 20.sp,
-            fontFamily = InterFontFamily
-        )
-
-        Spacer(Modifier.height(4.dp))
-
-        // Solid One UI Continue button
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(oneUiBlue)
-                .clickable(onClick = onClose),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Continue",
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-0.2).sp
-            )
         }
     }
 }

@@ -290,6 +290,7 @@ fun OscellionOnboardingScreen(
                         savedAccountName = savedAccountName,
                         googleLoading = isGoogleLoading,
                         appleLoading = isAppleLoading,
+                        isSubmitting = isConfirmingLoading,
                         onContinueSaved = {
                             if (primarySaved != null) {
                                 launchGoogleSignIn(AuthIntentMode.LOGIN)
@@ -308,7 +309,82 @@ fun OscellionOnboardingScreen(
                             currentScreenState = AuthScreenState.SIGN_IN_EMAIL
                         },
                         onExploreGuest = { enterAsGuest() },
-                        onTerms = { showTermsModal = true }
+                        onTerms = { showTermsModal = true },
+                        onSignUpWithCredentials = { uname, pwd ->
+                            scope.launch {
+                                isConfirmingLoading = true
+                                try {
+                                    val isAvailable = discoverRepo.checkUsernameAvailable(uname)
+                                    if (!isAvailable) {
+                                        Toast.makeText(context, "Username @$uname is already taken. Please try another.", Toast.LENGTH_LONG).show()
+                                        return@launch
+                                    }
+                                    val customEmail = "${uname.trim().lowercase()}@oscellion.com"
+                                    val authResult = auth.createUserWithEmailAndPassword(customEmail, pwd).await()
+                                    val user = authResult.user
+                                    if (user != null) {
+                                        val newProfile = UserProfile(
+                                            uid = user.uid,
+                                            username = uname.trim().lowercase(),
+                                            displayName = uname.trim(),
+                                            email = customEmail,
+                                            createdAt = System.currentTimeMillis()
+                                        )
+                                        discoverRepo.updateUserProfile(newProfile)
+                                        val savedAcc = SavedAccount(
+                                            uid = user.uid,
+                                            username = newProfile.username,
+                                            displayName = newProfile.displayName,
+                                            avatarUrl = "",
+                                            email = newProfile.email,
+                                            lastLoginMillis = System.currentTimeMillis(),
+                                            gender = "UNSPECIFIED"
+                                        )
+                                        SavedAccountManager.saveAccount(context, savedAcc)
+                                        com.chroma.studio.ChatStateManager.setCurrentUserId(user.uid)
+                                        com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+                                        Toast.makeText(context, "Welcome to Oscellion, ${newProfile.displayName}!", Toast.LENGTH_SHORT).show()
+                                        onLoginSuccess()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Sign up failed: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
+                                } finally {
+                                    isConfirmingLoading = false
+                                }
+                            }
+                        },
+                        onSignInWithCredentials = { uname, pwd ->
+                            scope.launch {
+                                isConfirmingLoading = true
+                                try {
+                                    val clean = uname.trim().lowercase()
+                                    val resolvedEmail = if (clean.contains("@")) clean else "$clean@oscellion.com"
+                                    val authResult = auth.signInWithEmailAndPassword(resolvedEmail, pwd).await()
+                                    val user = authResult.user
+                                    if (user != null) {
+                                        val prof = discoverRepo.getUserProfile(user.uid)
+                                        val savedAcc = SavedAccount(
+                                            uid = user.uid,
+                                            username = prof?.username ?: clean.substringBefore("@"),
+                                            displayName = prof?.displayName ?: clean.substringBefore("@"),
+                                            avatarUrl = prof?.avatarUrl ?: "",
+                                            email = user.email ?: resolvedEmail,
+                                            lastLoginMillis = System.currentTimeMillis(),
+                                            gender = "UNSPECIFIED"
+                                        )
+                                        SavedAccountManager.saveAccount(context, savedAcc)
+                                        com.chroma.studio.ChatStateManager.setCurrentUserId(user.uid)
+                                        com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+                                        Toast.makeText(context, "Welcome back, ${savedAcc.displayName}!", Toast.LENGTH_SHORT).show()
+                                        onLoginSuccess()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Sign in failed: ${e.localizedMessage ?: "Invalid credentials"}", Toast.LENGTH_LONG).show()
+                                } finally {
+                                    isConfirmingLoading = false
+                                }
+                            }
+                        }
                     )
                 }
 
