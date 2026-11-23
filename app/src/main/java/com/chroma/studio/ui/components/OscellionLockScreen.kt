@@ -50,6 +50,10 @@ import com.chroma.studio.chat.util.findActivity
 import com.chroma.studio.security.SecurityPinManager
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.*
+import dev.chrisbanes.haze.HazeDefaults
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -104,6 +108,9 @@ fun OscellionLockScreen(
             }
         }
     }
+
+    val hazeState = remember { HazeState() }
+    val useBlur = rememberUseRealtimeBlur()
 
     // Wallpaper and dimming customization state
     var wallpaperUri by remember { mutableStateOf(SecurityPinManager.getWallpaperUri(context)) }
@@ -308,25 +315,31 @@ fun OscellionLockScreen(
             }
     ) {
         // =========================================================================
-        // 1. SHARED WALLPAPER & DIMMING SERVICE LAYER
+        // 1. SHARED WALLPAPER & DIMMING SERVICE LAYER (REAL-TIME HAZE BLUR SOURCE)
         // =========================================================================
-        AsyncImage(
-            model = if (isWallpaperEditing) pendingWallpaperUri else wallpaperUri,
-            contentDescription = "Lock Screen Wallpaper",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Real-Time Dimming Overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Color.Black.copy(
-                        alpha = if (isWallpaperEditing) pendingDimming else wallpaperDimming
+                .then(if (useBlur) Modifier.haze(hazeState) else Modifier)
+        ) {
+            AsyncImage(
+                model = if (isWallpaperEditing) pendingWallpaperUri else wallpaperUri,
+                contentDescription = "Lock Screen Wallpaper",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Real-Time Dimming Overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Color.Black.copy(
+                            alpha = if (isWallpaperEditing) pendingDimming else wallpaperDimming
+                        )
                     )
-                )
-        )
+            )
+        }
 
         // =========================================================================
         // 2. MAIN ACTIVE SCREEN CONTENT CONTAINER (ZOOMABLE)
@@ -478,12 +491,25 @@ fun OscellionLockScreen(
                                                 scaleY = bioScale
                                             }
                                             .clip(CircleShape)
+                                            .then(
+                                                if (useBlur) {
+                                                    Modifier.hazeChild(
+                                                        state = hazeState,
+                                                        shape = CircleShape,
+                                                        style = HazeDefaults.style(
+                                                            tint = Color(0xFF0062E6).copy(alpha = 0.35f),
+                                                            blurRadius = 20.dp,
+                                                            noiseFactor = 0f
+                                                        )
+                                                    )
+                                                } else Modifier
+                                            )
                                             .background(
                                                 brush = Brush.verticalGradient(
-                                                    listOf(Color(0xFF167EFF), Color(0xFF0062E6))
+                                                    listOf(Color(0xFF167EFF).copy(alpha = 0.94f), Color(0xFF0062E6).copy(alpha = 0.94f))
                                                 )
                                             )
-                                            .border(0.75.dp, Color.White.copy(alpha = 0.26f), CircleShape)
+                                            .border(0.75.dp, Color.White.copy(alpha = 0.28f), CircleShape)
                                             .clickable(
                                                 interactionSource = bioInteraction,
                                                 indication = null
@@ -540,11 +566,25 @@ fun OscellionLockScreen(
                                                 scaleY = pinScale
                                             }
                                             .clip(CircleShape)
+                                            .then(
+                                                if (useBlur) {
+                                                    Modifier.hazeChild(
+                                                        state = hazeState,
+                                                        shape = CircleShape,
+                                                        style = HazeDefaults.style(
+                                                            tint = if (pinPressed) Color(0xFF222834).copy(alpha = 0.70f)
+                                                                   else Color(0xFF12161E).copy(alpha = 0.52f),
+                                                            blurRadius = 24.dp,
+                                                            noiseFactor = 0f
+                                                        )
+                                                    )
+                                                } else Modifier
+                                            )
                                             .background(
                                                 if (pinPressed) Color(0xFF222834).copy(alpha = 0.76f)
                                                 else Color(0xFF12161E).copy(alpha = 0.62f)
                                             )
-                                            .border(0.75.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                                            .border(0.75.dp, Color.White.copy(alpha = 0.24f), CircleShape)
                                             .clickable(
                                                 interactionSource = pinInteraction,
                                                 indication = null
@@ -715,6 +755,7 @@ fun OscellionLockScreen(
                                         ) {
                                             for (key in row) {
                                                 GlassKeypadButton(
+                                                    hazeState = hazeState,
                                                     enabled = lockoutSecondsRemaining == 0,
                                                     onClick = { onDigitEntered(key.digit) }
                                                 ) {
@@ -781,6 +822,7 @@ fun OscellionLockScreen(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             GlassCapsuleButton(
+                                                hazeState = hazeState,
                                                 enabled = lockoutSecondsRemaining == 0,
                                                 onClick = { triggerBiometricPrompt() },
                                                 modifier = Modifier
@@ -820,6 +862,7 @@ fun OscellionLockScreen(
 
                                         // Center: 0 Digit
                                         GlassKeypadButton(
+                                            hazeState = hazeState,
                                             enabled = lockoutSecondsRemaining == 0,
                                             onClick = { onDigitEntered("0") }
                                         ) {
@@ -842,6 +885,7 @@ fun OscellionLockScreen(
 
                                         // Right: Backspace Button
                                         GlassKeypadButton(
+                                            hazeState = hazeState,
                                             enabled = lockoutSecondsRemaining == 0,
                                             onClick = { onPinDelete() }
                                         ) {
@@ -897,6 +941,19 @@ fun OscellionLockScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
+                    .then(
+                        if (useBlur) {
+                            Modifier.hazeChild(
+                                state = hazeState,
+                                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                                style = HazeDefaults.style(
+                                    tint = Color(0xFF0B0D13).copy(alpha = 0.88f),
+                                    blurRadius = 24.dp,
+                                    noiseFactor = 0f
+                                )
+                            )
+                        } else Modifier
+                    )
                     .background(Color(0xFF0B0D13).copy(alpha = 0.94f))
                     .border(
                         width = 1.dp,
@@ -1406,15 +1463,17 @@ private fun OscellionExactMorphScreen() {
  * Specular Frosted Glass Capsule Keypad Button (Capsule pill for Biometric Switch)
  * Matches the capsule button from the lock screen specification:
  * - Rounded pill shape with vertical divider between fingerprint and text
- * - Frosted glass bevel highlight and tactile press feedback
+ * - Real-time backdrop blur, frosted glass bevel highlight, and tactile press feedback
  */
 @Composable
 private fun GlassCapsuleButton(
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
     enabled: Boolean = true,
     onClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
+    val useBlur = rememberUseRealtimeBlur()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -1431,6 +1490,20 @@ private fun GlassCapsuleButton(
                 alpha = if (enabled) 1f else 0.4f
             }
             .clip(CircleShape)
+            .then(
+                if (useBlur && hazeState != null) {
+                    Modifier.hazeChild(
+                        state = hazeState,
+                        shape = CircleShape,
+                        style = HazeDefaults.style(
+                            tint = if (isPressed && enabled) Color.White.copy(alpha = 0.18f)
+                                   else Color.White.copy(alpha = 0.08f),
+                            blurRadius = 24.dp,
+                            noiseFactor = 0f
+                        )
+                    )
+                } else Modifier
+            )
             .background(
                 if (isPressed && enabled) Color.White.copy(alpha = 0.22f)
                 else Color.White.copy(alpha = 0.08f)
@@ -1467,16 +1540,18 @@ private fun GlassCapsuleButton(
 /**
  * Specular Frosted Glass Circular Keypad Button (78dp x 78dp)
  * Matches `.keypad-btn` from e:\Design & 3D Assets\biometric_pin_lock_screen.html:
- * - 78px uniform circle with specular vertical bevel highlight
+ * - 78px uniform circle with real-time backdrop blur and specular vertical bevel highlight
  * - 0.92 scale feedback on press
  */
 @Composable
 private fun GlassKeypadButton(
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
     enabled: Boolean = true,
     onClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
+    val useBlur = rememberUseRealtimeBlur()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -1494,6 +1569,20 @@ private fun GlassKeypadButton(
                 alpha = if (enabled) 1f else 0.4f
             }
             .clip(CircleShape)
+            .then(
+                if (useBlur && hazeState != null) {
+                    Modifier.hazeChild(
+                        state = hazeState,
+                        shape = CircleShape,
+                        style = HazeDefaults.style(
+                            tint = if (isPressed && enabled) Color.White.copy(alpha = 0.18f)
+                                   else Color.White.copy(alpha = 0.08f),
+                            blurRadius = 24.dp,
+                            noiseFactor = 0f
+                        )
+                    )
+                } else Modifier
+            )
             .background(
                 if (isPressed && enabled) Color.White.copy(alpha = 0.22f)
                 else Color.White.copy(alpha = 0.08f)
