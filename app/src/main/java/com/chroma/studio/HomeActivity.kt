@@ -2454,119 +2454,12 @@ private fun AuthenticatedRoute(
             }
 
             if (isAppBiometricLockEnabled && !isAppBiometricUnlocked) {
-                androidx.activity.compose.BackHandler(enabled = true) {
-                    finish()
-                }
-                var promptedGeneration by remember { mutableStateOf(-1) }
-                LaunchedEffect(showComposeSplash, appBiometricLockGeneration, isAppBiometricUnlocked) {
-                    if (!showComposeSplash && !isAppBiometricUnlocked && promptedGeneration != appBiometricLockGeneration) {
-                        promptedGeneration = appBiometricLockGeneration
-                        kotlinx.coroutines.delay(150)
-                        if (!com.chroma.studio.chat.util.BiometricHelper.isPromptShowing) {
-                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                activity = this@HomeActivity,
-                                title = "Unlock Oscellion",
-                                subtitle = "Verify your identity to access Oscellion",
-                                onSuccess = { isAppBiometricUnlocked = true },
-                                onCancel = {},
-                                onError = { err -> com.chroma.studio.ui.components.ToastManager.showToast(err) }
-                            )
-                        }
+                com.chroma.studio.ui.components.OscellionLockScreen(
+                    titleText = "Unlock the app",
+                    onUnlockSuccess = {
+                        isAppBiometricUnlocked = true
                     }
-                }
-
-                val lockBg = if (vm.isDarkMode) Color(0xFF000000) else Color(0xFFF2F4F7)
-                val lockCard = if (vm.isDarkMode) Color(0xFF17171A) else Color(0xFFFFFFFF)
-                val lockTitleColor = if (vm.isDarkMode) Color(0xFFFAFAFA) else Color(0xFF0A0A0C)
-                val lockSubColor = if (vm.isDarkMode) Color(0xFF9CA3AF) else Color(0xFF6B7280)
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(lockBg)
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) {},
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 36.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(88.dp)
-                                .clip(androidx.compose.foundation.shape.CircleShape)
-                                .background(lockCard),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Fingerprint,
-                                contentDescription = "Biometric Lock",
-                                tint = Color(0xFF0381FE),
-                                modifier = Modifier.size(40.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(20.dp))
-                        Text(
-                            text = "Oscellion Locked",
-                            fontSize = 24.sp,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            color = lockTitleColor
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Authenticate with your fingerprint, face, or screen lock to continue.",
-                            fontSize = 14.sp,
-                            color = lockSubColor,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(28.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.76f)
-                                .height(50.dp)
-                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
-                                .background(Color(0xFF0381FE))
-                                .clickable {
-                                    com.chroma.studio.chat.sound.SoundManager.playReaction()
-                                    if (!com.chroma.studio.chat.util.BiometricHelper.isPromptShowing) {
-                                        com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                            activity = this@HomeActivity,
-                                            title = "Unlock Oscellion",
-                                            subtitle = "Verify your identity to access Oscellion",
-                                            onSuccess = { isAppBiometricUnlocked = true },
-                                            onCancel = {},
-                                            onError = { err -> com.chroma.studio.ui.components.ToastManager.showToast(err) }
-                                        )
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Lock,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    text = "Unlock with Biometrics",
-                                    color = Color.White,
-                                    fontSize = 15.5.sp,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-                }
+                )
             }
 
             androidx.compose.animation.AnimatedVisibility(

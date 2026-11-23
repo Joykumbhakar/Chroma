@@ -42,6 +42,10 @@ fun SecurityScreen(
     var biometricPasskeyEnabled by remember {
         mutableStateOf(secPrefs.getBoolean("biometric_passkey_lock", false))
     }
+    var hasPinConfigured by remember {
+        mutableStateOf(com.chroma.studio.security.SecurityPinManager.hasPin(context))
+    }
+    var showPinSetupDialog by remember { mutableStateOf(false) }
     var isSendingReset by remember { mutableStateOf(false) }
     var unrecognizedLogins by remember { mutableStateOf(profile.unrecognizedLoginsEnabled) }
     var hasChanges by remember { mutableStateOf(false) }
@@ -122,37 +126,53 @@ fun SecurityScreen(
 
             item {
                 AppleSettingsGroup(
-                    header = "Login Security & Alerts",
-                    footer = "Biometric protection and login alerts help keep your account secure."
+                    header = "Login Security & App Lock",
+                    footer = "Protect your app with Biometrics and a 4-digit PIN backup for fast, secure access."
                 ) {
                     AppleSettingToggleRow(
-                        title = "Biometric Passkey Lock",
-                        subtitle = "Require fingerprint, face, or screen lock to open Oscellion and for sensitive actions",
+                        title = "App Lock (Biometric & PIN)",
+                        subtitle = "Require Face, Fingerprint, or PIN to open Oscellion",
                         icon = Lucide.Fingerprint,
                         iconGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE)),
                         checked = biometricPasskeyEnabled,
                         onCheckedChange = { enabled ->
                             val activity = context.findActivity()
-                            if (activity == null) {
-                                ToastManager.showToast("Biometric authentication unavailable on this screen")
+                            if (enabled && !hasPinConfigured) {
+                                // Prompt user to set up PIN first as the alternative backup
+                                showPinSetupDialog = true
+                            } else if (activity == null) {
+                                ToastManager.showToast("Authentication unavailable on this screen")
                             } else {
                                 BiometricHelper.authenticate(
                                     activity = activity,
-                                    title = if (enabled) "Enable Biometric Lock" else "Disable Biometric Lock",
+                                    title = if (enabled) "Enable App Lock" else "Disable App Lock",
                                     subtitle = if (enabled) {
-                                        "Verify your identity to lock Oscellion with Biometrics"
+                                        "Verify your identity to lock Oscellion"
                                     } else {
-                                        "Verify your identity to turn off Biometric Lock"
+                                        "Verify your identity to turn off App Lock"
                                     },
                                     onSuccess = {
                                         biometricPasskeyEnabled = enabled
-                                        secPrefs.edit().putBoolean("biometric_passkey_lock", enabled).apply()
-                                        ToastManager.showToast(if (enabled) "Biometric lock enabled" else "Biometric lock disabled")
+                                        com.chroma.studio.security.SecurityPinManager.setAppLockEnabled(context, enabled)
+                                        ToastManager.showToast(if (enabled) "App lock enabled" else "App lock disabled")
                                     },
                                     onCancel = {},
                                     onError = { err -> ToastManager.showToast(err) }
                                 )
                             }
+                        }
+                    )
+
+                    AppleSettingDivider()
+
+                    AppleSettingNavRow(
+                        title = "App Lock PIN",
+                        subtitle = if (hasPinConfigured) "Change your 4-digit backup PIN" else "Set up a 4-digit PIN as a backup to Biometrics",
+                        icon = Lucide.Lock,
+                        iconGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE)),
+                        valueText = if (hasPinConfigured) "Configured" else "Set Up",
+                        onClick = {
+                            showPinSetupDialog = true
                         }
                     )
 
@@ -276,6 +296,21 @@ fun SecurityScreen(
                     onClick = { showDeleteConfirm = false }
                 ) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showPinSetupDialog) {
+        PinSetupDialog(
+            isChangingExisting = hasPinConfigured,
+            onDismiss = { showPinSetupDialog = false },
+            onSuccess = {
+                showPinSetupDialog = false
+                hasPinConfigured = true
+                if (!biometricPasskeyEnabled) {
+                    biometricPasskeyEnabled = true
+                    com.chroma.studio.security.SecurityPinManager.setAppLockEnabled(context, true)
                 }
             }
         )

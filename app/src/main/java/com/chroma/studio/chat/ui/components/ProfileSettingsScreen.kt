@@ -99,6 +99,10 @@ fun ProfileSettingsScreen(
     var screenLockEnabled by remember {
         mutableStateOf(chatSecurityPrefs.getBoolean("chat_screen_lock_enabled", false))
     }
+    var hasPinConfigured by remember {
+        mutableStateOf(com.chroma.studio.security.SecurityPinManager.hasPin(context))
+    }
+    var showPinSetupDialog by remember { mutableStateOf(false) }
 
     // Cache calculation
     var cacheSizeMb by remember { mutableFloatStateOf(14.8f) }
@@ -424,24 +428,38 @@ fun ProfileSettingsScreen(
                         subtitle = "Require Biometrics / PIN to access conversations",
                         checked = screenLockEnabled,
                         onCheckedChange = { enable ->
-                            val act = context.findActivity()
-                            if (act == null) {
-                                onShowToast("Biometric authentication unavailable on this screen")
+                            if (enable && !hasPinConfigured) {
+                                showPinSetupDialog = true
                             } else {
-                                com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                    activity = act,
-                                    title = if (enable) "Enable App Screen Lock" else "Disable App Screen Lock",
-                                    subtitle = if (enable) "Verify your identity to lock Messages" else "Verify your identity to turn off screen lock",
-                                    onSuccess = {
-                                        screenLockEnabled = enable
-                                        chatSecurityPrefs.edit().putBoolean("chat_screen_lock_enabled", enable).apply()
-                                        onShowToast(if (enable) "Screen lock enabled" else "Screen lock disabled")
-                                    },
-                                    onCancel = {},
-                                    onError = { err -> onShowToast(err) }
-                                )
+                                val act = context.findActivity()
+                                if (act == null) {
+                                    onShowToast("Biometric authentication unavailable on this screen")
+                                } else {
+                                    com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                        activity = act,
+                                        title = if (enable) "Enable App Screen Lock" else "Disable App Screen Lock",
+                                        subtitle = if (enable) "Verify your identity to lock Messages" else "Verify your identity to turn off screen lock",
+                                        onSuccess = {
+                                            screenLockEnabled = enable
+                                            com.chroma.studio.security.SecurityPinManager.setAppLockEnabled(context, enable)
+                                            onShowToast(if (enable) "Screen lock enabled" else "Screen lock disabled")
+                                        },
+                                        onCancel = {},
+                                        onError = { err -> onShowToast(err) }
+                                    )
+                                }
                             }
                         }
+                    )
+
+                    SettingsDivider()
+
+                    // PIN Setup / Change Row
+                    SettingsActionRow(
+                        icon = { Icon(Lucide.Lock, contentDescription = null, tint = Color(0xFF0381FE), modifier = Modifier.size(18.dp)) },
+                        title = "App Lock PIN",
+                        value = if (hasPinConfigured) "Configured" else "Set Up",
+                        onClick = { showPinSetupDialog = true }
                     )
 
                     SettingsDivider()
@@ -555,6 +573,21 @@ fun ProfileSettingsScreen(
     // ── MODAL 3: ABOUT OSCELLION MODAL ───────────────────────────────────────
     if (isAboutModalOpen) {
         AboutAppModal(onDismiss = { isAboutModalOpen = false })
+    }
+
+    if (showPinSetupDialog) {
+        com.chroma.studio.ui.components.PinSetupDialog(
+            isChangingExisting = hasPinConfigured,
+            onDismiss = { showPinSetupDialog = false },
+            onSuccess = {
+                showPinSetupDialog = false
+                hasPinConfigured = true
+                if (!screenLockEnabled) {
+                    screenLockEnabled = true
+                    com.chroma.studio.security.SecurityPinManager.setAppLockEnabled(context, true)
+                }
+            }
+        )
     }
 }
 

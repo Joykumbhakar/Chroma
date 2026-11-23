@@ -3586,157 +3586,18 @@ private fun ChatScreenContent(
                 } // end if (!isCurrentChatLocked)
 
                 // Full-screen Biometric Privacy Shield (covers header + messages)
-                // Rendered inside the outer Box so it sits above the ChatHeader.
                 if (isCurrentChatLocked) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = if (colors.isLight)
-                                        listOf(Color(0xFFF2F2F7), Color(0xFFE5E5EA), Color(0xFFF2F2F7))
-                                    else
-                                        listOf(Color(0xFF0A0A0D), Color(0xFF111116), Color(0xFF0A0A0D))
-                                )
-                            )
-                            .clickable(
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                indication = null
-                            ) { /* Consume all touches — nothing leaks through */ },
-                        contentAlignment = Alignment.Center
+                            .zIndex(100f)
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 36.dp)
-                        ) {
-                            // Glass-morphism lock icon circle
-                            Box(
-                                modifier = Modifier
-                                    .size(88.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (colors.isLight) Color.White.copy(alpha = 0.85f)
-                                        else Color(0xFF1C1C1E).copy(alpha = 0.85f)
-                                    )
-                                    .border(
-                                        1.5.dp,
-                                        Brush.linearGradient(
-                                            listOf(
-                                                colors.iosBlue.copy(alpha = 0.6f),
-                                                colors.iosBlue.copy(alpha = 0.2f)
-                                            )
-                                        ),
-                                        CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LucideLock(tint = colors.iosBlue, size = 38.dp)
+                        com.chroma.studio.ui.components.OscellionLockScreen(
+                            titleText = "Unlock ${activeChat.name}",
+                            onUnlockSuccess = {
+                                unlockedChatSessionIds = unlockedChatSessionIds + activeChatId
                             }
-
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            Text(
-                                text = "Chat Locked",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textDark,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                letterSpacing = (-0.5).sp
-                            )
-
-                            Spacer(modifier = Modifier.height(5.dp))
-
-                            Text(
-                                text = activeChat.name,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = colors.iosBlue,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Text(
-                                text = "This conversation is secured with Biometrics.\nTap below to authenticate and unveil messages.",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = colors.textMuted,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                lineHeight = 20.sp
-                            )
-
-                            Spacer(modifier = Modifier.height(32.dp))
-
-                            // Primary: Unlock button
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(0.72f)
-                                    .height(50.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(colors.iosBlue)
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        runBiometricProtected(
-                                            title = "Unlock ${activeChat.name}",
-                                            subtitle = "Verify your identity to view this conversation"
-                                        ) {
-                                            unlockedChatSessionIds = unlockedChatSessionIds + activeChatId
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(9.dp)
-                                ) {
-                                    LucideLock(tint = Color.White, size = 18.dp)
-                                    Text(
-                                        text = "Unlock with Biometrics",
-                                        color = Color.White,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Secondary: Back to Chats
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(0.72f)
-                                    .height(46.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(
-                                        if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF2C2C2E)
-                                    )
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        // Navigate back WITHOUT unlocking.
-                                        // Lock screen reappears next time chat is opened.
-                                        isInsideChat = false
-                                        if (chatViewModel != null) {
-                                            chatViewModel.setTypingStatus(false)
-                                            chatViewModel.setRecordingStatus(false)
-                                            chatViewModel.closeChat()
-                                        }
-                                        if (effectiveRoomId != null) {
-                                            onNavigateBack?.invoke() ?: onBack?.invoke()
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "Back to Chats",
-                                    color = colors.textMuted,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
+                        )
                     }
                 }
 
@@ -6265,94 +6126,17 @@ private fun ChatScreenContent(
 
         // Full-screen Messages App Screen Lock Shield (when enabled in Chat Settings)
         if (isAppScreenLockEnabled && !isAppScreenUnlocked) {
-            var appLockAutoPrompted by remember { mutableStateOf(false) }
-            LaunchedEffect(isAppScreenLockEnabled, isAppScreenUnlocked) {
-                if (isAppScreenLockEnabled && !isAppScreenUnlocked && !appLockAutoPrompted) {
-                    appLockAutoPrompted = true
-                    kotlinx.coroutines.delay(180)
-                    runBiometricProtected(
-                        title = "Unlock Messages",
-                        subtitle = "Verify your identity to access your conversations"
-                    ) {
-                        isAppScreenUnlocked = true
-                    }
-                }
-            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(500f)
-                    .background(if (colors.isLight) Color(0xFFF2F4F7) else Color(0xFF0A0A0D))
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
-                    ) {},
-                contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 36.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(88.dp)
-                            .clip(CircleShape)
-                            .background(if (colors.isLight) Color.White else Color(0xFF1C1C1E))
-                            .border(1.5.dp, colors.iosBlue.copy(alpha = 0.45f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        LucideLock(tint = colors.iosBlue, size = 38.dp)
+                com.chroma.studio.ui.components.OscellionLockScreen(
+                    titleText = "Unlock Messages",
+                    onUnlockSuccess = {
+                        isAppScreenUnlocked = true
                     }
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Text(
-                        text = "Messages Locked",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textDark,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Authenticate with Biometrics or PIN to open your chats.",
-                        fontSize = 14.sp,
-                        color = colors.textMuted,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(28.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.72f)
-                            .height(50.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(colors.iosBlue)
-                            .clickable {
-                                SoundManager.playReaction()
-                                runBiometricProtected(
-                                    title = "Unlock Messages",
-                                    subtitle = "Verify your identity to access your conversations"
-                                ) {
-                                    isAppScreenUnlocked = true
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            LucideLock(tint = Color.White, size = 18.dp)
-                            Text(
-                                text = "Unlock Messages",
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
+                )
             }
         }
 
