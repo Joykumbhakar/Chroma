@@ -188,24 +188,28 @@ fun WelcomeScreen(
                 .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ─── 1. COMPACT HERO 3D CHARACTER SECTION ────────────────────
+            // ─── 1. HERO 3D CHARACTER SECTION (PROPORTIONAL FIT & FILL) ──
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(185.dp)
+                    .height(215.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Image(
                     painter = painterResource(R.drawable.hero_oscellion_auth),
                     contentDescription = "Oscellion Hero Character",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    contentScale = ContentScale.Fit,
+                    alignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(215.dp)
                 )
 
                 // Smooth bottom gradient overlay fading into the canvas background
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(75.dp)
+                        .height(55.dp)
                         .align(Alignment.BottomCenter)
                         .background(
                             Brush.verticalGradient(
