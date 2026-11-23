@@ -219,7 +219,7 @@ fun WelcomeScreen(
                         )
                 )
 
-                // ─── 2. HEADLINE & BRANDING (PROFESSIONAL BRAND BLUE OVERLAID ON SPHERE) ────
+                // ─── 2. HEADLINE & BRANDING (OFFICIAL OSCELLION BRAND LOCKUP OVERLAID ON SPHERE) ────
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -236,23 +236,18 @@ fun WelcomeScreen(
                         fontFamily = InterFontFamily
                     )
 
-                    Text(
-                        text = "Oscellion",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-0.6).sp,
-                        style = TextStyle(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    Color(0xFF38B6FF),   // Crisp Sky Azure
-                                    colors.primaryHover, // Vibrant Azure Blue
-                                    colors.primary,      // Official Brand Blue (#0381FE)
-                                    colors.primaryDark   // Deep Royal Blue (#0072DE)
-                                )
-                            )
-                        ),
-                        fontFamily = InterFontFamily
+                    Spacer(Modifier.height(4.dp))
+
+                    Image(
+                        painter = painterResource(R.drawable.oscellion_brand_lockup),
+                        contentDescription = "Oscellion",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .height(34.dp)
+                            .aspectRatio(455f / 95f)
                     )
+
+                    Spacer(Modifier.height(4.dp))
 
                     Text(
                         text = "Create • Share • Explore",
