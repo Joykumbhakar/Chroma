@@ -405,78 +405,22 @@ fun OscellionWatermarkView(
 }
 
 /**
- * Variation 10: In-App Animated Loader / Spinner (Exact implementation of HTML Section 10)
+ * Variation 10: In-App Animated Loader / Spinner (Exact Flat Loader & Overflowed Checkmark Morph)
  */
 @Composable
 fun OscellionSpinner(
     modifier: Modifier = Modifier,
     size: Dp = 32.dp,
-    color: Color = Color.White
+    color: Color = Color.White,
+    isCompleted: Boolean = false,
+    checkColor: Color = Color.White
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "OscellionLoader")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f)),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "osc_spin"
-    )
-
-    val parsedPath = remember {
-        PathParser().parsePathString(OscellionBrand.PATH_DATA).toPath().apply {
-            fillType = PathFillType.EvenOdd
-        }
-    }
-
-    Box(
+    OscellionMorphLoader(
         modifier = modifier.size(size),
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val scale = size.toPx() / 1024f
-            val strokePx = 48f * scale
-
-            // 1. Faint background track
-            drawIntoCanvas { canvas ->
-                canvas.save()
-                canvas.scale(scale, scale)
-                canvas.drawPath(
-                    parsedPath,
-                    Paint().apply {
-                        this.color = color.copy(alpha = 0.12f)
-                        this.style = PaintingStyle.Stroke
-                        this.strokeWidth = 48f
-                        this.strokeCap = StrokeCap.Round
-                        this.strokeJoin = StrokeJoin.Round
-                        this.isAntiAlias = true
-                    }
-                )
-                canvas.restore()
-            }
-
-            // 2. Solid animated outer trace rotating around center
-            rotate(degrees = rotation, pivot = center) {
-                drawIntoCanvas { canvas ->
-                    canvas.save()
-                    canvas.scale(scale, scale)
-                    canvas.drawPath(
-                        parsedPath,
-                        Paint().apply {
-                            this.color = color
-                            this.style = PaintingStyle.Stroke
-                            this.strokeWidth = 48f
-                            this.strokeCap = StrokeCap.Round
-                            this.strokeJoin = StrokeJoin.Round
-                            this.isAntiAlias = true
-                        }
-                    )
-                    canvas.restore()
-                }
-            }
-        }
-    }
+        isCompleted = isCompleted,
+        color = color,
+        checkColor = checkColor
+    )
 }
 
 /**

@@ -44,6 +44,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.R
+import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
@@ -295,10 +296,9 @@ fun WelcomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     if (googleLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color(0xFF0F172A),
-                            strokeWidth = 2.2.dp
+                        OscellionLoadingSpinner(
+                            modifier = Modifier.size(22.dp),
+                            color = Color(0xFF0F172A)
                         )
                     } else {
                         Row(
@@ -538,10 +538,9 @@ fun WelcomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     if (isSubmitting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = colors.onPrimary,
-                            strokeWidth = 2.2.dp
+                        OscellionLoadingSpinner(
+                            modifier = Modifier.size(22.dp),
+                            color = colors.onPrimary
                         )
                     } else {
                         Row(
