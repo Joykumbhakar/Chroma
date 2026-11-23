@@ -32,8 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.R
 import com.chroma.studio.chat.sound.SoundManager
-import com.chroma.studio.ui.components.ChromaScreenHeader
 import com.chroma.studio.ui.components.LiquidGlassCheckbox
+import com.chroma.studio.ui.components.OneUiCollapsingHeaderLayout
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
@@ -113,168 +113,44 @@ fun PrivacyPolicyTermsScreen(
         )
     }
 
-    Scaffold(
-        containerColor = colors.bg,
-        topBar = {
-            ChromaScreenHeader(
-                title = "Oscellion",
-                badgeText = "Privacy Policy",
-                showBackButton = true,
-                onBack = {
-                    SoundManager.playReaction()
-                    onBack()
-                },
-                actions = {
-                    Text(
-                        text = "Nov 23, 2026",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = colors.textMuted,
-                        fontFamily = InterFontFamily,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                }
-            )
+    OneUiCollapsingHeaderLayout(
+        title = "Privacy & Terms",
+        subtitle = "Last updated: Nov 23, 2026",
+        onBack = {
+            SoundManager.playReaction()
+            onBack()
         },
-        bottomBar = {
-            // ─── BOTTOM ACCEPTANCE CONTROLS & ACTION BUTTONS ─────────
-            Column(
+        initialCollapsed = false,
+        headerActions = { compactTitleAlpha ->
+            Text(
+                text = if (isFirstLaunch) (if (hasAgreed) "Accept" else "") else "Done",
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0381FE),
+                fontFamily = InterFontFamily,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        SoundManager.playReaction()
+                        if (isFirstLaunch) {
+                            if (hasAgreed) onAccept()
+                        } else {
+                            onBack()
+                        }
+                    }
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            )
+        }
+    ) { collapseProgress ->
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(colors.bg.copy(alpha = 0.95f))
-                    .navigationBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .weight(1f),
+                contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                // Official Checkbox Button in PURE WHITE (as requested)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = { hasAgreed = !hasAgreed }
-                        )
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    LiquidGlassCheckbox(
-                        checked = hasAgreed,
-                        onCheckedChange = { hasAgreed = it },
-                        size = 22.dp,
-                        checkedColor = Color.White,
-                        uncheckedColor = Color(0xFF64748B)
-                    )
-
-                    Spacer(Modifier.width(12.dp))
-
-                    Text(
-                        text = "I have read and agree to the Privacy Policy",
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (hasAgreed) Color.White else Color(0xFF94A3B8),
-                        fontFamily = InterFontFamily,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(Modifier.height(10.dp))
-
-                // Primary Action: "Manage your privacy settings" / "Accept & Continue"
-                val buttonInteraction = remember { MutableInteractionSource() }
-                val buttonPressed by buttonInteraction.collectIsPressedAsState()
-                val buttonScale by animateFloatAsState(
-                    targetValue = if (buttonPressed) 0.975f else 1f,
-                    animationSpec = spring(stiffness = 400f, dampingRatio = 0.7f),
-                    label = "btn_press"
-                )
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .graphicsLayer {
-                            scaleX = buttonScale
-                            scaleY = buttonScale
-                        }
-                        .clip(CircleShape)
-                        .background(
-                            if (hasAgreed) Color.White
-                            else Color(0xFF16171C)
-                        )
-                        .border(
-                            1.dp,
-                            if (hasAgreed) Color.Transparent else Color(0xFF32343E),
-                            CircleShape
-                        )
-                        .clickable(
-                            interactionSource = buttonInteraction,
-                            indication = null,
-                            onClick = {
-                                if (hasAgreed) {
-                                    onAccept()
-                                } else {
-                                    hasAgreed = true
-                                }
-                            }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Lucide.ShieldCheck,
-                            contentDescription = null,
-                            tint = if (hasAgreed) Color(0xFF0A0A0C) else Color.White,
-                            modifier = Modifier.size(19.dp)
-                        )
-
-                        Spacer(Modifier.width(8.dp))
-
-                        Text(
-                            text = if (isFirstLaunch) "Accept & Continue" else "Manage your privacy settings",
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (hasAgreed) Color(0xFF0A0A0C) else Color.White,
-                            fontFamily = InterFontFamily
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                // Secondary Action: "Read full policy →"
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = { showFullPolicySheet = true }
-                        )
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Read full policy →",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF94A3B8),
-                        fontFamily = InterFontFamily
-                    )
-                }
-            }
-        }
-    ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(bottom = 16.dp)
-        ) {
             // ─── 1. HERO SHIELD GRAPHIC ──────────────────────────────
             item {
                 Box(
@@ -433,7 +309,139 @@ fun PrivacyPolicyTermsScreen(
                 }
             }
         }
+
+        // ─── BOTTOM ACCEPTANCE CONTROLS & ACTION BUTTONS ─────────
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(colors.bg.copy(alpha = 0.95f))
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+        ) {
+            // Official Checkbox Button in PURE WHITE (as requested)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { hasAgreed = !hasAgreed }
+                    )
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LiquidGlassCheckbox(
+                    checked = hasAgreed,
+                    onCheckedChange = { hasAgreed = it },
+                    size = 22.dp,
+                    checkedColor = Color.White,
+                    uncheckedColor = Color(0xFF64748B)
+                )
+
+                Spacer(Modifier.width(12.dp))
+
+                Text(
+                    text = "I have read and agree to the Privacy Policy",
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (hasAgreed) Color.White else Color(0xFF94A3B8),
+                    fontFamily = InterFontFamily,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // Primary Action: "Manage your privacy settings" / "Accept & Continue"
+            val buttonInteraction = remember { MutableInteractionSource() }
+            val buttonPressed by buttonInteraction.collectIsPressedAsState()
+            val buttonScale by animateFloatAsState(
+                targetValue = if (buttonPressed) 0.975f else 1f,
+                animationSpec = spring(stiffness = 400f, dampingRatio = 0.7f),
+                label = "btn_press"
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .graphicsLayer {
+                        scaleX = buttonScale
+                        scaleY = buttonScale
+                    }
+                    .clip(CircleShape)
+                    .background(
+                        if (hasAgreed) Color.White
+                        else Color(0xFF16171C)
+                    )
+                    .border(
+                        1.dp,
+                        if (hasAgreed) Color.Transparent else Color(0xFF32343E),
+                        CircleShape
+                    )
+                    .clickable(
+                        interactionSource = buttonInteraction,
+                        indication = null,
+                        onClick = {
+                            if (hasAgreed) {
+                                onAccept()
+                            } else {
+                                hasAgreed = true
+                            }
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.ShieldCheck,
+                        contentDescription = null,
+                        tint = if (hasAgreed) Color(0xFF0A0A0C) else Color.White,
+                        modifier = Modifier.size(19.dp)
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Text(
+                        text = if (isFirstLaunch) "Accept & Continue" else "Manage your privacy settings",
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (hasAgreed) Color(0xFF0A0A0C) else Color.White,
+                        fontFamily = InterFontFamily
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Secondary Action: "Read full policy →"
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { showFullPolicySheet = true }
+                    )
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Read full policy →",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF94A3B8),
+                    fontFamily = InterFontFamily
+                )
+            }
+        }
     }
+}
 
     // ─── MODAL DETAIL SHEET FOR INDIVIDUAL POLICY ITEM ─────────────
     selectedSectionDetail?.let { detail ->

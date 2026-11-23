@@ -654,23 +654,13 @@ fun OscellionLockScreen(
                                     )
                                 )
 
-                                Spacer(Modifier.height(28.dp))
+                                Spacer(Modifier.height(32.dp))
 
-                                // 4-Digit Rounded-Square PIN Indicator Boxes (46dp x 50dp, radius 14dp)
-                                val infiniteCaret = rememberInfiniteTransition(label = "pinCaret")
-                                val caretAlpha by infiniteCaret.animateFloat(
-                                    initialValue = 1f,
-                                    targetValue = 0.25f,
-                                    animationSpec = infiniteRepeatable(
-                                        animation = tween(550, easing = FastOutSlowInEasing),
-                                        repeatMode = RepeatMode.Reverse
-                                    ),
-                                    label = "caretAlpha"
-                                )
-
+                                // 4-Digit Circular PIN Indicator Dots (○ ○ ○ ○ per screenshot specification)
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(vertical = 8.dp)
                                 ) {
                                     for (index in 0 until 4) {
                                         val isFilled = index < enteredPin.length
@@ -678,175 +668,189 @@ fun OscellionLockScreen(
 
                                         Box(
                                             modifier = Modifier
-                                                .size(width = 46.dp, height = 50.dp)
-                                                .clip(RoundedCornerShape(14.dp))
+                                                .size(16.dp)
+                                                .clip(CircleShape)
                                                 .background(
                                                     when {
-                                                        isPinError -> Color(0xFFEF4444).copy(alpha = 0.18f)
-                                                        isActive -> Color(0xFF3B82F6).copy(alpha = 0.14f)
-                                                        isFilled -> Color.White.copy(alpha = 0.18f)
-                                                        else -> Color.White.copy(alpha = 0.08f)
+                                                        isPinError -> Color(0xFFEF4444)
+                                                        isFilled -> Color.White
+                                                        else -> Color.Transparent
                                                     }
                                                 )
                                                 .border(
-                                                    width = 1.25.dp,
+                                                    width = 1.5.dp,
                                                     color = when {
                                                         isPinError -> Color(0xFFEF4444)
-                                                        isActive -> Color(0xFF3B82F6)
-                                                        isFilled -> Color.White.copy(alpha = 0.55f)
-                                                        else -> Color.White.copy(alpha = 0.24f)
+                                                        isFilled -> Color.White
+                                                        isActive -> Color.White.copy(alpha = 0.90f)
+                                                        else -> Color.White.copy(alpha = 0.40f)
                                                     },
-                                                    shape = RoundedCornerShape(14.dp)
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (isFilled) {
-                                                // Center 12dp circular white dot
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(12.dp)
-                                                        .clip(CircleShape)
-                                                        .background(Color.White)
+                                                    shape = CircleShape
                                                 )
-                                            } else if (isActive) {
-                                                // Vertical pulsing caret bar
-                                                Box(
-                                                    modifier = Modifier
-                                                        .width(2.dp)
-                                                        .height(20.dp)
-                                                        .clip(RoundedCornerShape(2.dp))
-                                                        .background(Color(0xFF60A5FA).copy(alpha = caretAlpha))
-                                                )
-                                            }
-                                        }
+                                        )
                                     }
                                 }
 
-                                Spacer(Modifier.height(36.dp))
+                                Spacer(Modifier.height(44.dp))
 
-                                // 3x4 Uniform Circular Frosted Keypad Grid (78dp circular buttons)
+                                // 3x4 Uniform Frosted Keypad Grid (78dp circular buttons + Capsule Biometric Shortcut)
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .widthIn(max = 282.dp),
+                                        .widthIn(max = 296.dp),
                                     verticalArrangement = Arrangement.spacedBy(20.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    val keypadMatrix = listOf(
+                                    val keypadRows = listOf(
                                         listOf(KeypadData("1", ""), KeypadData("2", "ABC"), KeypadData("3", "DEF")),
                                         listOf(KeypadData("4", "GHI"), KeypadData("5", "JKL"), KeypadData("6", "MNO")),
-                                        listOf(KeypadData("7", "PQRS"), KeypadData("8", "TUV"), KeypadData("9", "WXYZ")),
-                                        listOf(KeypadData("BIO", ""), KeypadData("0", ""), KeypadData("DEL", ""))
+                                        listOf(KeypadData("7", "PQRS"), KeypadData("8", "TUV"), KeypadData("9", "WXYZ"))
                                     )
 
-                                    for (row in keypadMatrix) {
+                                    for (row in keypadRows) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(24.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             for (key in row) {
-                                                when (key.digit) {
-                                                    "BIO" -> {
-                                                        // Circular Biometric Shortcut Button (78dp)
-                                                        GlassKeypadButton(
-                                                            enabled = lockoutSecondsRemaining == 0,
-                                                            onClick = {
-                                                                triggerBiometricPrompt()
-                                                            }
-                                                        ) {
-                                                            Column(
-                                                                horizontalAlignment = Alignment.CenterHorizontally,
-                                                                verticalArrangement = Arrangement.Center
-                                                            ) {
-                                                                Icon(
-                                                                    imageVector = Lucide.Fingerprint,
-                                                                    contentDescription = "Switch to Biometric",
-                                                                    tint = Color.White,
-                                                                    modifier = Modifier.size(23.dp)
+                                                GlassKeypadButton(
+                                                    enabled = lockoutSecondsRemaining == 0,
+                                                    onClick = { onDigitEntered(key.digit) }
+                                                ) {
+                                                    Column(
+                                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                                        verticalArrangement = Arrangement.Center
+                                                    ) {
+                                                        Text(
+                                                            text = key.digit,
+                                                            fontSize = 30.sp,
+                                                            fontWeight = FontWeight.Normal,
+                                                            lineHeight = 30.sp,
+                                                            color = Color.White,
+                                                            fontFamily = InterFontFamily,
+                                                            style = TextStyle(
+                                                                shadow = Shadow(
+                                                                    color = Color.Black.copy(alpha = 0.85f),
+                                                                    offset = Offset(0f, 1f),
+                                                                    blurRadius = 3f
                                                                 )
-                                                                Spacer(Modifier.height(2.dp))
-                                                                Text(
-                                                                    text = "BIO",
-                                                                    fontSize = 9.sp,
-                                                                    fontWeight = FontWeight.Medium,
-                                                                    letterSpacing = 0.06.sp,
-                                                                    color = Color(0xFFE5E7EB),
-                                                                    fontFamily = InterFontFamily
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                    "DEL" -> {
-                                                        // Circular Backspace Button (78dp)
-                                                        GlassKeypadButton(
-                                                            enabled = lockoutSecondsRemaining == 0,
-                                                            onClick = { onPinDelete() }
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = Lucide.Delete,
-                                                                contentDescription = "Delete digit",
-                                                                tint = Color.White,
-                                                                modifier = Modifier.size(25.dp)
                                                             )
-                                                        }
-                                                    }
-                                                    else -> {
-                                                        // Standard Digit Keypad Button (78dp)
-                                                        GlassKeypadButton(
-                                                            enabled = lockoutSecondsRemaining == 0,
-                                                            onClick = { onDigitEntered(key.digit) }
-                                                        ) {
-                                                            Column(
-                                                                horizontalAlignment = Alignment.CenterHorizontally,
-                                                                verticalArrangement = Arrangement.Center
-                                                            ) {
-                                                                Text(
-                                                                    text = key.digit,
-                                                                    fontSize = 28.sp,
-                                                                    fontWeight = FontWeight.Normal,
-                                                                    lineHeight = 28.sp,
-                                                                    color = Color.White,
-                                                                    fontFamily = InterFontFamily,
-                                                                    style = TextStyle(
-                                                                        shadow = Shadow(
-                                                                            color = Color.Black.copy(alpha = 0.85f),
-                                                                            offset = Offset(0f, 1f),
-                                                                            blurRadius = 3f
-                                                                        )
+                                                        )
+                                                        if (key.sublabel.isNotBlank()) {
+                                                            Spacer(Modifier.height(2.dp))
+                                                            Text(
+                                                                text = key.sublabel,
+                                                                fontSize = 10.sp,
+                                                                fontWeight = FontWeight.Medium,
+                                                                letterSpacing = 1.2.sp,
+                                                                color = Color(0xFFE5E7EB),
+                                                                fontFamily = InterFontFamily,
+                                                                style = TextStyle(
+                                                                    shadow = Shadow(
+                                                                        color = Color.Black.copy(alpha = 0.85f),
+                                                                        offset = Offset(0f, 1f),
+                                                                        blurRadius = 3f
                                                                     )
                                                                 )
-                                                                if (key.sublabel.isNotBlank()) {
-                                                                    Spacer(Modifier.height(2.dp))
-                                                                    Text(
-                                                                        text = key.sublabel,
-                                                                        fontSize = 10.sp,
-                                                                        fontWeight = FontWeight.Medium,
-                                                                        letterSpacing = 1.2.sp,
-                                                                        color = Color(0xFFE5E7EB),
-                                                                        fontFamily = InterFontFamily,
-                                                                        style = TextStyle(
-                                                                            shadow = Shadow(
-                                                                                color = Color.Black.copy(alpha = 0.85f),
-                                                                                offset = Offset(0f, 1f),
-                                                                                blurRadius = 3f
-                                                                            )
-                                                                        )
-                                                                    )
-                                                                } else {
-                                                                    Spacer(Modifier.height(2.dp))
-                                                                    Text(
-                                                                        text = " ",
-                                                                        fontSize = 10.sp,
-                                                                        fontWeight = FontWeight.Medium,
-                                                                        color = Color.Transparent
-                                                                    )
-                                                                }
-                                                            }
+                                                            )
+                                                        } else {
+                                                            Spacer(Modifier.height(2.dp))
+                                                            Text(
+                                                                text = " ",
+                                                                fontSize = 10.sp,
+                                                                fontWeight = FontWeight.Medium,
+                                                                color = Color.Transparent
+                                                            )
                                                         }
                                                     }
                                                 }
                                             }
+                                        }
+                                    }
+
+                                    // Row 4: [Use Biometric] Capsule Pill | 0 Digit | [Delete] Backspace
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Left: Capsule Pill Button for Biometrics
+                                        Box(
+                                            modifier = Modifier.size(width = 78.dp, height = 78.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            GlassCapsuleButton(
+                                                enabled = lockoutSecondsRemaining == 0,
+                                                onClick = { triggerBiometricPrompt() },
+                                                modifier = Modifier
+                                                    .width(108.dp)
+                                                    .height(48.dp)
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.Center,
+                                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Lucide.Fingerprint,
+                                                        contentDescription = "Use Biometric",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(19.dp)
+                                                    )
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .width(1.dp)
+                                                            .height(18.dp)
+                                                            .background(Color.White.copy(alpha = 0.28f))
+                                                    )
+                                                    Spacer(Modifier.width(6.dp))
+                                                    Text(
+                                                        text = "Use Biometric",
+                                                        fontSize = 10.5.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = Color.White,
+                                                        fontFamily = InterFontFamily,
+                                                        maxLines = 1
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        // Center: 0 Digit
+                                        GlassKeypadButton(
+                                            enabled = lockoutSecondsRemaining == 0,
+                                            onClick = { onDigitEntered("0") }
+                                        ) {
+                                            Text(
+                                                text = "0",
+                                                fontSize = 30.sp,
+                                                fontWeight = FontWeight.Normal,
+                                                lineHeight = 30.sp,
+                                                color = Color.White,
+                                                fontFamily = InterFontFamily,
+                                                style = TextStyle(
+                                                    shadow = Shadow(
+                                                        color = Color.Black.copy(alpha = 0.85f),
+                                                        offset = Offset(0f, 1f),
+                                                        blurRadius = 3f
+                                                    )
+                                                )
+                                            )
+                                        }
+
+                                        // Right: Backspace Button
+                                        GlassKeypadButton(
+                                            enabled = lockoutSecondsRemaining == 0,
+                                            onClick = { onPinDelete() }
+                                        ) {
+                                            Icon(
+                                                imageVector = Lucide.Delete,
+                                                contentDescription = "Delete digit",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(24.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -1395,6 +1399,68 @@ private fun OscellionExactMorphScreen() {
                 letterSpacing = (-0.02).sp
             )
         }
+    }
+}
+
+/**
+ * Specular Frosted Glass Capsule Keypad Button (Capsule pill for Biometric Switch)
+ * Matches the capsule button from the lock screen specification:
+ * - Rounded pill shape with vertical divider between fingerprint and text
+ * - Frosted glass bevel highlight and tactile press feedback
+ */
+@Composable
+private fun GlassCapsuleButton(
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && enabled) 0.94f else 1f,
+        animationSpec = spring(stiffness = 500f, dampingRatio = 0.6f),
+        label = "glassCapsuleScale"
+    )
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                alpha = if (enabled) 1f else 0.4f
+            }
+            .clip(CircleShape)
+            .background(
+                if (isPressed && enabled) Color.White.copy(alpha = 0.22f)
+                else Color.White.copy(alpha = 0.08f)
+            )
+            .border(
+                width = 0.75.dp,
+                brush = Brush.verticalGradient(
+                    colors = if (isPressed && enabled) listOf(
+                        Color.White.copy(alpha = 0.75f),
+                        Color.White.copy(alpha = 0.35f),
+                        Color.White.copy(alpha = 0.15f),
+                        Color.White.copy(alpha = 0.45f)
+                    ) else listOf(
+                        Color.White.copy(alpha = 0.58f),
+                        Color.White.copy(alpha = 0.12f),
+                        Color.White.copy(alpha = 0.04f),
+                        Color.White.copy(alpha = 0.24f)
+                    )
+                ),
+                shape = CircleShape
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
     }
 }
 
