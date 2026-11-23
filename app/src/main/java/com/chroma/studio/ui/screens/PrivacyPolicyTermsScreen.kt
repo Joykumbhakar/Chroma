@@ -31,6 +31,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.R
+import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.ui.components.ChromaScreenHeader
 import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
@@ -56,6 +58,7 @@ fun PrivacyPolicyTermsScreen(
     onDecline: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
+    val colors = LocalOscellionColors.current
     var hasAgreed by remember { mutableStateOf(!isFirstLaunch) }
     var selectedSectionDetail by remember { mutableStateOf<PolicySectionItem?>(null) }
     var showFullPolicySheet by remember { mutableStateOf(false) }
@@ -111,71 +114,34 @@ fun PrivacyPolicyTermsScreen(
     }
 
     Scaffold(
-        containerColor = Color.Black,
+        containerColor = colors.bg,
         topBar = {
-            // ─── TOP APP BAR ──────────────────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .height(56.dp)
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Circular Back Button
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF16171B))
-                        .border(1.dp, Color(0xFF26272E), CircleShape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onBack
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Lucide.ChevronLeft,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                // Centered Title & Last Updated
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+            ChromaScreenHeader(
+                title = "Oscellion",
+                badgeText = "Privacy Policy",
+                showBackButton = true,
+                onBack = {
+                    SoundManager.playReaction()
+                    onBack()
+                },
+                actions = {
                     Text(
-                        text = "Privacy",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                        fontFamily = InterFontFamily
-                    )
-                    Spacer(Modifier.height(1.dp))
-                    Text(
-                        text = "Last updated: Nov 23, 2026",
+                        text = "Nov 23, 2026",
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color(0xFF8E8E93),
-                        fontFamily = InterFontFamily
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textMuted,
+                        fontFamily = InterFontFamily,
+                        modifier = Modifier.padding(end = 4.dp)
                     )
                 }
-
-                // Balance Spacer
-                Spacer(Modifier.size(40.dp))
-            }
+            )
         },
         bottomBar = {
             // ─── BOTTOM ACCEPTANCE CONTROLS & ACTION BUTTONS ─────────
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.95f))
+                    .background(colors.bg.copy(alpha = 0.95f))
                     .navigationBarsPadding()
                     .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
