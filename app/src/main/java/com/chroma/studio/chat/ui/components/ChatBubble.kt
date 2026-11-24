@@ -667,6 +667,17 @@ private fun MessageCallRow(
     colors: ChatColors,
     modifier: Modifier = Modifier
 ) {
+    val isMissed = message.callDuration?.contains("missed", ignoreCase = true) == true || message.text?.contains("missed", ignoreCase = true) == true
+    val isDeclined = message.callDuration?.contains("declined", ignoreCase = true) == true ||
+        message.callDuration?.contains("rejected", ignoreCase = true) == true ||
+        message.text?.contains("declined", ignoreCase = true) == true
+    val iconTint = if (isMissed) Color(0xFFEF4444) else colors.iosBlue
+    val callTitle = when {
+        isMissed -> "Missed ${message.callType ?: "Audio"} call"
+        isDeclined -> "Declined ${message.callType ?: "Audio"} call"
+        else -> "${message.callType ?: "Audio"} call ended • ${message.callDuration ?: "0m"}"
+    }
+
     Box(
         modifier = modifier.fillMaxWidth().padding(vertical = 6.dp),
         contentAlignment = Alignment.Center
@@ -680,12 +691,12 @@ private fun MessageCallRow(
                 .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(8.dp))
                 .padding(horizontal = 12.dp, vertical = 5.dp)
         ) {
-            LucidePhone(tint = colors.iosBlue, size = 13.dp)
+            LucidePhone(tint = iconTint, size = 13.dp)
             Text(
-                text = "${message.callType ?: "Audio"} call ended • ${message.callDuration ?: "0m"}",
+                text = callTitle,
                 fontSize = 11.5.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = colors.textMuted
+                color = if (isMissed) Color(0xFFEF4444) else colors.textMuted
             )
             if (message.time.isNotBlank()) {
                 Text(

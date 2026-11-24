@@ -2593,9 +2593,11 @@ fun FullCallModal(
     val min = callDurationSec / 60
     val sec = callDurationSec % 60
     val timerStr = "$min:${sec.toString().padStart(2, '0')}"
-    var isMicMuted by remember { mutableStateOf(false) }
-    var isCamOn by remember { mutableStateOf(callType.contains("Video")) }
-    var isSpeakerOn by remember { mutableStateOf(false) }
+    val defaultFalse = remember { kotlinx.coroutines.flow.MutableStateFlow(false) }
+    val defaultCam = remember { kotlinx.coroutines.flow.MutableStateFlow(callType.contains("Video")) }
+    val isMicMuted by (callManager?.isMicMuted ?: defaultFalse).collectAsState()
+    val isCamOn by (callManager?.isCameraEnabled ?: defaultCam).collectAsState()
+    val isSpeakerOn by (callManager?.isSpeakerOn ?: defaultFalse).collectAsState()
 
     Box(
         modifier = Modifier
@@ -2746,7 +2748,7 @@ fun FullCallModal(
                         },
                         label = "mute",
                         isActive = isMicMuted,
-                        onClick = { isMicMuted = !isMicMuted; onToggleMic() }
+                        onClick = onToggleMic
                     )
                     AppleCallIconButton(
                         icon = {
@@ -2755,7 +2757,7 @@ fun FullCallModal(
                         },
                         label = "speaker",
                         isActive = isSpeakerOn,
-                        onClick = { isSpeakerOn = !isSpeakerOn; onToggleSpeaker() }
+                        onClick = onToggleSpeaker
                     )
                     AppleCallIconButton(
                         icon = {
@@ -2764,7 +2766,7 @@ fun FullCallModal(
                         },
                         label = "video",
                         isActive = isCamOn,
-                        onClick = { isCamOn = !isCamOn; onToggleCam() }
+                        onClick = onToggleCam
                     )
                     if (isCamOn) {
                         AppleCallIconButton(

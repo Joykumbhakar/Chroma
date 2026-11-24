@@ -225,6 +225,10 @@ private fun AuthenticatedRoute(
                 val chatVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.ChatViewModel>()
                 val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
 
+                LaunchedEffect(Unit) {
+                    chatVm.initializeCallManager(this@HomeActivity)
+                }
+
                 val handleLogout: () -> Unit = {
                     // Optimistic instant UI transition directly to Login screen (never blank)
                     prefs.edit().putBoolean("is_first_launch", true).apply()
@@ -2381,6 +2385,40 @@ private fun AuthenticatedRoute(
             com.chroma.studio.ui.components.ChromaToastHost()
             com.chroma.studio.ui.components.IosDynamicIslandHost(isNotchMode = false)
             com.chroma.studio.ui.components.ChromaInAppBrowserHost()
+
+            // ── Global WebRTC Incoming Call Overlay ──
+            val rtcIncomingCall by chatVm.incomingCall.collectAsState()
+            androidx.compose.animation.AnimatedVisibility(
+                visible = rtcIncomingCall != null,
+                enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(250)) + androidx.compose.animation.slideInVertically { -it },
+                exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.slideOutVertically { -it }
+            ) {
+                com.chroma.studio.webrtc.IncomingCallOverlay(
+                    call = rtcIncomingCall,
+                    onAccept = {
+                        val call = rtcIncomingCall ?: return@IncomingCallOverlay
+                        try {
+                            chatVm.initializeCallManager(this@HomeActivity)
+                            chatVm.answerCall(call)
+                            if (call.roomId.isNotBlank()) {
+                                coroutineScope.launch {
+                                    pagerState.scrollToPage(3)
+                                }
+                                navController.navigate("chat/${call.roomId}") {
+                                    launchSingleTop = true
+                                }
+                            }
+                        } catch (e: Throwable) {
+                            android.util.Log.e("HomeActivity", "Error answering incoming call", e)
+                            com.chroma.studio.ui.components.ToastManager.showToast("Unable to answer call: ${e.message}")
+                        }
+                    },
+                    onDecline = {
+                        val call = rtcIncomingCall ?: return@IncomingCallOverlay
+                        chatVm.rejectCall(call)
+                    }
+                )
+            }
 
             // ── Device Music Trimmer Modal ──
             if (showDeviceMusicTrimmer) {

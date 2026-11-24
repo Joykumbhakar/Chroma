@@ -1743,9 +1743,20 @@ private fun ChatScreenContent(
     val rtcDuration by (chatViewModel?.callDurationSec ?: defaultDuration).collectAsState()
 
     LaunchedEffect(rtcCallState) {
-        if (rtcCallState == CallState.ENDED) {
-            isCallBannerActive = false
-            isFullCallModalOpen = false
+        when (rtcCallState) {
+            CallState.CALLING, CallState.ACTIVE -> {
+                val activeCall = chatViewModel?.activeCall?.value
+                if (activeCall != null) {
+                    activeCallType = if (activeCall.isVideo) "Video Call" else "Audio Call"
+                }
+                isCallBannerActive = true
+                isFullCallModalOpen = true
+            }
+            CallState.ENDED, CallState.IDLE -> {
+                isCallBannerActive = false
+                isFullCallModalOpen = false
+            }
+            else -> {}
         }
     }
     LaunchedEffect(rtcDuration) {

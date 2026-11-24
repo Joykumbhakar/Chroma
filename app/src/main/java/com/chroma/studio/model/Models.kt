@@ -258,7 +258,9 @@ data class ChatMessage(
     val flashVideoCaption: String? = null,
     val flashVideoAuthorUsername: String? = null,
     val flashVideoAuthorAvatarUrl: String? = null,
-    val flashVideoDurationMs: Long? = null
+    val flashVideoDurationMs: Long? = null,
+    val callDuration: String? = null,
+    val callType: String? = null
 )
 
 @kotlinx.serialization.Serializable

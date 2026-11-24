@@ -239,13 +239,16 @@ class SupabaseChatRepository {
         flashVideoAuthorUsername: String? = null,
         flashVideoAuthorAvatarUrl: String? = null,
         flashVideoDurationMs: Long? = null,
-        isForwarded: Boolean = false
+        isForwarded: Boolean = false,
+        callDuration: String? = null,
+        callType: String? = null,
+        mediaType: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext false
         try {
             val messageId = preGeneratedId ?: java.util.UUID.randomUUID().toString()
             val timestamp = System.currentTimeMillis()
-            val (finalMessageText, finalIv, finalEncryptedKeys) = if (messageType != "system" && messageType != "flash_video" && text.isNotBlank()) {
+            val (finalMessageText, finalIv, finalEncryptedKeys) = if (messageType != "system" && messageType != "flash_video" && messageType != "call" && text.isNotBlank()) {
                 encryptPayload(roomId, text, currentUser.uid)
             } else {
                 Triple(text, "", emptyMap<String, String>())
@@ -258,6 +261,7 @@ class SupabaseChatRepository {
                 timestamp = timestamp,
                 isRead = false,
                 imageUrl = imageUrl,
+                mediaType = mediaType ?: if (messageType == "call") "call" else null,
                 workId = workId,
                 messageType = messageType,
                 iv = finalIv,
@@ -273,7 +277,9 @@ class SupabaseChatRepository {
                 flashVideoAuthorUsername = flashVideoAuthorUsername,
                 flashVideoAuthorAvatarUrl = flashVideoAuthorAvatarUrl,
                 flashVideoDurationMs = flashVideoDurationMs,
-                isForwarded = isForwarded
+                isForwarded = isForwarded,
+                callDuration = callDuration,
+                callType = callType
             )
 
             // 1. Save directly to Firestore subcollection for 100% reliable persistence & realtime listeners
@@ -302,7 +308,11 @@ class SupabaseChatRepository {
                             updatedUnreadCount[participantId] = (updatedUnreadCount[participantId] ?: 0) + 1
                         }
                     }
-                    val displayMessage = if (messageType == "flash_video" || flashVideoId != null) {
+                    val displayMessage = if (messageType == "call") {
+                        val type = callType ?: "Audio"
+                        val dur = if (!callDuration.isNullOrBlank()) " • $callDuration" else ""
+                        "$type call$dur"
+                    } else if (messageType == "flash_video" || flashVideoId != null) {
                         "⚡ Shared a Flash video"
                     } else if (storyThumbnailUrl != null || storyId != null) {
                         "Replied to story: $text"

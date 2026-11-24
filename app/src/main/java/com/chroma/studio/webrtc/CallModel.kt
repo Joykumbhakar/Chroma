@@ -14,6 +14,7 @@ enum class CallState {
 @Keep
 data class CallModel(
     val id: String = "",
+    val roomId: String = "",
     val callerId: String = "",
     val callerName: String = "",
     val callerAvatar: String = "",
@@ -21,7 +22,7 @@ data class CallModel(
     val calleeName: String = "",
     val calleeAvatar: String = "",
     val type: String = "audio", // "audio" or "video"
-    val status: String = "calling", // "calling", "ringing", "accepted", "rejected", "ended", "busy"
+    val status: String = "calling", // "calling", "ringing", "accepted", "rejected", "ended", "busy", "missed"
     val offer: Map<String, String>? = null,
     val answer: Map<String, String>? = null,
     val timestamp: Long = System.currentTimeMillis()

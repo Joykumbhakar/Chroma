@@ -139,10 +139,6 @@ fun ChatCallOverlays(
         enter = slideInVertically(initialOffsetY = { it }, animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(animationSpec = tween(220)),
         exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(180)) + fadeOut(animationSpec = tween(180))
     ) {
-        var isMicMuted by remember { mutableStateOf(false) }
-        var isCamEnabled by remember { mutableStateOf(activeCallType.contains("Video", ignoreCase = true)) }
-        var isSpeakerOn by remember { mutableStateOf(activeCallType.contains("Video", ignoreCase = true)) }
-
         FullCallModal(
             chat = activeChat,
             callType = activeCallType,
@@ -150,53 +146,20 @@ fun ChatCallOverlays(
             callManager = chatViewModel?.callManager,
             onToggleMic = {
                 val muted = chatViewModel?.toggleMute() ?: false
-                isMicMuted = muted
                 showToast(if (muted) "Microphone muted" else "Microphone unmuted")
             },
             onToggleCam = {
                 val camOn = chatViewModel?.toggleCamera() ?: true
-                isCamEnabled = camOn
                 showToast(if (camOn) "Camera enabled" else "Camera disabled")
             },
             onToggleSpeaker = {
                 val spkOn = chatViewModel?.toggleSpeaker() ?: false
-                isSpeakerOn = spkOn
                 showToast(if (spkOn) "Speaker on" else "Earpiece active")
             },
             onSwitchCamera = {
                 chatViewModel?.switchCamera()
             },
             onHangup = onHangup
-        )
-    }
-
-    // WebRTC Incoming Call Overlay (Best User-Friendly Incoming Call UX)
-    val defaultIncoming = remember { kotlinx.coroutines.flow.MutableStateFlow<CallModel?>(null) }
-    val rtcIncomingCall by (chatViewModel?.incomingCall ?: defaultIncoming).collectAsState()
-
-    AnimatedVisibility(
-        visible = rtcIncomingCall != null,
-        enter = fadeIn(tween(250)) + slideInVertically { -it },
-        exit = fadeOut(tween(200)) + slideOutVertically { -it }
-    ) {
-        IncomingCallOverlay(
-            call = rtcIncomingCall,
-            onAccept = {
-                val call = rtcIncomingCall ?: return@IncomingCallOverlay
-                try {
-                    val callType = if (call.isVideo) "Video Call" else "Audio Call"
-                    onCallUiOpened(callType)
-                    chatViewModel?.initializeCallManager(context)
-                    chatViewModel?.answerCall(call)
-                } catch (e: Throwable) {
-                    Log.e("ChatCallHandler", "Error answering call", e)
-                    showToast("Unable to answer call: ${e.message}")
-                }
-            },
-            onDecline = {
-                val call = rtcIncomingCall ?: return@IncomingCallOverlay
-                chatViewModel?.rejectCall(call)
-            }
         )
     }
 }

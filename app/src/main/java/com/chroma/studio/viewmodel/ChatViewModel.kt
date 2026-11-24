@@ -1731,9 +1731,53 @@ class ChatViewModel : ViewModel() {
         if (callManager == null) {
             val mgr = com.chroma.studio.webrtc.CallManager(context.applicationContext)
             callManager = mgr
+            mgr.onCallEndedListener = { call, durationSec, status ->
+                logCallHistory(call, durationSec, status)
+            }
             val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
             if (!uid.isNullOrBlank()) {
                 mgr.startListeningForIncomingCalls(uid)
+            }
+        }
+    }
+
+    private fun logCallHistory(call: com.chroma.studio.webrtc.CallModel, durationSec: Int, status: String) {
+        val targetRoomId = call.roomId.takeIf { it.isNotBlank() } ?: return
+        val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        // Only the caller logs the call message to Firestore to prevent duplicates
+        if (call.callerId != currentUid) return
+
+        viewModelScope.launch {
+            try {
+                val callTypeStr = if (call.isVideo) "Video" else "Audio"
+                val durationStr = when (status) {
+                    "missed" -> "Missed"
+                    "rejected" -> "Declined"
+                    "busy" -> "Busy"
+                    else -> {
+                        val m = durationSec / 60
+                        val s = durationSec % 60
+                        if (m > 0) "${m}m ${s}s" else "${s}s"
+                    }
+                }
+                val textSnippet = when (status) {
+                    "missed" -> "Missed $callTypeStr call"
+                    "rejected" -> "Declined $callTypeStr call"
+                    "busy" -> "$callTypeStr call • Busy"
+                    else -> "$callTypeStr call ended • $durationStr"
+                }
+
+                repository.sendMessage(
+                    roomId = targetRoomId,
+                    text = textSnippet,
+                    messageType = "call",
+                    mediaType = "call",
+                    callDuration = durationStr,
+                    callType = callTypeStr
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                android.util.Log.e("ChatViewModel", "Error logging call history", e)
             }
         }
     }
@@ -1783,8 +1827,8 @@ class ChatViewModel : ViewModel() {
         callManager?.switchCamera()
     }
 
-    fun endCall() {
-        callManager?.endCall()
+    fun endCall(reason: String = "ended") {
+        callManager?.endCall(reason)
     }
 
     fun unpinMessage(roomId: String) {

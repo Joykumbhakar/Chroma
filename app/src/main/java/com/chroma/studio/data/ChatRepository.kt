@@ -128,7 +128,10 @@ class ChatRepository {
         flashVideoCaption: String? = null,
         flashVideoAuthorUsername: String? = null,
         flashVideoAuthorAvatarUrl: String? = null,
-        flashVideoDurationMs: Long? = null
+        flashVideoDurationMs: Long? = null,
+        callDuration: String? = null,
+        callType: String? = null,
+        mediaType: String? = null
     ): Boolean {
         val currentUser = auth.currentUser ?: return false
         return try {
@@ -141,6 +144,7 @@ class ChatRepository {
                 isRead = false,
                 workId = workId,
                 imageUrl = imageUrl,
+                mediaType = mediaType ?: if (messageType == "call") "call" else null,
                 isPending = false,
                 messageType = messageType,
                 durationSeconds = durationSeconds,
@@ -153,7 +157,9 @@ class ChatRepository {
                 flashVideoCaption = flashVideoCaption,
                 flashVideoAuthorUsername = flashVideoAuthorUsername,
                 flashVideoAuthorAvatarUrl = flashVideoAuthorAvatarUrl,
-                flashVideoDurationMs = flashVideoDurationMs
+                flashVideoDurationMs = flashVideoDurationMs,
+                callDuration = callDuration,
+                callType = callType
             )
             
             // Add message to subcollection
@@ -170,7 +176,11 @@ class ChatRepository {
                     for (id in otherUserIds) {
                         updatedUnreadCount[id] = (updatedUnreadCount[id] ?: 0) + 1
                     }
-                    val displayMessage = if (messageType == "flash_video" || flashVideoId != null) "⚡ Shared a Flash video"
+                    val displayMessage = if (messageType == "call") {
+                        val type = callType ?: "Audio"
+                        val dur = if (!callDuration.isNullOrBlank()) " • $callDuration" else ""
+                        "$type call$dur"
+                    } else if (messageType == "flash_video" || flashVideoId != null) "⚡ Shared a Flash video"
                                          else if (storyThumbnailUrl != null || storyId != null) "Replied to story: $text"
                                          else if (imageUrl != null) "Sent an image" 
                                          else if (workId != null) "Shared a work" 

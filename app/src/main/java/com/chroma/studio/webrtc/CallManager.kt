@@ -48,17 +48,28 @@ class CallManager(
     private var callSessionJob: Job? = null
     private var incomingCallJob: Job? = null
     private var candidateJob: Job? = null
+    private var ringingTimeoutJob: Job? = null
+
+    var onCallEndedListener: ((call: CallModel, durationSec: Int, status: String) -> Unit)? = null
 
     fun startListeningForIncomingCalls(currentUserId: String) {
         if (currentUserId.isBlank()) return
         incomingCallJob?.cancel()
         incomingCallJob = scope.launch {
             signaling.listenForIncomingCalls(currentUserId).collect { call ->
-                // Only show incoming call if we are currently IDLE
-                if (call != null && _callState.value == CallState.IDLE) {
-                    _incomingCall.value = call
-                    _callState.value = CallState.RINGING
-                } else if (call == null && _callState.value == CallState.RINGING) {
+                if (call != null) {
+                    if (_callState.value == CallState.IDLE) {
+                        _incomingCall.value = call
+                        _callState.value = CallState.RINGING
+                    } else if (_activeCall.value?.id != call.id) {
+                        // Busy line if already in another call
+                        scope.launch {
+                            try {
+                                signaling.endCall(call.id, "busy")
+                            } catch (_: Throwable) {}
+                        }
+                    }
+                } else if (_callState.value == CallState.RINGING) {
                     _incomingCall.value = null
                     _callState.value = CallState.IDLE
                 }
@@ -78,9 +89,10 @@ class CallManager(
     ) {
         if (_callState.value != CallState.IDLE) return
 
-        val callId = if (roomId.isNotBlank()) roomId.replace("/", "_") else "call_${System.currentTimeMillis()}"
+        val callId = "${if (roomId.isNotBlank()) roomId.replace("/", "_") else "call"}_${System.currentTimeMillis()}"
         val call = CallModel(
             id = callId,
+            roomId = roomId,
             callerId = callerId,
             callerName = callerName,
             callerAvatar = callerAvatar,
@@ -97,6 +109,16 @@ class CallManager(
         _isCameraEnabled.value = isVideo
         _isSpeakerOn.value = isVideo
         _isMicMuted.value = false
+
+        // 45-second Ringing Timeout
+        ringingTimeoutJob?.cancel()
+        ringingTimeoutJob = scope.launch {
+            delay(45_000L)
+            if (_callState.value == CallState.CALLING) {
+                Log.w("CallManager", "Call timed out with no answer after 45s")
+                endCall("missed")
+            }
+        }
 
         try {
             audioManager.start(isSpeakerDefault = isVideo)
@@ -149,6 +171,8 @@ class CallManager(
     }
 
     fun answerCall(call: CallModel) {
+        ringingTimeoutJob?.cancel()
+        ringingTimeoutJob = null
         _incomingCall.value = null
         _activeCall.value = call
         _callState.value = CallState.ACTIVE
@@ -196,7 +220,7 @@ class CallManager(
                                     },
                                     onError = { error ->
                                         Log.e("CallManager", "Create answer error: $error")
-                                        endCall()
+                                        endCall("error")
                                     }
                                 )
                             } catch (e: Throwable) {
@@ -213,11 +237,13 @@ class CallManager(
             }
         } catch (e: Throwable) {
             Log.e("CallManager", "Error answering call", e)
-            cleanupAndEnd()
+            cleanupAndEnd("error")
         }
     }
 
     fun rejectCall(call: CallModel) {
+        ringingTimeoutJob?.cancel()
+        ringingTimeoutJob = null
         scope.launch {
             try {
                 signaling.endCall(call.id, "rejected")
@@ -227,18 +253,28 @@ class CallManager(
         }
         _incomingCall.value = null
         _callState.value = CallState.IDLE
+        try {
+            onCallEndedListener?.invoke(call, 0, "rejected")
+        } catch (e: Throwable) {
+            Log.e("CallManager", "Error invoking onCallEndedListener on reject", e)
+        }
     }
 
     private fun listenToCallSession(callId: String, isCaller: Boolean) {
         callSessionJob?.cancel()
         callSessionJob = scope.launch {
             signaling.listenToCall(callId).collect { session ->
-                if (session == null || session.status == "ended" || session.status == "rejected") {
-                    cleanupAndEnd()
+                if (session == null || session.status in listOf("ended", "rejected", "busy", "missed")) {
+                    cleanupAndEnd(session?.status ?: "ended")
                     return@collect
                 }
 
                 _activeCall.value = session
+
+                if (session.status == "accepted") {
+                    ringingTimeoutJob?.cancel()
+                    ringingTimeoutJob = null
+                }
 
                 if (isCaller && session.status == "accepted" && session.answer != null) {
                     val answerSdp = session.answer["sdp"]
@@ -395,17 +431,25 @@ class CallManager(
         webRTCClient?.switchCamera()
     }
 
-    fun endCall() {
+    fun endCall(reason: String = "ended") {
+        ringingTimeoutJob?.cancel()
+        ringingTimeoutJob = null
         val currentCall = _activeCall.value
         if (currentCall != null) {
             scope.launch {
-                signaling.endCall(currentCall.id, "ended")
+                try {
+                    signaling.endCall(currentCall.id, reason)
+                } catch (e: Throwable) {
+                    Log.e("CallManager", "Error ending call", e)
+                }
             }
         }
-        cleanupAndEnd()
+        cleanupAndEnd(reason)
     }
 
-    private fun cleanupAndEnd() {
+    private fun cleanupAndEnd(reason: String = "ended") {
+        ringingTimeoutJob?.cancel()
+        ringingTimeoutJob = null
         timerJob?.cancel()
         timerJob = null
         callSessionJob?.cancel()
@@ -420,10 +464,21 @@ class CallManager(
         localRenderer = null
         remoteRenderer = null
 
+        val lastCall = _activeCall.value
+        val lastDuration = _callDurationSec.value
+
         _activeCall.value = null
         _incomingCall.value = null
         _callDurationSec.value = 0
         _callState.value = CallState.ENDED
+
+        if (lastCall != null) {
+            try {
+                onCallEndedListener?.invoke(lastCall, lastDuration, reason)
+            } catch (e: Throwable) {
+                Log.e("CallManager", "Error invoking onCallEndedListener", e)
+            }
+        }
 
         scope.launch {
             delay(500)
