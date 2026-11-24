@@ -93,10 +93,10 @@ import java.util.UUID
  * Universal Post Types for Chroma Studio Creator System.
  */
 enum class PostType(val id: String, val title: String, val subtitle: String, val icon: ImageVector) {
-    PHOTO("photo", "Photo Post", "Multi-Image & Carousel", Lucide.Image),
-    FLASH("flash", "Flash Video", "Short-Form Video & Reels", Lucide.Film),
-    WORK("work", "Creative Work", "Portfolio Showcase & Masterwork", Lucide.Palette),
-    STORY("story", "24h Story", "Ephemeral 24h Status", Lucide.Sparkles)
+    PHOTO("photo", "Post", "Multi-Image & Carousel", Lucide.Image),
+    FLASH("flash", "Flash", "Short-Form Video & Reels", Lucide.Film),
+    STORY("story", "Story", "Ephemeral 24h Status", Lucide.CirclePlus),
+    WORK("work", "Work", "Portfolio Showcase & Masterwork", Lucide.Palette)
 }
 
 /**
@@ -1013,7 +1013,7 @@ private fun PostTypeSegmentedBar(
                         modifier = Modifier.size(13.5.dp)
                     )
                     Text(
-                        text = type.title.split(" ").first(),
+                        text = type.title,
                         fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                         color = if (isSelected) colors.onPrimary else colors.textMuted,

@@ -97,12 +97,10 @@ import com.chroma.studio.ui.components.ShareStoryAudienceSheet
 import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
 
 import com.chroma.studio.ui.screens.StoryViewerScreen
-import com.chroma.studio.ui.screens.FlashPhotoEditorScreen
 import com.chroma.studio.ui.screens.ChromaPhotoEditorScreen
 import com.chroma.studio.sticker.StickerItem
 import com.chroma.studio.sticker.StickerPickerSheet
 import com.chroma.studio.sticker.StickerStudioModal
-import com.chroma.studio.ui.screens.PhotoAspectRatio
 
 import com.chroma.studio.viewmodel.StoryViewModel
 
@@ -4561,15 +4559,20 @@ private fun ChatScreenContent(
 
         // Story Image Editor
         if (editingStoryImageUri != null) {
-            FlashPhotoEditorScreen(
+            ChromaPhotoEditorScreen(
+                photoUri = editingStoryImageUri!!,
                 photoUris = listOf(editingStoryImageUri!!),
-                title = "Edit Story",
-                initialAspectRatio = PhotoAspectRatio.STORY_9_16,
-                nextButtonLabel = "Share Story",
-                onExportUris = { editedUris ->
+                exportButtonLabel = "Share Story",
+                onExportSuccess = { singleEditedUri ->
+                    pendingUploadStoryUri = singleEditedUri
+                    showShareStoryAudienceSheet = true
+                    editingStoryImageUri = null
+                },
+                onExportAllSuccess = { editedUris ->
                     val finalUri = editedUris.firstOrNull() ?: editingStoryImageUri!!
                     pendingUploadStoryUri = finalUri
                     showShareStoryAudienceSheet = true
+                    editingStoryImageUri = null
                 },
                 onBack = {
                     editingStoryImageUri = null
