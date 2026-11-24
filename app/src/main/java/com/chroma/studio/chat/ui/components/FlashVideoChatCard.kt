@@ -276,33 +276,67 @@ fun FlashVideoChatCard(
                     )
                 }
 
-                // Bottom Row: Duration Chip + "Watch Flash" Interactive Pill
+                // Bottom Row: Duration Chip, Time + Status Tick, and "Watch Flash" Interactive Pill
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Duration Chip
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.White.copy(alpha = 0.16f))
-                            .padding(horizontal = 6.dp, vertical = 2.5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(
-                            imageVector = Lucide.Clock,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.88f),
-                            modifier = Modifier.size(11.dp)
-                        )
-                        Text(
-                            text = durationFormatted,
-                            color = Color.White,
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        // Duration Chip
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.16f))
+                                .padding(horizontal = 6.dp, vertical = 2.5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Clock,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.88f),
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = durationFormatted,
+                                color = Color.White,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        // Time + MessageStatusTick Pill
+                        if (message.time.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Black.copy(alpha = 0.45f))
+                                    .padding(horizontal = 5.dp, vertical = 2.5.dp)
+                            ) {
+                                Text(
+                                    text = message.time,
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                if (isOutgoing) {
+                                    MessageStatusTick(
+                                        status = message.status,
+                                        isOutgoing = true,
+                                        normalTint = Color.White.copy(alpha = 0.9f),
+                                        readTint = Color(0xFF53BDEB),
+                                        pendingTint = Color.White.copy(alpha = 0.75f),
+                                        size = 11.5.dp
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     // "Watch Flash" Interactive Action Pill

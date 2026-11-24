@@ -1,8 +1,11 @@
 package com.chroma.studio.chat.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -15,6 +18,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.chroma.studio.ui.theme.LocalOscellionColors
 
 // ==========================================
 // 📸 INPUT & ATTACHMENT ICONS (from Interface.html)
@@ -381,53 +385,76 @@ fun PhosphorErrorExclamation(tint: Color = Color(0xFFEF4444), size: Dp = 13.dp, 
 fun MessageStatusTick(
     status: String,
     isOutgoing: Boolean = true,
-    normalTint: Color = Color(0xFF8696A0),
-    readTint: Color = Color(0xFF53BDEB),
+    normalTint: Color = if (LocalOscellionColors.current.isDark) Color(0xFF8696A0) else Color(0xFF71717A),
+    readTint: Color = if (LocalOscellionColors.current.isDark) Color(0xFF53BDEB) else Color(0xFF0381FE),
     pendingTint: Color = Color(0xFF8696A0),
     errorTint: Color = Color(0xFFEF4444),
     size: Dp = 13.dp,
     modifier: Modifier = Modifier
 ) {
     if (!isOutgoing) return
-    when (status.lowercase()) {
-        "pending" -> {
+
+    val cleanStatus = status.trim().lowercase()
+    val isSeen = cleanStatus == "read" || cleanStatus == "seen"
+    val isDelivered = cleanStatus == "delivered"
+    val isPending = cleanStatus == "pending"
+    val isError = cleanStatus == "error" || cleanStatus == "failed"
+
+    val targetTint = when {
+        isError -> errorTint
+        isSeen -> readTint
+        isPending -> pendingTint
+        else -> normalTint
+    }
+
+    val animatedTint by animateColorAsState(
+        targetValue = targetTint,
+        animationSpec = tween(durationMillis = 220),
+        label = "statusTickTint"
+    )
+
+    when {
+        isPending -> {
+            val infiniteTransition = rememberInfiniteTransition(label = "pendingPulse")
+            val pulseAlpha by infiniteTransition.animateFloat(
+                initialValue = 0.5f,
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(750, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "pulseAlpha"
+            )
             PhosphorPendingClock(
-                tint = pendingTint,
+                tint = animatedTint.copy(alpha = pulseAlpha),
                 size = (size.value - 1f).coerceAtLeast(10f).dp,
                 modifier = modifier
             )
         }
-        "sent" -> {
+        cleanStatus == "sent" -> {
             PhosphorSingleCheck(
-                tint = normalTint,
+                tint = animatedTint,
                 size = size,
                 modifier = modifier
             )
         }
-        "delivered" -> {
+        isDelivered || isSeen -> {
             PhosphorDoubleCheck(
-                tint = normalTint,
+                tint = animatedTint,
                 size = (size.value + 2.5f).dp,
                 modifier = modifier
             )
         }
-        "read", "seen" -> {
-            PhosphorDoubleCheck(
-                tint = readTint,
-                size = (size.value + 2.5f).dp,
-                modifier = modifier
-            )
-        }
-        "error", "failed" -> {
+        isError -> {
             PhosphorErrorExclamation(
-                tint = errorTint,
+                tint = animatedTint,
                 size = size,
                 modifier = modifier
             )
         }
         else -> {
             PhosphorSingleCheck(
-                tint = normalTint,
+                tint = animatedTint,
                 size = size,
                 modifier = modifier
             )

@@ -687,6 +687,14 @@ private fun MessageCallRow(
                 fontWeight = FontWeight.SemiBold,
                 color = colors.textMuted
             )
+            if (message.time.isNotBlank()) {
+                Text(
+                    text = "• ${message.time}",
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = colors.textMuted
+                )
+            }
         }
     }
 }
@@ -1966,7 +1974,8 @@ private fun MessageBubbleInnerContent(
             }
         } else {
             // 4. Timestamp for messages without text
-            if (!isVoiceOnly && !isMediaOnly) {
+            val isFlashVideo = message.mediaType == "flash_video" || message.flashVideoId != null
+            if (!isVoiceOnly && !isMediaOnly && !isFlashVideo) {
                 Row(
                     modifier = Modifier
                         .align(if (isOutgoing) Alignment.End else Alignment.Start)
@@ -1986,7 +1995,7 @@ private fun MessageBubbleInnerContent(
                             status = message.status,
                             isOutgoing = true,
                             normalTint = visual.timeColor,
-                            readTint = Color(0xFF53BDEB),
+                            readTint = if (colors.isLight && visual.timeColor != Color.White.copy(alpha = 0.82f)) Color(0xFF0381FE) else Color(0xFF53BDEB),
                             pendingTint = visual.timeColor.copy(alpha = 0.75f),
                             size = 12.dp
                         )

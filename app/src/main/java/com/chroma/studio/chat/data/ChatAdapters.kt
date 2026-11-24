@@ -133,7 +133,7 @@ object ChatAdapters {
 
         val timeStr = formatTime(msg.timestamp)
 
-        val isDelivered = msg.isDelivered || msg.isRead
+        val isDelivered = msg.isDelivered || msg.isRead || (isMe && isOtherOnline)
         val statusStr = when {
             msg.isPending -> "pending"
             msg.isError -> "error"
@@ -385,8 +385,14 @@ object ChatAdapters {
             val hasUnreadRecord = otherUid != null && room.unreadCount.containsKey(otherUid)
             val otherUnread = if (otherUid != null) room.unreadCount[otherUid] ?: 0 else 0
             val isOtherZeroUnread = hasUnreadRecord && otherUnread == 0
-            val isReadStatus = room.lastMessageIsRead || (!room.isGroup && isOtherZeroUnread)
-            val isDeliveredStatus = isReadStatus || room.lastMessageIsDelivered || isOnline
+            val isGroupAllRead = room.isGroup && room.participants.filter { it != currentUid }.let { others ->
+                others.isNotEmpty() && others.all { (room.unreadCount[it] ?: 0) == 0 }
+            }
+            val isGroupAnyDelivered = room.isGroup && room.participants.filter { it != currentUid }.let { others ->
+                others.isNotEmpty() && others.any { (room.unreadCount[it] ?: 0) == 0 }
+            }
+            val isReadStatus = room.lastMessageIsRead || (!room.isGroup && isOtherZeroUnread) || isGroupAllRead
+            val isDeliveredStatus = isReadStatus || room.lastMessageIsDelivered || isGroupAnyDelivered || isOnline
 
             val computedStatus = when {
                 room.lastSender != currentUid -> if ((room.unreadCount[currentUid] ?: 0) == 0) "read" else "delivered"

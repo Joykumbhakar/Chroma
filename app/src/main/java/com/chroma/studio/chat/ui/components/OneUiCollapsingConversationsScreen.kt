@@ -1699,9 +1699,9 @@ private fun OneUiSwipeableConversationItem(
                             MessageStatusTick(
                                 status = lastMsgStatus,
                                 isOutgoing = true,
-                                normalTint = Color(0xFF8696A0),
-                                readTint = Color(0xFF53BDEB),
-                                pendingTint = Color(0xFF8696A0),
+                                normalTint = if (colors.isLight) Color(0xFF71717A) else Color(0xFF8696A0),
+                                readTint = if (colors.isLight) Color(0xFF0381FE) else Color(0xFF53BDEB),
+                                pendingTint = if (colors.isLight) Color(0xFF71717A) else Color(0xFF8696A0),
                                 errorTint = Color(0xFFEF4444),
                                 size = 13.dp
                             )
