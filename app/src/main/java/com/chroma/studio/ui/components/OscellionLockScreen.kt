@@ -52,10 +52,6 @@ import com.chroma.studio.chat.util.findActivity
 import com.chroma.studio.security.SecurityPinManager
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.*
-import dev.chrisbanes.haze.HazeDefaults
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -115,9 +111,6 @@ fun OscellionLockScreen(
             }
         }
     }
-
-    val hazeState = remember { HazeState() }
-    val useBlur = rememberUseRealtimeBlur()
 
     // Wallpaper and dimming customization state
     var wallpaperUri by remember { mutableStateOf(SecurityPinManager.getWallpaperUri(context)) }
@@ -345,9 +338,7 @@ fun OscellionLockScreen(
         // 1. SHARED WALLPAPER & DIMMING SERVICE LAYER (REAL-TIME HAZE BLUR SOURCE)
         // =========================================================================
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .then(if (useBlur) Modifier.haze(hazeState) else Modifier)
+            modifier = Modifier.fillMaxSize()
         ) {
             AsyncImage(
                 model = ImageRequest.Builder(context)
@@ -532,25 +523,12 @@ fun OscellionLockScreen(
                                                 scaleY = bioScale
                                             }
                                             .clip(CircleShape)
-                                            .then(
-                                                if (useBlur) {
-                                                    Modifier.hazeChild(
-                                                        state = hazeState,
-                                                        shape = CircleShape,
-                                                        style = HazeDefaults.style(
-                                                            tint = Color(0xFF0062E6).copy(alpha = 0.35f),
-                                                            blurRadius = 20.dp,
-                                                            noiseFactor = 0f
-                                                        )
-                                                    )
-                                                } else Modifier
-                                            )
                                             .background(
-                                                brush = Brush.verticalGradient(
-                                                    listOf(Color(0xFF167EFF).copy(alpha = 0.94f), Color(0xFF0062E6).copy(alpha = 0.94f))
+                                                brush = Brush.horizontalGradient(
+                                                    listOf(Color(0xFF0381FE), Color(0xFF0072DE))
                                                 )
                                             )
-                                            .border(0.75.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+                                            .border(0.75.dp, Color.White.copy(alpha = 0.35f), CircleShape)
                                             .clickable(
                                                 interactionSource = bioInteraction,
                                                 indication = null
@@ -607,25 +585,11 @@ fun OscellionLockScreen(
                                                 scaleY = pinScale
                                             }
                                             .clip(CircleShape)
-                                            .then(
-                                                if (useBlur) {
-                                                    Modifier.hazeChild(
-                                                        state = hazeState,
-                                                        shape = CircleShape,
-                                                        style = HazeDefaults.style(
-                                                            tint = if (pinPressed) Color(0xFF222834).copy(alpha = 0.70f)
-                                                                   else Color(0xFF12161E).copy(alpha = 0.52f),
-                                                            blurRadius = 24.dp,
-                                                            noiseFactor = 0f
-                                                        )
-                                                    )
-                                                } else Modifier
-                                            )
                                             .background(
-                                                if (pinPressed) Color(0xFF222834).copy(alpha = 0.76f)
-                                                else Color(0xFF12161E).copy(alpha = 0.62f)
+                                                if (pinPressed) Color(0xFF222834).copy(alpha = 0.85f)
+                                                else Color(0xFF141822).copy(alpha = 0.72f)
                                             )
-                                            .border(0.75.dp, Color.White.copy(alpha = 0.24f), CircleShape)
+                                            .border(0.75.dp, Color.White.copy(alpha = 0.28f), CircleShape)
                                             .clickable(
                                                 interactionSource = pinInteraction,
                                                 indication = null
@@ -707,14 +671,12 @@ fun OscellionLockScreen(
                                     hintText = "Enter any 4 digits to unlock",
                                     buttonSize = 76.dp,
                                     horizontalSpacing = 20.dp,
-                                    hazeState = hazeState,
                                     onDigitClick = { onDigitEntered(it) },
                                     onDeleteClick = { onPinDelete() },
                                     actionSlotLeft = if (isBiometricEnabled) {
                                         {
                                             OscellionBiometricKeypadButton(
                                                 size = 76.dp,
-                                                hazeState = hazeState,
                                                 enabled = lockoutSecondsRemaining == 0,
                                                 onClick = { triggerBiometricPrompt() }
                                             )
@@ -752,20 +714,7 @@ fun OscellionLockScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-                    .then(
-                        if (useBlur) {
-                            Modifier.hazeChild(
-                                state = hazeState,
-                                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                                style = HazeDefaults.style(
-                                    tint = Color(0xFF0B0D13).copy(alpha = 0.88f),
-                                    blurRadius = 24.dp,
-                                    noiseFactor = 0f
-                                )
-                            )
-                        } else Modifier
-                    )
-                    .background(Color(0xFF0B0D13).copy(alpha = 0.94f))
+                    .background(Color(0xFF0B0D13).copy(alpha = 0.95f))
                     .border(
                         width = 1.dp,
                         color = Color.White.copy(alpha = 0.15f),

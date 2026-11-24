@@ -36,9 +36,7 @@ import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.Delete
 import com.composables.icons.lucide.Fingerprint
 import com.composables.icons.lucide.Lucide
-import dev.chrisbanes.haze.HazeDefaults
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeChild
 
 /**
  * Job types defining the context in which the Oscellion Dialpad operates.
@@ -108,23 +106,22 @@ fun OscellionKeypadButton(
                 alpha = if (enabled) 1f else 0.4f
             }
             .clip(CircleShape)
-            .then(
-                if (useBlur && hazeState != null) {
-                    Modifier.hazeChild(
-                        state = hazeState,
-                        shape = CircleShape,
-                        style = HazeDefaults.style(
-                            tint = if (isPressed && enabled) Color.White.copy(alpha = 0.18f)
-                            else Color.White.copy(alpha = 0.08f),
-                            blurRadius = 24.dp,
-                            noiseFactor = 0f
+            .background(
+                if (isPressed && enabled) {
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.28f),
+                            Color.White.copy(alpha = 0.16f)
                         )
                     )
-                } else Modifier
-            )
-            .background(
-                if (isPressed && enabled) Color.White.copy(alpha = 0.22f)
-                else Color.White.copy(alpha = 0.08f)
+                } else {
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.15f),
+                            Color.White.copy(alpha = 0.07f)
+                        )
+                    )
+                }
             )
             .border(
                 width = 0.75.dp,
@@ -135,10 +132,10 @@ fun OscellionKeypadButton(
                         Color.White.copy(alpha = 0.15f),
                         Color.White.copy(alpha = 0.45f)
                     ) else listOf(
-                        Color.White.copy(alpha = 0.58f),
-                        Color.White.copy(alpha = 0.12f),
-                        Color.White.copy(alpha = 0.04f),
-                        Color.White.copy(alpha = 0.24f)
+                        Color.White.copy(alpha = 0.55f),
+                        Color.White.copy(alpha = 0.16f),
+                        Color.White.copy(alpha = 0.05f),
+                        Color.White.copy(alpha = 0.25f)
                     )
                 ),
                 shape = CircleShape
@@ -434,39 +431,21 @@ fun OscellionPinIndicatorBoxes(
                 modifier = Modifier
                     .size(width = boxWidth, height = boxHeight)
                     .clip(RoundedCornerShape(boxRadius))
-                    .then(
-                        if (useBlur && hazeState != null) {
-                            Modifier.hazeChild(
-                                state = hazeState,
-                                shape = RoundedCornerShape(boxRadius),
-                                style = HazeDefaults.style(
-                                    tint = when {
-                                        isError -> Color(0xFFEF4444).copy(alpha = 0.18f)
-                                        isActive -> Color(0xFF3B82F6).copy(alpha = 0.14f)
-                                        isFilled -> Color.White.copy(alpha = 0.18f)
-                                        else -> Color.White.copy(alpha = 0.08f)
-                                    },
-                                    blurRadius = 18.dp,
-                                    noiseFactor = 0f
-                                )
-                            )
-                        } else Modifier
-                    )
                     .background(
                         when {
-                            isError -> Color(0xFFEF4444).copy(alpha = 0.18f)
-                            isActive -> Color(0xFF3B82F6).copy(alpha = 0.14f)
+                            isError -> Color(0xFFEF4444).copy(alpha = 0.20f)
+                            isActive -> Color(0xFF0381FE).copy(alpha = 0.16f)
                             isFilled -> Color.White.copy(alpha = 0.18f)
                             else -> Color.White.copy(alpha = 0.08f)
                         }
                     )
                     .border(
-                        width = 1.25.dp,
+                        width = if (isActive || isError) 1.5.dp else 1.dp,
                         color = when {
                             isError -> Color(0xFFEF4444)
-                            isActive -> Color(0xFF3B82F6)
+                            isActive -> Color(0xFF0381FE)
                             isFilled -> Color.White.copy(alpha = 0.55f)
-                            else -> Color.White.copy(alpha = 0.24f)
+                            else -> Color.White.copy(alpha = 0.22f)
                         },
                         shape = RoundedCornerShape(boxRadius)
                     ),
