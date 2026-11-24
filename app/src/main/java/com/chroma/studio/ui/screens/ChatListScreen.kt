@@ -404,21 +404,13 @@ fun ChatListScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Avatar & Online Status
-                    Box(modifier = Modifier.size(44.dp)) {
-                        IosAvatarView(name = chatTitle, avatarUrl = chatAvatar ?: "", size = 44.dp)
-                        if (isOnline) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .offset(x = (-1).dp, y = (-1).dp)
-                                    .size(12.dp)
-                                    .background(sidebarBg, CircleShape)
-                                    .padding(1.5.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF22C55E))
-                            )
-                        }
-                    }
+                    IosAvatarView(
+                        name = chatTitle,
+                        avatarUrl = chatAvatar ?: "",
+                        size = 44.dp,
+                        isOnline = isOnline,
+                        statusRingColor = sidebarBg
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                     
                     // Middle Content (Name, Msg Preview)

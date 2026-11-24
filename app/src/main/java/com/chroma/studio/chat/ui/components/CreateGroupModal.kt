@@ -1,5 +1,7 @@
 package com.chroma.studio.chat.ui.components
 
+import com.chroma.studio.ui.components.OnlineStatusBadge
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -546,10 +548,10 @@ private fun StepSelectParticipants(
                         )
                     }
                 } else {
-                    Text(
-                        text = contact.status,
-                        fontSize = 12.5.sp,
-                        color = if (contact.status == "Online") colors.success else colors.textMuted
+                    OnlineStatusBadge(
+                        isOnline = contact.status == "Online",
+                        statusText = contact.status,
+                        compact = true
                     )
                 }
             }

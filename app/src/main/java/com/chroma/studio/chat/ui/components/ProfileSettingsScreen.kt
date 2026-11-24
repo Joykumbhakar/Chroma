@@ -2,6 +2,7 @@
 package com.chroma.studio.chat.ui.components
 
 import android.content.Context
+import com.chroma.studio.ui.components.OnlineStatusDot
 import com.chroma.studio.chat.util.findActivity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -247,15 +248,14 @@ fun ProfileSettingsScreen(
                                     .border(2.5.dp, colors.cardBg, CircleShape),
                                 contentScale = ContentScale.Crop
                             )
-                            Box(
+                            OnlineStatusDot(
+                                isOnline = true,
+                                size = 15.dp,
+                                showPulse = true,
+                                ringColor = colors.cardBg,
                                 modifier = Modifier
-                                    .size(15.dp)
                                     .align(Alignment.BottomEnd)
                                     .offset(x = (-2).dp, y = (-2).dp)
-                                    .background(colors.cardBg, CircleShape)
-                                    .padding(2.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.success)
                             )
                         }
 

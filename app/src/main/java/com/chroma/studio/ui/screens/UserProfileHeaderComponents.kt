@@ -269,7 +269,7 @@ fun UserProfileHeroSection(
                                 avatarUrl = profile?.avatarUrl.orEmpty(),
                                 size = 74.dp,
                                 gender = profile?.gender,
-                                isOnline = isUserOnline,
+                                isOnline = false,
                                 modifier = Modifier.fillMaxSize()
                             )
 
@@ -329,7 +329,7 @@ fun UserProfileHeroSection(
                                 avatarUrl = profile?.avatarUrl.orEmpty(),
                                 size = 78.dp,
                                 gender = profile?.gender,
-                                isOnline = isUserOnline,
+                                isOnline = false,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -340,7 +340,7 @@ fun UserProfileHeroSection(
                 if (isUserOnline) {
                     com.chroma.studio.ui.components.OnlineStatusDot(
                         isOnline = true,
-                        size = 17.dp,
+                        size = 18.dp,
                         showPulse = true,
                         ringColor = colors.bg,
                         modifier = Modifier

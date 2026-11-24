@@ -192,6 +192,7 @@ fun IosAvatarView(
     isGroup: Boolean = false,
     isOnline: Boolean = false,
     gender: String? = null,
+    statusRingColor: Color? = null,
     modifier: Modifier = Modifier
 ) {
     val cleanUrl = remember(avatarUrl) { avatarUrl.trim() }
@@ -323,20 +324,18 @@ fun IosAvatarView(
             }
         }
 
-        // Online Status Dot
+        // Universal Atomic Online Status Dot with Live Pulse
         if (!isGroup && isOnline) {
             val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
-            val dotSize = (size.value * 0.25f).coerceIn(9f, 14f).dp
-            val borderWidth = (size.value * 0.04f).coerceIn(1.2f, 2f).dp
-            Box(
+            val dotSize = (size.value * 0.23f).coerceIn(10f, 24f).dp
+            OnlineStatusDot(
+                isOnline = true,
+                size = dotSize,
+                showPulse = true,
+                ringColor = statusRingColor ?: colors.statusRingBorder,
                 modifier = Modifier
-                    .size(dotSize)
                     .align(Alignment.BottomEnd)
                     .offset(x = (-1).dp, y = (-1).dp)
-                    .background(colors.statusRingBorder, CircleShape)
-                    .padding(borderWidth)
-                    .clip(CircleShape)
-                    .background(colors.onlineStatus)
             )
         }
     }
@@ -663,27 +662,16 @@ fun AppleStatusAvatar(
                 )
             }
         } else if (isOnline) {
-            val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
-            // Online green indicator dot with clean gap border
-            val dotSize = (size.value * 0.22f).coerceIn(12f, 15f).dp
-            Box(
+            val dotSize = (size.value * 0.23f).coerceIn(12f, 18f).dp
+            OnlineStatusDot(
+                isOnline = true,
+                size = dotSize,
+                showPulse = true,
+                ringColor = gapColor,
                 modifier = Modifier
-                    .size(dotSize)
                     .align(Alignment.BottomEnd)
                     .offset(x = 0.dp, y = 0.dp)
-                    .background(gapColor, CircleShape)
-                    .padding(2.dp)
-                    .clip(CircleShape)
-                    .background(colors.onlineStatus),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.65f))
-                )
-            }
+            )
         }
     }
 }

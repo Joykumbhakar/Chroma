@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.ui.components.IosAvatarView
+import com.chroma.studio.ui.components.OnlineStatusBadge
 import coil.compose.AsyncImage
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.viewmodel.DiscoverViewModel
@@ -190,22 +191,18 @@ fun UserListScreen(
                                         lineHeight = 15.sp,
                                         maxLines = 1
                                     )
-                                    if (isOnline) {
-                                        Text("•", color = colors.onlineStatus, fontSize = 11.sp)
-                                        Text(
-                                            text = "Online",
-                                            color = colors.onlineStatus,
-                                            fontSize = 11.5.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
+                                    val statusText = if (isOnline) {
+                                        "Online"
                                     } else if (presence.lastOnline != null && presence.lastOnline > 0L) {
+                                        com.chroma.studio.data.OnlineStatusManager.formatWhatsAppLastSeen(presence.lastOnline)
+                                    } else null
+
+                                    if (statusText != null) {
                                         Text("•", color = colors.textMuted.copy(alpha = 0.5f), fontSize = 11.sp)
-                                        Text(
-                                            text = com.chroma.studio.data.OnlineStatusManager.formatWhatsAppLastSeen(presence.lastOnline),
-                                            color = colors.textMuted.copy(alpha = 0.75f),
-                                            fontSize = 11.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                        OnlineStatusBadge(
+                                            isOnline = isOnline,
+                                            statusText = statusText,
+                                            compact = true
                                         )
                                     }
                                 }

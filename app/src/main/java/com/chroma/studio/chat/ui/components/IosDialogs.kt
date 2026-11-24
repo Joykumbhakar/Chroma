@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.chroma.studio.chat.ui.components
 
+import com.chroma.studio.ui.components.OnlineStatusDot
+import com.chroma.studio.ui.components.OnlineStatusBadge
+
 import androidx.compose.animation.*
 
 import androidx.compose.animation.core.Spring
@@ -1807,63 +1810,36 @@ fun IosConversationContextMenuModal(
                         )
 
                         if (chat.online) {
-
-                            Box(
-
+                            OnlineStatusDot(
+                                isOnline = true,
+                                size = 12.dp,
+                                showPulse = true,
+                                ringColor = colors.cardBg,
                                 modifier = Modifier
-
-                                    .size(12.dp)
-
                                     .align(Alignment.BottomEnd)
-
-                                    .background(colors.success, CircleShape)
-
-                                    .border(1.5.dp, colors.cardBg, CircleShape)
-
+                                    .offset(x = (-1).dp, y = (-1).dp)
                             )
-
                         }
-
                     }
 
                     Column(
-
                         modifier = Modifier.weight(1f),
-
                         verticalArrangement = Arrangement.spacedBy(2.dp)
-
                     ) {
-
                         Text(
-
                             text = chat.name,
-
                             fontSize = 16.sp,
-
                             fontWeight = FontWeight.SemiBold,
-
                             color = colors.textDark,
-
                             maxLines = 1,
-
                             overflow = TextOverflow.Ellipsis
-
                         )
 
-                        Text(
-
-                            text = if (chat.type == "group") "${chat.members?.size ?: 3} members" else if (chat.online) "Online now" else chat.statusText,
-
-                            fontSize = 13.sp,
-
-                            color = if (chat.online) colors.success else colors.textMuted,
-
-                            maxLines = 1,
-
-                            overflow = TextOverflow.Ellipsis
-
+                        OnlineStatusBadge(
+                            isOnline = chat.type != "group" && chat.online,
+                            statusText = if (chat.type == "group") "${chat.members?.size ?: 3} members" else if (chat.online) "Online now" else chat.statusText,
+                            compact = true
                         )
-
                     }
 
                 }

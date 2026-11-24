@@ -1,5 +1,7 @@
 package com.chroma.studio.chat.ui.components
 
+import com.chroma.studio.ui.components.OnlineStatusBadge
+
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -391,11 +393,11 @@ fun NewDirectChatModal(
                                     )
                                 }
 
-                                // Online / Status Indicator text
-                                Text(
-                                    text = contact.status,
-                                    fontSize = 12.sp,
-                                    color = if (contact.status == "Online") colors.success else colors.textMuted
+                                // Online / Status Indicator badge
+                                OnlineStatusBadge(
+                                    isOnline = contact.status == "Online",
+                                    statusText = contact.status,
+                                    compact = true
                                 )
                             }
 

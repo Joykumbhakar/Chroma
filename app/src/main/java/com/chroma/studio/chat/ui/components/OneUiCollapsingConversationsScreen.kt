@@ -1640,22 +1640,13 @@ private fun OneUiSwipeableConversationItem(
                 }
 
                 // Avatar + Online Status Dot
-                Box(contentAlignment = Alignment.BottomEnd) {
-                    IosAvatarView(
-                        name = chat.name,
-                        avatarUrl = chat.avatar,
-                        size = 50.dp
-                    )
-                    if (chat.online) {
-                        Box(
-                            modifier = Modifier
-                                .size(13.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF10B981))
-                                .border(2.dp, cardBgColor, CircleShape)
-                        )
-                    }
-                }
+                IosAvatarView(
+                    name = chat.name,
+                    avatarUrl = chat.avatar,
+                    size = 50.dp,
+                    isOnline = chat.online,
+                    statusRingColor = cardBgColor
+                )
 
                 Spacer(modifier = Modifier.width(14.dp))
 

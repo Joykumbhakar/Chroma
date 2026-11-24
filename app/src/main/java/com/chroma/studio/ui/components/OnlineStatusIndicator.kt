@@ -40,15 +40,28 @@ fun OnlineStatusDot(
     val pulseScale by if (isOnline && showPulse) {
         infiniteTransition.animateFloat(
             initialValue = 1f,
-            targetValue = 1.35f,
+            targetValue = 1.38f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1200, easing = FastOutSlowInEasing),
+                animation = tween(1250, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "dotPulse"
         )
     } else {
         androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    }
+    val pulseAlpha by if (isOnline && showPulse) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 0.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1250, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "dotPulseAlpha"
+        )
+    } else {
+        androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     }
 
     Box(
@@ -61,19 +74,28 @@ fun OnlineStatusDot(
                     .fillMaxSize()
                     .scale(pulseScale)
                     .clip(CircleShape)
-                    .background(targetColor.copy(alpha = 0.25f))
+                    .background(targetColor.copy(alpha = pulseAlpha))
             )
         }
         val ring = ringColor ?: colors.statusRingBorder
-        Box(
-            modifier = Modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(ring)
-                .padding((size.value * 0.15f).coerceIn(1f, 2f).dp)
-                .clip(CircleShape)
-                .background(targetColor)
-        )
+        if (ring != Color.Transparent) {
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .background(ring)
+                    .padding((size.value * 0.15f).coerceIn(1.2f, 2.5f).dp)
+                    .clip(CircleShape)
+                    .background(targetColor)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .background(targetColor)
+            )
+        }
     }
 }
 
@@ -100,7 +122,8 @@ fun OnlineStatusBadge(
             OnlineStatusDot(
                 isOnline = true,
                 size = if (compact) 6.5.dp else 8.dp,
-                showPulse = true
+                showPulse = true,
+                ringColor = Color.Transparent
             )
         }
         Text(

@@ -2,6 +2,8 @@
 package com.chroma.studio.chat.ui.components
 
 import com.chroma.studio.ui.components.VerifiedBadge
+import com.chroma.studio.ui.components.OnlineStatusDot
+import com.chroma.studio.ui.components.OnlineStatusBadge
 import com.chroma.studio.R
 import com.chroma.studio.chat.media.MediaStoreHelper
 import kotlin.math.roundToInt
@@ -436,13 +438,14 @@ fun ContactInfoDrawer(
                                 )
                             }
                         } else if (chat.online) {
-                            Box(
+                            OnlineStatusDot(
+                                isOnline = true,
+                                size = 22.dp,
+                                showPulse = true,
+                                ringColor = colors.appBg,
                                 modifier = Modifier
-                                    .size(22.dp)
                                     .align(Alignment.BottomEnd)
                                     .offset(x = (-2).dp, y = (-2).dp)
-                                    .background(colors.success, CircleShape)
-                                    .border(3.dp, colors.appBg, CircleShape)
                             )
                         }
                     }
@@ -483,26 +486,11 @@ fun ContactInfoDrawer(
                         chat.statusText.isNotBlank() -> chat.statusText
                         else -> "Offline"
                     }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        if (!isGroup && chat.online) {
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.success)
-                            )
-                        }
-                        Text(
-                            text = statusSubtitle,
-                            fontSize = 14.sp,
-                            fontWeight = if (!isGroup && chat.online) FontWeight.Medium else FontWeight.Normal,
-                            color = if (!isGroup && chat.online) colors.success else colors.textMuted,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                    OnlineStatusBadge(
+                        isOnline = !isGroup && chat.online,
+                        statusText = statusSubtitle,
+                        compact = false
+                    )
 
                     if (isGroup) {
                         Spacer(Modifier.height(8.dp))

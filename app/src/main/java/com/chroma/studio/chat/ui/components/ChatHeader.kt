@@ -141,53 +141,9 @@ fun ChatHeader(
                                 avatarUrl = activeChat.avatar,
                                 size = 40.dp,
                                 isGroup = activeChat.type == "group",
-                                isOnline = false
+                                isOnline = activeChat.online,
+                                statusRingColor = colors.headerBg
                             )
-                            if (activeChat.online) {
-                                val infiniteTransition = rememberInfiniteTransition(label = "headerPulse")
-                                val pulseScale by infiniteTransition.animateFloat(
-                                    initialValue = 1f,
-                                    targetValue = 1.45f,
-                                    animationSpec = infiniteRepeatable(
-                                        animation = tween(1500, easing = FastOutSlowInEasing),
-                                        repeatMode = RepeatMode.Restart
-                                    ),
-                                    label = "pulseScale"
-                                )
-                                val pulseAlpha by infiniteTransition.animateFloat(
-                                    initialValue = 0.55f,
-                                    targetValue = 0f,
-                                    animationSpec = infiniteRepeatable(
-                                        animation = tween(1500, easing = FastOutSlowInEasing),
-                                        repeatMode = RepeatMode.Restart
-                                    ),
-                                    label = "pulseAlpha"
-                                )
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(12.dp)
-                                        .align(Alignment.BottomEnd)
-                                        .offset(x = (-1).dp, y = (-1).dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .graphicsLayer {
-                                                scaleX = pulseScale
-                                                scaleY = pulseScale
-                                                alpha = pulseAlpha
-                                            }
-                                            .background(colors.success, CircleShape)
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(colors.success, CircleShape)
-                                            .border(2.dp, colors.headerBg, CircleShape)
-                                    )
-                                }
-                            }
                         }
 
                         // Name + status
