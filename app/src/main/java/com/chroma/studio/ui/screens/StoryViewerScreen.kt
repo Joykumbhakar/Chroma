@@ -58,6 +58,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import com.chroma.studio.ui.components.IosAlertDialog
+import com.chroma.studio.ui.components.AddToHighlightSheet
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chroma.studio.R
@@ -991,8 +992,14 @@ fun StoryViewerScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                val displayName = if (isOwner) "Your Story" else group.userProfile.displayName.ifBlank { "User" }
+                                val titleText = if (currentStory?.isHighlight == true && currentStory.highlightTitle.isNotBlank()) {
+                                    "$displayName • ${currentStory.highlightTitle}"
+                                } else {
+                                    displayName
+                                }
                                 Text(
-                                    text = if (isOwner) "Your Story" else group.userProfile.displayName.ifBlank { "User" },
+                                    text = titleText,
                                     color = topBarTextColor,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
@@ -1251,54 +1258,14 @@ fun StoryViewerScreen(
                             }
                         }
 
-                        if (showHighlightSaveDialog) {
-                            IosAlertDialog(
-                                title = "Save to Story Highlights",
-                                message = "Add this story to your profile highlights. Highlighted stories live forever on your profile (unlike 24h stories)!",
-                                confirmText = "Save to Profile",
-                                onConfirm = {
-                                    val name = targetHighlightName.trim().ifBlank { "Highlights" }
-                                    storyViewModel?.saveStoryToHighlight(
-                                        storyId = currentStory.id,
-                                        highlightTitle = name,
-                                        coverUrl = currentStory.mediaUrl
-                                    ) { success ->
-                                        if (success) {
-                                            isCurrentStoryHighlighted = true
-                                            ToastManager.showToast("Saved to Highlights! Lives forever ✨")
-                                        } else {
-                                            ToastManager.showToast("Failed to save highlight")
-                                        }
-                                    }
-                                    showHighlightSaveDialog = false
-                                },
-                                dismissText = "Cancel",
+                        if (showHighlightSaveDialog && storyViewModel != null && currentStory != null) {
+                            AddToHighlightSheet(
+                                story = currentStory,
+                                storyViewModel = storyViewModel,
                                 onDismiss = { showHighlightSaveDialog = false },
-                                customContent = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(
-                                            text = "Highlight Name",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF8E8E93)
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(Color(0xFF2C2C2E))
-                                                .padding(horizontal = 12.dp, vertical = 10.dp)
-                                        ) {
-                                            BasicTextField(
-                                                value = targetHighlightName,
-                                                onValueChange = { targetHighlightName = it.take(24) },
-                                                singleLine = true,
-                                                textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
-                                                cursorBrush = SolidColor(Color(0xFF0381FE)),
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
+                                onHighlightAdded = { title ->
+                                    isCurrentStoryHighlighted = true
+                                    showHighlightSaveDialog = false
                                 }
                             )
                         }

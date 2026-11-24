@@ -2,6 +2,7 @@ package com.chroma.studio.data
 
 import android.util.Log
 import com.chroma.studio.model.Story
+import com.chroma.studio.model.StoryHighlight
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.model.UserStoryGroup
 import com.google.firebase.auth.FirebaseAuth
@@ -435,7 +436,8 @@ class StoryRepository {
                     "emoji" to emoji,
                     "coverUrl" to chosenCover,
                     "storyIds" to FieldValue.arrayUnion(storyId),
-                    "createdAt" to now
+                    "createdAt" to now,
+                    "updatedAt" to now
                 ),
                 SetOptions.merge()
             ).await()
@@ -445,6 +447,210 @@ class StoryRepository {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("StoryRepository", "Error saving story to highlight", e)
             false
+        }
+    }
+
+    /** Fetch all highlights for a user sorted by updatedAt descending. */
+    suspend fun fetchUserHighlights(userId: String): List<StoryHighlight> {
+        return try {
+            val snap = usersCol.document(userId).collection("highlights").get().await()
+            snap.documents.mapNotNull { doc ->
+                val id = doc.getString("id") ?: doc.id
+                val title = doc.getString("title") ?: "Highlights"
+                val coverUrl = doc.getString("coverUrl") ?: ""
+                @Suppress("UNCHECKED_CAST")
+                val storyIds = (doc.get("storyIds") as? List<String>) ?: emptyList()
+                val createdAt = doc.getLong("createdAt") ?: 0L
+                val updatedAt = doc.getLong("updatedAt") ?: createdAt
+                StoryHighlight(
+                    id = id,
+                    userId = userId,
+                    title = title,
+                    coverUrl = coverUrl,
+                    storyIds = storyIds,
+                    createdAt = createdAt,
+                    updatedAt = updatedAt
+                )
+            }.sortedByDescending { it.updatedAt }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error fetching user highlights", e)
+            emptyList()
+        }
+    }
+
+    /** Create a new highlight album with a list of stories. */
+    suspend fun createHighlight(
+        title: String,
+        coverUrl: String,
+        storyIds: List<String>
+    ): StoryHighlight? {
+        val user = auth.currentUser ?: return null
+        val now = System.currentTimeMillis()
+        val cleanTitle = title.trim().ifBlank { "Highlights" }
+        val docRef = usersCol.document(user.uid).collection("highlights").document()
+        val chosenCover = coverUrl.trim().ifBlank { "" }
+
+        return try {
+            // Mark all included stories as highlights that never expire
+            storyIds.forEach { sId ->
+                try {
+                    storiesCol.document(sId).update(
+                        mapOf(
+                            "isHighlight" to true,
+                            "highlightTitle" to cleanTitle,
+                            "expiresAt" to Long.MAX_VALUE
+                        )
+                    ).await()
+                } catch (ignored: Exception) {}
+            }
+
+            val highlight = StoryHighlight(
+                id = docRef.id,
+                userId = user.uid,
+                title = cleanTitle,
+                coverUrl = chosenCover,
+                storyIds = storyIds,
+                createdAt = now,
+                updatedAt = now
+            )
+
+            docRef.set(
+                mapOf(
+                    "id" to highlight.id,
+                    "userId" to highlight.userId,
+                    "title" to highlight.title,
+                    "coverUrl" to highlight.coverUrl,
+                    "storyIds" to highlight.storyIds,
+                    "createdAt" to highlight.createdAt,
+                    "updatedAt" to highlight.updatedAt
+                )
+            ).await()
+
+            highlight
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error creating highlight", e)
+            null
+        }
+    }
+
+    /** Add a story to an existing highlight album. */
+    suspend fun addStoryToHighlight(highlightId: String, storyId: String): Boolean {
+        val user = auth.currentUser ?: return false
+        val now = System.currentTimeMillis()
+        return try {
+            // Update highlight document
+            val hlRef = usersCol.document(user.uid).collection("highlights").document(highlightId)
+            val docSnap = hlRef.get().await()
+            val currentCover = docSnap.getString("coverUrl") ?: ""
+
+            // Make story permanent
+            val storyDoc = storiesCol.document(storyId).get().await()
+            val mediaUrl = storyDoc.getString("mediaUrl") ?: ""
+            storiesCol.document(storyId).update(
+                mapOf(
+                    "isHighlight" to true,
+                    "expiresAt" to Long.MAX_VALUE
+                )
+            ).await()
+
+            val updates = mutableMapOf<String, Any>(
+                "storyIds" to FieldValue.arrayUnion(storyId),
+                "updatedAt" to now
+            )
+            if (currentCover.isBlank() && mediaUrl.isNotBlank()) {
+                updates["coverUrl"] = mediaUrl
+            }
+
+            hlRef.update(updates).await()
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error adding story to highlight", e)
+            false
+        }
+    }
+
+    /** Update highlight title, cover image, and story IDs list. */
+    suspend fun updateHighlight(
+        highlightId: String,
+        title: String,
+        coverUrl: String,
+        storyIds: List<String>
+    ): Boolean {
+        val user = auth.currentUser ?: return false
+        val now = System.currentTimeMillis()
+        return try {
+            val hlRef = usersCol.document(user.uid).collection("highlights").document(highlightId)
+            hlRef.update(
+                mapOf(
+                    "title" to title.trim().ifBlank { "Highlights" },
+                    "coverUrl" to coverUrl,
+                    "storyIds" to storyIds,
+                    "updatedAt" to now
+                )
+            ).await()
+
+            // Ensure included stories remain permanent
+            storyIds.forEach { sId ->
+                try {
+                    storiesCol.document(sId).update(
+                        mapOf(
+                            "isHighlight" to true,
+                            "expiresAt" to Long.MAX_VALUE
+                        )
+                    ).await()
+                } catch (ignored: Exception) {}
+            }
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error updating highlight", e)
+            false
+        }
+    }
+
+    /** Delete a highlight album (does not delete stories from user archive). */
+    suspend fun deleteHighlight(highlightId: String): Boolean {
+        val user = auth.currentUser ?: return false
+        return try {
+            usersCol.document(user.uid).collection("highlights").document(highlightId).delete().await()
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error deleting highlight", e)
+            false
+        }
+    }
+
+    /** Fetch full Story objects by list of story IDs in preserved order. */
+    suspend fun fetchStoriesByIds(storyIds: List<String>): List<Story> {
+        if (storyIds.isEmpty()) return emptyList()
+        return try {
+            val result = mutableListOf<Story>()
+            storyIds.chunked(30).forEach { chunk ->
+                val snap = storiesCol.whereIn(com.google.firebase.firestore.FieldPath.documentId(), chunk).get().await()
+                result.addAll(snap.toObjects(Story::class.java))
+            }
+            val map = result.associateBy { it.id }
+            storyIds.mapNotNull { map[it] }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error fetching stories by IDs", e)
+            emptyList()
+        }
+    }
+
+    /** Fetch all stories (active & past archive) published by a user. */
+    suspend fun fetchUserStoryArchive(userId: String): List<Story> {
+        return try {
+            val snap = storiesCol.whereEqualTo("userId", userId).get().await()
+            snap.toObjects(Story::class.java).sortedByDescending { it.timestamp }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error fetching user story archive", e)
+            emptyList()
         }
     }
 

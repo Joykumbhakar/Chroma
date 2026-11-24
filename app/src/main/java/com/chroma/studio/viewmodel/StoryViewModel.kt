@@ -10,6 +10,7 @@ import com.chroma.studio.data.CloudinaryClient
 import com.chroma.studio.data.StoryRepository
 import com.chroma.studio.data.StoryLikeSyncManager
 import com.chroma.studio.model.Story
+import com.chroma.studio.model.StoryHighlight
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.model.UserStoryGroup
 import com.google.firebase.auth.FirebaseAuth
@@ -73,6 +74,16 @@ class StoryViewModel : ViewModel() {
     private val _onlyFriendsIds = MutableStateFlow<List<String>>(emptyList())
     val onlyFriendsIds: StateFlow<List<String>> = _onlyFriendsIds.asStateFlow()
 
+    // Highlights & Archive
+    private val _highlights = MutableStateFlow<List<StoryHighlight>>(emptyList())
+    val highlights: StateFlow<List<StoryHighlight>> = _highlights.asStateFlow()
+
+    private val _storyArchive = MutableStateFlow<List<Story>>(emptyList())
+    val storyArchive: StateFlow<List<Story>> = _storyArchive.asStateFlow()
+
+    private val _isArchiveLoading = MutableStateFlow(false)
+    val isArchiveLoading: StateFlow<Boolean> = _isArchiveLoading.asStateFlow()
+
     private var authStateListener: FirebaseAuth.AuthStateListener? = null
 
     init {
@@ -108,6 +119,8 @@ class StoryViewModel : ViewModel() {
         _uploadProgress.value = 0f
         _uploadError.value = null
         _failedStoryUpload.value = null
+        _highlights.value = emptyList()
+        _storyArchive.value = emptyList()
     }
 
     override fun onCleared() {
@@ -658,5 +671,144 @@ class StoryViewModel : ViewModel() {
 
     suspend fun fetchStoryGroupForStory(storyId: String): Pair<UserStoryGroup, Story>? {
         return repository.fetchStoryGroupForStory(storyId)
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // Story Highlights & Archive Operations
+    // ────────────────────────────────────────────────────────────────────────────
+
+    /** Load highlights for a user (sorted by updatedAt descending). */
+    fun loadHighlights(userId: String) {
+        viewModelScope.launch {
+            try {
+                val list = repository.fetchUserHighlights(userId)
+                _highlights.value = list
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("StoryViewModel", "loadHighlights error", e)
+            }
+        }
+    }
+
+    /** Load all past and active stories for a user archive. */
+    fun loadStoryArchive(userId: String) {
+        viewModelScope.launch {
+            _isArchiveLoading.value = true
+            try {
+                val archive = repository.fetchUserStoryArchive(userId)
+                _storyArchive.value = archive
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("StoryViewModel", "loadStoryArchive error", e)
+            } finally {
+                _isArchiveLoading.value = false
+            }
+        }
+    }
+
+    /** Add a story to an existing highlight album. */
+    fun addStoryToHighlight(
+        highlightId: String,
+        storyId: String,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                val success = repository.addStoryToHighlight(highlightId, storyId)
+                if (success) {
+                    auth.currentUser?.uid?.let { loadHighlights(it) }
+                    loadMyStories()
+                }
+                onComplete(success)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("StoryViewModel", "addStoryToHighlight error", e)
+                onComplete(false)
+            }
+        }
+    }
+
+    /** Create a new highlight album with a list of stories. */
+    fun createHighlight(
+        title: String,
+        coverUrl: String,
+        storyIds: List<String>,
+        onComplete: (StoryHighlight?) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                val created = repository.createHighlight(title, coverUrl, storyIds)
+                if (created != null) {
+                    auth.currentUser?.uid?.let { loadHighlights(it) }
+                    loadMyStories()
+                }
+                onComplete(created)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("StoryViewModel", "createHighlight error", e)
+                onComplete(null)
+            }
+        }
+    }
+
+    /** Update highlight title, cover image, and story list. */
+    fun updateHighlight(
+        highlightId: String,
+        title: String,
+        coverUrl: String,
+        storyIds: List<String>,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                val success = repository.updateHighlight(highlightId, title, coverUrl, storyIds)
+                if (success) {
+                    auth.currentUser?.uid?.let { loadHighlights(it) }
+                }
+                onComplete(success)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("StoryViewModel", "updateHighlight error", e)
+                onComplete(false)
+            }
+        }
+    }
+
+    /** Delete a highlight album. */
+    fun deleteHighlight(
+        highlightId: String,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                val success = repository.deleteHighlight(highlightId)
+                if (success) {
+                    _highlights.value = _highlights.value.filter { it.id != highlightId }
+                    auth.currentUser?.uid?.let { loadHighlights(it) }
+                }
+                onComplete(success)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("StoryViewModel", "deleteHighlight error", e)
+                onComplete(false)
+            }
+        }
+    }
+
+    /** Fetch full Story objects for a given highlight reel. */
+    fun fetchStoriesForHighlight(
+        highlight: StoryHighlight,
+        onResult: (List<Story>) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val stories = repository.fetchStoriesByIds(highlight.storyIds)
+                onResult(stories)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("StoryViewModel", "fetchStoriesForHighlight error", e)
+                onResult(emptyList())
+            }
+        }
     }
 }

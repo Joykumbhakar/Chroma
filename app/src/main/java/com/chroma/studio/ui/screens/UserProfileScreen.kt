@@ -652,7 +652,7 @@ fun UserProfileScreen(
                     storyVm = storyVm,
                     isFollowRequested = isFollowRequested,
                     onHighlightClick = { hl ->
-                        storyVm.loadHighlightStories(userId, hl.title) { stories ->
+                        val launchViewer: (List<Story>) -> Unit = { stories ->
                             val permanentStories = if (stories.isNotEmpty()) stories else {
                                 listOf(
                                     Story(
@@ -673,6 +673,26 @@ fun UserProfileScreen(
                             )
                             storyViewerInitialIndex = 0
                             showStoryViewer = true
+                        }
+
+                        if (hl.storyIds.isNotEmpty()) {
+                            storyVm.fetchStoriesForHighlight(
+                                com.chroma.studio.model.StoryHighlight(
+                                    id = hl.id,
+                                    userId = userId,
+                                    title = hl.title,
+                                    coverUrl = hl.coverUrl ?: "",
+                                    storyIds = hl.storyIds
+                                )
+                            ) { stories ->
+                                if (stories.isNotEmpty()) {
+                                    launchViewer(stories)
+                                } else {
+                                    storyVm.loadHighlightStories(userId, hl.title, launchViewer)
+                                }
+                            }
+                        } else {
+                            storyVm.loadHighlightStories(userId, hl.title, launchViewer)
                         }
                     }
                 )

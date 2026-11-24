@@ -1390,6 +1390,7 @@ fun UserProfileActionsStoriesSection(
         UserProfileHighlightsSection(
             userId = userId,
             isCurrentUser = isCurrentUser,
+            storyViewModel = storyVm,
             onHighlightClick = { hl ->
                 if (onHighlightClick != null) {
                     onHighlightClick(hl)

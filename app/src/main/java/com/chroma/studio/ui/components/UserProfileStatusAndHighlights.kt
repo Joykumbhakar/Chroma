@@ -6,6 +6,10 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import com.chroma.studio.model.StoryHighlight
+import com.chroma.studio.viewmodel.StoryViewModel
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -25,7 +29,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -64,7 +70,9 @@ data class ProfileHighlightItem(
     val title: String,
     val emoji: String = "✨",
     val coverUrl: String? = null,
-    val gradientColorIndex: Int = 0
+    val gradientColorIndex: Int = 0,
+    val storyIds: List<String> = emptyList(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
 /**
@@ -262,17 +270,23 @@ fun UserProfileStatusSection(
  * - '+ New' button for adding highlights from saved stories
  * - Tap to view highlight reel / story
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun UserProfileHighlightsSection(
     userId: String,
     isCurrentUser: Boolean,
     onHighlightClick: (ProfileHighlightItem) -> Unit = {},
+    storyViewModel: StoryViewModel? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val colors = LocalOscellionColors.current
     val isDark = colors.isDark
     val prefs = remember { context.getSharedPreferences("user_highlights_prefs", Context.MODE_PRIVATE) }
+
+    var showArchivePicker by remember { mutableStateOf(false) }
+    var editingHighlight by remember { mutableStateOf<StoryHighlight?>(null) }
 
     fun loadHighlights(): List<ProfileHighlightItem> {
         val raw = prefs.getString("highlights_$userId", null)
@@ -315,6 +329,14 @@ fun UserProfileHighlightsSection(
     var highlightsList by remember(userId) { mutableStateOf(loadHighlights()) }
     var showNewHighlightDialog by remember { mutableStateOf(false) }
 
+    val vmHighlights by (storyViewModel?.highlights?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
+
+    LaunchedEffect(userId, storyViewModel) {
+        if (storyViewModel != null && userId.isNotBlank()) {
+            storyViewModel.loadHighlights(userId)
+        }
+    }
+
     // Sync real highlights from Firestore
     LaunchedEffect(userId) {
         try {
@@ -324,12 +346,17 @@ fun UserProfileHighlightsSection(
                 .addOnSuccessListener { snapshot ->
                     if (!snapshot.isEmpty) {
                         val serverItems = snapshot.documents.mapNotNull { doc ->
+                            @Suppress("UNCHECKED_CAST")
+                            val sIds = (doc.get("storyIds") as? List<String>) ?: emptyList()
+                            val uAt = doc.getLong("updatedAt") ?: doc.getLong("createdAt") ?: System.currentTimeMillis()
                             ProfileHighlightItem(
                                 id = doc.id,
                                 title = doc.getString("title") ?: "Highlight",
                                 emoji = doc.getString("emoji") ?: "✨",
                                 coverUrl = doc.getString("coverUrl").takeIf { !it.isNullOrBlank() },
-                                gradientColorIndex = (doc.getLong("gradientIndex") ?: 0L).toInt()
+                                gradientColorIndex = (doc.getLong("gradientIndex") ?: 0L).toInt(),
+                                storyIds = sIds,
+                                updatedAt = uAt
                             )
                         }
                         if (serverItems.isNotEmpty()) {
@@ -339,6 +366,24 @@ fun UserProfileHighlightsSection(
                     }
                 }
         } catch (_: Exception) {}
+    }
+
+    val displayHighlights = remember(vmHighlights, highlightsList) {
+        if (vmHighlights.isNotEmpty()) {
+            vmHighlights.mapIndexed { idx, hl ->
+                ProfileHighlightItem(
+                    id = hl.id,
+                    title = hl.title,
+                    emoji = "✨",
+                    coverUrl = hl.coverUrl.takeIf { it.isNotBlank() },
+                    gradientColorIndex = idx % 5,
+                    storyIds = hl.storyIds,
+                    updatedAt = hl.updatedAt
+                )
+            }
+        } else {
+            highlightsList
+        }
     }
 
     val highlightGradients = remember {
@@ -351,7 +396,7 @@ fun UserProfileHighlightsSection(
         )
     }
 
-    if (!isCurrentUser && highlightsList.isEmpty()) {
+    if (!isCurrentUser && displayHighlights.isEmpty()) {
         return
     }
 
@@ -375,7 +420,11 @@ fun UserProfileHighlightsSection(
                             .graphicsLayer { scaleX = scale; scaleY = scale }
                             .clickable(interactionSource = interactionSource, indication = null) {
                                 SoundManager.playReaction()
-                                showNewHighlightDialog = true
+                                if (storyViewModel != null) {
+                                    showArchivePicker = true
+                                } else {
+                                    showNewHighlightDialog = true
+                                }
                             }
                     ) {
                         Box(
@@ -409,7 +458,7 @@ fun UserProfileHighlightsSection(
             }
 
             // Saved Highlight Bubbles (Lives Forever)
-            items(highlightsList, key = { it.id }) { hl ->
+            items(displayHighlights, key = { it.id }) { hl ->
                 val interactionSource = remember { MutableInteractionSource() }
                 val isPressed by interactionSource.collectIsPressedAsState()
                 val scale by animateFloatAsState(targetValue = if (isPressed) 0.92f else 1f, label = "hlScale")
@@ -420,10 +469,27 @@ fun UserProfileHighlightsSection(
                     modifier = Modifier
                         .width(56.dp)
                         .graphicsLayer { scaleX = scale; scaleY = scale }
-                        .clickable(interactionSource = interactionSource, indication = null) {
-                            SoundManager.playReaction()
-                            onHighlightClick(hl)
-                        }
+                        .combinedClickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = {
+                                SoundManager.playReaction()
+                                onHighlightClick(hl)
+                            },
+                            onLongClick = {
+                                if (isCurrentUser && storyViewModel != null) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    editingHighlight = StoryHighlight(
+                                        id = hl.id,
+                                        userId = userId,
+                                        title = hl.title,
+                                        coverUrl = hl.coverUrl ?: "",
+                                        storyIds = hl.storyIds,
+                                        updatedAt = hl.updatedAt
+                                    )
+                                }
+                            }
+                        )
                 ) {
                     // Beveled Professional Gradient Highlight Circle
                     val titleLower = hl.title.lowercase()
@@ -570,6 +636,30 @@ fun UserProfileHighlightsSection(
                         )
                     }
                 }
+            }
+        )
+    }
+
+    if (showArchivePicker && storyViewModel != null) {
+        CreateHighlightFromArchiveSheet(
+            storyViewModel = storyViewModel,
+            onDismiss = { showArchivePicker = false },
+            onHighlightCreated = {
+                storyViewModel.loadHighlights(userId)
+            }
+        )
+    }
+
+    if (editingHighlight != null && storyViewModel != null) {
+        EditHighlightSheet(
+            highlight = editingHighlight!!,
+            storyViewModel = storyViewModel,
+            onDismiss = { editingHighlight = null },
+            onHighlightUpdated = {
+                storyViewModel.loadHighlights(userId)
+            },
+            onHighlightDeleted = {
+                storyViewModel.loadHighlights(userId)
             }
         )
     }

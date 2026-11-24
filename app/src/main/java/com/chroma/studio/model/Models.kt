@@ -312,6 +312,16 @@ data class UserStoryGroup(
     val allSeen: Boolean = false
 )
 
+data class StoryHighlight(
+    val id: String = UUID.randomUUID().toString(),
+    val userId: String = "",
+    val title: String = "Highlights",
+    val coverUrl: String = "",
+    val storyIds: List<String> = emptyList(),
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
 // ────────────────────────────────────────────────────────────────────────────
 // Notifications & Activity Models
 // ────────────────────────────────────────────────────────────────────────────
