@@ -862,6 +862,8 @@ private fun ChatScreenContent(
 
     var currentWallpaperDimming by remember { mutableFloatStateOf(settingsManager.wallpaperDimming) }
 
+    var currentCustomWallpaperUri by remember { mutableStateOf(settingsManager.customWallpaperUri) }
+
     var isWallpaperPickerOpen by remember { mutableStateOf(false) }
 
     var currentBubbleStyle by remember { mutableStateOf(settingsManager.bubbleStyle) }
@@ -2726,7 +2728,9 @@ private fun ChatScreenContent(
 
                     wallpaperType = currentWallpaper,
 
-                    dimmingAlpha = currentWallpaperDimming
+                    dimmingAlpha = currentWallpaperDimming,
+
+                    customUri = currentCustomWallpaperUri
 
                 )
 
@@ -4454,7 +4458,7 @@ private fun ChatScreenContent(
 
 
 
-        // Wallpaper Picker Modal (Apple Design, No Pill Shapes)
+        // Flagship Wallpaper Gallery Modal (Live Preview, Real-time Dimming, Category Filters, Custom Photos)
 
         AnimatedVisibility(
 
@@ -4466,21 +4470,29 @@ private fun ChatScreenContent(
 
         ) {
 
-            WallpaperPickerModal(
+            com.chroma.studio.chat.ui.components.ChatWallpaperGalleryModal(
 
                 currentWallpaper = currentWallpaper,
 
                 currentDimmingAlpha = currentWallpaperDimming,
 
-                onSelectWallpaper = { wp, dim ->
+                currentCustomUri = currentCustomWallpaperUri,
+
+                settingsManager = settingsManager,
+
+                onSelectWallpaper = { wp, dim, customUri ->
 
                     currentWallpaper = wp
 
                     currentWallpaperDimming = dim
 
+                    currentCustomWallpaperUri = customUri
+
                     settingsManager.wallpaperType = wp
 
                     settingsManager.wallpaperDimming = dim
+
+                    settingsManager.customWallpaperUri = customUri
 
                     isWallpaperPickerOpen = false
 

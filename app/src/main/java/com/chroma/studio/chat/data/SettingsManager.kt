@@ -12,6 +12,8 @@ class SettingsManager(context: Context) {
         private const val KEY_ACCENT_COLOR = "pref_accent_color"
         private const val KEY_WALLPAPER_TYPE = "pref_wallpaper_type"
         private const val KEY_WALLPAPER_DIMMING = "pref_wallpaper_dimming"
+        private const val KEY_CUSTOM_WALLPAPER_URI = "pref_custom_wallpaper_uri"
+        private const val KEY_CUSTOM_WALLPAPERS_LIST = "pref_custom_wallpapers_list"
         private const val KEY_BUBBLE_STYLE = "pref_bubble_style"
         private const val KEY_GLOBE_STYLE = "pref_globe_style"
         private const val KEY_ANIMATION_STYLE = "pref_animation_style"
@@ -54,6 +56,45 @@ class SettingsManager(context: Context) {
     var wallpaperDimming: Float
         get() = prefs.getFloat(KEY_WALLPAPER_DIMMING, 0.15f)
         set(value) = prefs.edit().putFloat(KEY_WALLPAPER_DIMMING, value).apply()
+
+    var customWallpaperUri: String?
+        get() = prefs.getString(KEY_CUSTOM_WALLPAPER_URI, null)
+        set(value) = prefs.edit().putString(KEY_CUSTOM_WALLPAPER_URI, value).apply()
+
+    fun getCustomWallpapers(): List<String> {
+        val raw = prefs.getString(KEY_CUSTOM_WALLPAPERS_LIST, null) ?: return emptyList()
+        return try {
+            val arr = org.json.JSONArray(raw)
+            val list = mutableListOf<String>()
+            for (i in 0 until arr.length()) {
+                list.add(arr.getString(i))
+            }
+            list
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun addCustomWallpaper(uri: String) {
+        val current = getCustomWallpapers().toMutableList()
+        current.remove(uri)
+        current.add(0, uri)
+        val arr = org.json.JSONArray()
+        current.take(20).forEach { arr.put(it) }
+        prefs.edit().putString(KEY_CUSTOM_WALLPAPERS_LIST, arr.toString()).apply()
+        customWallpaperUri = uri
+    }
+
+    fun deleteCustomWallpaper(uri: String) {
+        val current = getCustomWallpapers().toMutableList()
+        current.remove(uri)
+        val arr = org.json.JSONArray()
+        current.forEach { arr.put(it) }
+        prefs.edit().putString(KEY_CUSTOM_WALLPAPERS_LIST, arr.toString()).apply()
+        if (customWallpaperUri == uri) {
+            customWallpaperUri = current.firstOrNull()
+        }
+    }
 
     var bubbleStyle: BubbleStyleType
         get() {

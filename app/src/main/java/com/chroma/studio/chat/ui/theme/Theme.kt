@@ -186,17 +186,27 @@ fun ChatAppTheme(
 fun ChatWallpaperBackground(
     wallpaperType: WallpaperType,
     dimmingAlpha: Float = 0.15f,
+    customUri: String? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalChatColors.current
 
     Box(modifier = modifier.fillMaxSize().background(colors.appBg)) {
-        AsyncImage(
-            model = wallpaperType.drawableRes,
-            contentDescription = wallpaperType.title,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        if (!customUri.isNullOrBlank()) {
+            AsyncImage(
+                model = customUri,
+                contentDescription = "Custom Chat Wallpaper",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            AsyncImage(
+                model = wallpaperType.drawableRes,
+                contentDescription = wallpaperType.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
         // Ambient overlay for legibility over wallpapers
         Box(
             modifier = Modifier

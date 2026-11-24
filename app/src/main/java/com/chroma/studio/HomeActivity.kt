@@ -1734,6 +1734,7 @@ private fun AuthenticatedRoute(
                         var currentAccentColor by remember { mutableStateOf<com.chroma.studio.chat.data.AccentColorType>(settingsManager.accentColor) }
                         var currentCustomCorners by remember { mutableStateOf<com.chroma.studio.chat.data.CustomCornerConfig>(settingsManager.customCorners) }
                         var currentAnimationStyle by remember { mutableStateOf<com.chroma.studio.chat.data.BubbleAnimationStyle>(settingsManager.animationStyle) }
+                        var isWallpaperGalleryOpen by remember { mutableStateOf(false) }
 
                         com.chroma.studio.chat.ui.theme.ChatAppTheme(darkTheme = vm.isDarkMode) {
                             com.chroma.studio.chat.ui.components.AppearanceSettingsScreen(
@@ -1775,13 +1776,26 @@ private fun AuthenticatedRoute(
                                     settingsManager.accentColor = picked
                                 },
                                 onOpenWallpaperPicker = {
-                                    val values = com.chroma.studio.chat.data.WallpaperType.entries
-                                    val next = values[(values.indexOf(settingsManager.wallpaperType) + 1) % values.size]
-                                    settingsManager.wallpaperType = next
-                                    com.chroma.studio.ui.components.ToastManager.showToast("Chat wallpaper: ${next.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }}")
+                                    isWallpaperGalleryOpen = true
                                 },
                                 onClose = { navController.popBackStack() }
                             )
+
+                            if (isWallpaperGalleryOpen) {
+                                com.chroma.studio.chat.ui.components.ChatWallpaperGalleryModal(
+                                    currentWallpaper = settingsManager.wallpaperType,
+                                    currentDimmingAlpha = settingsManager.wallpaperDimming,
+                                    currentCustomUri = settingsManager.customWallpaperUri,
+                                    settingsManager = settingsManager,
+                                    onSelectWallpaper = { pickedType, dim, customUri ->
+                                        settingsManager.wallpaperType = pickedType
+                                        settingsManager.wallpaperDimming = dim
+                                        settingsManager.customWallpaperUri = customUri
+                                        isWallpaperGalleryOpen = false
+                                    },
+                                    onClose = { isWallpaperGalleryOpen = false }
+                                )
+                            }
                         }
                     }
 
