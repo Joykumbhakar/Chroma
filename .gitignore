@@ -1,24 +1,36 @@
+# Android & Gradle
 *.iml
-.gradle
-/local.properties
+.gradle/
+local.properties
 /.idea/
 .DS_Store
 .kotlin/
 .agents/
 *.bak
 /build
+build/
 /captures
 .externalNativeBuild
 .cxx
-local.properties
 
+# Secrets & Credentials
 google-services.json
 serviceAccountKey.json
 firebase_backup*.json
+debug.keystore
+*.jks
+*.keystore
+.env
+.env.*
+!.env.example
 
+# Logs
 *.log
 firebase-debug.log
+build_log*.txt
+build_output*.txt
 
+# Python & ML
 __pycache__/
 *.pyc
 *.py
@@ -27,22 +39,12 @@ __pycache__/
 !ml_safety/**/*.py
 *.txt
 !ml_safety/*.txt
+
+# Temporary & Scratch files
 temp_*/
 temp_*.kt
 test.kt
-build_log*.txt
-build_output*.txt
 *.zip
-node_modules/
-package-lock.json
-package.json
-result.json
-export_firebase.js
-wipe_and_init_database.js
-skills-lock.json
-.env
-.env.*
-!.env.example
 scratch/
 cursors/
 *.cur
@@ -54,9 +56,19 @@ extracted_*.png
 Notification sound pack/
 /fonts/
 !app/src/main/assets/fonts/
+skills-lock.json
+result.json
+export_firebase.js
+wipe_and_init_database.js
 
- 
-debug.keystore
-*.jks
-*.keystore
+# Web build artifacts
+node_modules/
+package-lock.json
+package.json
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Binaries
 *.apk
