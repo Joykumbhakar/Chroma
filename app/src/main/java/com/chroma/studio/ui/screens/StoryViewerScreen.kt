@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -1171,12 +1172,19 @@ fun StoryViewerScreen(
                                     )
                                 }
                             } else {
-                                // Viewers & Likes pill button
+                                // Viewers & Likes pill button (tap or swipe up to open insights)
                                 Row(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clip(RoundedCornerShape(24.dp))
+                                        .clip(CircleShape)
                                         .background(Color.Black.copy(alpha = 0.65f))
+                                        .pointerInput(isOwner) {
+                                            detectVerticalDragGestures { _, dragAmount ->
+                                                if (dragAmount < -15f && isOwner && !showViewers) {
+                                                    showViewers = true
+                                                }
+                                            }
+                                        }
                                         .clickable { showViewers = true }
                                         .padding(horizontal = 14.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -1200,7 +1208,7 @@ fun StoryViewerScreen(
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     }
-                                    Icon(Lucide.ChevronUp, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+                                    Icon(Lucide.ChevronUp, contentDescription = "Swipe up for insights", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
                                 }
                             }
 
@@ -1530,130 +1538,6 @@ fun StoryViewerScreen(
                         }
                     }
                 )
-            }
-        }
-    }
-}
-
-// ── Admin Viewers Sheet Component ─────────────────────────────────────────────
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AdminStoryViewersSheet(
-    story: Story,
-    onDismiss: () -> Unit,
-    onDelete: () -> Unit
-) {
-    var viewerProfiles by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
-    var isLoadingProfiles by remember { mutableStateOf(true) }
-
-    LaunchedEffect(story.id) {
-        if (story.viewedBy.isNotEmpty()) {
-            withContext(Dispatchers.IO) {
-                val repo = DiscoverRepository()
-                val profiles = story.viewedBy.mapNotNull { uid ->
-                    try { repo.getUserProfile(uid) } catch (e: Exception) { null }
-                }
-                viewerProfiles = profiles
-                isLoadingProfiles = false
-            }
-        } else {
-            isLoadingProfiles = false
-        }
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1C1C1E),
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(vertical = 10.dp)
-                    .width(36.dp)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Color.White.copy(alpha = 0.3f))
-            )
-        }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Story Insights",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "${story.viewedBy.size} Viewers · ${story.likedBy.size} Likes",
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 13.sp
-                    )
-                }
-
-                IconButton(onClick = onDelete) {
-                    Icon(Lucide.Trash2, contentDescription = "Delete", tint = Color(0xFFFF453A))
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            if (isLoadingProfiles) {
-                Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color(0xFF0381FE), modifier = Modifier.size(24.dp))
-                }
-            } else if (viewerProfiles.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("No viewers yet", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(viewerProfiles) { profile ->
-                        val hasLiked = story.likedBy.contains(profile.uid)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                IosAvatarView(
-                                    name = profile.displayName,
-                                    avatarUrl = profile.avatarUrl,
-                                    size = 38.dp,
-                                    gender = profile.gender
-                                )
-                                Column(verticalArrangement = Arrangement.spacedBy((-2).dp)) {
-                                    Text(profile.displayName, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 16.sp)
-                                    Text("@${profile.username}", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, lineHeight = 14.sp)
-                                }
-                            }
-
-                            if (hasLiked) {
-                                Icon(
-                                    ChromaIcons.HeartFilled,
-                                    contentDescription = "Liked",
-                                    tint = Color(0xFFFF2D55),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
             }
         }
     }

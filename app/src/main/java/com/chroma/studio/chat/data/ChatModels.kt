@@ -22,7 +22,8 @@ data class StoryViewerInfo(
     val username: String,
     val avatar: String,
     val timeAgo: String,
-    val reactedEmoji: String? = null
+    val reactedEmoji: String? = null,
+    val verified: Boolean = false
 )
 
 @Immutable

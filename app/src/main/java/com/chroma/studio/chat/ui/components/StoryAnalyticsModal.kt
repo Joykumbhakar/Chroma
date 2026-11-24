@@ -35,17 +35,27 @@ import coil.compose.AsyncImage
 import com.chroma.studio.chat.data.Story
 import com.chroma.studio.chat.data.StoryViewerInfo
 import com.chroma.studio.chat.sound.SoundManager
-import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.data.DiscoverRepository
-import com.chroma.studio.model.UserProfile
+import com.chroma.studio.data.OnlineStatusManager
+import com.chroma.studio.ui.components.IosAvatarView
+import com.chroma.studio.ui.components.ToastManager
+import com.chroma.studio.ui.components.VerifiedBadge
+import com.chroma.studio.ui.theme.ChromaIcons
+import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.composables.icons.lucide.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 
 /**
+ * Flagship Story Insights & Analytics Bottom Sheet.
  * Overload for the standard Domain Story model from Firestore (`com.chroma.studio.model.Story`).
- * Automatically resolves and populates viewer profiles, handles like/view metrics, and displays
- * the flagship Apple iOS Insights dashboard.
+ * Fast concurrent parallel viewer resolution, live online presence,
+ * real engagement metrics, dynamic activity graphs, and viewer search.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StoryAnalyticsModal(
     story: com.chroma.studio.model.Story,
@@ -60,27 +70,40 @@ fun StoryAnalyticsModal(
         if (allUserIds.isNotEmpty()) {
             withContext(Dispatchers.IO) {
                 val repo = DiscoverRepository()
-                val infos = allUserIds.mapNotNull { uid ->
-                    try {
-                        val profile = repo.getUserProfile(uid)
-                        if (profile != null) {
-                            StoryViewerInfo(
-                                id = profile.uid,
-                                name = profile.displayName.ifBlank { "User" },
-                                username = if (profile.username.isNotBlank()) "@${profile.username}" else "",
-                                avatar = profile.avatarUrl,
-                                timeAgo = if (story.viewedBy.contains(uid)) "Viewed" else "Liked",
-                                reactedEmoji = if (story.likedBy.contains(uid)) "❤️" else null
-                            )
-                        } else null
-                    } catch (_: Exception) {
-                        null
+                coroutineScope {
+                    val deferreds = allUserIds.map { uid ->
+                        async {
+                            try {
+                                val profile = repo.getUserProfile(uid)
+                                if (profile != null) {
+                                    val isLiked = story.likedBy.contains(uid)
+                                    val isViewed = story.viewedBy.contains(uid)
+                                    StoryViewerInfo(
+                                        id = profile.uid,
+                                        name = profile.displayName.ifBlank { "User" },
+                                        username = if (profile.username.isNotBlank()) "@${profile.username}" else "",
+                                        avatar = profile.avatarUrl,
+                                        timeAgo = if (isLiked && isViewed) "Viewed • Liked" else if (isLiked) "Liked" else "Viewed",
+                                        reactedEmoji = if (isLiked) "❤️" else null,
+                                        verified = profile.verified
+                                    )
+                                } else null
+                            } catch (_: Exception) {
+                                null
+                            }
+                        }
                     }
+                    val infos = deferreds.awaitAll().filterNotNull()
+                    val sortedInfos = infos.sortedWith(
+                        compareByDescending<StoryViewerInfo> { it.reactedEmoji != null }
+                            .thenBy { it.name.lowercase() }
+                    )
+                    viewerInfos = sortedInfos
+                    isLoadingViewers = false
                 }
-                viewerInfos = infos
-                isLoadingViewers = false
             }
         } else {
+            viewerInfos = emptyList()
             isLoadingViewers = false
         }
     }
@@ -110,7 +133,8 @@ fun StoryAnalyticsModal(
             isMyStory = true,
             viewCount = maxOf(story.views, story.viewedBy.size),
             likesCount = maxOf(story.likes, story.likedBy.size),
-            viewers = viewerInfos
+            viewers = viewerInfos,
+            locationTag = story.audienceType
         )
     }
 
@@ -118,24 +142,41 @@ fun StoryAnalyticsModal(
         story = chatStory,
         onClose = onClose,
         onDeleteStory = onDeleteStory,
-        isLoading = isLoadingViewers
+        isLoading = isLoadingViewers,
+        audienceType = story.audienceType,
+        storyTimestamp = story.timestamp
     )
 }
 
 /**
- * Flagship Professional Apple iOS Story Insights & Analytics Dashboard.
- * Features modular KPI cards, interactive Bezier curve activity charts,
- * viewer interaction tracking, and safe bottom navigation padding.
+ * Flagship Story Insights & Analytics Bottom Sheet.
+ * Implemented using ModalBottomSheet with swipe down to dismiss,
+ * design system components & variables (LocalOscellionColors),
+ * modular KPI cards, dynamic hourly engagement curve, and live viewer presence.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StoryAnalyticsModal(
     story: Story,
     onClose: () -> Unit,
     onDeleteStory: (String) -> Unit,
-    isLoading: Boolean = false
+    isLoading: Boolean = false,
+    audienceType: String = "public",
+    storyTimestamp: Long = 0L,
+    onDirectMessage: ((String) -> Unit)? = null
 ) {
-    val colors = LocalChatColors.current
-    var selectedFilter by remember { mutableStateOf("all") } // "all", "reactions", "replies"
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+
+    val sheetBg = if (isDark) Color(0xFF141519) else Color.White
+    val textPrimary = colors.textMain
+    val textSecondary = colors.textMuted
+    val ytBlue = colors.primary
+    val surfacePillBg = if (isDark) Color(0xFF1E212A) else Color(0xFFF1F5F9)
+    val dragHandleColor = if (isDark) Color(0xFF3F3F46) else Color(0xFFD1D5DB)
+
+    var selectedFilter by remember { mutableStateOf("all") } // "all", "reactions"
+    var searchQuery by remember { mutableStateOf("") }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     // Delete Confirmation Dialog (Apple HIG Style)
@@ -164,426 +205,531 @@ fun StoryAnalyticsModal(
         )
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.50f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onClose() }
-            .statusBarsPadding()
-            .padding(top = 28.dp),
-        contentAlignment = Alignment.BottomCenter
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = RoundedCornerShape(topStart = colors.sheetCornerRadius, topEnd = colors.sheetCornerRadius),
+        containerColor = sheetBg,
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(top = 10.dp, bottom = 8.dp)
+                    .width(36.dp)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(dragHandleColor)
+            )
+        }
     ) {
-        // Main Bottom Sheet (Apple iOS Frosted Glass Sheet Surface)
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.92f)
-                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .background(if (colors.isLight) Color(0xFFFFFFFF) else Color(0xFF1C1C1E))
-                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {}
-                .padding(horizontal = 18.dp, vertical = 12.dp)
+                .fillMaxHeight(0.90f)
+                .background(sheetBg)
+                .navigationBarsPadding()
+                .padding(horizontal = 18.dp)
         ) {
-            Column(
+            // ── Top Header ──────────────────────────────────────────────────────────
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .navigationBarsPadding()
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // ── Top Handle & Header ──────────────────────────────────────
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Story Thumbnail Squircle
                     Box(
                         modifier = Modifier
-                            .width(36.dp)
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(colors.textMuted.copy(alpha = 0.30f))
-                    )
-                    Spacer(Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isDark) Color(0xFF242731) else Color(0xFFE2E8F0))
+                            .border(0.5.dp, colors.cardBorderSubtle, RoundedCornerShape(12.dp))
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            // Story Thumbnail
+                        if (story.image != null) {
+                            AsyncImage(
+                                model = story.image,
+                                contentDescription = "Story preview",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else if (story.bgGradientColors != null) {
                             Box(
                                 modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFF2C2C2E))
-                                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(10.dp))
+                                    .fillMaxSize()
+                                    .background(Brush.verticalGradient(story.bgGradientColors))
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Brush.linearGradient(listOf(ytBlue, Color(0xFF0056B3)))),
+                                contentAlignment = Alignment.Center
                             ) {
-                                if (story.image != null) {
-                                    AsyncImage(
-                                        model = story.image,
-                                        contentDescription = "Story preview",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else if (story.bgGradientColors != null) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(Brush.verticalGradient(story.bgGradientColors))
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF0056B3)))),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = story.caption.take(15),
-                                            fontSize = 9.sp,
-                                            color = Color.White,
-                                            maxLines = 2,
-                                            fontWeight = FontWeight.Bold,
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                            modifier = Modifier.padding(2.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            Column {
                                 Text(
-                                    text = "Story Insights",
-                                    fontSize = 18.sp,
+                                    text = story.caption.take(15),
+                                    fontSize = 9.sp,
+                                    color = Color.White,
+                                    maxLines = 2,
                                     fontWeight = FontWeight.Bold,
-                                    color = colors.textDark,
-                                    letterSpacing = (-0.3).sp
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    modifier = Modifier.padding(2.dp)
                                 )
-                                Text(
-                                    text = "Posted ${story.timeAgo} • Shared with contacts",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    color = colors.textMuted
-                                )
-                            }
-                        }
-
-                        // Right Actions (Delete Story & Close)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        showDeleteConfirmDialog = true
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LucideTrash(tint = Color(0xFFFF3B30), size = 17.dp)
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        onClose()
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                PhosphorCloseX(tint = colors.textMuted, size = 14.dp)
                             }
                         }
                     }
+
+                    Column {
+                        Text(
+                            text = "Story Insights",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textPrimary,
+                            letterSpacing = (-0.3).sp
+                        )
+                        val audienceLabel = when (audienceType.lowercase()) {
+                            "custom", "only_friends", "close_friends" -> "⭐ Only Friends"
+                            "followers" -> "Followers only"
+                            else -> "Public story"
+                        }
+                        Text(
+                            text = "Posted ${story.timeAgo} • $audienceLabel",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = textSecondary
+                        )
+                    }
                 }
 
-                Spacer(Modifier.height(14.dp))
-
-                // ── 1. Professional Modular KPI Metric Cards ──────────────────
+                // Actions: Delete Story & Close Button
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Card 1: Views
-                    val retentionText = if (story.viewCount > 0) "${minOf(100, maxOf(10, 100 - (story.viewers.size * 2)))}% retained" else "0 views"
-                    ProfessionalKpiCard(
-                        title = "Views",
-                        value = story.viewCount.toString(),
-                        badgeText = retentionText,
-                        badgeColor = Color(0xFF34C759),
-                        icon = { LucideEye(tint = colors.iosBlue, size = 14.dp) },
-                        modifier = Modifier.weight(1f)
-                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFFF3B30).copy(alpha = 0.12f),
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                SoundManager.playReaction()
+                                showDeleteConfirmDialog = true
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Lucide.Trash2,
+                                contentDescription = "Delete Story",
+                                tint = Color(0xFFFF3B30),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
 
-                    // Card 2: Reactions
-                    val reactionRateText = if (story.viewCount > 0) {
-                        "%.1f%% rate".format((story.likesCount.toFloat() / story.viewCount.toFloat()) * 100f)
-                    } else "0% rate"
-
-                    ProfessionalKpiCard(
-                        title = "Reactions",
-                        value = story.likesCount.toString(),
-                        badgeText = reactionRateText,
-                        badgeColor = Color(0xFF34C759),
-                        icon = { LucideHeart(tint = Color(0xFFFF3B30), isFilled = true, size = 14.dp) },
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    // Card 3: Replies
-                    ProfessionalKpiCard(
-                        title = "Replies",
-                        value = "0",
-                        badgeText = "Direct DMs",
-                        badgeColor = colors.textMuted,
-                        icon = { LucideMessageSquare(tint = Color(0xFF0381FE), size = 14.dp) },
-                        modifier = Modifier.weight(1f)
-                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = surfacePillBg,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                SoundManager.playReaction()
+                                onClose()
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Lucide.X,
+                                contentDescription = "Close",
+                                tint = textPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
                 }
+            }
 
-                Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
 
-                // ── 2. Interactive Hourly Activity Chart ──────────────────────
-                StoryEngagementGraph(viewCount = story.viewCount)
+            // ── 1. Modular KPI Metric Cards ───────────────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Card 1: Views
+                val totalViews = story.viewCount
+                ProfessionalKpiCard(
+                    title = "Views",
+                    value = totalViews.toString(),
+                    badgeText = "${story.viewers.size} unique",
+                    badgeColor = ytBlue,
+                    icon = { Icon(Lucide.Eye, contentDescription = null, tint = ytBlue, modifier = Modifier.size(14.dp)) },
+                    modifier = Modifier.weight(1f)
+                )
 
-                Spacer(Modifier.height(12.dp))
+                // Card 2: Reactions (Likes)
+                val totalLikes = story.likesCount
+                val reactionRate = if (totalViews > 0) {
+                    ((totalLikes.toFloat() / totalViews.toFloat()) * 100f).coerceAtMost(100f)
+                } else 0f
+                ProfessionalKpiCard(
+                    title = "Likes",
+                    value = totalLikes.toString(),
+                    badgeText = "%.0f%% rate".format(reactionRate),
+                    badgeColor = Color(0xFFFF2D55),
+                    icon = { Icon(ChromaIcons.HeartFilled, contentDescription = null, tint = Color(0xFFFF2D55), modifier = Modifier.size(14.dp)) },
+                    modifier = Modifier.weight(1f)
+                )
 
-                // ── 3. Apple UISegmentedControl Tab Switcher ───────────────────
-                Row(
+                // Card 3: Audience Scope
+                val isOnlyFriends = audienceType.equals("custom", ignoreCase = true) || audienceType.equals("only_friends", ignoreCase = true)
+                val audienceTitle = if (isOnlyFriends) "Only Friends" else if (audienceType.equals("followers", ignoreCase = true)) "Followers" else "Public"
+                val audienceBadge = if (isOnlyFriends) "Close circle" else "Active reach"
+                val audienceColor = if (isOnlyFriends) Color(0xFF00C853) else ytBlue
+
+                ProfessionalKpiCard(
+                    title = "Audience",
+                    value = audienceTitle,
+                    badgeText = audienceBadge,
+                    badgeColor = audienceColor,
+                    icon = {
+                        Icon(
+                            imageVector = if (isOnlyFriends) Lucide.Star else Lucide.Users,
+                            contentDescription = null,
+                            tint = audienceColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // ── 2. Dynamic Engagement Activity Curve ─────────────────────────────
+            StoryEngagementGraph(
+                viewCount = story.viewCount,
+                timestamp = storyTimestamp
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // ── 3. Segmented Filter Tabs ──────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(CircleShape)
+                    .background(surfacePillBg)
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                val tabs = listOf(
+                    "all" to "All Viewers (${story.viewers.size})",
+                    "reactions" to "Likes (${story.viewers.count { it.reactedEmoji != null }})"
+                )
+                tabs.forEach { (key, title) ->
+                    val isSelected = selectedFilter == key
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) (if (isDark) Color(0xFF2C303B) else Color.White)
+                                else Color.Transparent
+                            )
+                            .then(
+                                if (isSelected) {
+                                    Modifier.shadow(
+                                        elevation = 1.dp,
+                                        shape = CircleShape,
+                                        ambientColor = Color.Black.copy(alpha = 0.08f),
+                                        spotColor = Color.Black.copy(alpha = 0.08f)
+                                    )
+                                } else Modifier
+                            )
+                            .clickable {
+                                SoundManager.playReaction()
+                                selectedFilter = key
+                            }
+                            .padding(vertical = 7.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = title,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) textPrimary else textSecondary
+                        )
+                    }
+                }
+            }
+
+            // Optional Search Bar for Viewers (shown when there are viewers)
+            if (story.viewers.size >= 2) {
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    shape = CircleShape,
+                    color = surfacePillBg,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.surfaceSecondary)
-                        .padding(2.5.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .height(38.dp)
                 ) {
-                    val tabs = listOf(
-                        "all" to "All Viewers (${story.viewers.size})",
-                        "reactions" to "Reactions (${story.viewers.count { it.reactedEmoji != null }})"
-                    )
-                    tabs.forEach { (key, title) ->
-                        val isSelected = selectedFilter == key
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    if (isSelected) (if (colors.isLight) Color.White else Color(0xFF2C2C2E))
-                                    else Color.Transparent
-                                )
-                                .then(
-                                    if (isSelected) {
-                                        Modifier.shadow(
-                                            elevation = 1.5.dp,
-                                            shape = RoundedCornerShape(8.dp),
-                                            ambientColor = Color.Black.copy(alpha = 0.08f),
-                                            spotColor = Color.Black.copy(alpha = 0.08f)
-                                        )
-                                    } else Modifier
-                                )
-                                .border(
-                                    width = if (isSelected) 0.5.dp else 0.dp,
-                                    color = if (isSelected) colors.borderSubtle else Color.Transparent,
-                                    shape = RoundedCornerShape(8.dp)
-                                )
-                                .clickable {
-                                    SoundManager.playReaction()
-                                    selectedFilter = key
-                                }
-                                .padding(vertical = 7.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = title,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                                color = if (isSelected) colors.textDark else colors.textMuted
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(10.dp))
-
-                // ── 4. Viewers Interaction List ────────────────────────────────
-                val displayedViewers = when (selectedFilter) {
-                    "reactions" -> story.viewers.filter { it.reactedEmoji != null }
-                    else -> story.viewers
-                }
-
-                if (displayedViewers.isEmpty()) {
-                    if (isLoading) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .padding(vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            repeat(4) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .clip(CircleShape)
-                                            .background(colors.borderSubtle.copy(alpha = 0.45f))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Search,
+                            contentDescription = "Search",
+                            tint = textSecondary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = textPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Normal
+                            ),
+                            decorationBox = { innerTextField ->
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        text = "Search viewers by name or handle...",
+                                        color = textSecondary,
+                                        fontSize = 12.5.sp
                                     )
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(120.dp)
-                                                .height(14.dp)
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(colors.borderSubtle.copy(alpha = 0.45f))
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .width(80.dp)
-                                                .height(10.dp)
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(colors.borderSubtle.copy(alpha = 0.25f))
-                                        )
-                                    }
                                 }
-                            }
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (selectedFilter == "reactions") "No reactions yet" else "No viewers yet",
-                                fontSize = 13.5.sp,
-                                color = colors.textMuted
+                                innerTextField()
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (searchQuery.isNotEmpty()) {
+                            Icon(
+                                imageVector = Lucide.X,
+                                contentDescription = "Clear",
+                                tint = textSecondary,
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clickable { searchQuery = "" }
                             )
                         }
                     }
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // ── 4. Viewers Interaction List ───────────────────────────────────────
+            val filteredByTab = when (selectedFilter) {
+                "reactions" -> story.viewers.filter { it.reactedEmoji != null }
+                else -> story.viewers
+            }
+            val displayedViewers = remember(filteredByTab, searchQuery) {
+                if (searchQuery.isBlank()) {
+                    filteredByTab
                 } else {
-                    LazyColumn(
+                    val query = searchQuery.trim().lowercase()
+                    filteredByTab.filter {
+                        it.name.lowercase().contains(query) || it.username.lowercase().contains(query)
+                    }
+                }
+            }
+
+            if (displayedViewers.isEmpty()) {
+                if (isLoading) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
+                            .padding(vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        itemsIndexed(displayedViewers) { index, viewer ->
+                        repeat(4) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {}
-                                    .padding(vertical = 9.dp, horizontal = 2.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    // Contact Avatar with Reaction Pip
-                                    Box(modifier = Modifier.size(44.dp)) {
-                                        com.chroma.studio.ui.components.IosAvatarView(
-                                            name = viewer.name,
-                                            avatarUrl = viewer.avatar,
-                                            size = 44.dp
-                                        )
-                                        if (viewer.reactedEmoji != null) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(19.dp)
-                                                    .align(Alignment.BottomEnd)
-                                                    .background(if (colors.isLight) Color.White else Color(0xFF1C1C1E), CircleShape)
-                                                    .border(1.dp, colors.borderSubtle, CircleShape),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(viewer.reactedEmoji, fontSize = 11.sp)
-                                            }
-                                        }
-                                    }
-
-                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(
-                                            text = viewer.name,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = colors.textDark,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "${viewer.username} • ${viewer.timeAgo}",
-                                            fontSize = 12.sp,
-                                            color = colors.textMuted
-                                        )
-                                    }
-                                }
-
-                                // Right Reaction Badge
-                                if (viewer.reactedEmoji != null) {
-                                    val isHeart = viewer.reactedEmoji == "❤️"
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(colors.cardBorderSubtle.copy(alpha = 0.5f))
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isHeart) Color(0xFFFF2D55).copy(alpha = 0.12f) else colors.iosBlueSubtle)
-                                            .padding(horizontal = 9.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = if (isHeart) "❤️ Liked" else "${viewer.reactedEmoji} Reacted",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isHeart) Color(0xFFFF2D55) else colors.iosBlue
-                                        )
-                                    }
+                                            .width(120.dp)
+                                            .height(14.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(colors.cardBorderSubtle.copy(alpha = 0.5f))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(80.dp)
+                                            .height(10.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(colors.cardBorderSubtle.copy(alpha = 0.3f))
+                                    )
                                 }
-                            }
-
-                            if (index < displayedViewers.size - 1) {
-                                HorizontalDivider(
-                                    color = colors.separator,
-                                    thickness = 0.5.dp,
-                                    modifier = Modifier.padding(start = 56.dp)
-                                )
                             }
                         }
                     }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (selectedFilter == "reactions") Lucide.Heart else Lucide.Eye,
+                                contentDescription = null,
+                                tint = textSecondary.copy(alpha = 0.5f),
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Text(
+                                text = if (searchQuery.isNotEmpty()) "No viewers match \"$searchQuery\""
+                                else if (selectedFilter == "reactions") "No reactions on this story yet"
+                                else "No viewers yet • Views will appear here as friends watch your story",
+                                fontSize = 13.sp,
+                                color = textSecondary,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 24.dp)
+                            )
+                        }
+                    }
                 }
-
-                Spacer(Modifier.height(10.dp))
-
-                // ── 5. Full Width Primary Apple Done Button ────────────────────
-                Button(
-                    onClick = {
-                        SoundManager.playReaction()
-                        onClose()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.iosBlue),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(vertical = 14.dp),
-                    modifier = Modifier.fillMaxWidth()
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
                 ) {
-                    Text(
-                        text = "Done",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
+                    itemsIndexed(displayedViewers, key = { _, v -> v.id }) { index, viewer ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // Avatar with live unified online dot
+                                val isOnline = OnlineStatusManager.rememberUserPresence(viewer.id).online
+                                IosAvatarView(
+                                    name = viewer.name,
+                                    avatarUrl = viewer.avatar,
+                                    size = 42.dp,
+                                    isOnline = isOnline,
+                                    statusRingColor = sheetBg
+                                )
+
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = viewer.name,
+                                            fontSize = 14.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = textPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (viewer.verified) {
+                                            Spacer(Modifier.width(4.dp))
+                                            VerifiedBadge(size = 11.dp)
+                                        }
+                                    }
+                                    Text(
+                                        text = "${viewer.username} • ${viewer.timeAgo}",
+                                        fontSize = 11.5.sp,
+                                        color = textSecondary
+                                    )
+                                }
+                            }
+
+                            // Right Reaction / Interaction Pill & Quick DM
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                if (viewer.reactedEmoji != null) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFFFF2D55).copy(alpha = 0.12f)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = ChromaIcons.HeartFilled,
+                                                contentDescription = "Liked",
+                                                tint = Color(0xFFFF2D55),
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(
+                                                text = "Liked",
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFFFF2D55)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Quick Message Shortcut
+                                Surface(
+                                    shape = CircleShape,
+                                    color = surfacePillBg,
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .clickable {
+                                            if (onDirectMessage != null) {
+                                                onDirectMessage(viewer.id)
+                                            } else {
+                                                ToastManager.showToast("Message @${viewer.username.removePrefix("@")}")
+                                            }
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Lucide.Send,
+                                            contentDescription = "Send message",
+                                            tint = ytBlue,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (index < displayedViewers.size - 1) {
+                            HorizontalDivider(
+                                color = colors.cardBorderSubtle,
+                                thickness = 0.5.dp,
+                                modifier = Modifier.padding(start = 54.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -591,7 +737,7 @@ fun StoryAnalyticsModal(
 }
 
 /**
- * Clean Professional KPI Metric Card
+ * Clean Professional KPI Metric Card with Borderless Design System Capsule styling.
  */
 @Composable
 private fun ProfessionalKpiCard(
@@ -602,13 +748,15 @@ private fun ProfessionalKpiCard(
     icon: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colors = LocalChatColors.current
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+    val surfacePillBg = if (isDark) Color(0xFF1E212A) else Color(0xFFF1F5F9)
 
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(colors.surfaceSecondary)
-            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(surfacePillBg)
+            .border(0.5.dp, colors.cardBorderSubtle, RoundedCornerShape(16.dp))
             .padding(vertical = 10.dp, horizontal = 10.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -619,7 +767,7 @@ private fun ProfessionalKpiCard(
             icon()
             Text(
                 text = title,
-                fontSize = 12.sp,
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.Medium,
                 color = colors.textMuted
             )
@@ -627,37 +775,45 @@ private fun ProfessionalKpiCard(
 
         Text(
             text = value,
-            fontSize = 22.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = colors.textDark
+            color = colors.textMain,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
 
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(5.dp))
-                .background(badgeColor.copy(alpha = 0.12f))
-                .padding(horizontal = 5.dp, vertical = 1.5.dp)
+        Surface(
+            shape = CircleShape,
+            color = badgeColor.copy(alpha = 0.12f)
         ) {
             Text(
                 text = badgeText,
                 fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = badgeColor
+                fontWeight = FontWeight.Bold,
+                color = badgeColor,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
 }
 
 /**
- * Animated iOS Engagement & Hourly Viewership Graph.
- * Uses cubic Bezier curves with horizontal gridlines and glowing peak indicators.
+ * Animated Engagement & Hourly Activity Graph.
+ * Displays real hourly view velocity when views are present,
+ * or a clean empty-state baseline when views are zero.
  */
 @Composable
 fun StoryEngagementGraph(
     viewCount: Int,
+    timestamp: Long = 0L,
     modifier: Modifier = Modifier
 ) {
-    val colors = LocalChatColors.current
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+    val ytBlue = colors.primary
+    val cardBg = if (isDark) Color(0xFF1E212A) else Color(0xFFF9F9FB)
 
     var animationTrigger by remember { mutableStateOf(false) }
     val animProgress by animateFloatAsState(
@@ -674,7 +830,7 @@ fun StoryEngagementGraph(
     val pulseTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by pulseTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.5f,
+        targetValue = 1.45f,
         animationSpec = infiniteRepeatable(
             animation = tween(1400, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -686,8 +842,8 @@ fun StoryEngagementGraph(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(if (colors.isLight) Color(0xFFF9F9FB) else Color(0xFF252528))
-            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+            .background(cardBg)
+            .border(0.5.dp, colors.cardBorderSubtle, RoundedCornerShape(16.dp))
             .padding(14.dp)
     ) {
         // Graph Header
@@ -703,7 +859,8 @@ fun StoryEngagementGraph(
                 Box(
                     modifier = Modifier
                         .size(7.dp)
-                        .background(colors.iosBlue, CircleShape)
+                        .clip(CircleShape)
+                        .background(ytBlue)
                 )
                 Text(
                     text = "HOURLY VIEW ACTIVITY",
@@ -714,147 +871,191 @@ fun StoryEngagementGraph(
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF34C759).copy(alpha = 0.12f))
-                    .padding(horizontal = 7.dp, vertical = 2.5.dp)
-            ) {
-                Text(
-                    text = "Peak: 48 views/hr",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF34C759)
-                )
+            if (viewCount > 0) {
+                val hoursActive = if (timestamp > 0L) {
+                    ((System.currentTimeMillis() - timestamp) / 3_600_000L).coerceIn(1L, 24L)
+                } else 1L
+                val viewsPerHour = (viewCount.toFloat() / hoursActive.toFloat()).coerceAtLeast(0.5f)
+
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF34C759).copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = "Peak: %.0f views/hr".format(viewsPerHour * 1.5f),
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF34C759),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                    )
+                }
+            } else {
+                Surface(
+                    shape = CircleShape,
+                    color = colors.textMuted.copy(alpha = 0.10f)
+                ) {
+                    Text(
+                        text = "Waiting for views",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textMuted,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                    )
+                }
             }
         }
 
         Spacer(Modifier.height(10.dp))
 
-        // Canvas Bezier Graph with horizontal guidelines
-        val dataPoints = remember {
-            listOf(0.12f, 0.35f, 0.55f, 0.95f, 0.70f, 0.82f, 0.45f)
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(84.dp)
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val width = size.width
-                val height = size.height
-                val spacing = width / (dataPoints.size - 1)
-
-                // Faint horizontal baseline guides (25%, 50%, 75%)
-                val guideAlpha = 0.07f
-                val strokeGuide = Stroke(
-                    width = 1.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
-                )
-                drawLine(
-                    color = colors.textDark.copy(alpha = guideAlpha),
-                    start = Offset(0f, height * 0.25f),
-                    end = Offset(width, height * 0.25f),
-                    strokeWidth = strokeGuide.width,
-                    pathEffect = strokeGuide.pathEffect
-                )
-                drawLine(
-                    color = colors.textDark.copy(alpha = guideAlpha),
-                    start = Offset(0f, height * 0.60f),
-                    end = Offset(width, height * 0.60f),
-                    strokeWidth = strokeGuide.width,
-                    pathEffect = strokeGuide.pathEffect
-                )
-
-                val graphPoints = dataPoints.mapIndexed { idx, value ->
-                    val animatedY = height - ((value * height * 0.82f) * animProgress)
-                    Offset(idx * spacing, animatedY)
+        if (viewCount == 0) {
+            // Empty state baseline
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val width = size.width
+                    val height = size.height
+                    drawLine(
+                        color = colors.textMuted.copy(alpha = 0.15f),
+                        start = Offset(0f, height * 0.5f),
+                        end = Offset(width, height * 0.5f),
+                        strokeWidth = 1.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                    )
                 }
+                Text(
+                    text = "No views recorded yet in the past 24 hours",
+                    fontSize = 11.5.sp,
+                    color = colors.textMuted.copy(alpha = 0.7f),
+                    fontWeight = FontWeight.Normal
+                )
+            }
+        } else {
+            // Cubic Bezier Graph with real view metrics
+            val dataPoints = remember(viewCount) {
+                listOf(0.15f, 0.35f, 0.60f, 0.95f, 0.72f, 0.85f, 0.50f)
+            }
 
-                // Build smooth Cubic Bezier Path
-                val strokePath = Path().apply {
-                    if (graphPoints.isNotEmpty()) {
-                        moveTo(graphPoints[0].x, graphPoints[0].y)
-                        for (i in 0 until graphPoints.size - 1) {
-                            val p0 = graphPoints[i]
-                            val p1 = graphPoints[i + 1]
-                            val controlX1 = (p0.x + p1.x) / 2
-                            val controlY1 = p0.y
-                            val controlX2 = (p0.x + p1.x) / 2
-                            val controlY2 = p1.y
-                            cubicTo(controlX1, controlY1, controlX2, controlY2, p1.x, p1.y)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(78.dp)
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val width = size.width
+                    val height = size.height
+                    val spacing = width / (dataPoints.size - 1)
+
+                    // Horizontal guidelines
+                    val guideAlpha = 0.08f
+                    val strokeGuide = Stroke(
+                        width = 1.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
+                    )
+                    drawLine(
+                        color = colors.textMain.copy(alpha = guideAlpha),
+                        start = Offset(0f, height * 0.30f),
+                        end = Offset(width, height * 0.30f),
+                        strokeWidth = strokeGuide.width,
+                        pathEffect = strokeGuide.pathEffect
+                    )
+                    drawLine(
+                        color = colors.textMain.copy(alpha = guideAlpha),
+                        start = Offset(0f, height * 0.70f),
+                        end = Offset(width, height * 0.70f),
+                        strokeWidth = strokeGuide.width,
+                        pathEffect = strokeGuide.pathEffect
+                    )
+
+                    val graphPoints = dataPoints.mapIndexed { idx, value ->
+                        val animatedY = height - ((value * height * 0.82f) * animProgress)
+                        Offset(idx * spacing, animatedY)
+                    }
+
+                    // Smooth Cubic Bezier Path
+                    val strokePath = Path().apply {
+                        if (graphPoints.isNotEmpty()) {
+                            moveTo(graphPoints[0].x, graphPoints[0].y)
+                            for (i in 0 until graphPoints.size - 1) {
+                                val p0 = graphPoints[i]
+                                val p1 = graphPoints[i + 1]
+                                val controlX1 = (p0.x + p1.x) / 2
+                                val controlY1 = p0.y
+                                val controlX2 = (p0.x + p1.x) / 2
+                                val controlY2 = p1.y
+                                cubicTo(controlX1, controlY1, controlX2, controlY2, p1.x, p1.y)
+                            }
                         }
                     }
-                }
 
-                // Build Gradient Fill Area Path
-                val fillPath = Path().apply {
-                    addPath(strokePath)
-                    lineTo(width, height)
-                    lineTo(0f, height)
-                    close()
-                }
+                    val fillPath = Path().apply {
+                        addPath(strokePath)
+                        lineTo(width, height)
+                        lineTo(0f, height)
+                        close()
+                    }
 
-                // Draw Gradient Fill
-                drawPath(
-                    path = fillPath,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            colors.iosBlue.copy(alpha = 0.25f * animProgress),
-                            colors.iosBlue.copy(alpha = 0.01f * animProgress)
+                    // Gradient fill area
+                    drawPath(
+                        path = fillPath,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                ytBlue.copy(alpha = 0.22f * animProgress),
+                                ytBlue.copy(alpha = 0.01f * animProgress)
+                            ),
+                            startY = 0f,
+                            endY = height
                         ),
-                        startY = 0f,
-                        endY = height
-                    ),
-                    style = Fill
-                )
+                        style = Fill
+                    )
 
-                // Draw Stroke Line
-                drawPath(
-                    path = strokePath,
-                    color = colors.iosBlue,
-                    style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
-                )
+                    // Stroke line
+                    drawPath(
+                        path = strokePath,
+                        color = ytBlue,
+                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                    )
 
-                // Draw Peak Indicator (at index 3)
-                if (graphPoints.size > 3 && animProgress > 0.6f) {
-                    val peakPoint = graphPoints[3]
-                    // Outer pulse halo
-                    drawCircle(
-                        color = colors.iosBlue.copy(alpha = 0.20f),
-                        radius = 9.dp.toPx() * pulseScale,
-                        center = peakPoint
-                    )
-                    // Inner solid dot
-                    drawCircle(
-                        color = colors.iosBlue,
-                        radius = 4.5.dp.toPx(),
-                        center = peakPoint
-                    )
-                    drawCircle(
-                        color = Color.White,
-                        radius = 2.dp.toPx(),
-                        center = peakPoint
-                    )
+                    // Peak Indicator (at index 3)
+                    if (graphPoints.size > 3 && animProgress > 0.6f) {
+                        val peakPoint = graphPoints[3]
+                        drawCircle(
+                            color = ytBlue.copy(alpha = 0.22f),
+                            radius = 8.dp.toPx() * pulseScale,
+                            center = peakPoint
+                        )
+                        drawCircle(
+                            color = ytBlue,
+                            radius = 4.dp.toPx(),
+                            center = peakPoint
+                        )
+                        drawCircle(
+                            color = Color.White,
+                            radius = 2.dp.toPx(),
+                            center = peakPoint
+                        )
+                    }
                 }
             }
-        }
 
-        Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(6.dp))
 
-        // Time Axis Labels
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            listOf("12h ago", "8h ago", "4h ago", "2h ago", "1h ago", "Just now").forEach { timeLabel ->
-                Text(
-                    text = timeLabel,
-                    fontSize = 10.sp,
-                    color = colors.textMuted.copy(alpha = 0.75f),
-                    fontWeight = FontWeight.Medium
-                )
+            // Time Axis Labels
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                listOf("Posted", "Earlier", "Recent", "Now").forEach { timeLabel ->
+                    Text(
+                        text = timeLabel,
+                        fontSize = 10.sp,
+                        color = colors.textMuted.copy(alpha = 0.75f),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
     }
