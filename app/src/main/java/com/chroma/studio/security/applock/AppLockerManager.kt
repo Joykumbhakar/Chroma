@@ -160,6 +160,14 @@ object AppLockerManager {
 
     /** Checks whether OscellionAppLockService Accessibility service is enabled */
     fun isAccessibilityServiceEnabled(context: Context): Boolean {
+        try {
+            val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? android.view.accessibility.AccessibilityManager
+            val runningServices = am?.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            if (runningServices?.any { it.resolveInfo.serviceInfo.packageName == context.packageName } == true) {
+                return true
+            }
+        } catch (_: Exception) {}
+
         val expectedService = "${context.packageName}/${OscellionAppLockService::class.java.canonicalName}"
         val enabledServices = Settings.Secure.getString(
             context.contentResolver,
@@ -168,7 +176,7 @@ object AppLockerManager {
 
         return enabledServices.split(':').any {
             it.equals(expectedService, ignoreCase = true) ||
-            it.contains(context.packageName, ignoreCase = true) && it.contains("OscellionAppLockService", ignoreCase = true)
+            (it.contains(context.packageName, ignoreCase = true) && it.contains("OscellionAppLockService", ignoreCase = true))
         }
     }
 
@@ -178,6 +186,27 @@ object AppLockerManager {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         context.startActivity(intent)
+    }
+
+    /** Opens System App Info page (where user can tap 3-dots -> "Allow restricted settings") */
+    fun openAppInfo(context: Context) {
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", context.packageName, null)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            val fallback = Intent(Settings.ACTION_APPLICATION_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(fallback)
+        }
+    }
+
+    /** Returns true if device is Android 13+ (API 33+) where sideloaded APKs have restricted settings */
+    fun isRestrictedSettingsApplicable(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     }
 
     /** Checks whether Usage Stats permission is granted */

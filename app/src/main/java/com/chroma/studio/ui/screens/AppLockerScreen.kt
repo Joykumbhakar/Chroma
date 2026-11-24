@@ -20,13 +20,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.security.applock.AppLockTarget
 import com.chroma.studio.security.applock.AppLockerManager
@@ -48,7 +55,9 @@ fun AppLockerScreen(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     var isEnabled by remember { mutableStateOf(AppLockerManager.isEnabled(context)) }
     var hasOverlayPermission by remember { mutableStateOf(AppLockerManager.hasOverlayPermission(context)) }
@@ -58,11 +67,18 @@ fun AppLockerScreen(
     var installedApps by remember { mutableStateOf<List<AppLockTarget>>(emptyList()) }
     var isLoadingApps by remember { mutableStateOf(true) }
 
-    // Refresh permission statuses whenever user returns to screen
-    DisposableEffect(Unit) {
-        hasOverlayPermission = AppLockerManager.hasOverlayPermission(context)
-        isAccessibilityEnabled = AppLockerManager.isAccessibilityServiceEnabled(context)
-        onDispose {}
+    // Auto-refresh permission statuses whenever user returns from Settings or App Info
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasOverlayPermission = AppLockerManager.hasOverlayPermission(context)
+                isAccessibilityEnabled = AppLockerManager.isAccessibilityServiceEnabled(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     // Load installed applications on background IO dispatcher
@@ -184,6 +200,28 @@ fun AppLockerScreen(
                                 }
                             )
                         }
+                    }
+                }
+
+                // Android 13+ (API 33+) Restricted Settings Helper Card
+                if (!isAccessibilityEnabled && AppLockerManager.isRestrictedSettingsApplicable()) {
+                    item {
+                        RestrictedSettingAlertCard(
+                            onOpenAppInfo = {
+                                SoundManager.playReaction()
+                                AppLockerManager.openAppInfo(context)
+                            },
+                            onOpenAccessibility = {
+                                SoundManager.playReaction()
+                                AppLockerManager.openAccessibilitySettings(context)
+                            },
+                            onCopyAdbCommand = {
+                                SoundManager.playReaction()
+                                val cmd = "adb shell appops set ${context.packageName} ACCESS_RESTRICTED_SETTINGS allow"
+                                clipboardManager.setText(AnnotatedString(cmd))
+                                ToastManager.showToast("Copied ADB bypass command to clipboard")
+                            }
+                        )
                     }
                 }
             }
@@ -426,6 +464,233 @@ private fun AppLockRowItem(
                 uncheckedThumbColor = Color(0xFF94A3B8),
                 uncheckedTrackColor = Color(0xFF1E293B)
             )
+        )
+    }
+}
+
+/**
+ * Visual guide and 1-tap navigation for Android 13+ (API 33+) "Restricted Settings".
+ * When an APK is sideloaded outside Google Play, Android blocks accessibility toggles
+ * until enabled via App Info -> 3-dots -> "Allow restricted settings".
+ */
+@Composable
+private fun RestrictedSettingAlertCard(
+    onOpenAppInfo: () -> Unit,
+    onOpenAccessibility: () -> Unit,
+    onCopyAdbCommand: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFF1E1608))
+            .border(1.dp, Color(0xFFFF9F0A).copy(alpha = 0.35f), RoundedCornerShape(20.dp))
+            .padding(18.dp)
+    ) {
+        // Warning Header
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFF9F0A).copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Lucide.ShieldAlert,
+                    contentDescription = "Restricted Setting Warning",
+                    tint = Color(0xFFFF9F0A),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Android \"Restricted Setting\" Fix",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFFB340),
+                    fontFamily = InterFontFamily
+                )
+                Text(
+                    text = "Android 13, 14 & 15 sideload security check",
+                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.60f),
+                    fontFamily = InterFontFamily
+                )
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Text(
+            text = "If Android grays out the toggle and says \"Restricted setting: For your security, this setting is currently unavailable\", unlock it in 3 steps:",
+            fontSize = 12.5.sp,
+            lineHeight = 17.sp,
+            color = Color.White.copy(alpha = 0.85f),
+            fontFamily = InterFontFamily
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // Steps
+        RestrictedStepItem(
+            stepNumber = "1",
+            boldText = "Trigger prompt: ",
+            normalText = "Tap '2. Accessibility' below and tap ChromaStudio once so Android registers the restriction."
+        )
+        Spacer(Modifier.height(8.dp))
+        RestrictedStepItem(
+            stepNumber = "2",
+            boldText = "Allow in App Info: ",
+            normalText = "Tap '1. App Info' below, tap the three dots (⋮) in the top-right corner, and choose 'Allow restricted settings'."
+        )
+        Spacer(Modifier.height(8.dp))
+        RestrictedStepItem(
+            stepNumber = "3",
+            boldText = "Turn ON: ",
+            normalText = "Return here, tap '2. Accessibility' again, and turn the toggle ON."
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        // Action Buttons Row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Button(
+                onClick = onOpenAppInfo,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFFF9F0A),
+                    contentColor = Color.Black
+                ),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Lucide.Settings,
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "1. App Info (⋮)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = InterFontFamily,
+                    maxLines = 1
+                )
+            }
+
+            Button(
+                onClick = onOpenAccessibility,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White.copy(alpha = 0.12f),
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Lucide.Zap,
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                    tint = Color(0xFFFF9F0A)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "2. Accessibility",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = InterFontFamily,
+                    maxLines = 1
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // ADB Bypass button for developers
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color.Black.copy(alpha = 0.35f))
+                .clickable { onCopyAdbCommand() }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Lucide.Terminal,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.50f),
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Developer ADB bypass command",
+                fontSize = 11.5.sp,
+                color = Color.White.copy(alpha = 0.65f),
+                fontFamily = InterFontFamily,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                imageVector = Lucide.Copy,
+                contentDescription = "Copy",
+                tint = Color(0xFFFF9F0A),
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RestrictedStepItem(
+    stepNumber: String,
+    boldText: String,
+    normalText: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFFF9F0A).copy(alpha = 0.22f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = stepNumber,
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFF9F0A),
+                fontFamily = InterFontFamily
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = buildAnnotatedString {
+                append(boldText)
+                addStyle(
+                    SpanStyle(fontWeight = FontWeight.Bold, color = Color.White),
+                    0,
+                    boldText.length
+                )
+                append(normalText)
+            },
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            color = Color.White.copy(alpha = 0.75f),
+            fontFamily = InterFontFamily,
+            modifier = Modifier.weight(1f)
         )
     }
 }
