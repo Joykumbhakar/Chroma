@@ -353,7 +353,7 @@ private fun glassPose(enterRaw: Float, press: Float, tilt: Float): GlassPose {
 
 // ── Drawing entry point ──────────────────────────────────────────────────────
 
-private fun DrawScope.drawGlassTile(
+internal fun DrawScope.drawGlassTile(
     agsl: Any?,
     tile: Dp,
     gradient: GlassGradient,
@@ -369,7 +369,7 @@ private fun DrawScope.drawGlassTile(
     drawGlassFallback(tilePx, gradient, style, pose)
 }
 
-private fun createGlassAgsl(): Any? {
+internal fun createGlassAgsl(): Any? {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
     return try {
         GlassAgsl()
@@ -605,11 +605,11 @@ private fun DrawScope.drawGlassFallback(
 
 // ── Glyphs (white line icons on the glass, 24-unit design grid) ─────────────
 
-private fun DrawScope.glyphStroke(k: Float) =
+internal fun DrawScope.glyphStroke(k: Float) =
     Stroke(width = 1.9f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
 
 /** Draws [block] twice: a faint offset shadow first, then the real ink. */
-private inline fun DrawScope.withGlyphShadow(ink: Color, crossinline block: DrawScope.(Color) -> Unit) {
+internal inline fun DrawScope.withGlyphShadow(ink: Color, crossinline block: DrawScope.(Color) -> Unit) {
     val k = size.width / 24f
     withTransform({ translate(0f, 0.9f * k) }) { block(Color(0x40000000)) }
     block(ink)
@@ -635,7 +635,7 @@ private fun DrawScope.glyphCamera(ink: Color) = withGlyphShadow(ink) { c ->
     drawCircle(color = c, radius = 3.3f * k, center = Offset(12f * k, 13.3f * k), style = st)
 }
 
-private fun DrawScope.glyphPhotos(ink: Color) = withGlyphShadow(ink) { c ->
+internal fun DrawScope.glyphPhotos(ink: Color) = withGlyphShadow(ink) { c ->
     val k = size.width / 24f
     val st = glyphStroke(k)
     drawRoundRect(
@@ -722,7 +722,7 @@ private fun DrawScope.glyphSticker(ink: Color) = withGlyphShadow(ink) { c ->
     drawCircle(color = c, radius = 1.05f * k, center = Offset(14.6f * k, 9.3f * k))
 }
 
-private fun DrawScope.glyphFlashVideo(ink: Color) = withGlyphShadow(ink) { c ->
+internal fun DrawScope.glyphFlashVideo(ink: Color) = withGlyphShadow(ink) { c ->
     val k = size.width / 24f
     val st = glyphStroke(k)
     val zap = Path().apply {

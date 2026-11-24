@@ -566,20 +566,6 @@ fun HomeScreen(
 
             }
 
-            ActionMenuType.POST -> {
-
-                if (!com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
-
-                    onNavigateToCreatePost?.invoke()
-
-                } else {
-
-                    onRequireLogin()
-
-                }
-
-            }
-
             ActionMenuType.FLASH -> {
 
                 if (!com.chroma.studio.data.SavedAccountManager.isGuest(context)) {

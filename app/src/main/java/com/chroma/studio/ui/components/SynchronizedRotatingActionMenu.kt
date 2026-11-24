@@ -1,11 +1,9 @@
 package com.chroma.studio.ui.components
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -14,20 +12,16 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -36,197 +30,80 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.chroma.studio.chat.ui.components.GlassGradient
+import com.chroma.studio.chat.ui.components.GlassStyle
+import com.chroma.studio.chat.ui.components.createGlassAgsl
+import com.chroma.studio.chat.ui.components.drawGlassTile
+import com.chroma.studio.chat.ui.components.glyphFlashVideo
+import com.chroma.studio.chat.ui.components.glyphPhotos
+import com.chroma.studio.chat.ui.components.glyphStroke
+import com.chroma.studio.chat.ui.components.withGlyphShadow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * Exact constants matching the CSS custom properties:
+ * Exact animation constants:
  * --spin-angle: 135deg;
  * --anim-duration: 540ms;
  * --spring-easing: cubic-bezier(0.19, 1, 0.22, 1.16);
- * --orbit-radius: 74px;
+ * --orbit-radius: 82px;
  */
 private const val SPIN_ANGLE_DEG = 135f
 private const val ANIM_DURATION_MS = 540
-private val ORBIT_RADIUS_DP = 74.dp
-private val TRIGGER_BUTTON_SIZE_DP = 54.dp
-private val ACTION_NODE_SIZE_DP = 46.dp
-private val GLASS_HALO_BASE_SIZE_DP = 60.dp
+private val ORBIT_RADIUS_DP = 82.dp
+private val TRIGGER_BUTTON_SIZE_DP = 56.dp
+private val ACTION_NODE_SIZE_DP = 48.dp
+private val GLASS_HALO_BASE_SIZE_DP = 64.dp
 
-/**
- * Custom Spring CubicBezierEasing matching `cubic-bezier(0.19, 1, 0.22, 1.16)`.
- * Jetpack Compose's CubicBezierEasing permits Y control points > 1f to produce
- * the exact spring overshoot trajectory from CSS.
- */
 private val SpringOvershootEasing = CubicBezierEasing(0.19f, 1.0f, 0.22f, 1.16f)
-
-/**
- * Matches `cubic-bezier(0.16, 1, 0.3, 1)` used for node opacity fade.
- */
 private val SmoothOpacityEasing = CubicBezierEasing(0.16f, 1.0f, 0.3f, 1.0f)
-
-/**
- * Matches `cubic-bezier(0.22, 1, 0.36, 1)` used for press & selection pulse feedback.
- */
 private val PressFeedbackEasing = CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)
 
 /**
- * Identifies each action item in the orbital menu.
+ * Identifies the 5 main creation editors:
+ * 1. Chroma Studio Gradient Studio
+ * 2. Flash Final Cut Video Editor
+ * 3. Photo Editor for Post
+ * 4. Story Editor
+ * 5. AI Generator
  */
 enum class ActionMenuType(val label: String) {
-    GRADIENTS("Gradients"),
-    POST("Post"),
+    GRADIENTS("Gradient Studio"),
     FLASH("Flash Video"),
-    IMAGE_EDITOR("Image Editor"),
-    STORY("Story"),
-    AI_GENERATOR("Smart Generator")
+    IMAGE_EDITOR("Photo Editor"),
+    STORY("Story Editor"),
+    AI_GENERATOR("AI Generator")
 }
 
-/**
- * Encapsulates the exact radial surface gradient stops, linear glass border stops,
- * and SVG icon linear gradient stops for each option button.
- */
-data class GlassOptionTheme(
-    val fillStops: Array<Pair<Float, Color>>,
-    val borderStops: Array<Pair<Float, Color>>,
-    val iconGradientStops: Array<Pair<Float, Color>>
-)
-
-/**
- * Returns the exact theme specification corresponding to `.glass-indigo`, `.glass-sky`,
- * `.glass-teal`, `.glass-amber`, and `.glass-violet`.
- */
-private fun getThemeForAction(type: ActionMenuType): GlassOptionTheme {
+private fun getGradientForAction(type: ActionMenuType): GlassGradient {
     return when (type) {
-        ActionMenuType.GRADIENTS -> GlassOptionTheme(
-            fillStops = arrayOf(
-                0.00f to Color(0xFAFFFFFF), // rgba(255, 255, 255, 0.98)
-                0.52f to Color(0xEBEEF2FF), // rgba(238, 242, 255, 0.92)
-                1.00f to Color(0xE0E0E7FF)  // rgba(224, 231, 255, 0.88)
-            ),
-            borderStops = arrayOf(
-                0.00f to Color(0xFFFFFFFF), // rgba(255, 255, 255, 1.0)
-                0.52f to Color(0x8CA5B4FC), // rgba(165, 180, 252, 0.55)
-                1.00f to Color(0x526366F1)  // rgba(99, 102, 241, 0.32)
-            ),
-            iconGradientStops = arrayOf(
-                0.00f to Color(0xFF6366F1),
-                1.00f to Color(0xFF4338CA)
-            )
-        )
-
-        ActionMenuType.FLASH -> GlassOptionTheme(
-            fillStops = arrayOf(
-                0.00f to Color(0xFAFFFFFF),
-                0.52f to Color(0xEBEEF2FF),
-                1.00f to Color(0xE0E0E7FF)
-            ),
-            borderStops = arrayOf(
-                0.00f to Color(0xFFFFFFFF),
-                0.52f to Color(0x8CA5B4FC),
-                1.00f to Color(0x526366F1)
-            ),
-            iconGradientStops = arrayOf(
-                0.00f to Color(0xFF0381FE),
-                1.00f to Color(0xFF0052B4)
-            )
-        )
-
-        ActionMenuType.POST -> GlassOptionTheme(
-            fillStops = arrayOf(
-                0.00f to Color(0xFAFFFFFF), // rgba(255, 255, 255, 0.98)
-                0.52f to Color(0xEBF0F9FF), // rgba(240, 249, 255, 0.92)
-                1.00f to Color(0xE0E0F2FE)  // rgba(224, 242, 254, 0.88)
-            ),
-            borderStops = arrayOf(
-                0.00f to Color(0xFFFFFFFF), // rgba(255, 255, 255, 1.0)
-                0.52f to Color(0x8C7DD3FC), // rgba(125, 211, 252, 0.55)
-                1.00f to Color(0x520EA5E9)  // rgba(14, 165, 233, 0.32)
-            ),
-            iconGradientStops = arrayOf(
-                0.00f to Color(0xFF0EA5E9),
-                1.00f to Color(0xFF0369A1)
-            )
-        )
-
-        ActionMenuType.IMAGE_EDITOR -> GlassOptionTheme(
-            fillStops = arrayOf(
-                0.00f to Color(0xFAFFFFFF),
-                0.52f to Color(0xEBFDF2F8),
-                1.00f to Color(0xDBFCE7F3)
-            ),
-            borderStops = arrayOf(
-                0.00f to Color(0xFFFFFFFF),
-                0.52f to Color(0x8CF472B6),
-                1.00f to Color(0x52EC4899)
-            ),
-            iconGradientStops = arrayOf(
-                0.00f to Color(0xFFF43F5E),
-                1.00f to Color(0xFFE11D48)
-            )
-        )
-
-        ActionMenuType.STORY -> GlassOptionTheme(
-            fillStops = arrayOf(
-                0.00f to Color(0xFAFFFFFF), // rgba(255, 255, 255, 0.98)
-                0.52f to Color(0xEBFFFBEB), // rgba(255, 251, 235, 0.92)
-                1.00f to Color(0xDBFEF3C7)  // rgba(254, 243, 199, 0.86)
-            ),
-            borderStops = arrayOf(
-                0.00f to Color(0xFFFFFFFF), // rgba(255, 255, 255, 1.0)
-                0.52f to Color(0x94FCD34D), // rgba(252, 211, 77, 0.58)
-                1.00f to Color(0x52F59E0B)  // rgba(245, 158, 11, 0.32)
-            ),
-            iconGradientStops = arrayOf(
-                0.00f to Color(0xFFF59E0B),
-                1.00f to Color(0xFFB45309)
-            )
-        )
-
-        ActionMenuType.AI_GENERATOR -> GlassOptionTheme(
-            fillStops = arrayOf(
-                0.00f to Color(0xFAFFFFFF), // rgba(255, 255, 255, 0.98)
-                0.52f to Color(0xEBF0F9FF), // rgba(240, 249, 255, 0.92)
-                1.00f to Color(0xE0E0F2FE)  // rgba(224, 242, 254, 0.88)
-            ),
-            borderStops = arrayOf(
-                0.00f to Color(0xFFFFFFFF), // rgba(255, 255, 255, 1.0)
-                0.52f to Color(0x94BAE6FD), // rgba(186, 230, 253, 0.58)
-                1.00f to Color(0x520381FE)  // rgba(3, 129, 254, 0.32)
-            ),
-            iconGradientStops = arrayOf(
-                0.00f to Color(0xFF0381FE),
-                0.50f to Color(0xFF0066D6),
-                1.00f to Color(0xFF004BBB)
-            )
-        )
+        ActionMenuType.GRADIENTS -> GlassGradient(Color(0xFF8B5CF6), Color(0xFF6366F1))
+        ActionMenuType.FLASH -> GlassGradient(Color(0xFFFF007A), Color(0xFFFF5E00))
+        ActionMenuType.IMAGE_EDITOR -> GlassGradient(Color(0xFF38BDF8), Color(0xFF0381FE))
+        ActionMenuType.STORY -> GlassGradient(Color(0xFFFFB83D), Color(0xFFF8651B))
+        ActionMenuType.AI_GENERATOR -> GlassGradient(Color(0xFF2DD4BF), Color(0xFF0D9488))
     }
 }
 
 /**
- * The self-contained Synchronized Rotating Action Menu component.
- *
- * Synchronizes the 135-degree rotation of the central '+' trigger button with the
- * orbital carrier, while counter-rotating each action node by -135 degrees so icons
- * travel along a curved spiral path and arrive upright in a symmetrical upper arc.
+ * Synchronized Rotating Action Menu with liquid-glass 3D squircle icons.
+ * Symmetrically presents the 5 main editors across an upper radial arc.
  */
 @Composable
 fun SynchronizedRotatingActionMenu(
@@ -239,7 +116,6 @@ fun SynchronizedRotatingActionMenu(
     val density = LocalDensity.current
     val orbitRadiusPx = with(density) { ORBIT_RADIUS_DP.toPx() }
 
-    // Carrier & Main button synchronized rotation (0deg <-> 135deg)
     val spinRotation by animateFloatAsState(
         targetValue = if (isOpen) SPIN_ANGLE_DEG else 0f,
         animationSpec = tween(
@@ -249,7 +125,6 @@ fun SynchronizedRotatingActionMenu(
         label = "SynchronizedSpinRotation"
     )
 
-    // Subtle expanding glass halo scale (0.75 <-> 3.45)
     val haloScale by animateFloatAsState(
         targetValue = if (isOpen) 3.45f else 0.75f,
         animationSpec = tween(
@@ -259,7 +134,6 @@ fun SynchronizedRotatingActionMenu(
         label = "GlassHaloScale"
     )
 
-    // Glass halo opacity (0f <-> 1f over 320ms ease)
     val haloAlpha by animateFloatAsState(
         targetValue = if (isOpen) 1f else 0f,
         animationSpec = tween(
@@ -271,27 +145,40 @@ fun SynchronizedRotatingActionMenu(
 
     val actions = remember { ActionMenuType.entries }
     val totalNodes = actions.size
-    val arcSpanDeg = 180f // -180deg (left) to 0deg (right)
-    val stepDeg = arcSpanDeg / (totalNodes - 1)
+    val arcSpanDeg = 180f
+    val stepDeg = arcSpanDeg / (totalNodes - 1) // 45° step for 5 nodes
 
-    // Interactive 256.dp x 256.dp container matching `w-64 h-64`
+    val glassStyle = remember {
+        GlassStyle(
+            tilt = 30f,
+            roundness = 0.6f,
+            refraction = 0.8f,
+            bevel = 0.6f,
+            frost = 0.2f,
+            shine = 0.85f,
+            shade = 0.22f,
+            tint = Color(0xFFDFDFDF),
+            tintOpacity = 0.2f
+        )
+    }
+    val agsl = remember { createGlassAgsl() }
+
     Box(
-        modifier = modifier.size(256.dp),
+        modifier = modifier.size(280.dp),
         contentAlignment = Alignment.Center
     ) {
-        // 1. Subtle Frosted Glass Halo Plate
+        // 1. Frosted Glass Halo Plate
         GlassHaloPlate(
             scale = haloScale,
             alpha = haloAlpha
         )
 
-        // 2. Synchronized Carrier
+        // 2. Synchronized Carrier for the 5 Liquid Squircle Action Nodes
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             actions.forEachIndexed { index, actionType ->
-                // Pre-compute polar coordinates with -SPIN_ANGLE compensation
                 val finalAngleDeg = -180f + index * stepDeg
                 val compensatedAngleDeg = finalAngleDeg - SPIN_ANGLE_DEG
                 val rad = (compensatedAngleDeg * PI / 180.0).toFloat()
@@ -299,11 +186,10 @@ fun SynchronizedRotatingActionMenu(
                 val targetTx = orbitRadiusPx * cos(rad)
                 val targetTy = orbitRadiusPx * sin(rad)
 
-                // Micro-stagger matching `--stagger-open: index * 12ms` and `--stagger-close: (total - 1 - index) * 8ms`
                 val staggerDelayMs = if (isOpen) {
-                    index * 12
+                    index * 14
                 } else {
-                    (totalNodes - 1 - index) * 8
+                    (totalNodes - 1 - index) * 10
                 }
 
                 OrbitalActionNode(
@@ -313,6 +199,8 @@ fun SynchronizedRotatingActionMenu(
                     targetTy = targetTy,
                     spinRotation = spinRotation,
                     staggerDelayMs = staggerDelayMs,
+                    agsl = agsl,
+                    glassStyle = glassStyle,
                     onSelect = {
                         onActionSelected(actionType)
                         onClose()
@@ -321,7 +209,7 @@ fun SynchronizedRotatingActionMenu(
             }
         }
 
-        // 3. Central Circle '+' Trigger Button
+        // 3. Central Obsidian Circle '+' Trigger Button
         MainTriggerButton(
             isOpen = isOpen,
             rotationDeg = spinRotation,
@@ -331,7 +219,7 @@ fun SynchronizedRotatingActionMenu(
 }
 
 /**
- * Renders the expanding `.glass-halo` backdrop behind the active menu.
+ * Renders the expanding glass halo backdrop behind the active menu.
  */
 @Composable
 private fun GlassHaloPlate(
@@ -350,16 +238,15 @@ private fun GlassHaloPlate(
             }
     ) {
         val radius = size.minDimension / 2f
-        // Keep the 1dp border crisp even when scaled up by 3.45x
         val strokeWidthPx = (1.dp.toPx() / scale.coerceAtLeast(1f))
 
         // Radial inner fill at (50%, 35%)
         drawCircle(
             brush = Brush.radialGradient(
                 colorStops = arrayOf(
-                    0.00f to Color(0xADFFFFFF), // rgba(255, 255, 255, 0.68)
-                    0.65f to Color(0x47FFFFFF), // rgba(255, 255, 255, 0.28)
-                    1.00f to Color(0x1FFFFFFF)  // rgba(255, 255, 255, 0.12)
+                    0.00f to Color(0xADFFFFFF),
+                    0.65f to Color(0x47FFFFFF),
+                    1.00f to Color(0x1FFFFFFF)
                 ),
                 center = Offset(size.width * 0.50f, size.height * 0.35f),
                 radius = radius * 1.15f
@@ -373,9 +260,9 @@ private fun GlassHaloPlate(
                 angleDeg = 145f,
                 size = size,
                 colorStops = arrayOf(
-                    0.00f to Color(0xD9FFFFFF), // rgba(255, 255, 255, 0.85)
-                    0.50f to Color(0x4DCBD5E1), // rgba(203, 213, 225, 0.30)
-                    1.00f to Color(0x8CFFFFFF)  // rgba(255, 255, 255, 0.55)
+                    0.00f to Color(0xD9FFFFFF),
+                    0.50f to Color(0x4DCBD5E1),
+                    1.00f to Color(0x8CFFFFFF)
                 )
             ),
             radius = radius - strokeWidthPx / 2f,
@@ -386,10 +273,7 @@ private fun GlassHaloPlate(
 
 /**
  * Individual action button node inside the rotating orbital carrier.
- *
- * Translates from `(0, 0)` to `(targetTx, targetTy)`, scales from `0.28f` to `1.0f`,
- * and maintains a local `-135deg` counter-rotation so its world angle matches the
- * central '+' button rotation and comes to rest upright (`0deg`).
+ * Renders the dual-layer liquid glass squircle with white glyph floating above.
  */
 @Composable
 private fun OrbitalActionNode(
@@ -399,12 +283,14 @@ private fun OrbitalActionNode(
     targetTy: Float,
     spinRotation: Float,
     staggerDelayMs: Int,
+    agsl: Any?,
+    glassStyle: GlassStyle,
     onSelect: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val theme = remember(actionType) { getThemeForAction(actionType) }
+    val haptic = LocalHapticFeedback.current
+    val gradient = remember(actionType) { getGradientForAction(actionType) }
 
-    // Progress animatable for transform (translation & scale) with spring overshoot
     val transformProgress by animateFloatAsState(
         targetValue = if (isOpen) 1f else 0f,
         animationSpec = tween(
@@ -415,7 +301,6 @@ private fun OrbitalActionNode(
         label = "NodeTransform_${actionType.name}"
     )
 
-    // Opacity animatable (300ms cubic-bezier(0.16, 1, 0.3, 1))
     val alphaProgress by animateFloatAsState(
         targetValue = if (isOpen) 1f else 0f,
         animationSpec = tween(
@@ -426,7 +311,6 @@ private fun OrbitalActionNode(
         label = "NodeAlpha_${actionType.name}"
     )
 
-    // Interactive press scale (0.9f when active)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
@@ -438,12 +322,8 @@ private fun OrbitalActionNode(
         label = "NodePressScale_${actionType.name}"
     )
 
-    // Selection pulse animation matching `@keyframes selectPulse` (1 -> 1.16 at 45% -> 0.92 at 100%)
-    val pulseScale = remember { Animatable(1f) }
-
-    // Interpolate scale from 0.28f (closed) to 1.0f (open)
     val baseScale = 0.28f + (1.0f - 0.28f) * transformProgress
-    val combinedScale = baseScale * pressScale * pulseScale.value
+    val combinedScale = baseScale * pressScale
 
     if (alphaProgress <= 0.001f && !isOpen) return
 
@@ -453,6 +333,8 @@ private fun OrbitalActionNode(
     val worldTx = localX * cos(rotRad) - localY * sin(rotRad)
     val worldTy = localX * sin(rotRad) + localY * cos(rotRad)
 
+    val nodeSize = ACTION_NODE_SIZE_DP
+
     Box(
         modifier = Modifier
             .offset {
@@ -461,13 +343,12 @@ private fun OrbitalActionNode(
                     worldTy.roundToInt()
                 )
             }
-            .size(ACTION_NODE_SIZE_DP)
+            .size(nodeSize)
             .graphicsLayer {
                 scaleX = combinedScale
                 scaleY = combinedScale
                 alpha = alphaProgress.coerceIn(0f, 1f)
             }
-            .clip(CircleShape)
             .semantics {
                 contentDescription = actionType.label
                 role = Role.Button
@@ -478,85 +359,117 @@ private fun OrbitalActionNode(
                 enabled = isOpen
             ) {
                 scope.launch {
-                    // Trigger the 320ms keyframe selection pulse
-                    launch {
-                        pulseScale.snapTo(1f)
-                        pulseScale.animateTo(
-                            targetValue = 1f,
-                            animationSpec = keyframes {
-                                durationMillis = 320
-                                1.00f at 0 using PressFeedbackEasing
-                                1.16f at 144 using PressFeedbackEasing // 45% of 320ms
-                                0.92f at 320
-                            }
-                        )
-                        pulseScale.snapTo(1f)
-                    }
-                    // Matches the 120ms timeout before closing the menu in JS
-                    delay(120)
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    delay(100)
                     onSelect()
                 }
             },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val radius = size.minDimension / 2f
-            val borderStroke = 1.dp.toPx()
-
-            // 1. Bespoke Radial Gradient Surface (120% radius at 25% 20%)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colorStops = theme.fillStops,
-                    center = Offset(size.width * 0.25f, size.height * 0.20f),
-                    radius = size.minDimension * 1.20f
-                ),
-                radius = radius - borderStroke / 2f
-            )
-
-            // 2. Top Specular Sheen (.option-btn::before: 165deg white 0.75 -> 0.15 at 45% -> transparent at 65%)
-            drawCircle(
-                brush = cssLinearGradient(
-                    angleDeg = 165f,
-                    size = size,
-                    colorStops = arrayOf(
-                        0.00f to Color(0xBFFFFFFF), // rgba(255, 255, 255, 0.75)
-                        0.45f to Color(0x26FFFFFF), // rgba(255, 255, 255, 0.15)
-                        0.65f to Color.Transparent
-                    )
-                ),
-                radius = radius - borderStroke / 2f
-            )
-
-            // 3. Outer 135deg Tinted Glass Border (1dp)
-            drawCircle(
-                brush = cssLinearGradient(
-                    angleDeg = 135f,
-                    size = size,
-                    colorStops = theme.borderStops
-                ),
-                radius = radius - borderStroke / 2f,
-                style = Stroke(width = borderStroke)
-            )
-
-            // 4. Inner Glass Rim (.option-btn::after: inset 1px border rgba(255, 255, 255, 0.82))
-            drawCircle(
-                color = Color(0xD1FFFFFF),
-                radius = radius - borderStroke * 1.5f,
-                style = Stroke(width = borderStroke)
+        // 1. Dual-layer Liquid Glass Tile (Tilted Gradient Plate + Frosted Front Squircle)
+        Canvas(modifier = Modifier.requiredSize(nodeSize * 2.2f)) {
+            drawGlassTile(
+                agsl = agsl,
+                tile = nodeSize,
+                gradient = gradient,
+                style = glassStyle,
+                enter = transformProgress,
+                press = if (isPressed) 1f else 0f
             )
         }
 
-        // 5. Custom Gradient SVG Iconography
-        ActionNodeIcon(
-            actionType = actionType,
-            iconGradientStops = theme.iconGradientStops
-        )
+        // 2. Crisp White Vector Glyph floating on the glass with subtle shadow
+        Canvas(
+            modifier = Modifier
+                .size(nodeSize * 0.44f)
+                .graphicsLayer {
+                    val e = transformProgress.coerceIn(0f, 1f)
+                    val rise = (1f - ((1f - e) * (1f - e))) * 0.08f * nodeSize.toPx()
+                    translationY = rise
+                    alpha = alphaProgress.coerceIn(0f, 1f)
+                }
+        ) {
+            when (actionType) {
+                ActionMenuType.GRADIENTS -> glyphGradientStudio(Color.White)
+                ActionMenuType.FLASH -> glyphFlashVideo(Color.White)
+                ActionMenuType.IMAGE_EDITOR -> glyphPhotos(Color.White)
+                ActionMenuType.STORY -> glyphStoryEditor(Color.White)
+                ActionMenuType.AI_GENERATOR -> glyphAiGenerator(Color.White)
+            }
+        }
     }
 }
 
 /**
- * Renders the central 54.dp obsidian '+' trigger button with its smooth open/close
- * color transition, inner specular glass rim, press scale feedback, and 135-degree spin.
+ * 1. Chroma Studio Gradient Studio Glyph: Artist palette with color wells.
+ */
+private fun DrawScope.glyphGradientStudio(ink: Color) = withGlyphShadow(ink) { c ->
+    val k = size.width / 24f
+    val st = glyphStroke(k)
+    val palette = Path().apply {
+        moveTo(12f * k, 3f * k)
+        cubicTo(7.03f * k, 3f * k, 3f * k, 7.03f * k, 3f * k, 12f * k)
+        cubicTo(3f * k, 16.97f * k, 7.03f * k, 21f * k, 12f * k, 21f * k)
+        cubicTo(12.83f * k, 21f * k, 13.5f * k, 20.33f * k, 13.5f * k, 19.5f * k)
+        cubicTo(13.5f * k, 19.11f * k, 13.34f * k, 18.76f * k, 13.09f * k, 18.5f * k)
+        cubicTo(12.84f * k, 18.24f * k, 12.68f * k, 17.89f * k, 12.68f * k, 17.5f * k)
+        cubicTo(12.68f * k, 16.67f * k, 13.35f * k, 16f * k, 14.18f * k, 16f * k)
+        lineTo(16f * k, 16f * k)
+        cubicTo(18.76f * k, 16f * k, 21f * k, 13.76f * k, 21f * k, 11f * k)
+        cubicTo(21f * k, 6.58f * k, 16.97f * k, 3f * k, 12f * k, 3f * k)
+        close()
+    }
+    drawPath(palette, color = c, style = st)
+    drawCircle(color = c, radius = 1.3f * k, center = Offset(7.5f * k, 11.5f * k))
+    drawCircle(color = c, radius = 1.3f * k, center = Offset(9.5f * k, 7.5f * k))
+    drawCircle(color = c, radius = 1.3f * k, center = Offset(14.5f * k, 7.5f * k))
+    drawCircle(color = c, radius = 1.3f * k, center = Offset(16.8f * k, 11.5f * k))
+}
+
+/**
+ * 4. Story Editor Glyph: Segmented circular story ring with centered plus.
+ */
+private fun DrawScope.glyphStoryEditor(ink: Color) = withGlyphShadow(ink) { c ->
+    val k = size.width / 24f
+    val st = glyphStroke(k)
+    val radius = 8.5f * k
+    val center = Offset(12f * k, 12f * k)
+    drawArc(color = c, startAngle = -60f, sweepAngle = 80f, useCenter = false, topLeft = Offset(center.x - radius, center.y - radius), size = Size(radius * 2, radius * 2), style = st)
+    drawArc(color = c, startAngle = 60f, sweepAngle = 80f, useCenter = false, topLeft = Offset(center.x - radius, center.y - radius), size = Size(radius * 2, radius * 2), style = st)
+    drawArc(color = c, startAngle = 180f, sweepAngle = 80f, useCenter = false, topLeft = Offset(center.x - radius, center.y - radius), size = Size(radius * 2, radius * 2), style = st)
+    drawLine(color = c, start = Offset(12f * k, 8.5f * k), end = Offset(12f * k, 15.5f * k), strokeWidth = st.width, cap = StrokeCap.Round)
+    drawLine(color = c, start = Offset(8.5f * k, 12f * k), end = Offset(15.5f * k, 12f * k), strokeWidth = st.width, cap = StrokeCap.Round)
+}
+
+/**
+ * 5. AI Generator Glyph: Dual 4-pointed intelligence sparkles.
+ */
+private fun DrawScope.glyphAiGenerator(ink: Color) = withGlyphShadow(ink) { c ->
+    val k = size.width / 24f
+    val st = glyphStroke(k)
+    val heroSparkle = Path().apply {
+        moveTo(10.5f * k, 4f * k)
+        quadraticBezierTo(10.5f * k, 11f * k, 3.5f * k, 11f * k)
+        quadraticBezierTo(10.5f * k, 11f * k, 10.5f * k, 18f * k)
+        quadraticBezierTo(10.5f * k, 11f * k, 17.5f * k, 11f * k)
+        quadraticBezierTo(10.5f * k, 11f * k, 10.5f * k, 4f * k)
+        close()
+    }
+    drawPath(heroSparkle, color = c, style = st)
+    val accentSparkle = Path().apply {
+        moveTo(18f * k, 4f * k)
+        quadraticBezierTo(18f * k, 6.5f * k, 15.5f * k, 6.5f * k)
+        quadraticBezierTo(18f * k, 6.5f * k, 18f * k, 9f * k)
+        quadraticBezierTo(18f * k, 6.5f * k, 20.5f * k, 6.5f * k)
+        quadraticBezierTo(18f * k, 6.5f * k, 18f * k, 4f * k)
+        close()
+    }
+    drawPath(accentSparkle, color = c, style = st)
+}
+
+/**
+ * Central 56.dp obsidian trigger button with specular glass rim, press scale feedback,
+ * and 135-degree spin morphing '+' into '×'.
  */
 @Composable
 private fun MainTriggerButton(
@@ -567,7 +480,6 @@ private fun MainTriggerButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Press scale (0.92f when active)
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1.0f,
         animationSpec = tween(
@@ -577,7 +489,6 @@ private fun MainTriggerButton(
         label = "MainTriggerPressScale"
     )
 
-    // Smoothly transition background and border colors over 280ms when opened
     val openColorFraction by animateFloatAsState(
         targetValue = if (isOpen) 1f else 0f,
         animationSpec = tween(durationMillis = 280),
@@ -608,13 +519,12 @@ private fun MainTriggerButton(
             val radius = size.minDimension / 2f
             val borderWidth = 1.dp.toPx()
 
-            // Interpolate radial gradient stops between closed and open obsidian states
             val stop0 = lerp(Color(0xFF334155), Color(0xFF1E293B), openColorFraction)
             val stop1 = lerp(Color(0xFF1E293B), Color(0xFF0F172A), openColorFraction)
             val stop2 = lerp(Color(0xFF0F172A), Color(0xFF080C16), openColorFraction)
             val stop3 = lerp(Color(0xFF090D16), Color(0xFF060911), openColorFraction)
 
-            // 1. Main Obsidian Radial Fill (110% radius at 30% 20%)
+            // 1. Obsidian Radial Fill
             drawCircle(
                 brush = Brush.radialGradient(
                     colorStops = arrayOf(
@@ -648,14 +558,14 @@ private fun MainTriggerButton(
                 style = Stroke(width = borderWidth)
             )
 
-            // 3. Inner Specular Glass Rim (.main-trigger-btn::after: inset 1px)
+            // 3. Inner Specular Glass Rim
             val innerRadius = radius - borderWidth * 1.5f
             drawCircle(
                 brush = cssLinearGradient(
                     angleDeg = 160f,
                     size = size,
                     colorStops = arrayOf(
-                        0.00f to Color(0x29FFFFFF), // rgba(255, 255, 255, 0.16)
+                        0.00f to Color(0x29FFFFFF),
                         0.45f to Color.Transparent
                     )
                 ),
@@ -663,18 +573,17 @@ private fun MainTriggerButton(
             )
 
             drawCircle(
-                color = Color(0x1AFFFFFF), // rgba(255, 255, 255, 0.10)
+                color = Color(0x1AFFFFFF),
                 radius = innerRadius,
                 style = Stroke(width = borderWidth)
             )
 
-            // 4. Crisp Plus ('+') Icon (22.dp x 22.dp, stroke-width 2.25 in 24x24 viewport)
+            // 4. Crisp White '+' Icon
             val iconSizePx = 22.dp.toPx()
             val iconOffset = (size.minDimension - iconSizePx) / 2f
             val scaleFactor = iconSizePx / 24f
             val plusStrokeWidth = 2.25f * scaleFactor
 
-            // Horizontal bar: M5 12h14 -> (5, 12) to (19, 12)
             drawLine(
                 color = Color.White,
                 start = Offset(iconOffset + 5f * scaleFactor, iconOffset + 12f * scaleFactor),
@@ -682,7 +591,6 @@ private fun MainTriggerButton(
                 strokeWidth = plusStrokeWidth,
                 cap = StrokeCap.Round
             )
-            // Vertical bar: M12 5v14 -> (12, 5) to (12, 19)
             drawLine(
                 color = Color.White,
                 start = Offset(iconOffset + 12f * scaleFactor, iconOffset + 5f * scaleFactor),
@@ -694,242 +602,6 @@ private fun MainTriggerButton(
     }
 }
 
-/**
- * Renders the 5 customized Lucide vector icons with their exact SVG paths, circles,
- * rounded rectangles, gradient strokes (`stroke-width="1.9"`), and translucent gradient fills.
- */
-@Composable
-private fun ActionNodeIcon(
-    actionType: ActionMenuType,
-    iconGradientStops: Array<Pair<Float, Color>>
-) {
-    val iconSizeDp: Dp = if (actionType == ActionMenuType.POST || actionType == ActionMenuType.FLASH) 18.dp else 19.dp
-
-    Canvas(modifier = Modifier.size(iconSizeDp)) {
-        val sx = size.width / 24f
-        val sy = size.height / 24f
-        val strokeWidthPx = 1.9f * sx
-
-        val strokeBrush = Brush.linearGradient(
-            colorStops = iconGradientStops,
-            start = Offset.Zero,
-            end = Offset(size.width, size.height)
-        )
-
-        fun fillBrushWithAlpha(alphaMultiplier: Float): Brush {
-            val alphaStops = iconGradientStops.map { (stop, color) ->
-                stop to color.copy(alpha = color.alpha * alphaMultiplier)
-            }.toTypedArray()
-            return Brush.linearGradient(
-                colorStops = alphaStops,
-                start = Offset.Zero,
-                end = Offset(size.width, size.height)
-            )
-        }
-
-        val strokeStyle = Stroke(
-            width = strokeWidthPx,
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round
-        )
-
-        when (actionType) {
-            // 1. Gradients (Customized Lucide Palette Icon)
-            ActionMenuType.GRADIENTS -> {
-                val palettePath = parseScaledSvgPath(
-                    pathData = "M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C22 6.5 17.5 2 12 2Z",
-                    sx = sx,
-                    sy = sy
-                )
-                drawPath(path = palettePath, brush = fillBrushWithAlpha(0.14f), style = Fill)
-                drawPath(path = palettePath, brush = strokeBrush, style = strokeStyle)
-
-                val dotRadius = 1.1f * sx
-                drawCircle(brush = strokeBrush, radius = dotRadius, center = Offset(13.5f * sx, 6.5f * sy))
-                drawCircle(brush = strokeBrush, radius = dotRadius, center = Offset(17.5f * sx, 10.5f * sy))
-                drawCircle(brush = strokeBrush, radius = dotRadius, center = Offset(8.5f * sx, 7.5f * sy))
-                drawCircle(brush = strokeBrush, radius = dotRadius, center = Offset(6.5f * sx, 12.5f * sy))
-            }
-
-            // 2. Post (Customized Lucide Square-Pen Icon)
-            ActionMenuType.POST -> {
-                val boxPath = parseScaledSvgPath(
-                    pathData = "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7",
-                    sx = sx,
-                    sy = sy
-                )
-                val penPath = parseScaledSvgPath(
-                    pathData = "M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z",
-                    sx = sx,
-                    sy = sy
-                )
-                drawPath(path = boxPath, brush = fillBrushWithAlpha(0.12f), style = Fill)
-                drawPath(path = boxPath, brush = strokeBrush, style = strokeStyle)
-                drawPath(path = penPath, brush = strokeBrush, style = strokeStyle)
-            }
-
-            // 3. Video (Customized Lucide Video Icon)
-            ActionMenuType.FLASH -> {
-                val filmPath = parseScaledSvgPath(
-                    pathData = "M 19.8 4 H 4.2 C 3 4 2 5 2 6.2 v 11.6 C 2 19 3 20 4.2 20 h 15.6 c 1.2 0 2.2 -1 2.2 -2.2 V 6.2 C 22 5 21 4 19.8 4 Z M 7 4 v 16 M 17 4 v 16 M 2 12 h 20 M 2 8 h 5 M 2 16 h 5 M 17 8 h 5 M 17 16 h 5",
-                    sx = sx,
-                    sy = sy
-                )
-                drawPath(path = filmPath, brush = fillBrushWithAlpha(0.12f), style = Fill)
-                drawPath(path = filmPath, brush = strokeBrush, style = strokeStyle)
-            }
-
-            // 3. Image Editor (Dedicated Apple-style Image Editor)
-            ActionMenuType.IMAGE_EDITOR -> {
-                val rectTopLeft = Offset(3f * sx, 4.5f * sy)
-                val rectSize = Size(18f * sx, 15f * sy)
-                val cornerRadius = CornerRadius(3.5f * sx, 3.5f * sy)
-                drawRoundRect(
-                    brush = fillBrushWithAlpha(0.12f),
-                    topLeft = rectTopLeft,
-                    size = rectSize,
-                    cornerRadius = cornerRadius,
-                    style = Fill
-                )
-                drawRoundRect(
-                    brush = strokeBrush,
-                    topLeft = rectTopLeft,
-                    size = rectSize,
-                    cornerRadius = cornerRadius,
-                    style = strokeStyle
-                )
-                val circleCenter = Offset(8.5f * sx, 9.5f * sy)
-                val circleRadius = 2.2f * sx
-                drawCircle(
-                    brush = fillBrushWithAlpha(0.20f),
-                    radius = circleRadius,
-                    center = circleCenter
-                )
-                drawCircle(
-                    brush = strokeBrush,
-                    radius = circleRadius,
-                    center = circleCenter,
-                    style = strokeStyle
-                )
-                val landscapePath = parseScaledSvgPath(
-                    pathData = "M 4 17.5 L 8.5 13 L 13 16.2 L 16.5 13.5 L 20 16.5",
-                    sx = sx,
-                    sy = sy
-                )
-                drawPath(path = landscapePath, brush = strokeBrush, style = strokeStyle)
-                val sparklePath = parseScaledSvgPath(
-                    pathData = "M 18 5.5 Q 18 8 15.5 8 Q 18 8 18 10.5 Q 18 8 20.5 8 Q 18 8 18 5.5 Z",
-                    sx = sx,
-                    sy = sy
-                )
-                drawPath(path = sparklePath, brush = strokeBrush, style = strokeStyle)
-                drawPath(path = sparklePath, brush = fillBrushWithAlpha(0.9f), style = Fill)
-            }
-
-            ActionMenuType.STORY -> {
-                drawCircle(
-                    brush = fillBrushWithAlpha(0.14f),
-                    radius = 9f * sx,
-                    center = Offset(12f * sx, 12f * sy)
-                )
-
-                val storyPaths = listOf(
-                    "M12 2a10 10 0 0 1 7.38 16.75",
-                    "M12 8v8",
-                    "M16 12H8",
-                    "M2.5 8.875a10 10 0 0 0-.5 3",
-                    "M2.83 16a10 10 0 0 0 2.43 3.4",
-                    "M4.636 5.235a10 10 0 0 1 .891-.857",
-                    "M8.644 21.42a10 10 0 0 0 7.631-.38"
-                )
-                storyPaths.forEach { d ->
-                    val path = parseScaledSvgPath(d, sx, sy)
-                    drawPath(path = path, brush = strokeBrush, style = strokeStyle)
-                }
-            }
-
-            // 5. AI Generator (Brand Blue Gradient Wave Sphere Graphic)
-            ActionMenuType.AI_GENERATOR -> {
-                val scale = size.minDimension / 48f
-                val cx = size.width / 2f
-                val cy = size.height / 2f
-
-                // 1. Brand Blue Gradient Circular Background Badge
-                val grad = Brush.linearGradient(
-                    colors = listOf(Color(0xFF0381FE), Color(0xFF0066D6), Color(0xFF004BBB)),
-                    start = Offset(cx - 16f * scale, cy - 18f * scale),
-                    end = Offset(cx + 16f * scale, cy + 18f * scale)
-                )
-                drawCircle(
-                    brush = grad,
-                    radius = 22f * scale,
-                    center = Offset(cx, cy)
-                )
-
-                // 2. Outer White Ring
-                drawCircle(
-                    color = Color.White,
-                    radius = 14f * scale,
-                    center = Offset(cx, cy),
-                    style = Stroke(width = 2.2f * scale)
-                )
-
-                // 3. Three Flowing Wave Strokes (Clipped inside sphere)
-                clipPath(
-                    Path().apply {
-                        addOval(Rect(center = Offset(cx, cy), radius = 13f * scale))
-                    }
-                ) {
-                    val waveStroke = Stroke(width = 2.2f * scale, cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    // Wave 1 (Upper Hemisphere)
-                    drawPath(
-                        Path().apply {
-                            moveTo(cx - 16f * scale, cy - 8f * scale)
-                            cubicTo(cx - 8f * scale, cy, cx, cy - 16f * scale, cx + 16f * scale, cy - 8f * scale)
-                        },
-                        color = Color.White,
-                        style = waveStroke
-                    )
-                    // Wave 2 (Center Equator Wave)
-                    drawPath(
-                        Path().apply {
-                            moveTo(cx - 16f * scale, cy)
-                            cubicTo(cx - 8f * scale, cy + 8f * scale, cx, cy - 8f * scale, cx + 16f * scale, cy)
-                        },
-                        color = Color.White,
-                        style = waveStroke
-                    )
-                    // Wave 3 (Lower Hemisphere)
-                    drawPath(
-                        Path().apply {
-                            moveTo(cx - 16f * scale, cy + 8f * scale)
-                            cubicTo(cx - 8f * scale, cy + 16f * scale, cx, cy, cx + 16f * scale, cy + 8f * scale)
-                        },
-                        color = Color.White,
-                        style = waveStroke
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Parses an SVG path string in a 24x24 coordinate space and scales it to the target Canvas size.
- */
-private fun parseScaledSvgPath(pathData: String, sx: Float, sy: Float): Path {
-    val path = PathParser().parsePathString(pathData).toPath()
-    val matrix = androidx.compose.ui.graphics.Matrix()
-    matrix.scale(sx, sy, 1f)
-    path.transform(matrix)
-    return path
-}
-
-/**
- * Computes an exact CSS-equivalent `linear-gradient(<angle>deg, ...)` brush for a given [Size].
- * In CSS, `0deg` points upward (bottom-to-top) and angles increase clockwise (`90deg` is left-to-right,
- * `135deg` is top-left to bottom-right, `165deg` is steeply angled downward).
- */
 private fun DrawScope.cssLinearGradient(
     angleDeg: Float,
     size: Size,
@@ -943,7 +615,6 @@ private fun DrawScope.cssLinearGradient(
     val halfH = size.height / 2f
     val center = Offset(halfW, halfH)
 
-    // Exact projection length along the gradient line inside the bounding box
     val halfLength = kotlin.math.abs(halfW * cosA) + kotlin.math.abs(halfH * sinA)
 
     val start = Offset(

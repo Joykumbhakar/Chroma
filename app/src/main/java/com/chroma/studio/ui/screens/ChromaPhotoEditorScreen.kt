@@ -2370,7 +2370,7 @@ private fun PhotoPreviewArea(
                                                 )
 
                                                 if (canDrag) {
-                                                    val curT = curTarget!!.transform
+                                                    val curT = curTarget.transform
                                                     val dxDp = panChange.x / density.density
                                                     val dyDp = panChange.y / density.density
 
