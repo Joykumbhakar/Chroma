@@ -44,6 +44,10 @@ object AppLockerManager {
     var currentForegroundPackage: String? = null
         private set
 
+    // Active shield package currently being locked/displayed on screen
+    @Volatile
+    var shieldPackage: String? = null
+
     private val _lockedCountFlow = MutableStateFlow(0)
     val lockedCountFlow: StateFlow<Int> = _lockedCountFlow.asStateFlow()
 

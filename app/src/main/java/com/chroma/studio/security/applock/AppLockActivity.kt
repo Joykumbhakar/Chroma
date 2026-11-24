@@ -3,73 +3,65 @@ package com.chroma.studio.security.applock
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
-import android.view.KeyEvent
-import android.window.OnBackInvokedDispatcher
 import androidx.activity.ComponentActivity
-import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import com.chroma.studio.ui.components.OscellionLockScreen
 import com.chroma.studio.ui.theme.OscellionTheme
+import kotlinx.coroutines.delay
 
 /**
- * High-Security Instant Shield Activity for Oscellion App Locker.
- * Displays the exact same OscellionLockScreen UI over locked applications.
- * If user unlocks, grants session access; if dismissed or back is pressed,
- * immediately redirects to the Android Home launcher and ensures the locked app
- * cannot be accessed or revealed under any circumstances.
+ * Instant Shield Activity for Oscellion App Locker.
+ * Unlock grants session access; back / dismiss sends the user to the Home screen
+ * (never back to the locked app).
  */
 class AppLockActivity : ComponentActivity() {
 
     private var targetPackage: String = ""
-    private var targetAppName: String = "the app"
-    private var isUnlocked = false
-    private var isRedirectingToHome = false
+    private var targetAppName by mutableStateOf("the app")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Make window edge-to-edge transparent overlay
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        targetPackage = intent.getStringExtra(EXTRA_PACKAGE_NAME).orEmpty()
-        targetAppName = resolveAppName(targetPackage)
+        // Opaque from the very first frame so the locked app never shows through.
+        window.setBackgroundDrawable(ColorDrawable(0xFF030407.toInt()))
 
-        // Register hardware / predictive back callback
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                handleCancelOrBack()
-            }
-        })
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            onBackInvokedDispatcher.registerOnBackInvokedCallback(
-                OnBackInvokedDispatcher.PRIORITY_DEFAULT
-            ) {
-                handleCancelOrBack()
-            }
-        }
+        applyIntent(intent)
 
         setContent {
             OscellionTheme(darkTheme = true) {
+                BackHandler(enabled = true) { redirectToHome() }
+
+                // Remove the service's instant cover only after our first frame is up.
+                LaunchedEffect(Unit) {
+                    withFrameNanos { }
+                    delay(60)
+                    OscellionAppLockService.hideCover()
+                }
+
                 Box(modifier = Modifier.fillMaxSize()) {
                     OscellionLockScreen(
                         titleText = if (targetAppName != "the app") "Unlock $targetAppName" else "Unlock the app",
-                        onBack = {
-                            handleCancelOrBack()
-                        },
+                        onBack = { redirectToHome() },
                         onUnlockSuccess = {
-                            isUnlocked = true
                             if (targetPackage.isNotBlank()) {
                                 AppLockerManager.markPackageUnlocked(targetPackage)
                             }
+                            AppLockerManager.shieldPackage = null
+                            OscellionAppLockService.hideCover()
                             finish()
-                            overridePendingTransition(0, 0)
                         }
                     )
                 }
@@ -77,70 +69,47 @@ class AppLockActivity : ComponentActivity() {
         }
     }
 
-    private fun handleCancelOrBack() {
-        if (isUnlocked) return
-        redirectToHome()
+    // singleInstance: a second launch (another locked app) arrives here, not in onCreate.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyIntent(intent)
+    }
+
+    private fun applyIntent(intent: Intent?) {
+        targetPackage = intent?.getStringExtra(EXTRA_PACKAGE_NAME).orEmpty()
+        targetAppName = resolveAppName(targetPackage)
+        AppLockerManager.shieldPackage = targetPackage.ifBlank { null }
+    }
+
+    override fun onDestroy() {
+        if (AppLockerManager.shieldPackage == targetPackage) {
+            AppLockerManager.shieldPackage = null
+        }
+        super.onDestroy()
     }
 
     private fun resolveAppName(pkg: String): String {
         if (pkg.isBlank()) return "the app"
         return try {
             val pm = packageManager
-            val appInfo = pm.getApplicationInfo(pkg, 0)
-            pm.getApplicationLabel(appInfo).toString()
+            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
         } catch (_: PackageManager.NameNotFoundException) {
             "the app"
         }
     }
 
     private fun redirectToHome() {
-        if (isRedirectingToHome) return
-        isRedirectingToHome = true
-
-        // 1. Immediately revoke session for target package so it stays locked
-        if (targetPackage.isNotBlank()) {
-            AppLockerManager.lockPackage(targetPackage)
-        }
-        OscellionAppLockService.resetInterception()
-
-        // 2. Perform system-level Home via Accessibility Service (instant 0ms OS navigation)
+        AppLockerManager.shieldPackage = null
         OscellionAppLockService.performHome()
-
-        // 3. Always dispatch standard Android HOME intent with NEW_TASK as authoritative fallback
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         try {
             startActivity(homeIntent)
         } catch (_: Exception) {}
-
-        // 4. Safely delay finish until Home has taken over to prevent revealing the underlying locked app
-        window.decorView.postDelayed({
-            if (!isUnlocked && !isFinishing) {
-                finish()
-                overridePendingTransition(0, 0)
-            }
-        }, 350)
-    }
-
-    override fun onStop() {
-        super.onStop()
-        // If the user navigates away or Home takes the foreground without unlocking,
-        // finish this lock shield activity so it doesn't linger in memory
-        if (!isUnlocked && !isFinishing) {
-            finish()
-            overridePendingTransition(0, 0)
-        }
-    }
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            handleCancelOrBack()
-            return true
-        }
-        return super.onKeyDown(keyCode, event)
+        finish()
     }
 
     override fun finish() {
@@ -154,8 +123,8 @@ class AppLockActivity : ComponentActivity() {
         fun launch(context: Context, packageName: String) {
             val intent = Intent(context, AppLockActivity::class.java).apply {
                 putExtra(EXTRA_PACKAGE_NAME, packageName)
+                // singleInstance already guarantees one instance; CLEAR_TOP is unnecessary.
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
                         Intent.FLAG_ACTIVITY_NO_ANIMATION or
                         Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
             }
