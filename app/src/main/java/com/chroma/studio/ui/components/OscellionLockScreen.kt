@@ -29,6 +29,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -239,20 +240,25 @@ fun OscellionLockScreen(
             SoundManager.playLockError()
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
 
-            shakeAnim.animateTo(
-                targetValue = 0f,
-                animationSpec = keyframes {
-                    durationMillis = 420
-                    0f at 0
-                    (-20f) at 50
-                    20f at 100
-                    (-16f) at 150
-                    16f at 200
-                    (-10f) at 250
-                    10f at 300
-                    0f at 420
-                }
-            )
+            shakeAnim.snapTo(0f)
+            try {
+                shakeAnim.animateTo(
+                    targetValue = 0f,
+                    animationSpec = keyframes {
+                        durationMillis = 420
+                        0f at 0
+                        (-20f) at 50
+                        20f at 100
+                        (-16f) at 150
+                        16f at 200
+                        (-10f) at 250
+                        10f at 300
+                        0f at 420
+                    }
+                )
+            } finally {
+                shakeAnim.snapTo(0f)
+            }
 
             if (failedAttempts >= 5) {
                 lockoutSecondsRemaining = 30
@@ -441,7 +447,7 @@ fun OscellionLockScreen(
                             ) {
                                 // Main Title with drop shadow
                                 Text(
-                                    text = "Unlock the app",
+                                    text = titleText,
                                     fontSize = 35.sp,
                                     lineHeight = 41.sp,
                                     fontWeight = FontWeight.SemiBold,
@@ -722,11 +728,22 @@ fun OscellionLockScreen(
                                     )
                                 )
 
-                                Spacer(Modifier.height(32.dp))
+                                Spacer(Modifier.height(30.dp))
 
-                                // 4-Digit Circular PIN Indicator Dots (○ ○ ○ ○ per screenshot specification)
+                                // 4-Digit Rounded-Square PIN Indicator Boxes (46dp x 50dp, radius 14dp per design specs)
+                                val infiniteCaret = rememberInfiniteTransition(label = "pinCaret")
+                                val caretAlpha by infiniteCaret.animateFloat(
+                                    initialValue = 1f,
+                                    targetValue = 0.25f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(550, easing = FastOutSlowInEasing),
+                                        repeatMode = RepeatMode.Reverse
+                                    ),
+                                    label = "caretAlpha"
+                                )
+
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(vertical = 8.dp)
                                 ) {
@@ -736,34 +753,73 @@ fun OscellionLockScreen(
 
                                         Box(
                                             modifier = Modifier
-                                                .size(16.dp)
-                                                .clip(CircleShape)
+                                                .size(width = 46.dp, height = 50.dp)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .then(
+                                                    if (useBlur) {
+                                                        Modifier.hazeChild(
+                                                            state = hazeState,
+                                                            shape = RoundedCornerShape(14.dp),
+                                                            style = HazeDefaults.style(
+                                                                tint = when {
+                                                                    isPinError -> Color(0xFFEF4444).copy(alpha = 0.18f)
+                                                                    isActive -> Color(0xFF3B82F6).copy(alpha = 0.14f)
+                                                                    isFilled -> Color.White.copy(alpha = 0.18f)
+                                                                    else -> Color.White.copy(alpha = 0.08f)
+                                                                },
+                                                                blurRadius = 18.dp,
+                                                                noiseFactor = 0f
+                                                            )
+                                                        )
+                                                    } else Modifier
+                                                )
                                                 .background(
                                                     when {
-                                                        isPinError -> Color(0xFFEF4444)
-                                                        isFilled -> Color.White
-                                                        else -> Color.Transparent
+                                                        isPinError -> Color(0xFFEF4444).copy(alpha = 0.18f)
+                                                        isActive -> Color(0xFF3B82F6).copy(alpha = 0.14f)
+                                                        isFilled -> Color.White.copy(alpha = 0.18f)
+                                                        else -> Color.White.copy(alpha = 0.08f)
                                                     }
                                                 )
                                                 .border(
-                                                    width = 1.5.dp,
+                                                    width = 1.25.dp,
                                                     color = when {
                                                         isPinError -> Color(0xFFEF4444)
-                                                        isFilled -> Color.White
-                                                        isActive -> Color.White.copy(alpha = 0.90f)
-                                                        else -> Color.White.copy(alpha = 0.40f)
+                                                        isActive -> Color(0xFF3B82F6)
+                                                        isFilled -> Color.White.copy(alpha = 0.55f)
+                                                        else -> Color.White.copy(alpha = 0.24f)
                                                     },
-                                                    shape = CircleShape
+                                                    shape = RoundedCornerShape(14.dp)
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (isFilled) {
+                                                // Center 12dp circular white dot
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(12.dp)
+                                                        .clip(CircleShape)
+                                                        .background(if (isPinError) Color(0xFFEF4444) else Color.White)
                                                 )
-                                        )
+                                            } else if (isActive) {
+                                                // Vertical pulsing caret bar
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(2.dp)
+                                                        .height(20.dp)
+                                                        .clip(RoundedCornerShape(2.dp))
+                                                        .background(Color(0xFF60A5FA).copy(alpha = caretAlpha))
+                                                )
+                                            }
+                                        }
                                     }
                                 }
 
-                                Spacer(Modifier.height(36.dp))
+                                Spacer(Modifier.height(34.dp))
 
                                 // 3x4 Uniform Frosted Keypad Grid (Centered mathematically across all screens)
-                                val buttonSize = 75.dp
-                                val horizontalSpacing = 18.dp
+                                val buttonSize = 76.dp
+                                val horizontalSpacing = 20.dp
 
                                 Column(
                                     modifier = Modifier.wrapContentWidth(),
@@ -779,7 +835,7 @@ fun OscellionLockScreen(
                                     for (row in keypadRows) {
                                         Row(
                                             modifier = Modifier.wrapContentWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
+                                            horizontalArrangement = Arrangement.spacedBy(horizontalSpacing, Alignment.CenterHorizontally),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             for (key in row) {
@@ -840,56 +896,51 @@ fun OscellionLockScreen(
                                         }
                                     }
 
-                                    // Row 4: [Use Biometric] Capsule Pill | 0 Digit | [Delete] Backspace
+                                    // Row 4: [Use Biometric] Circular Button | 0 Digit | [Delete] Backspace
                                     Row(
                                         modifier = Modifier.wrapContentWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
+                                        horizontalArrangement = Arrangement.spacedBy(horizontalSpacing, Alignment.CenterHorizontally),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        // Left: Capsule Pill Button for Biometrics (Contained within buttonSize to guarantee center column alignment)
-                                        Box(
-                                            modifier = Modifier.size(buttonSize),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (isBiometricEnabled) {
-                                                GlassCapsuleButton(
-                                                    hazeState = hazeState,
-                                                    enabled = lockoutSecondsRemaining == 0,
-                                                    onClick = { triggerBiometricPrompt() },
-                                                    modifier = Modifier
-                                                        .width(84.dp)
-                                                        .height(48.dp)
+                                        // Left: Circular Button for Biometrics (Matches exact visual specification)
+                                        if (isBiometricEnabled) {
+                                            GlassKeypadButton(
+                                                size = buttonSize,
+                                                hazeState = hazeState,
+                                                enabled = lockoutSecondsRemaining == 0,
+                                                onClick = { triggerBiometricPrompt() }
+                                            ) {
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    verticalArrangement = Arrangement.Center
                                                 ) {
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.Center,
-                                                        modifier = Modifier.padding(horizontal = 6.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Lucide.Fingerprint,
-                                                            contentDescription = "Use Biometric",
-                                                            tint = Color.White,
-                                                            modifier = Modifier.size(18.dp)
+                                                    Icon(
+                                                        imageVector = Lucide.Fingerprint,
+                                                        contentDescription = "Use Biometric",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                    Spacer(Modifier.height(2.dp))
+                                                    Text(
+                                                        text = "BIO",
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Medium,
+                                                        letterSpacing = 0.6.sp,
+                                                        color = Color(0xFFE5E7EB),
+                                                        fontFamily = InterFontFamily,
+                                                        style = TextStyle(
+                                                            shadow = Shadow(
+                                                                color = Color.Black.copy(alpha = 0.85f),
+                                                                offset = Offset(0f, 1f),
+                                                                blurRadius = 3f
+                                                            )
                                                         )
-                                                        Spacer(Modifier.width(5.dp))
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .width(1.dp)
-                                                                .height(16.dp)
-                                                                .background(Color.White.copy(alpha = 0.28f))
-                                                        )
-                                                        Spacer(Modifier.width(5.dp))
-                                                        Text(
-                                                            text = "Biometric",
-                                                            fontSize = 10.sp,
-                                                            fontWeight = FontWeight.Medium,
-                                                            color = Color.White,
-                                                            fontFamily = InterFontFamily,
-                                                            maxLines = 1
-                                                        )
-                                                    }
+                                                    )
                                                 }
                                             }
+                                        } else {
+                                            // Empty slot with identical size to preserve 3-column symmetry
+                                            Box(modifier = Modifier.size(buttonSize))
                                         }
 
                                         // Center: 0 Digit
@@ -899,21 +950,33 @@ fun OscellionLockScreen(
                                             enabled = lockoutSecondsRemaining == 0,
                                             onClick = { onDigitEntered("0") }
                                         ) {
-                                            Text(
-                                                text = "0",
-                                                fontSize = 30.sp,
-                                                fontWeight = FontWeight.Normal,
-                                                lineHeight = 30.sp,
-                                                color = Color.White,
-                                                fontFamily = InterFontFamily,
-                                                style = TextStyle(
-                                                    shadow = Shadow(
-                                                        color = Color.Black.copy(alpha = 0.85f),
-                                                        offset = Offset(0f, 1f),
-                                                        blurRadius = 3f
+                                            Column(
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.Center
+                                            ) {
+                                                Text(
+                                                    text = "0",
+                                                    fontSize = 30.sp,
+                                                    fontWeight = FontWeight.Normal,
+                                                    lineHeight = 30.sp,
+                                                    color = Color.White,
+                                                    fontFamily = InterFontFamily,
+                                                    style = TextStyle(
+                                                        shadow = Shadow(
+                                                            color = Color.Black.copy(alpha = 0.85f),
+                                                            offset = Offset(0f, 1f),
+                                                            blurRadius = 3f
+                                                        )
                                                     )
                                                 )
-                                            )
+                                                Spacer(Modifier.height(2.dp))
+                                                Text(
+                                                    text = " ",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = Color.Transparent
+                                                )
+                                            }
                                         }
 
                                         // Right: Backspace Button
@@ -1410,9 +1473,14 @@ private fun OscellionExactMorphScreen() {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val canvasSize = size.minDimension
                     val scaleFactor = canvasSize / 1024f
+                    val centerOffset = Offset(size.width / 2f, size.height / 2f)
 
-                    scale(scaleFactor, pivot = Offset.Zero) {
-                        val centerOffset = Offset(512f, 512f)
+                    withTransform({
+                        translate(centerOffset.x, centerOffset.y)
+                        scale(scaleFactor, scaleFactor, pivot = Offset.Zero)
+                        translate(-512f, -512f)
+                    }) {
+                        val centerPt = Offset(512f, 512f)
                         val radius = 420f
 
                         // 1. Background Track Ring
@@ -1429,7 +1497,7 @@ private fun OscellionExactMorphScreen() {
                                 startAngle = 339.87f,
                                 sweepAngle = trackSweep,
                                 useCenter = false,
-                                topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
+                                topLeft = Offset(centerPt.x - radius, centerPt.y - radius),
                                 size = Size(radius * 2, radius * 2),
                                 style = Stroke(width = 44f, cap = StrokeCap.Round)
                             )
@@ -1453,7 +1521,7 @@ private fun OscellionExactMorphScreen() {
                             startAngle = activeStartAngle,
                             sweepAngle = activeSweepAngle,
                             useCenter = false,
-                            topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
+                            topLeft = Offset(centerPt.x - radius, centerPt.y - radius),
                             size = Size(radius * 2, radius * 2),
                             style = Stroke(width = 44f, cap = StrokeCap.Round)
                         )
@@ -1468,18 +1536,18 @@ private fun OscellionExactMorphScreen() {
                                 lerpFloat(1f, 0.28f, morphProgress)
                             } else 1f
 
-                            scale(logoScale, pivot = centerOffset) {
+                            scale(logoScale, pivot = centerPt) {
                                 // Draw centered Oscellion logo geometry
                                 drawCircle(
                                     color = Color.White.copy(alpha = logoAlpha),
                                     radius = 160f,
-                                    center = centerOffset,
+                                    center = centerPt,
                                     style = Stroke(width = 44f)
                                 )
                                 drawCircle(
                                     color = Color(0xFFD4D4D8).copy(alpha = logoAlpha * 0.8f),
                                     radius = 80f,
-                                    center = centerOffset
+                                    center = centerPt
                                 )
                             }
                         }
@@ -1515,13 +1583,13 @@ private fun OscellionExactMorphScreen() {
                             val echoScale = lerpFloat(1.0f, 1.14f, tEcho)
                             val echoAlpha = lerpFloat(0.32f, 0f, tEcho)
 
-                            scale(echoScale, pivot = centerOffset) {
+                            scale(echoScale, pivot = centerPt) {
                                 drawArc(
                                     color = emeraldColor.copy(alpha = echoAlpha),
                                     startAngle = 339.87f,
                                     sweepAngle = 332f,
                                     useCenter = false,
-                                    topLeft = Offset(centerOffset.x - radius, centerOffset.y - radius),
+                                    topLeft = Offset(centerPt.x - radius, centerPt.y - radius),
                                     size = Size(radius * 2, radius * 2),
                                     style = Stroke(width = 24f, cap = StrokeCap.Round)
                                 )

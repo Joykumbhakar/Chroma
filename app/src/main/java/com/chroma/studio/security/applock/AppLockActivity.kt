@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -30,10 +29,6 @@ class AppLockActivity : ComponentActivity() {
 
         // Make window edge-to-edge transparent overlay
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-        )
 
         targetPackage = intent.getStringExtra(EXTRA_PACKAGE_NAME).orEmpty()
         targetAppName = resolveAppName(targetPackage)

@@ -20,6 +20,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import java.io.File
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -415,9 +416,18 @@ data class PhotoProjectState(
     val exportSettings: PhotoExportSettings = PhotoExportSettings()
 ) {
     val effectiveAspectRatio: Float
-        get() = when (cropRatio) {
-            PhotoCropRatio.ORIGINAL -> nativeAspectRatio ?: (projectRatio.w.toFloat() / projectRatio.h.toFloat())
-            else -> cropRatio.ratio ?: (projectRatio.w.toFloat() / projectRatio.h.toFloat())
+        get() {
+            val mainRot = clips.find { it.trackId == 1 }?.transform?.rotation ?: 0f
+            val isRotated90 = (kotlin.math.abs(mainRot / 90f).roundToInt() % 2) != 0
+            val baseAspect = when (cropRatio) {
+                PhotoCropRatio.ORIGINAL -> nativeAspectRatio ?: (projectRatio.w.toFloat() / projectRatio.h.toFloat())
+                else -> cropRatio.ratio ?: (projectRatio.w.toFloat() / projectRatio.h.toFloat())
+            }
+            return if (cropRatio == PhotoCropRatio.ORIGINAL && isRotated90 && baseAspect > 0f) {
+                1f / baseAspect
+            } else {
+                baseAspect
+            }
         }
 }
 
@@ -539,16 +549,49 @@ class ChromaPhotoEditorViewModel : ViewModel() {
     private val redoStack = mutableListOf<PhotoProjectState>()
     private var dragSnapshot: PhotoProjectState? = null
 
-    fun initialize(uri: String, context: Context? = null) {
-        if (_state.value.clips.isNotEmpty()) return
+    fun initialize(uri: String, context: Context? = null, forceReset: Boolean = false) {
+        val existingMainUri = _state.value.clips.firstOrNull { it.trackId == 1 }?.uri
+        if (!forceReset && existingMainUri == uri && _state.value.clips.isNotEmpty()) return
+
+        undoStack.clear()
+        redoStack.clear()
+        dragSnapshot = null
+
         var nativeAspect: Float? = null
         if (context != null) {
             try {
-                context.contentResolver.openInputStream(Uri.parse(uri))?.use { input ->
+                val parsed = Uri.parse(uri)
+                val openStream = {
+                    if (parsed.scheme == null || parsed.scheme == "file") {
+                        val path = parsed.path ?: uri
+                        File(path).inputStream()
+                    } else {
+                        context.contentResolver.openInputStream(parsed)
+                    }
+                }
+                openStream()?.use { input ->
                     val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     BitmapFactory.decodeStream(input, null, opts)
                     if (opts.outWidth > 0 && opts.outHeight > 0) {
-                        nativeAspect = opts.outWidth.toFloat() / opts.outHeight.toFloat()
+                        var w = opts.outWidth.toFloat()
+                        var h = opts.outHeight.toFloat()
+                        try {
+                            openStream()?.use { exifIn ->
+                                val exif = android.media.ExifInterface(exifIn)
+                                val orientation = exif.getAttributeInt(
+                                    android.media.ExifInterface.TAG_ORIENTATION,
+                                    android.media.ExifInterface.ORIENTATION_NORMAL
+                                )
+                                if (orientation == android.media.ExifInterface.ORIENTATION_ROTATE_90 ||
+                                    orientation == android.media.ExifInterface.ORIENTATION_ROTATE_270
+                                ) {
+                                    val temp = w
+                                    w = h
+                                    h = temp
+                                }
+                            }
+                        } catch (_: Exception) {}
+                        nativeAspect = w / h
                     }
                 }
             } catch (_: Exception) {}
@@ -561,14 +604,12 @@ class ChromaPhotoEditorViewModel : ViewModel() {
             duration = 10f,
             color = Color(0xFF3B82F6)
         )
-        _state.update {
-            it.copy(
-                clips = listOf(baseClip),
-                selectedClipId = baseClip.id,
-                nativeAspectRatio = nativeAspect,
-                cropRatio = PhotoCropRatio.ORIGINAL
-            )
-        }
+        _state.value = PhotoProjectState(
+            clips = listOf(baseClip),
+            selectedClipId = baseClip.id,
+            nativeAspectRatio = nativeAspect,
+            cropRatio = PhotoCropRatio.ORIGINAL
+        )
     }
 
     fun canUndo(): Boolean = undoStack.isNotEmpty()
@@ -1246,13 +1287,13 @@ fun ChromaPhotoEditorScreen(
                         )
                     }
 
-                    // Primary Action: Solid One UI Blue "Next" or "Export"
+                    // Primary Action: Solid One UI Blue "Next" / "Done" / "Export"
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
                             .background(Color(0xFF0381FE))
                             .clickable(enabled = !isExporting) {
-                                if (exportButtonLabel == "Next") {
+                                if (exportButtonLabel != "Export") {
                                     isExporting = true
                                     scope.launch {
                                         val savedUri = exportEditedPhotoToGallery(
@@ -1293,7 +1334,11 @@ fun ChromaPhotoEditorScreen(
                                     color = Color.White
                                 )
                                 Icon(
-                                    imageVector = if (exportButtonLabel == "Next") Lucide.ArrowRight else Lucide.Share,
+                                    imageVector = when (exportButtonLabel) {
+                                        "Next" -> Lucide.ArrowRight
+                                        "Done", "Save", "Select", "Share Story" -> Lucide.Check
+                                        else -> Lucide.Share
+                                    },
                                     contentDescription = exportButtonLabel,
                                     modifier = Modifier.size(13.dp),
                                     tint = Color.White
@@ -1305,11 +1350,14 @@ fun ChromaPhotoEditorScreen(
             }
 
             // ── Quick Aspect Ratio Selection Chips (One-tap switch) ──
+            val chipsBg = if (editorColors.isDark) Color(0xFF14161E) else Color.White
+            val chipsBorder = if (editorColors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .editorChromeFadeOnScrub()
-                    .background(Color.White)
+                    .background(chipsBg)
+                    .border(0.5.dp, chipsBorder)
                     .padding(horizontal = 12.dp, vertical = 6.dp)
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1317,17 +1365,19 @@ fun ChromaPhotoEditorScreen(
             ) {
                 PhotoCropRatio.values().forEach { ratio ->
                     val selected = state.cropRatio == ratio
+                    val pillBg = if (selected) Color(0xFF0381FE) else (if (editorColors.isDark) Color(0xFF262A34) else Color(0xFFF3F4F6))
+                    val pillText = if (selected) Color.White else (if (editorColors.isDark) Color.White.copy(alpha = 0.75f) else Color(0xFF4B5563))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
-                            .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
+                            .background(pillBg)
                             .clickable { viewModel.setCropRatio(ratio) }
                             .padding(horizontal = 12.dp, vertical = 5.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = ratio.label,
-                            color = if (selected) Color.White else Color(0xFF4B5563),
+                            color = pillText,
                             fontSize = 12.sp,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                         )
@@ -1365,7 +1415,20 @@ fun ChromaPhotoEditorScreen(
             // ── Bottom Photo Editing Toolbar ──
             PhotoHorizontalToolbar(
                 clip = rememberedClip,
-                onOpenTool = { activeToolSheet = it },
+                onOpenTool = { tool ->
+                    if (tool == PhotoEditorTool.TEXT) {
+                        val textClip = state.clips.find { it.type == MediaType.TEXT }
+                        if (textClip != null) {
+                            viewModel.selectClip(textClip.id)
+                        } else {
+                            viewModel.addClip(MediaType.TEXT, "Text", 3, Color(0xFF701A75), null)
+                            viewModel.setText("Tap to edit")
+                            viewModel.setTextColor(Color.White)
+                            viewModel.setTextSize(36f)
+                        }
+                    }
+                    activeToolSheet = tool
+                },
                 onAddMedia = { showAddSheet = true },
                 onRotate = { viewModel.rotate90Degrees() },
                 onDelete = { viewModel.deleteSelected() },
@@ -2521,18 +2584,33 @@ private fun PhotoHorizontalToolbar(
         ToolItem(Lucide.Trash2, "Delete", Color(0xFFFF3B30), { onDelete() })
     )
 
+    val isDark = LocalOscellionColors.current.isDark
+    val toolbarBg = if (isDark) Color(0xFF14161E) else Color.White
+    val toolbarBorder = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .editorChromeFadeOnScrub()
-            .background(Color.White)
-            .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 16.dp)
+            .background(toolbarBg)
+            .border(0.5.dp, toolbarBorder)
+            .navigationBarsPadding()
+            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         tools.forEach { tool ->
             val enabled = if (tool.requiresClip) clip != null else true
+            val labelColor = when {
+                !enabled -> Color(0xFF9CA3AF)
+                isDark -> Color.White.copy(alpha = 0.85f)
+                else -> Color(0xFF374151)
+            }
+            val iconTint = when {
+                !enabled -> if (isDark) Color.White.copy(alpha = 0.25f) else Color(0xFF9CA3AF)
+                else -> tool.color
+            }
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -2545,12 +2623,12 @@ private fun PhotoHorizontalToolbar(
                 Icon(
                     imageVector = tool.icon,
                     contentDescription = tool.label,
-                    tint = if (enabled) tool.color else Color(0xFF9CA3AF),
+                    tint = iconTint,
                     modifier = Modifier.size(22.dp)
                 )
                 Text(
                     text = tool.label,
-                    color = if (enabled) Color(0xFF374151) else Color(0xFF9CA3AF),
+                    color = labelColor,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1
@@ -4553,7 +4631,13 @@ private suspend fun exportEditedPhotoToGallery(
         val outWidth = state.exportSettings.resolution.coerceIn(720, maxDim)
         val outHeight = (outWidth / outAspect).roundToInt().coerceIn(720, maxDim)
 
-        val outputBitmap = Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+        val outputBitmap = try {
+            Bitmap.createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+        } catch (oom: OutOfMemoryError) {
+            val safeWidth = (outWidth * 0.7f).toInt().coerceAtLeast(720)
+            val safeHeight = (safeWidth / outAspect).roundToInt().coerceAtLeast(720)
+            Bitmap.createBitmap(safeWidth, safeHeight, Bitmap.Config.ARGB_8888)
+        }
         val canvas = AndroidCanvas(outputBitmap)
 
         // Draw outer frame background
@@ -4590,13 +4674,31 @@ private suspend fun exportEditedPhotoToGallery(
             when (clip.type) {
                 MediaType.IMAGE, MediaType.VIDEO, MediaType.STICKER -> {
                     val uriStr = clip.uri ?: continue
+                    val dataObj: Any = if (uriStr.startsWith("content://") || uriStr.startsWith("file://") || uriStr.startsWith("http")) {
+                        Uri.parse(uriStr)
+                    } else {
+                        File(uriStr)
+                    }
                     val req = ImageRequest.Builder(context)
-                        .data(Uri.parse(uriStr))
+                        .data(dataObj)
                         .size(outWidth, outHeight)
                         .allowHardware(false)
                         .build()
                     val result = loader.execute(req)
-                    val rawBmp = (result as? SuccessResult)?.drawable?.let { (it as? BitmapDrawable)?.bitmap } ?: continue
+                    val rawBmp = (result as? SuccessResult)?.drawable?.let { (it as? BitmapDrawable)?.bitmap }
+                        ?: run {
+                            try {
+                                val parsed = Uri.parse(uriStr)
+                                val stream = if (parsed.scheme == null || parsed.scheme == "file") {
+                                    File(parsed.path ?: uriStr).inputStream()
+                                } else {
+                                    context.contentResolver.openInputStream(parsed)
+                                }
+                                stream?.use { BitmapFactory.decodeStream(it) }
+                            } catch (_: Exception) {
+                                null
+                            }
+                        } ?: continue
 
                     // Apply studio blur if blur > 0.01f on main photo
                     var blurredBmp: Bitmap? = null
@@ -4652,10 +4754,13 @@ private suspend fun exportEditedPhotoToGallery(
                     canvas.rotate(t.rotation)
                     canvas.scale(t.scale * flipH, t.scale * flipV)
 
+                    val isRotated90 = (kotlin.math.abs(t.rotation / 90f).roundToInt() % 2) != 0
+                    val effectiveBmpW = if (isRotated90) bmp.height else bmp.width
+                    val effectiveBmpH = if (isRotated90) bmp.width else bmp.height
                     val fitScale = if (state.videoFitMode == VideoFitMode.FILL || state.videoFitMode == VideoFitMode.CROP) {
-                        max(targetW / bmp.width, targetH / bmp.height)
+                        max(targetW / effectiveBmpW, targetH / effectiveBmpH)
                     } else {
-                        min(targetW / bmp.width, targetH / bmp.height)
+                        min(targetW / effectiveBmpW, targetH / effectiveBmpH)
                     }
                     val scaleMult = if (clip.trackId == 1) 1f else 0.55f
                     val drawW = bmp.width * fitScale * scaleMult
@@ -4894,28 +4999,42 @@ private suspend fun exportEditedPhotoToGallery(
         }
 
         val resolver = context.contentResolver
-        val outUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return@withContext null
-        resolver.openOutputStream(outUri)?.use { stream ->
-            val compressFormat = when (state.exportSettings.format) {
-                "JPEG" -> Bitmap.CompressFormat.JPEG
-                "WEBP" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    Bitmap.CompressFormat.WEBP_LOSSY
-                } else {
-                    @Suppress("DEPRECATION")
-                    Bitmap.CompressFormat.WEBP
-                }
-                else -> Bitmap.CompressFormat.PNG
-            }
-            outputBitmap.compress(compressFormat, state.exportSettings.quality, stream)
+        val outUri = try {
+            resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        } catch (_: Exception) {
+            null
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.clear()
-            values.put(MediaStore.Images.Media.IS_PENDING, 0)
-            resolver.update(outUri, values, null, null)
+        val compressFormat = when (state.exportSettings.format) {
+            "JPEG" -> Bitmap.CompressFormat.JPEG
+            "WEBP" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Bitmap.CompressFormat.WEBP_LOSSY
+            } else {
+                @Suppress("DEPRECATION")
+                Bitmap.CompressFormat.WEBP
+            }
+            else -> Bitmap.CompressFormat.PNG
         }
-        outUri
-    } catch (e: Exception) {
+
+        if (outUri != null) {
+            resolver.openOutputStream(outUri)?.use { stream ->
+                outputBitmap.compress(compressFormat, state.exportSettings.quality, stream)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                values.clear()
+                values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                resolver.update(outUri, values, null, null)
+            }
+            outUri
+        } else {
+            val fallbackDir = File(context.cacheDir, "edited_photos").apply { mkdirs() }
+            val fallbackFile = File(fallbackDir, filename)
+            fallbackFile.outputStream().use { stream ->
+                outputBitmap.compress(compressFormat, state.exportSettings.quality, stream)
+            }
+            Uri.fromFile(fallbackFile)
+        }
+    } catch (e: Throwable) {
         null
     }
 }
