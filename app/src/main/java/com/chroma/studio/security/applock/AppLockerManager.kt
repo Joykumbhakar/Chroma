@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import androidx.annotation.WorkerThread
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -237,6 +238,72 @@ object AppLockerManager {
         try {
             context.startActivity(intent)
         } catch (_: Exception) {}
+    }
+
+    private var usageWatcherJob: kotlinx.coroutines.Job? = null
+
+    /** Starts foreground app monitoring using UsageStatsManager if Accessibility is restricted */
+    fun startUsageWatcherIfNeeded(context: Context, scope: kotlinx.coroutines.CoroutineScope) {
+        if (!isEnabled(context)) {
+            stopUsageWatcher()
+            return
+        }
+        if (isAccessibilityServiceEnabled(context)) {
+            // Accessibility service is active; zero latency interception running
+            stopUsageWatcher()
+            return
+        }
+        if (!hasUsageStatsPermission(context)) {
+            stopUsageWatcher()
+            return
+        }
+
+        if (usageWatcherJob?.isActive == true) return
+
+        usageWatcherJob = scope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager ?: return@launch
+            var lastPkg: String? = null
+            var lastLaunchTime = 0L
+
+            while (isActive && isEnabled(context) && !isAccessibilityServiceEnabled(context)) {
+                try {
+                    val now = System.currentTimeMillis()
+                    val events = usm.queryEvents(now - 3500, now)
+                    val event = android.app.usage.UsageEvents.Event()
+                    var foregroundPkg: String? = null
+
+                    while (events.hasNextEvent()) {
+                        events.getNextEvent(event)
+                        if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED ||
+                            event.eventType == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                            foregroundPkg = event.packageName
+                        }
+                    }
+
+                    if (foregroundPkg != null &&
+                        foregroundPkg != context.packageName &&
+                        foregroundPkg != "com.android.systemui" &&
+                        !foregroundPkg.contains("launcher") &&
+                        !foregroundPkg.contains("home")
+                    ) {
+                        currentForegroundPackage = foregroundPkg
+                        if (isPackageLocked(context, foregroundPkg) && !isPackageSessionUnlocked(foregroundPkg)) {
+                            if (foregroundPkg != lastPkg || now - lastLaunchTime > 500L) {
+                                lastPkg = foregroundPkg
+                                lastLaunchTime = now
+                                AppLockActivity.launch(context, foregroundPkg)
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+                kotlinx.coroutines.delay(250L)
+            }
+        }
+    }
+
+    fun stopUsageWatcher() {
+        usageWatcherJob?.cancel()
+        usageWatcherJob = null
     }
 
     // =========================================================================

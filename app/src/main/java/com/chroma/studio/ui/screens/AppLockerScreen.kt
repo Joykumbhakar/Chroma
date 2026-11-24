@@ -66,9 +66,11 @@ fun AppLockerScreen(
     var isEnabled by remember { mutableStateOf(AppLockerManager.isEnabled(context)) }
     var hasOverlayPermission by remember { mutableStateOf(AppLockerManager.hasOverlayPermission(context)) }
     var isAccessibilityEnabled by remember { mutableStateOf(AppLockerManager.isAccessibilityServiceEnabled(context)) }
+    var hasUsageStatsPermission by remember { mutableStateOf(AppLockerManager.hasUsageStatsPermission(context)) }
     var hasPinConfigured by remember { mutableStateOf(SecurityPinManager.hasPin(context)) }
     var isBiometricEnabled by remember { mutableStateOf(SecurityPinManager.isBiometricEnabled(context)) }
     var showPinSetupDialog by remember { mutableStateOf(false) }
+    var showRestrictedSettingsGuideModal by remember { mutableStateOf(false) }
 
     var searchQuery by remember { mutableStateOf("") }
     var installedApps by remember { mutableStateOf<List<AppLockTarget>>(emptyList()) }
@@ -80,11 +82,23 @@ fun AppLockerScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasOverlayPermission = AppLockerManager.hasOverlayPermission(context)
                 isAccessibilityEnabled = AppLockerManager.isAccessibilityServiceEnabled(context)
+                hasUsageStatsPermission = AppLockerManager.hasUsageStatsPermission(context)
+                if (!isAccessibilityEnabled && hasUsageStatsPermission) {
+                    AppLockerManager.startUsageWatcherIfNeeded(context, scope)
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(isEnabled, isAccessibilityEnabled, hasUsageStatsPermission) {
+        if (isEnabled && !isAccessibilityEnabled && hasUsageStatsPermission) {
+            AppLockerManager.startUsageWatcherIfNeeded(context, scope)
+        } else if (!isEnabled || isAccessibilityEnabled) {
+            AppLockerManager.stopUsageWatcher()
         }
     }
 
@@ -158,7 +172,11 @@ fun AppLockerScreen(
                 ) {
                     AppleSettingToggleRow(
                         title = "Enable App Locker",
-                        subtitle = if (isEnabled) "Active • Intercepting locked apps" else "Disabled • No apps locked",
+                        subtitle = if (isEnabled) {
+                            if (isAccessibilityEnabled) "Active • Zero-latency Accessibility"
+                            else if (hasUsageStatsPermission) "Active • Usage Access Fallback"
+                            else "Enabled • Grant permission below"
+                        } else "Disabled • No apps locked",
                         icon = Lucide.ShieldCheck,
                         iconGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE)),
                         checked = isEnabled,
@@ -167,6 +185,11 @@ fun AppLockerScreen(
                             SoundManager.playReaction()
                             isEnabled = checked
                             AppLockerManager.setEnabled(context, checked)
+                            if (checked && !isAccessibilityEnabled && hasUsageStatsPermission) {
+                                AppLockerManager.startUsageWatcherIfNeeded(context, scope)
+                            } else if (!checked) {
+                                AppLockerManager.stopUsageWatcher()
+                            }
                         }
                     )
 
@@ -215,28 +238,50 @@ fun AppLockerScreen(
             // =====================================================================
             // 2. PERMISSION HEALTH DIAGNOSTICS
             // =====================================================================
-            if (!isAccessibilityEnabled || !hasOverlayPermission) {
+            val hasDetectionEngine = isAccessibilityEnabled || hasUsageStatsPermission
+            if (!hasDetectionEngine || !hasOverlayPermission) {
                 item {
                     AppleSettingsGroup(
                         header = "Required System Permissions",
-                        footer = "App Locker requires these system settings to detect launched apps instantly without latency or screen flicker."
+                        footer = "App Locker requires these settings to detect launched apps and display the security shield."
                     ) {
                         if (!isAccessibilityEnabled) {
                             AppleSettingNavRow(
                                 title = "Accessibility Service",
-                                subtitle = "Required for instant zero-latency interception",
+                                subtitle = if (AppLockerManager.isRestrictedSettingsApplicable()) "Zero-latency • Tap for Restricted Setting fix" else "Required for instant zero-latency interception",
                                 icon = Lucide.Zap,
                                 iconGradient = listOf(Color(0xFFFF9500), Color(0xFFFF5E3A)),
+                                valueText = if (AppLockerManager.isRestrictedSettingsApplicable()) "Fix" else "Grant",
+                                onClick = {
+                                    SoundManager.playReaction()
+                                    if (AppLockerManager.isRestrictedSettingsApplicable()) {
+                                        showRestrictedSettingsGuideModal = true
+                                    } else {
+                                        AppLockerManager.openAccessibilitySettings(context)
+                                    }
+                                }
+                            )
+                        }
+
+                        if (!hasUsageStatsPermission && !isAccessibilityEnabled) {
+                            if (!isAccessibilityEnabled) {
+                                AppleSettingDivider()
+                            }
+                            AppleSettingNavRow(
+                                title = "Usage Access (Alternative)",
+                                subtitle = "Bypasses Android Restricted Setting lock",
+                                icon = Lucide.Activity,
+                                iconGradient = listOf(Color(0xFF10B981), Color(0xFF059669)),
                                 valueText = "Grant",
                                 onClick = {
                                     SoundManager.playReaction()
-                                    AppLockerManager.openAccessibilitySettings(context)
+                                    AppLockerManager.openUsageStatsSettings(context)
                                 }
                             )
                         }
 
                         if (!hasOverlayPermission) {
-                            if (!isAccessibilityEnabled) {
+                            if (!isAccessibilityEnabled || !hasUsageStatsPermission) {
                                 AppleSettingDivider()
                             }
                             AppleSettingNavRow(
@@ -448,6 +493,25 @@ fun AppLockerScreen(
                 hasPinConfigured = true
                 isBiometricEnabled = SecurityPinManager.isBiometricEnabled(context)
                 ToastManager.showToast("PIN configured successfully")
+            }
+        )
+    }
+
+    if (showRestrictedSettingsGuideModal) {
+        RestrictedSettingsGuideDialog(
+            isDark = isDark,
+            onDismiss = { showRestrictedSettingsGuideModal = false },
+            onOpenAppInfo = {
+                showRestrictedSettingsGuideModal = false
+                AppLockerManager.openAppInfo(context)
+            },
+            onOpenAccessibility = {
+                showRestrictedSettingsGuideModal = false
+                AppLockerManager.openAccessibilitySettings(context)
+            },
+            onOpenUsageAccess = {
+                showRestrictedSettingsGuideModal = false
+                AppLockerManager.openUsageStatsSettings(context)
             }
         )
     }
@@ -790,4 +854,171 @@ private fun RestrictedStepItem(
             modifier = Modifier.weight(1f)
         )
     }
+}
+
+@Composable
+private fun RestrictedSettingsGuideDialog(
+    isDark: Boolean,
+    onDismiss: () -> Unit,
+    onOpenAppInfo: () -> Unit,
+    onOpenAccessibility: () -> Unit,
+    onOpenUsageAccess: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = if (isDark) Color(0xFF1C1C1E) else Color.White,
+        shape = RoundedCornerShape(24.dp),
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFF9F0A).copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.ShieldAlert,
+                        contentDescription = null,
+                        tint = Color(0xFFFF9F0A),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Text(
+                    text = "Fix Restricted Setting",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDark) Color.White else Color(0xFF111827),
+                    fontFamily = InterFontFamily
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Android 13+ automatically displays 'App was denied access' for sideloaded APKs. You can unblock it in 2 taps:",
+                    fontSize = 13.sp,
+                    color = if (isDark) Color.White.copy(alpha = 0.75f) else Color(0xFF4B5563),
+                    fontFamily = InterFontFamily
+                )
+
+                // Step 1
+                Surface(
+                    onClick = onOpenAppInfo,
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isDark) Color(0xFFFF9F0A).copy(alpha = 0.15f) else Color(0xFFFFFBEB),
+                    border = BorderStroke(1.dp, Color(0xFFFF9F0A).copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFF9F0A)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("1", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Open App Info",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                color = if (isDark) Color(0xFFFFB340) else Color(0xFF92400E)
+                            )
+                            Text(
+                                text = "Tap 3 dots (⋮) in top-right -> 'Allow restricted settings'",
+                                fontSize = 11.5.sp,
+                                color = if (isDark) Color.White.copy(alpha = 0.70f) else Color(0xFF78350F)
+                            )
+                        }
+                        Icon(Lucide.ChevronRight, contentDescription = null, tint = Color(0xFFFF9F0A), modifier = Modifier.size(16.dp))
+                    }
+                }
+
+                // Step 2
+                Surface(
+                    onClick = onOpenAccessibility,
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isDark) Color.White.copy(alpha = 0.06f) else Color(0xFFF3F4F6),
+                    border = BorderStroke(1.dp, if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.08f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF0381FE)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("2", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Turn ON in Accessibility",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                color = if (isDark) Color.White else Color(0xFF111827)
+                            )
+                            Text(
+                                text = "Tap 'Installed apps' -> 'Oscellion' -> toggle ON",
+                                fontSize = 11.5.sp,
+                                color = if (isDark) Color.White.copy(alpha = 0.60f) else Color(0xFF6B7280)
+                            )
+                        }
+                        Icon(Lucide.ChevronRight, contentDescription = null, tint = Color(0xFF0381FE), modifier = Modifier.size(16.dp))
+                    }
+                }
+
+                // Alternative: Usage Access
+                Surface(
+                    onClick = onOpenUsageAccess,
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isDark) Color(0xFF10B981).copy(alpha = 0.12f) else Color(0xFFECFDF5),
+                    border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.30f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(Lucide.ShieldCheck, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(24.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Or Use Usage Access (No Restriction)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = if (isDark) Color(0xFF34D399) else Color(0xFF065F46)
+                            )
+                            Text(
+                                text = "Android never restricts Usage Access for APKs",
+                                fontSize = 11.5.sp,
+                                color = if (isDark) Color.White.copy(alpha = 0.65f) else Color(0xFF047857)
+                            )
+                        }
+                        Icon(Lucide.ChevronRight, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Got It", fontWeight = FontWeight.Bold, color = Color(0xFF0381FE))
+            }
+        }
+    )
 }
