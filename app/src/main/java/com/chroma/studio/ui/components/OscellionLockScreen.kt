@@ -44,6 +44,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.util.BiometricHelper
 import com.chroma.studio.chat.util.findActivity
@@ -139,15 +140,16 @@ fun OscellionLockScreen(
                             input.copyTo(output)
                         }
                     }
-                    val localUri = "file://${targetFile.absolutePath}"
+                    val localUri = Uri.fromFile(targetFile).toString()
                     withContext(Dispatchers.Main) {
                         customGalleryWallpaperUri = localUri
                         pendingWallpaperUri = localUri
+                        android.widget.Toast.makeText(context, "Custom wallpaper selected", android.widget.Toast.LENGTH_SHORT).show()
                         ToastManager.showToast("Custom wallpaper selected")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        ToastManager.showToast("Failed to load photo: ${e.message}")
+                        android.widget.Toast.makeText(context, "Failed to load photo: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -289,17 +291,17 @@ fun OscellionLockScreen(
     // Active screen zoom animation for iOS-style wallpaper customization
     val screenScale by animateFloatAsState(
         targetValue = if (isWallpaperEditing) 0.84f else 1f,
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "screenScale"
     )
     val screenOffsetY by animateDpAsState(
         targetValue = if (isWallpaperEditing) (-32).dp else 0.dp,
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "screenOffsetY"
     )
     val screenCornerRadius by animateDpAsState(
         targetValue = if (isWallpaperEditing) 34.dp else 0.dp,
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "screenCornerRadius"
     )
 
@@ -327,7 +329,12 @@ fun OscellionLockScreen(
                 .then(if (useBlur) Modifier.haze(hazeState) else Modifier)
         ) {
             AsyncImage(
-                model = if (isWallpaperEditing) pendingWallpaperUri else wallpaperUri,
+                model = ImageRequest.Builder(context)
+                    .data(if (isWallpaperEditing) pendingWallpaperUri else wallpaperUri)
+                    .crossfade(true)
+                    .fallback(com.chroma.studio.R.drawable.wallpaper_stock)
+                    .error(com.chroma.studio.R.drawable.wallpaper_stock)
+                    .build(),
                 contentDescription = "Lock Screen Wallpaper",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -348,19 +355,24 @@ fun OscellionLockScreen(
         // =========================================================================
         // 2. MAIN ACTIVE SCREEN CONTENT CONTAINER (ZOOMABLE)
         // =========================================================================
+        val safeCornerRadius = screenCornerRadius.coerceAtLeast(0.dp)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {
-                    scaleX = screenScale
-                    scaleY = screenScale
+                    scaleX = screenScale.coerceIn(0.5f, 1.5f)
+                    scaleY = screenScale.coerceIn(0.5f, 1.5f)
                     translationY = screenOffsetY.toPx()
                 }
-                .clip(RoundedCornerShape(screenCornerRadius))
-                .border(
-                    width = if (isWallpaperEditing) 1.5.dp else 0.dp,
-                    color = Color.White.copy(alpha = 0.25f),
-                    shape = RoundedCornerShape(screenCornerRadius)
+                .clip(RoundedCornerShape(safeCornerRadius))
+                .then(
+                    if (isWallpaperEditing && safeCornerRadius > 0.dp) {
+                        Modifier.border(
+                            width = 1.5.dp,
+                            color = Color.White.copy(alpha = 0.25f),
+                            shape = RoundedCornerShape(safeCornerRadius)
+                        )
+                    } else Modifier
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -1017,6 +1029,8 @@ fun OscellionLockScreen(
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.10f))
                                 .clickable {
+                                    SoundManager.playTap(context)
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     pendingWallpaperUri = wallpaperUri
                                     pendingDimming = wallpaperDimming
                                     isWallpaperEditing = false
@@ -1038,12 +1052,19 @@ fun OscellionLockScreen(
                                 .clip(CircleShape)
                                 .background(Color(0xFF167EFF))
                                 .clickable {
-                                    wallpaperUri = pendingWallpaperUri
-                                    wallpaperDimming = pendingDimming
-                                    SecurityPinManager.setWallpaperUri(context, wallpaperUri)
-                                    SecurityPinManager.setWallpaperDimming(context, wallpaperDimming)
-                                    isWallpaperEditing = false
-                                    ToastManager.showToast("Wallpaper updated")
+                                    try {
+                                        SoundManager.playReaction()
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        wallpaperUri = pendingWallpaperUri
+                                        wallpaperDimming = pendingDimming
+                                        SecurityPinManager.setWallpaperUri(context, wallpaperUri)
+                                        SecurityPinManager.setWallpaperDimming(context, wallpaperDimming)
+                                        isWallpaperEditing = false
+                                        android.widget.Toast.makeText(context, "Wallpaper updated", android.widget.Toast.LENGTH_SHORT).show()
+                                        ToastManager.showToast("Wallpaper updated")
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "Failed to save wallpaper: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                                 .padding(horizontal = 18.dp, vertical = 7.dp)
                         ) {
