@@ -1,0 +1,1439 @@
+====================================================================================================
+CHROMASTUDIO / OSCELLION — FOUNDER'S COMPLETE NEXT.JS ADMIN PANEL ENGINEERING SPECIFICATION & BLUEPRINT
+====================================================================================================
+Authoritative Master Guide for Building a Comprehensive Enterprise Admin Panel in Next.js
+Version: 2.0.0
+Stack: Next.js 15 (App Router) + TypeScript + Tailwind CSS + shadcn/ui + Firebase Admin SDK + Supabase
+Target Audience: Founder, Lead Full-Stack Engineers, DevOps & Security Teams
+
+----------------------------------------------------------------------------------------------------
+TABLE OF CONTENTS:
+----------------------------------------------------------------------------------------------------
+1. EXECUTIVE SYSTEM OVERVIEW & ARCHITECTURE
+2. COMPLETE DATABASE SCHEMA & DATA DICTIONARY (FIRESTORE, SUPABASE, REALTIME)
+   2.1. Root Collections & Subcollections Index
+   2.2. Collection: users (User Profiles, Identities, Settings, Security)
+   2.3. Subcollection: users/{uid}/followers & users/{uid}/following
+   2.4. Subcollection: users/{uid}/follow_requests
+   2.5. Subcollection: users/{uid}/liked_posts, saved_posts, shared_posts
+   2.6. Subcollection: users/{uid}/highlights (Permanent Story Highlights)
+   2.7. Subcollection: users/{uid}/notifications (User Activity Feeds)
+   2.8. Subcollection: users/{uid}/device_tokens (FCM Registrations)
+   2.9. Collection: usernames (Atomic Handle Reservation & Reverse Index)
+   2.10. Collection: community_works (Posts, Photos, Gradients, Masterworks)
+   2.11. Collection: flash_videos (Short-form Reels <= 30 seconds)
+   2.12. Collection: flash_comments (Threaded YouTube/Instagram Style Comments)
+   2.13. Collection: stories (24-Hour Ephemeral Stories & Analytics)
+   2.14. Subcollection: stories/{storyId}/views (Viewer Telemetry)
+   2.15. Collection: chats (1:1 Direct Messages & Group Rooms)
+   2.16. Subcollection: chats/{roomId}/messages (E2EE Encrypted Payloads)
+   2.17. Collection: user_chat_prefs (Per-User Chat Room Preferences)
+   2.18. Collection: reports (Moderation, Safety, Abuse & Takedown Queue)
+   2.19. Supabase Storage Buckets & File Organization
+   2.20. Local SharedPreferences & Client Storage Keys (For Reference)
+3. ALL CORE APP FEATURES & MODULES (CLIENT-SIDE FUNCTIONALITY)
+   3.1. Authentication, Onboarding & Identity Engine
+   3.2. Creative Studio Suite (Gradient Studio, Final Cut Video, Photo Editor, AI Gen)
+   3.3. Feed & Reels Discovery Algorithm
+   3.4. Threaded Comment System (Quadratic Bezier Connectors & Creator Hearts)
+   3.5. Story Viewer & Real-Time Engagement Curves
+   3.6. End-to-End Encrypted (E2EE) Chat & Messaging Infrastructure
+   3.7. Push Notifications & FCM Dispatch Pipeline
+   3.8. Moderation, Content Filtering & User Safety
+4. FOUNDER'S NEXT.JS ADMIN PANEL ARCHITECTURE
+   4.1. Recommended Tech Stack & Dependencies
+   4.2. Complete Directory Structure (Next.js 15 App Router)
+   4.3. Role-Based Access Control (RBAC) Matrix
+   4.4. Security, Environment Variables & Secret Configuration
+5. DETAILED ADMIN PANEL PAGES & DASHBOARD MODULES
+   5.1. Module 1: Executive Dashboard (Real-time KPIs, Growth Curves, Health Metrics)
+   5.2. Module 2: User Management & CRM (Inspector, Ban/Suspend, Badges, Roles)
+   5.3. Module 3: Content Moderation & Takedown Queue (Report Resolution, Action Audit)
+   5.4. Module 4: Posts & Masterworks Catalog (Inspect, Feature, Edit Counters, Purge)
+   5.5. Module 5: Flash Reels Manager (Video Player, Metric Auditing, Takedowns)
+   5.6. Module 6: Stories & Highlights Monitor (Active Stories, Viewer Analytics, Archive)
+   5.7. Module 7: Threaded Comments & Community Discussions (Spam Purge, Tree Inspector)
+   5.8. Module 8: Chat & Messaging Oversight (Metadata, Active Channels, Spam Flagging)
+   5.9. Module 9: Push Notification Broadcast Studio (Compose, Deep-link, Segment Targets)
+   5.10. Module 10: Storage & Asset Browser (Supabase/Firebase Buckets, Orphaned Cleanup)
+   5.11. Module 11: Remote Config & Feature Flags (Maintenance Mode, Min Version, Shaders)
+   5.12. Module 12: Immutable Security & Audit Logs (Admin actions, IP, Diff tracking)
+6. COMPLETE TYPESCRIPT DATA MODELS & SCHEMAS FOR NEXT.JS
+7. PRODUCTION-READY CODE SNIPPETS & SERVER ACTIONS
+   7.1. Firebase Admin SDK Initializer (`lib/firebaseAdmin.ts`)
+   7.2. User Management Server Actions (`actions/users.ts`)
+   7.3. Moderation Server Actions (`actions/moderation.ts`)
+   7.4. Broadcast Notification Server Action (`actions/notifications.ts`)
+8. DEPLOYMENT & PRODUCTION RUNBOOK (VERCEL / DOCKER / GCP)
+
+====================================================================================================
+1. EXECUTIVE SYSTEM OVERVIEW & ARCHITECTURE
+====================================================================================================
+ChromaStudio (also branded as Oscellion) is a high-performance creative mobile studio and creator 
+social ecosystem built on Android (Kotlin, Jetpack Compose, Material 3, Samsung One UI / Apple Glass 
+Design System) connected to a multi-backend cloud architecture:
+1. Google Cloud Firebase / Firestore:
+   - Primary NoSQL real-time document database.
+   - Firebase Authentication (Google OAuth, Apple OAuth, Email/Password, Custom handle logins).
+   - Firebase Cloud Messaging (FCM) for low-latency background notifications.
+2. Supabase Cloud (PostgreSQL, Storage, Realtime):
+   - Media Storage for avatars, banners, post media, and encrypted chat attachments.
+   - Realtime websocket subscriptions for presence and telemetry.
+3. Cloudinary CDN:
+   - High-throughput video transcoding, poster frame extraction, and CDN optimization for Flash reels.
+4. Google Gemini GenAI API:
+   - Creative AI generative features, prompt expansion, smart captions, and automated content moderation.
+
+The purpose of the Next.js Founder Admin Panel is to provide a single, omniscient web dashboard 
+allowing the founder and company operators to:
+- Monitor user growth, DAU/MAU, creator retention, and storage consumption in real time.
+- Manage user profiles, verify creator accounts with badges, reset compromised sessions, and ban bad actors.
+- Review flagged content (posts, reels, stories, comments, chat reports) in a triage queue.
+- Broadcast system announcements and push notifications to segmented user demographics.
+- Audit the health of cloud storage buckets and prune orphaned media assets.
+- Configure feature flags, minimum app version requirements, and platform operational modes.
+
+====================================================================================================
+2. COMPLETE DATABASE SCHEMA & DATA DICTIONARY (FIRESTORE, SUPABASE, REALTIME)
+====================================================================================================
+
+2.1. Root Collections & Subcollections Index
+--------------------------------------------
+- `users` (Collection)
+  |-- `{uid}` (Document)
+      |-- `followers` (Subcollection)
+      |-- `following` (Subcollection)
+      |-- `follow_requests` (Subcollection)
+      |-- `liked_posts` (Subcollection)
+      |-- `saved_posts` (Subcollection)
+      |-- `shared_posts` (Subcollection)
+      |-- `remixed_posts` (Subcollection)
+      |-- `highlights` (Subcollection)
+      |-- `notifications` (Subcollection)
+      |-- `device_tokens` (Subcollection)
+- `usernames` (Collection: Atomic uniqueness registry)
+- `community_works` (Collection: Posts, Photos, Gradients, Masterworks)
+  |-- `{postId}` (Document)
+      |-- `likes` (Subcollection)
+      |-- `comments` (Subcollection)
+- `flash_videos` (Collection: Short-form Reels <= 30 seconds)
+  |-- `{videoId}` (Document)
+      |-- `likes` (Subcollection)
+- `flash_comments` (Collection: Global Threaded Comments collection)
+- `stories` (Collection: 24-hour Ephemeral Stories & Highlights)
+  |-- `{storyId}` (Document)
+      |-- `views` (Subcollection: Viewer timestamps & user IDs)
+- `chats` (Collection: 1:1 and Group Chat Rooms)
+  |-- `{roomId}` (Document)
+      |-- `messages` (Subcollection: End-to-End Encrypted payloads)
+- `user_chat_prefs` (Collection: Composite `{userId}_{roomId}` preferences)
+- `reports` (Collection: Triage safety & abuse queue)
+
+----------------------------------------------------------------------------------------------------
+2.2. Collection: `users`
+----------------------------------------------------------------------------------------------------
+Path: `users/{uid}`
+Document ID: Firebase Authentication UID string (e.g. "aB3dE8fK...")
+Purpose: Stores comprehensive user creator profile, account state, badges, privacy settings.
+
+Fields:
+- `uid` (string, required): Firebase Auth UID.
+- `username` (string, required): Clean lowercase unique handle (3-30 chars, a-z, 0-9, _).
+- `displayName` (string, required): Public display name (e.g. "Elena Rostova").
+- `email` (string, required): Primary verified email or OAuth email.
+- `customEmail` (string, required): Internal handle email format: `{username}@oscellion.com`.
+- `googleId` (string, optional): Associated Google OAuth ID.
+- `bio` (string, optional): Public profile description (max 500 chars).
+- `avatarUrl` (string, optional): HTTPS URL to profile image (Supabase / Cloudinary).
+- `bannerUrl` (string, optional): HTTPS URL to profile cover banner.
+- `bannerWorkId` (string, optional): ID of a community_work used as profile banner.
+- `dob` (number, optional): Date of birth in UTC epoch milliseconds. Enforced 13+.
+- `dateOfBirth` (any, optional): Legacy or alternate timestamp format for DOB.
+- `gender` (string, default: "Private"): "Male" | "Female" | "Non-binary" | "Private".
+- `role` (string, default: "Creator"): "Creator" | "Admin" | "Moderator" | "VIP".
+- `verified` (boolean, default: false): True grants the official blue verified badge.
+- `online` (boolean, default: false): Live presence indicator.
+- `lastSeen` (number, optional): Epoch milliseconds timestamp of last active heartbeat.
+- `location` (string, optional): General city/region display.
+- `officeLocation` (string, optional): Professional office location.
+- `homeLocation` (string, optional): Personal hometown.
+- `countryLocation` (string, optional): ISO or full country name.
+- `showLocation` (boolean, default: false): Visibility toggle for public location.
+- `socialLinks` (map<string, string>): Map of platform key to URL (e.g., {"instagram": "...", "x": "..."}).
+- `followersCount` (number, default: 0): Denormalized total followers count.
+- `followingCount` (number, default: 0): Denormalized total following count.
+- `interests` (array<string>): Array of chosen studio domains (e.g., ["Color Grading", "Motion Graphics"]).
+- `statusEmoji` (string, optional): Single emoji status (e.g., "🎨").
+- `statusText` (string, optional): Short status message (e.g., "Grading LUTs").
+- `agreedToTermsAt` (number, optional): Epoch milliseconds when terms were accepted.
+- `createdAt` (number / timestamp): Account creation timestamp.
+- `isOnboarded` (boolean, default: true): Whether onboarding wizard was completed.
+- `publicKey` (string, optional): Base64 encoded RSA-2048 public key for E2EE chats.
+- `isPrivateAccount` (boolean, default: false): If true, requires follow requests to view posts.
+- `allowTagging` (boolean, default: true): Whether others can tag/mention this user.
+- `showOnlineStatus` (boolean, default: true): Whether online status dot is visible to others.
+- `pushNotificationsEnabled` (boolean, default: true): Master push notification toggle.
+- `emailNotificationsEnabled` (boolean, default: true): Email updates toggle.
+- `quietModeEnabled` (boolean, default: false): Do not disturb / silent mode toggle.
+- `unrecognizedLoginsEnabled` (boolean, default: false): Security alert on unknown device login.
+- `contentTags` (array<string>): Creator tags applied to user's profile.
+- `dataVisibility` (map<string, string>): Granular privacy settings.
+- `onlyFriends` (array<string>): UIDs of close friends allowed in restricted stories.
+- `fcmToken` (string, optional): Active device FCM registration token.
+- `blockedUsers` (array<string>): UIDs blocked by this user.
+- `isBanned` (boolean, default: false, ADMIN-MANAGED): If true, user is locked out.
+- `banReason` (string, optional, ADMIN-MANAGED): Administrative explanation for ban.
+- `bannedAt` (number, optional, ADMIN-MANAGED): Timestamp when ban was enacted.
+
+----------------------------------------------------------------------------------------------------
+2.3. Subcollection: `users/{uid}/followers` & `users/{uid}/following`
+----------------------------------------------------------------------------------------------------
+Path: `users/{targetUid}/followers/{followerUid}`
+Path: `users/{followerUid}/following/{targetUid}`
+Document ID: Follower or Target UID
+Fields:
+- `uid` (string): The other user's UID.
+- `timestamp` (number): Epoch milliseconds when follow action occurred.
+
+----------------------------------------------------------------------------------------------------
+2.4. Subcollection: `users/{uid}/follow_requests`
+----------------------------------------------------------------------------------------------------
+Path: `users/{targetUid}/follow_requests/{requesterUid}`
+Document ID: Requester UID
+Fields:
+- `uid` (string): Requester UID.
+- `timestamp` (number): Epoch milliseconds of the request.
+- `status` (string, default: "pending"): "pending" | "approved" | "rejected".
+
+----------------------------------------------------------------------------------------------------
+2.5. Subcollection: `users/{uid}/liked_posts`, `saved_posts`, `shared_posts`, `remixed_posts`
+----------------------------------------------------------------------------------------------------
+Path: `users/{uid}/{interaction_type}/{postId}`
+Document ID: `postId` of community_work or flash_video
+Fields:
+- `timestamp` (number): Epoch milliseconds of the interaction.
+
+----------------------------------------------------------------------------------------------------
+2.6. Subcollection: `users/{uid}/highlights`
+----------------------------------------------------------------------------------------------------
+Path: `users/{uid}/highlights/{highlightId}`
+Document ID: `highlightId` (UUID string)
+Purpose: Immortal Story Highlights showcased in circular profile bubbles.
+Fields:
+- `id` (string): Highlight ID.
+- `title` (string): Title label shown below the bubble (e.g. "Presets", "VFX Reel").
+- `coverUrl` (string): HTTPS URL of the circular cover image.
+- `storyIds` (array<string>): Ordered array of Story document IDs contained in this highlight.
+- `createdAt` (number): Epoch milliseconds when created.
+- `updatedAt` (number): Epoch milliseconds when last edited.
+
+----------------------------------------------------------------------------------------------------
+2.7. Subcollection: `users/{uid}/notifications`
+----------------------------------------------------------------------------------------------------
+Path: `users/{uid}/notifications/{notifId}`
+Document ID: `notifId` (UUID string)
+Purpose: In-app notification center activity items.
+Fields:
+- `id` (string): Notification ID.
+- `type` (string): "LIKE" | "COMMENT" | "FOLLOW" | "MESSAGE" | "REMIX" | "MENTION" | 
+                  "SYSTEM_DROP" | "PROJECT_EXPORT" | "PROJECT_COLLAB" | "LIKE_COMMENT" | 
+                  "REPLY" | "FOLLOW_REQUEST" | "STORY_LIKE" | "STORY_REPLY" | "STORY_REACTION".
+- `actorUid` (string): UID of the user who initiated the action.
+- `actorName` (string): Display name of the acting user.
+- `actorHandle` (string): `@handle` of the acting user.
+- `actorAvatarUrl` (string, optional): Avatar URL of the acting user.
+- `actorGender` (string, optional): Gender of the acting user.
+- `isVerified` (boolean): Whether acting user holds verified badge.
+- `actionText` (string): Human-readable action description (e.g. "liked your post", "commented on...").
+- `detailText` (string, optional): Snippet of comment text or message.
+- `targetPreviewUrl` (string, optional): Thumbnail of the target post/reel/story.
+- `targetId` (string, optional): ID of the affected post, reel, story, or chat room.
+- `timestamp` (number): Epoch milliseconds of the notification.
+- `isRead` (boolean, default: false): Read state.
+- `following` (boolean, default: false): Contextual state if recipient follows actor back.
+
+----------------------------------------------------------------------------------------------------
+2.8. Subcollection: `users/{uid}/device_tokens`
+----------------------------------------------------------------------------------------------------
+Path: `users/{uid}/device_tokens/{tokenId}`
+Document ID: Hash or unique token string
+Fields:
+- `token` (string): Raw FCM push notification registration token.
+- `platform` (string, default: "android"): "android" | "ios" | "web".
+- `appVersion` (string): Client version (e.g., "1.2").
+- `updatedAt` (number): Timestamp of last token refresh.
+
+----------------------------------------------------------------------------------------------------
+2.9. Collection: `usernames`
+----------------------------------------------------------------------------------------------------
+Path: `usernames/{cleanUsername}`
+Document ID: Normalized lowercase handle (e.g. "elena_vfx")
+Purpose: Atomic single-document reservation ensuring zero duplicate usernames across the entire network.
+Fields:
+- `uid` (string): Owning Firebase user UID.
+- `customEmail` (string): `{cleanUsername}@oscellion.com`.
+- `email` (string): User's primary login email.
+- `createdAt` (number): Timestamp when handle was claimed.
+
+----------------------------------------------------------------------------------------------------
+2.10. Collection: `community_works`
+----------------------------------------------------------------------------------------------------
+Path: `community_works/{postId}`
+Document ID: `postId` (UUID string)
+Purpose: Community posts, interactive gradient masterworks, multi-photo carousels, and videos.
+
+Fields:
+- `id` (string): Post ID.
+- `creatorId` (string): UID of the author.
+- `authorUsername` (string): Handle of author.
+- `authorDisplayName` (string): Display name of author.
+- `authorAvatarUrl` (string): Author avatar URL.
+- `authorVerified` (boolean): Author verification status at publish time.
+- `title` (string): Post headline.
+- `description` (string): Caption / description text.
+- `aspectRatio` (string, default: "4:3"): "1:1" | "4:3" | "9:16" | "16:9".
+- `postType` (string, default: "work"): "work" (interactive JSON gradient) | "image" (photo) | "video".
+- `imageUrl` (string, optional): Primary media image URL.
+- `imageUrls` (array<string>): Array of media image URLs for multi-slide carousel posts.
+- `videoUrl` (string, optional): Video playback URL if postType == "video".
+- `thumbnailUrl` (string, optional): Poster frame image URL for video posts.
+- `jsonUrl` (string, optional): Cloud storage URL to the JSON gradient layers file.
+- `workUrls` (array<string>): Associated project resource URLs.
+- `likesCount` (number, default: 0): Denormalized likes counter.
+- `likedBy` (array<string>): Array of UIDs who liked (truncated for performance).
+- `remixCount` (number, default: 0): Number of times other creators remixed this canvas.
+- `remixedBy` (array<string>): Array of remixed user UIDs.
+- `downloadCount` (number, default: 0): Total downloads.
+- `downloadedBy` (array<string>): UIDs who downloaded.
+- `shareCount` (number, default: 0): Total shares.
+- `sharedBy` (array<string>): UIDs who shared.
+- `saveCount` (number, default: 0): Total saves / bookmarks.
+- `savedBy` (array<string>): UIDs who bookmarked.
+- `commentsCount` (number, default: 0): Total top-level + reply comments.
+- `commentCount` (number, default: 0): Duplicate counter field maintained for backward compatibility.
+- `tags` (array<string>): Hashtags and category tags (e.g. ["#LUT", "#FilmGrain"]).
+- `mentions` (array<string>): Tagged usernames.
+- `trendingTag` (string, optional): Elevated badge (e.g., "Trending", "Staff Pick").
+- `timestamp` (number): Epoch milliseconds when posted.
+- `hideLikesCount` (boolean, default: false): Creator privacy toggle hiding like count from public.
+- `hideSharesCount` (boolean, default: false): Hides share count.
+- `hideRemixesCount` (boolean, default: false): Hides remix counter.
+- `hideDownloadsCount` (boolean, default: false): Hides download counter.
+- `hideSavesCount` (boolean, default: false): Hides bookmark count.
+- `turnOffComments` (boolean, default: false): Disables new comments.
+- `turnOffRemix` (boolean, default: false): Prevents remixing in Studio.
+- `remixedFromPostId` (string, optional): Parent post ID if this post was remixed.
+- `remixedFromAuthorId` (string, optional): Parent author UID.
+- `remixedFromAuthorUsername` (string, optional): Parent author handle.
+- `remixedFromAuthorDisplayName` (string, optional): Parent author name.
+- `remixedFromAuthorAvatar` (string, optional): Parent author avatar.
+- `remixedFromAuthorVerified` (boolean, default: false): Parent author verification.
+- `archived` (boolean, default: false): If true, hidden from public feed but kept in creator archive.
+- `isFeatured` (boolean, default: false, ADMIN-MANAGED): Featured on explore carousel.
+- `isTakedown` (boolean, default: false, ADMIN-MANAGED): Removed by moderation for violations.
+- `takedownReason` (string, optional, ADMIN-MANAGED): Why moderation removed the post.
+
+Subcollections under `community_works/{postId}`:
+- `likes/{userId}`: Document containing `{"timestamp": number}`.
+- `comments/{commentId}`: Local threaded comments subcollection (see `flash_comments` schema).
+
+----------------------------------------------------------------------------------------------------
+2.11. Collection: `flash_videos`
+----------------------------------------------------------------------------------------------------
+Path: `flash_videos/{videoId}`
+Document ID: `videoId` (UUID string)
+Purpose: Short-form Reels / Flash video posts capped at 30 seconds.
+
+Fields:
+- `id` (string): Reel ID.
+- `creatorId` (string): Creator UID.
+- `authorUsername`, `authorDisplayName`, `authorAvatarUrl`, `authorVerified`: Creator metadata.
+- `videoUrl` (string): Cloudinary / Supabase streaming MP4 URL.
+- `thumbnailUrl` (string): Poster frame image URL.
+- `caption` (string): Post text / description.
+- `hashtags` (array<string>): Array of hashtags.
+- `mentions` (array<string>): Array of tagged usernames.
+- `likesCount` (number, default: 0): Total likes.
+- `likedBy` (array<string>): Array of user UIDs who liked.
+- `commentCount` (number, default: 0): Total comments.
+- `remixCount` (number, default: 0): Total remixes.
+- `remixedBy` (array<string>): Array of remixing UIDs.
+- `shareCount` (number, default: 0): Total shares.
+- `sharedBy` (array<string>): UIDs who shared.
+- `saveCount` (number, default: 0): Total bookmarks.
+- `savedBy` (array<string>): UIDs who bookmarked.
+- `duration` (number): Duration in milliseconds (max 30,000 ms).
+- `remixedFromPostId` (string, optional): Lineage reference.
+- `remixedFromAuthorUsername` (string, optional): Parent creator handle.
+- `timestamp` (number): Epoch milliseconds when published.
+- `hideLikesCount`, `turnOffComments`, `turnOffRemix`, `archived`: Boolean controls.
+- `isTakedown` (boolean, default: false, ADMIN-MANAGED): Administrative moderation flag.
+
+----------------------------------------------------------------------------------------------------
+2.12. Collection: `flash_comments`
+----------------------------------------------------------------------------------------------------
+Path: `flash_comments/{commentId}` (also synchronized in `community_works/{postId}/comments/{commentId}`)
+Document ID: `commentId` (UUID string)
+Purpose: Threaded, hierarchical comment trees with SVG-style branch lines, creator hearts, and pins.
+
+Fields:
+- `id` (string): Comment ID.
+- `videoId` (string): Associated post or flash video ID.
+- `userId` (string): Commenter UID.
+- `username` (string): Commenter handle.
+- `displayName` (string): Commenter display name.
+- `avatarUrl` (string): Commenter avatar URL.
+- `verified` (boolean): Commenter verified badge status.
+- `text` (string): Comment text content.
+- `timestamp` (number): Epoch milliseconds when posted.
+- `likesCount` (number, default: 0): Like counter.
+- `likedBy` (array<string>): Array of user UIDs who liked.
+- `dislikedBy` (array<string>): Array of user UIDs who disliked.
+- `isPinned` (boolean, default: false): Author-pinned comment displayed at the top.
+- `isCreatorHearted` (boolean, default: false): Creator has given an official love badge.
+- `replyToCommentId` (string, optional): null for root level comments; parent comment ID for replies.
+- `replyToUsername` (string, optional): Tagged parent commenter handle.
+- `replyCount` (number, default: 0): Total nested direct replies beneath this comment.
+- `replyFlashVideoUrl` (string, optional): URL to a video response reel if replied with video.
+- `isSpam` (boolean, default: false, ADMIN-MANAGED): Auto-flagged or admin-flagged as spam.
+
+----------------------------------------------------------------------------------------------------
+2.13. Collection: `stories`
+----------------------------------------------------------------------------------------------------
+Path: `stories/{storyId}`
+Document ID: `storyId` (UUID string)
+Purpose: Ephemeral 24-hour stories, text updates, interactive stickers, and permanent highlights.
+
+Fields:
+- `id` (string): Story ID.
+- `userId` (string): Creator UID.
+- `mediaUrl` (string, optional): HTTPS image or video URL.
+- `textContent` (string, optional): Text story content.
+- `textFormat` (string): JSON string (LZ-compressed) containing text coordinates, font styles, colors.
+- `backgroundColor` (string): Hex color code for text status stories.
+- `audienceType` (string, default: "public"): "public" | "followers" | "custom".
+- `customAudienceIds` (array<string>): UIDs permitted to view if audienceType == "custom".
+- `timestamp` (number): Epoch milliseconds when published.
+- `expiresAt` (number): Epoch milliseconds when story expires (timestamp + 86,400,000 ms).
+- `views` (number, default: 0): Total view counter.
+- `likes` (number, default: 0): Total like counter.
+- `shares` (number, default: 0): Total share counter.
+- `viewedBy` (array<string>): Array of viewer UIDs.
+- `likedBy` (array<string>): Array of user UIDs who liked.
+- `isHighlight` (boolean, default: false): Whether this story is pinned into a profile Highlight.
+- `highlightId` (string, optional): Highlight collection ID if pinned.
+- `highlightTitle` (string, optional): Highlight title.
+- `highlightCoverUrl` (string, optional): Highlight cover artwork URL.
+
+----------------------------------------------------------------------------------------------------
+2.14. Subcollection: `stories/{storyId}/views`
+----------------------------------------------------------------------------------------------------
+Path: `stories/{storyId}/views/{viewerUid}`
+Document ID: Viewer UID
+Purpose: Telemetry records used to generate the engagement curves in StoryAnalyticsModal.
+Fields:
+- `viewerId` (string): Viewer UID.
+- `timestamp` (number): Epoch milliseconds when viewed.
+- `userProfile` (map): Snapshot of viewer profile (username, displayName, avatarUrl, verified).
+
+----------------------------------------------------------------------------------------------------
+2.15. Collection: `chats`
+----------------------------------------------------------------------------------------------------
+Path: `chats/{roomId}`
+Document ID: `roomId` (for 1:1 DMs: sorted composite e.g. `uid1_uid2`; for groups: UUID)
+Purpose: Messaging rooms supporting E2EE encryption, media, voice notes, and groups.
+
+Fields:
+- `id` (string): Room ID.
+- `name` (string, optional): Group name (null for 1:1 direct messages).
+- `isGroup` (boolean, default: false): True if group chat, false if 1:1 DM.
+- `avatarUrl` (string, optional): Group icon avatar URL.
+- `participants` (array<string>): Array of all member UIDs.
+- `admins` (array<string>): Array of group admin UIDs.
+- `createdBy` (string, optional): UID of group creator.
+- `groupDescription` (string, optional): Group rules or description.
+- `lastMessage` (string): Preview text of last message (masked if encrypted).
+- `lastSender` (string, optional): UID of last message author.
+- `lastMessageTime` (number): Epoch milliseconds of last message.
+- `lastMessageId` (string, optional): ID of last message document.
+- `lastMessageIsRead` (boolean, default: false): Whether recipient has opened.
+- `lastMessageIsDelivered` (boolean, default: false): Whether recipient device has received.
+- `unreadCount` (map<string, number>): Map of UID to unread integer count (e.g., {"uid1": 2, "uid2": 0}).
+- `favoritedBy` (array<string>): UIDs who starred this chat.
+- `archivedBy` (array<string>): UIDs who archived this chat.
+- `deletedBy` (array<string>): UIDs who hid this conversation.
+- `deletedAt` (map<string, number>): Map of UID to timestamp when they cleared conversation history.
+- `pinnedMessageId` (string, optional): Pinned announcement message ID.
+- `pinnedMessageText` (string, optional): Text of pinned message.
+- `pinnedBy` (string, optional): UID who pinned.
+- `pinnedAt` (number, optional): Timestamp when pinned.
+- `onlyAdminsCanPost` (boolean, default: false): Group restriction setting.
+
+----------------------------------------------------------------------------------------------------
+2.16. Subcollection: `chats/{roomId}/messages`
+----------------------------------------------------------------------------------------------------
+Path: `chats/{roomId}/messages/{messageId}`
+Document ID: `messageId` (UUID string)
+Purpose: Individual chat messages, voice notes, media attachments, and polls.
+NOTE: In E2EE mode, the `text` field contains cipher bytes and can only be decrypted by 
+the participants holding the private key. Admin panel inspects metadata, not private plaintext.
+
+Fields:
+- `id` (string): Message ID.
+- `senderId` (string): UID of author.
+- `text` (string): Message body (Plaintext or AES-GCM Ciphertext).
+- `timestamp` (number): Epoch milliseconds sent.
+- `isRead` (boolean, default: false): Read receipt state.
+- `isDelivered` (boolean, default: false): Delivery receipt state.
+- `imageUrl` (string, optional): Image attachment URL.
+- `mediaUrl` (string, optional): Voice note audio URL or video URL.
+- `mediaType` (string, optional): MIME type (e.g. "audio/mp4", "video/mp4", "image/jpeg").
+- `workId` (string, optional): Attached Chroma Studio project work ID.
+- `messageType` (string, default: "text"): "text" | "image" | "video" | "audio" | "system" | 
+                                          "poll" | "story_reply" | "flash_share" | "call".
+- `iv` (string, optional): Base64 initialization vector for AES-GCM.
+- `encryptedAesKeys` (map<string, string>): Map of `participantId -> RSA-encrypted AES key`.
+- `reactions` (map<string, string>): Map of `userId -> emoji` (e.g. {"uid1": "❤️", "uid2": "🔥"}).
+- `durationSeconds` (number, optional): Duration in seconds for voice notes.
+- `replyToMessageId` (string, optional): Parent message ID being replied to.
+- `pollVotes` (map<string, string>): Map of `userId -> selected option index`.
+- `isEdited` (boolean, default: false): True if message was modified after sending.
+- `deletedFor` (array<string>): UIDs who deleted this message for themselves.
+- `isPollClosed` (boolean, default: false): Whether poll voting has concluded.
+- `isForwarded` (boolean, default: false): True if forwarded from another chat.
+- `storyId`, `storyThumbnailUrl`: Story reply attachments.
+- `flashVideoId`, `flashVideoThumbnailUrl`, `flashVideoUrl`, `flashVideoCaption`: Flash reel attachments.
+- `callDuration`, `callType`: Call history records ("voice" | "video").
+
+----------------------------------------------------------------------------------------------------
+2.17. Collection: `user_chat_prefs`
+----------------------------------------------------------------------------------------------------
+Path: `user_chat_prefs/{userId}_{roomId}`
+Document ID: Composite key `{userId}_{roomId}`
+Fields:
+- `wallpaperUri` (string, optional): Custom chat background image.
+- `muted` (boolean, default: false): Mute notifications for this room.
+- `customNotificationSound` (string, optional): Notification tone override.
+
+----------------------------------------------------------------------------------------------------
+2.18. Collection: `reports`
+----------------------------------------------------------------------------------------------------
+Path: `reports/{reportId}`
+Document ID: `reportId` (UUID string)
+Purpose: Centralized trust, safety, moderation, and abuse triage queue.
+
+Fields:
+- `id` (string): Report ID.
+- `reporterId` (string): UID of the user filing the report.
+- `reporterUsername` (string): Handle of reporter.
+- `targetType` (string): "user" | "post" | "flash" | "story" | "comment" | "chat_message".
+- `targetId` (string): Document ID of the offending entity.
+- `targetAuthorId` (string): UID of the accused author.
+- `targetAuthorUsername` (string): Handle of the accused author.
+- `reason` (string): "Spam" | "Harassment or Hate Speech" | "Nudity or Sexual Content" | 
+                    "Violence or Dangerous Organizations" | "Copyright Infringement" | "Other".
+- `description` (string, optional): Detailed explanation from reporter.
+- `evidenceUrl` (string, optional): Screenshot or media link.
+- `status` (string, default: "pending"): "pending" | "investigating" | "resolved" | "dismissed".
+- `resolutionAction` (string, optional): "none" | "warned_user" | "content_removed" | 
+                                         "account_suspended_24h" | "account_banned_permanent".
+- `resolvedBy` (string, optional): Admin UID or email of the resolving operator.
+- `resolvedAt` (number, optional): Epoch milliseconds when resolved.
+- `createdAt` (number): Epoch milliseconds filed.
+
+----------------------------------------------------------------------------------------------------
+2.19. Supabase Storage Buckets & File Organization
+----------------------------------------------------------------------------------------------------
+1. `avatars`:
+   - Path structure: `{uid}/avatar_{timestamp}.jpg`
+   - Resolution: 320x320 squared JPEG, EXIF auto-corrected.
+2. `banners`:
+   - Path structure: `{uid}/banner_{timestamp}.jpg`
+   - Resolution: 1080x450 landscape JPEG.
+3. `posts`:
+   - Path structure: `posts/{postId}/image_{index}.jpg`
+   - Gradients: `posts/{postId}/work.json`
+4. `flash_videos`:
+   - Path structure: `flash/{videoId}/video.mp4`
+   - Posters: `flash/{videoId}/thumb.jpg`
+5. `stories`:
+   - Path structure: `stories/{uid}/{storyId}.jpg` (or `.mp4`)
+6. `chat_media`:
+   - Path structure: `chats/{roomId}/{messageId}_{type}.bin`
+
+----------------------------------------------------------------------------------------------------
+2.20. Local SharedPreferences & Client Storage Keys (For Reference)
+----------------------------------------------------------------------------------------------------
+- `saved_accounts_pref`: JSON list of multi-account profiles (`SavedAccount`).
+- `user_highlights_prefs`: Local cache of highlights per user (`highlights_{userId}`).
+- `chat_settings`: Local preferences (`haze_blur_enabled`, `sound_enabled`, `vibration_enabled`).
+- `has_accepted_terms`: Boolean (Privacy Policy and Terms consent).
+- `has_completed_post_onboarding`: Boolean (Workspace initial launch completed).
+- `theme_mode`: "system" | "light" | "dark".
+
+====================================================================================================
+3. ALL CORE APP FEATURES & MODULES (CLIENT-SIDE FUNCTIONALITY)
+====================================================================================================
+
+3.1. Authentication, Onboarding & Identity Engine
+-------------------------------------------------
+- Welcome screen features the 3D Oscellion hero character, Google Sign-In, Apple Sign-In, 
+  and direct account creation.
+- Direct account creation routes into the multi-step OnboardingWizard:
+  * Step 1: Unique `@handle` with live debounce availability checking & suggestions, Display Name,
+    Avatar selection with interactive circular crop modal (pinch-to-zoom, pan, rotation, mirror flip),
+    Linked `@oscellion.com` custom email banner, and 5-rule password security checkmark system.
+  * Step 2: Date of Birth verification (strictly enforces 13+ with alert banner), Gender selection
+    ("Male", "Female", "Non-binary", "Private"), and Creator Bio.
+  * Step 3: Selection of 2 or more creative domains out of 12 studio categories.
+- Multi-account persistence using `SavedAccountManager` for 1-tap switching without re-authenticating.
+
+3.2. Creative Studio Suite
+--------------------------
+1. Chroma Studio (Gradient Studio):
+   - Multi-layer vector & shader compositor supporting 7 layer types (Linear, Radial, Conic, Mesh, 
+     Blob, Aurora, Liquid).
+   - 8 blend modes (SrcOver, Multiply, Screen, Overlay, Darken, Lighten, ColorDodge, Difference).
+   - Real-time animation engines (Drift, Pulse, Hue Shift, Breathe).
+   - Post-processing shaders (Film Grain, Retro Halftone, Brutalist Dither).
+   - Accessibility color-blind simulation filters (Protanopia, Deuteranopia, Tritanopia).
+2. Flash Final Cut Video Editor (`FinalCutProVideoEditor.kt`):
+   - Multitrack timeline editor, trim sliders (ms precision), audio waveform preview, LUT filters.
+   - Cloudinary / Supabase rendering engine.
+3. Photo Editor (`ChromaPhotoEditorScreen.kt`):
+   - Full RGB curve tone editing (blacks, shadows, midtones, highlights, whites).
+   - Multilayer manager (Main photo, image overlays, typography, markup brush, stickers).
+   - 2-finger pan, zoom, and rotate gesture engine.
+4. AI Generator (Gemini API):
+   - Intelligent caption suggestions, generative artwork synthesis, prompt expansion.
+
+3.3. Feed & Reels Discovery Algorithm
+-------------------------------------
+- Community feed sorts by newest, trending velocity (`likesCount > 100 && comments >= 5`), 
+  and curated Staff Picks.
+- Full support for interactive JSON work remixing, allowing creators to open another creator's 
+  gradient in their own editor.
+- Flash reels full-screen vertical pager with loop optimization and instant caching.
+
+3.4. Threaded Comment System (`YouTubeCommentsSheet.kt`)
+--------------------------------------------------------
+- Bottom sheet with `skipPartiallyExpanded = true` and `imePadding()`.
+- Hierarchical trees: root comments display with indented child replies.
+- Gutter connector lines rendered via native Compose `Path.quadraticBezierTo` for smooth curved branches.
+- Creator heart badge (`isCreatorHearted`) and author-pinned status (`isPinned`).
+- Optimistic posting and optimistic like/dislike counts.
+
+3.5. Story Viewer & Real-Time Engagement Curves (`StoryAnalyticsModal.kt`)
+--------------------------------------------------------------------------
+- 24-hour auto-expiring ephemeral stories.
+- Dynamic analytics modal featuring a cubic spline bezier curve tracking hourly views without mock data.
+- Live viewers list with debounced search query filter and pulsing `OnlineStatusDot` on viewer avatars.
+- Ability to pin any active story into a permanent profile Highlight.
+
+3.6. End-to-End Encrypted (E2EE) Chat & Messaging Infrastructure
+----------------------------------------------------------------
+- Asymmetric RSA-2048 key exchange combined with symmetric AES-GCM 256-bit encryption.
+- Synchronized rotating action menu with liquid glass styling.
+- Rich attachments: photos, videos, audio voice notes with scrubbable waveforms, interactive polls, 
+  project file shares, and story reactions.
+- Read receipts (single tick, double tick, blue ticks) and live typing indicators.
+
+3.7. Push Notifications & FCM Dispatch Pipeline
+-----------------------------------------------
+- `NotificationDispatcher.kt` handles actor attribution, skips self-notifications, filters blocked 
+  users, verifies chat mute preferences, and sends high-priority FCM data messages.
+- Automatic purge of dead/unregistered tokens (`UNREGISTERED` error handling).
+
+3.8. Moderation, Content Filtering & User Safety
+------------------------------------------------
+- In-app report modal for reporting users, posts, comments, stories, and chat messages.
+- User-level blocking (`blockedUsers` list) instantly hiding content across feeds and chats.
+
+====================================================================================================
+4. FOUNDER'S NEXT.JS ADMIN PANEL ARCHITECTURE
+====================================================================================================
+
+4.1. Recommended Tech Stack & Dependencies
+------------------------------------------
+- Framework: Next.js 15 (App Router, React 19, Server Components & Server Actions).
+- Language: TypeScript 5.5+ (strict mode enabled).
+- Styling: Tailwind CSS v4 + `@tailwindcss/typography`.
+- UI Components: shadcn/ui (Radix UI primitives), Lucide React icons.
+- Database Clients:
+  * `firebase-admin` (v12+): Full server-side privileged read/write to Firestore & Firebase Auth.
+  * `@supabase/supabase-js` (v2+): Admin access for Supabase Storage bucket management.
+- Data Visualizations: Tremor (`@tremor/react`) or Recharts for KPI analytics and growth curves.
+- Data Tables: `@tanstack/react-table` for user lists, post catalogs, and moderation queues.
+- Authentication: NextAuth.js (Auth.js) or Firebase Auth with Admin Role verification.
+
+4.2. Complete Directory Structure (Next.js 15 App Router)
+---------------------------------------------------------
+```
+admin-panel/
+├── app/
+│   ├── (auth)/
+│   │   ├── login/
+│   │   │   └── page.tsx              # Admin secure login (MFA required)
+│   │   └── layout.tsx
+│   ├── admin/
+│   │   ├── layout.tsx                # Admin shell (Sidebar, Header, Breadcrumbs, Notifications)
+│   │   ├── page.tsx                  # Module 1: Executive Founder Dashboard
+│   │   ├── users/
+│   │   │   ├── page.tsx              # Module 2: User Catalog & Search Data Table
+│   │   │   └── [uid]/
+│   │   │       └── page.tsx          # User Detail View (Profile, Stats, Actions, Ban)
+│   │   ├── moderation/
+│   │   │   ├── page.tsx              # Module 3: Triage Moderation Queue
+│   │   │   └── [reportId]/
+│   │   │       └── page.tsx          # Report Detail & Action Resolution
+│   │   ├── posts/
+│   │   │   ├── page.tsx              # Module 4: Community Works Catalog
+│   │   │   └── [postId]/
+│   │   │       └── page.tsx          # Post Inspector, Remix Lineage, Comment Tree
+│   │   ├── flash/
+│   │   │   ├── page.tsx              # Module 5: Flash Reels Video Catalog
+│   │   │   └── [videoId]/
+│   │   │       └── page.tsx          # Video Player, Stats & Takedown
+│   │   ├── stories/
+│   │   │   ├── page.tsx              # Module 6: Live 24h Stories Monitor
+│   │   │   └── highlights/
+│   │   │       └── page.tsx          # Highlights Browser
+│   │   ├── comments/
+│   │   │   └── page.tsx              # Module 7: Threaded Comments Inspector & Spam Purge
+│   │   ├── chats/
+│   │   │   └── page.tsx              # Module 8: Chat Rooms & Messaging Oversight
+│   │   ├── broadcast/
+│   │   │   └── page.tsx              # Module 9: Push Notification Broadcast Studio
+│   │   ├── storage/
+│   │   │   └── page.tsx              # Module 10: Supabase / Firebase Storage Inspector
+│   │   ├── config/
+│   │   │   └── page.tsx              # Module 11: Remote Config & Feature Flags
+│   │   └── audit-logs/
+│   │       └── page.tsx              # Module 12: Immutable Security & Audit Log
+│   ├── api/
+│   │   ├── auth/
+│   │   │   └── [...nextauth]/route.ts
+│   │   ├── webhooks/
+│   │   │   └── route.ts              # Inbound telemetry webhooks
+│   │   └── export/
+│   │       └── route.ts              # CSV / JSON database report exporter
+├── actions/                          # Next.js Server Actions (Privileged)
+│   ├── users.ts                      # Ban, unban, verify, reset password, delete
+│   ├── moderation.ts                 # Resolve report, remove content, issue warning
+│   ├── posts.ts                      # Takedown post, toggle feature, edit counters
+│   ├── broadcast.ts                  # Send FCM broadcast push notifications
+│   └── config.ts                     # Update remote configuration & maintenance mode
+├── components/
+│   ├── ui/                           # shadcn/ui components (button, card, dialog, table...)
+│   ├── admin-sidebar.tsx             # Collapsible responsive navigation sidebar
+│   ├── admin-header.tsx              # Top bar with admin identity and quick search
+│   ├── kpi-card.tsx                  # Metric statistic card with % change delta
+│   ├── date-range-picker.tsx         # Date range filter for queries
+│   └── user-avatar.tsx               # Avatar with fallback and verified checkmark
+├── lib/
+│   ├── firebaseAdmin.ts              # Privileged Firebase Admin SDK initialization
+│   ├── supabaseAdmin.ts              # Privileged Supabase Admin Client
+│   ├── types.ts                      # Complete TypeScript interfaces for all Firestore models
+│   ├── auditLogger.ts                # Appends actions to `admin_audit_logs` collection
+│   └── utils.ts                      # Formatting, dates, number compacting (e.g. 1.2M)
+├── middleware.ts                     # Enforces Admin authentication and RBAC checks
+├── .env.local                        # Private service account keys
+├── next.config.ts                    # Next.js image domain configuration
+└── package.json
+```
+
+4.3. Role-Based Access Control (RBAC) Matrix
+--------------------------------------------
+Implement custom claims on Firebase Auth (`adminRole`) or manage in `admin_users` collection:
+- `FOUNDER_SUPERADMIN`: Full read/write/delete access across all 12 modules, financial metrics, 
+  permanent user deletion, and direct database execution.
+- `MODERATOR`: Access to Moderation Queue, Posts, Flash, Comments, and Stories. Can take down content, 
+  issue user warnings, and enact 24h suspensions. Cannot permanently delete users.
+- `SUPPORT_AGENT`: Access to User Management, Device Tokens, and Chat Metadata. Can trigger password 
+  resets and view user account status. Cannot delete content or view admin logs.
+- `CONTENT_CURATOR`: Access to Community Works, Featured Carousels, and Broadcast Notifications. 
+  Can feature posts and create announcements.
+
+4.4. Security, Environment Variables & Secret Configuration
+-----------------------------------------------------------
+Create `.env.local` with the following keys:
+```env
+# Next.js Application Secrets
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=generate_with_openssl_rand_base64_32
+
+# Firebase Admin SDK Service Account Credentials
+FIREBASE_PROJECT_ID=oscellion-chroma-prod
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@oscellion-chroma-prod.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC...\n-----END PRIVATE KEY-----\n"
+
+# Supabase Admin Service Key (Bypasses RLS for full storage inspection)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# Google Cloud & Gemini API Key (For automated admin content moderation)
+GEMINI_API_KEY=AIzaSy...
+
+# Cloudinary Admin API (For Flash video inspection & deletion)
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=1234567890
+CLOUDINARY_API_SECRET=abcdefghijklmnopqrstuvwxyz
+```
+
+====================================================================================================
+5. DETAILED ADMIN PANEL PAGES & DASHBOARD MODULES
+====================================================================================================
+
+5.1. Module 1: Executive Founder Dashboard (`app/admin/page.tsx`)
+-----------------------------------------------------------------
+Features:
+- Real-time KPI Metric Cards:
+  * Total Registered Users (count of `users` collection) + daily growth rate %.
+  * Active Users Today (DAU): Count of users where `lastSeen >= today_midnight`.
+  * Total Masterworks & Photos: Count of `community_works`.
+  * Total Flash Reels: Count of `flash_videos`.
+  * Total 24h Stories Live: Count of active stories where `expiresAt > Date.now()`.
+  * Pending Safety Reports: Count of `reports` where `status == "pending"`.
+- Real-Time Interactive Charts:
+  * 30-Day User Acquisition & Sign-Up Curve (Split by Google OAuth, Apple, Custom Handle).
+  * 24-Hour Story & Feed Interaction Velocity (Likes, Comments, Shares, Downloads).
+  * Storage Usage breakdown (Avatars, Videos, Project JSON files).
+- Live Real-Time Activity Feed:
+  * Firestore snapshot listener displaying recent signups, viral posts hitting 100+ likes, and new reports.
+
+5.2. Module 2: User Management & CRM (`app/admin/users/page.tsx`)
+-----------------------------------------------------------------
+Features:
+- Data Table with column filters and debounced search:
+  * Search by UID, `@username`, Display Name, or Email.
+  * Filter by Role (Creator, Verified, Admin), Gender, Age (13-17, 18-24, 25+), Account Privacy.
+- User Profile Drawer / Inspector (`app/admin/users/[uid]/page.tsx`):
+  * Profile card showing avatar, banner, bio, interests, location, and social links.
+  * Security & Auth overview: creation date, last seen date, linked Google ID, public key status.
+  * Telemetry counters: followers, following, posts, flash reels, stories.
+  * Device tokens: registered FCM tokens and active push channels.
+- Actions:
+  * Toggle Blue Verified Badge (`users/{uid}.verified = true/false`).
+  * Change Role ("Creator", "VIP", "Moderator", "Admin").
+  * Force Password Reset (Sends password reset email via Firebase Auth).
+  * Ban User (Sets `isBanned = true`, revokes Firebase refresh tokens via `auth.revokeRefreshTokens(uid)`).
+  * Unban User (Restores account access).
+  * Export User Data Archive (GDPR compliance JSON bundle).
+  * Delete Account (Atomic cascade removing `users/{uid}`, `usernames/{handle}`, and posts).
+
+5.3. Module 3: Content Moderation & Takedown Queue (`app/admin/moderation/page.tsx`)
+------------------------------------------------------------------------------------
+Features:
+- Filter reports by status ("pending", "investigating", "resolved", "dismissed") and target type.
+- Triage Grid showing:
+  * Reporter information and timestamp.
+  * Reason code ("Harassment", "Nudity", "Copyright", "Spam").
+  * Accused creator card and offending content preview (post thumbnail, comment text, reel video).
+- Triage Actions:
+  * "Dismiss Report": Marks report as dismissed with notes.
+  * "Issue Creator Warning": Sends a high-priority system notification to the accused user.
+  * "Takedown Content": Removes the post/reel/comment from public feeds (`isTakedown = true` or delete).
+  * "Suspend Creator 24 Hours": Temporarily locks account.
+  * "Permanent Ban & IP Block": Bans UID and adds device token to blacklist.
+- Automated Audit Trail: Automatically writes resolution details and admin ID to `reports/{reportId}`.
+
+5.4. Module 4: Posts & Masterworks Catalog (`app/admin/posts/page.tsx`)
+-----------------------------------------------------------------------
+Features:
+- Visual Grid & Data Table for `community_works`:
+  * Filter by type ("work" gradient, "image" photo, "video").
+  * Filter by aspect ratio ("1:1", "4:3", "9:16", "16:9").
+  * Search by title, tags, or author handle.
+- Post Inspector Modal:
+  * Inspect gradient layers JSON (`layersJson` preview).
+  * View remix lineage (`remixedFromPostId` graph showing who remixed from whom).
+  * View real-time counters (Likes, Remixes, Downloads, Shares, Saves, Comments).
+- Controls:
+  * "Feature Post" (Toggles `isFeatured = true` for home explore hero banner).
+  * "Edit Privacy Toggles" (Force turn on/off comments or remixing).
+  * "Archive / Unarchive" post.
+  * "Permanent Delete" (Removes document and calls Supabase Storage to delete media).
+
+5.5. Module 5: Flash Reels Manager (`app/admin/flash/page.tsx`)
+---------------------------------------------------------------
+Features:
+- Gallery of short-form video reels with built-in HTML5 video player.
+- Display video duration, aspect ratio, Cloudinary/Supabase CDN URL, and poster frames.
+- Metrics audit: watch count, like count, comment count, share count.
+- Action: Immediate takedown for copyright or inappropriate content with creator notification.
+
+5.6. Module 6: Stories & Highlights Monitor (`app/admin/stories/page.tsx`)
+--------------------------------------------------------------------------
+Features:
+- Real-time monitor of all active stories currently live in the network (`expiresAt > Date.now()`).
+- Display creator avatar, text formatting, background gradient, and remaining time before expiration.
+- Story Analytics Inspector: View list of users who watched the story and hourly view distribution.
+- Highlights Browser (`app/admin/stories/highlights/page.tsx`):
+  * Browse all permanent profile highlights per user.
+  * Inspect story collections grouped within each highlight bubble.
+  * Action: Remove violating story from user's permanent highlight.
+
+5.7. Module 7: Threaded Comments & Community Discussions (`app/admin/comments/page.tsx`)
+----------------------------------------------------------------------------------------
+Features:
+- Nested Tree Viewer: Reconstructs root comments and branched reply trees.
+- Displays pinned comments (`isPinned = true`) and creator-hearted comments (`isCreatorHearted = true`).
+- Spam Detector: Highlights repetitive text, blacklisted URLs, or suspicious patterns.
+- Bulk Actions: Select multiple comments and purge them in a single batch operation.
+
+5.8. Module 8: Chat & Messaging Oversight (`app/admin/chats/page.tsx`)
+----------------------------------------------------------------------
+Features:
+- Overview of all 1:1 and Group chat rooms (Participant count, creation time, message frequency).
+- Group Chat Inspector: Edit group title, description, or remove unauthorized members.
+- Encryption Health Check: Validates that messages contain valid IVs and RSA-encrypted AES keys.
+- Chat Report Escalations: If a user reports a chat, inspects reported message snippet for threats.
+
+5.9. Module 9: Push Notification Broadcast Studio (`app/admin/broadcast/page.tsx`)
+-----------------------------------------------------------------------------------
+Features:
+- Form to compose network-wide or segmented push notifications:
+  * Title & Body input.
+  * Target Audience Selector:
+    - "All Users" (Broadcast to all active device tokens).
+    - "Segment by Interest" (e.g. users interested in "Color Grading" or "Motion Graphics").
+    - "Segment by Activity" (e.g. inactive for > 7 days).
+    - "Specific User" (Single UID targeting).
+  * Deep-Link Action Target: Route user to a specific post (`post:{id}`), reel (`flash:{id}`), 
+    or custom URL.
+- Live preview showing how the notification renders on Samsung One UI and Apple iOS lock screens.
+- Server Action executes `admin.messaging().sendEachForMulticast(message)` in batches of 500.
+
+5.10. Module 10: Storage & Asset Browser (`app/admin/storage/page.tsx`)
+-----------------------------------------------------------------------
+Features:
+- Connects to Supabase Storage and Firebase Storage:
+  * Browse `avatars`, `banners`, `posts`, and `flash_videos` buckets.
+  * Displays file size, MIME type, upload timestamp, and public URL.
+- Orphaned Media Cleaner: Scans storage buckets and identifies files that are no longer linked 
+  to any existing user profile or post document in Firestore, with 1-click safe garbage collection.
+
+5.11. Module 11: Remote Config & Feature Flags (`app/admin/config/page.tsx`)
+----------------------------------------------------------------------------
+Features:
+- Managed in Firestore document `system/config` or Firebase Remote Config:
+  * `maintenanceMode` (boolean): Shows maintenance screen on mobile client.
+  * `minAppVersion` (string, e.g. "1.2"): Forces client update if installed version is outdated.
+  * `aiGenerationEnabled` (boolean): Toggles Gemini AI features.
+  * `e2eeMandatory` (boolean): Enforces end-to-end encryption for all new chat rooms.
+  * `featuredCategoryTags` (array<string>): Controls discover tab categories.
+
+5.12. Module 12: Immutable Security & Audit Logs (`app/admin/audit-logs/page.tsx`)
+----------------------------------------------------------------------------------
+Features:
+- Non-deletable log recording every administrative action taken in the admin panel.
+- Log Schema:
+  * `id`: Unique log UUID.
+  * `adminEmail`: Email of the operator who performed the action.
+  * `adminRole`: Role of operator.
+  * `action`: Action verb (e.g. "USER_BAN", "POST_TAKEDOWN", "BROADCAST_SENT").
+  * `targetId`: Affected user UID or post ID.
+  * `metadata`: JSON payload showing state before and state after (diff).
+  * `ipAddress`: Client IP address.
+  * `timestamp`: Epoch milliseconds.
+
+====================================================================================================
+6. COMPLETE TYPESCRIPT DATA MODELS & SCHEMAS FOR NEXT.JS
+====================================================================================================
+Save the following file in your Next.js project as `lib/types.ts`:
+
+```typescript
+// ============================================================================
+// CHROMASTUDIO / OSCELLION — MASTER TYPESCRIPT DEFINITIONS
+// ============================================================================
+
+export interface UserProfile {
+  uid: string;
+  username: string;
+  displayName: string;
+  email: string;
+  customEmail: string;
+  googleId?: string;
+  bio?: string;
+  avatarUrl?: string;
+  bannerUrl?: string;
+  bannerWorkId?: string;
+  dob?: number | null;
+  dateOfBirth?: any;
+  gender: 'Male' | 'Female' | 'Non-binary' | 'Private';
+  role: 'Creator' | 'Admin' | 'Moderator' | 'VIP';
+  verified: boolean;
+  online: boolean;
+  lastSeen?: number | null;
+  location?: string;
+  officeLocation?: string;
+  homeLocation?: string;
+  countryLocation?: string;
+  showLocation: boolean;
+  socialLinks: Record<string, string>;
+  followersCount: number;
+  followingCount: number;
+  interests: string[];
+  statusEmoji?: string | null;
+  statusText?: string | null;
+  agreedToTermsAt?: number | null;
+  createdAt: number | any;
+  isOnboarded: boolean;
+  publicKey?: string;
+  isPrivateAccount: boolean;
+  allowTagging: boolean;
+  showOnlineStatus: boolean;
+  pushNotificationsEnabled: boolean;
+  emailNotificationsEnabled: boolean;
+  quietModeEnabled: boolean;
+  unrecognizedLoginsEnabled: boolean;
+  contentTags: string[];
+  dataVisibility: Record<string, string>;
+  onlyFriends: string[];
+  fcmToken?: string;
+  blockedUsers?: string[];
+  isBanned?: boolean;
+  banReason?: string;
+  bannedAt?: number;
+}
+
+export interface DiscoverPost {
+  id: string;
+  creatorId: string;
+  authorUsername: string;
+  authorDisplayName: string;
+  authorAvatarUrl: string;
+  authorVerified: boolean;
+  title: string;
+  description: string;
+  aspectRatio: '1:1' | '4:3' | '9:16' | '16:9';
+  postType: 'work' | 'image' | 'video';
+  imageUrl?: string | null;
+  imageUrls: string[];
+  videoUrl?: string | null;
+  thumbnailUrl?: string | null;
+  jsonUrl?: string;
+  workUrls: string[];
+  likesCount: number;
+  likedBy: string[];
+  remixCount: number;
+  remixedBy: string[];
+  downloadCount: number;
+  downloadedBy: string[];
+  shareCount: number;
+  sharedBy: string[];
+  saveCount: number;
+  savedBy: string[];
+  commentsCount: number;
+  commentCount: number;
+  tags: string[];
+  mentions: string[];
+  trendingTag?: string | null;
+  timestamp: number;
+  hideLikesCount: boolean;
+  hideSharesCount: boolean;
+  hideRemixesCount: boolean;
+  hideDownloadsCount: boolean;
+  hideSavesCount: boolean;
+  turnOffComments: boolean;
+  turnOffRemix: boolean;
+  remixedFromPostId?: string | null;
+  remixedFromAuthorId?: string | null;
+  remixedFromAuthorUsername?: string | null;
+  remixedFromAuthorDisplayName?: string | null;
+  remixedFromAuthorAvatar?: string | null;
+  remixedFromAuthorVerified?: boolean;
+  archived: boolean;
+  isFeatured?: boolean;
+  isTakedown?: boolean;
+  takedownReason?: string;
+}
+
+export interface FlashVideo {
+  id: string;
+  creatorId: string;
+  authorUsername: string;
+  authorDisplayName: string;
+  authorAvatarUrl: string;
+  authorVerified: boolean;
+  videoUrl: string;
+  thumbnailUrl: string;
+  caption: string;
+  hashtags: string[];
+  mentions: string[];
+  likesCount: number;
+  likedBy: string[];
+  commentCount: number;
+  remixCount: number;
+  remixedBy: string[];
+  shareCount: number;
+  sharedBy: string[];
+  saveCount: number;
+  savedBy: string[];
+  duration: number;
+  remixedFromPostId?: string | null;
+  remixedFromAuthorUsername?: string | null;
+  timestamp: number;
+  hideLikesCount: boolean;
+  turnOffComments: boolean;
+  turnOffRemix: boolean;
+  archived: boolean;
+  isTakedown?: boolean;
+}
+
+export interface FlashComment {
+  id: string;
+  videoId: string;
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string;
+  verified: boolean;
+  text: string;
+  timestamp: number;
+  likesCount: number;
+  likedBy: string[];
+  dislikedBy: string[];
+  isPinned: boolean;
+  isCreatorHearted: boolean;
+  replyToCommentId?: string | null;
+  replyToUsername?: string | null;
+  replyCount: number;
+  replyFlashVideoUrl?: string | null;
+  isSpam?: boolean;
+}
+
+export interface Story {
+  id: string;
+  userId: string;
+  mediaUrl?: string;
+  textContent?: string;
+  textFormat: string;
+  backgroundColor?: string;
+  audienceType: 'public' | 'followers' | 'custom';
+  customAudienceIds: string[];
+  timestamp: number;
+  expiresAt: number;
+  views: number;
+  likes: number;
+  shares: number;
+  viewedBy: string[];
+  likedBy: string[];
+  isHighlight: boolean;
+  highlightId?: string;
+  highlightTitle?: string;
+  highlightCoverUrl?: string;
+}
+
+export interface ChatRoom {
+  id: string;
+  name?: string | null;
+  isGroup: boolean;
+  avatarUrl?: string | null;
+  participants: string[];
+  admins: string[];
+  createdBy?: string | null;
+  groupDescription?: string | null;
+  lastMessage: string;
+  lastSender?: string | null;
+  lastMessageTime: number;
+  lastMessageId?: string | null;
+  lastMessageIsRead: boolean;
+  lastMessageIsDelivered: boolean;
+  unreadCount: Record<string, number>;
+  favoritedBy: string[];
+  archivedBy: string[];
+  deletedBy: string[];
+  deletedAt: Record<string, number>;
+  pinnedMessageId?: string | null;
+  pinnedMessageText?: string | null;
+  pinnedBy?: string | null;
+  pinnedAt: number;
+  onlyAdminsCanPost: boolean;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  text: string;
+  timestamp: number;
+  isRead: boolean;
+  isDelivered: boolean;
+  imageUrl?: string | null;
+  mediaUrl?: string | null;
+  mediaType?: string | null;
+  workId?: string | null;
+  messageType: 'text' | 'image' | 'video' | 'audio' | 'system' | 'poll' | 'story_reply' | 'flash_share';
+  iv?: string;
+  encryptedAesKeys?: Record<string, string>;
+  reactions?: Record<string, string>;
+  durationSeconds?: number | null;
+  replyToMessageId?: string | null;
+  pollVotes?: Record<string, string>;
+  isEdited: boolean;
+  deletedFor: string[];
+  isPollClosed: boolean;
+  isForwarded: boolean;
+  storyId?: string | null;
+  flashVideoId?: string | null;
+}
+
+export interface ModerationReport {
+  id: string;
+  reporterId: string;
+  reporterUsername: string;
+  targetType: 'user' | 'post' | 'flash' | 'story' | 'comment' | 'chat_message';
+  targetId: string;
+  targetAuthorId: string;
+  targetAuthorUsername?: string;
+  reason: 'Spam' | 'Harassment' | 'Nudity' | 'Violence' | 'Copyright' | 'Other';
+  description?: string;
+  evidenceUrl?: string;
+  status: 'pending' | 'investigating' | 'resolved' | 'dismissed';
+  resolutionAction?: 'none' | 'warned' | 'content_removed' | 'suspended_24h' | 'banned_permanent';
+  resolvedBy?: string;
+  resolvedAt?: number;
+  createdAt: number;
+}
+
+export interface AdminAuditLog {
+  id: string;
+  adminEmail: string;
+  adminRole: string;
+  action: string;
+  targetId: string;
+  metadata: Record<string, any>;
+  ipAddress?: string;
+  timestamp: number;
+}
+```
+
+====================================================================================================
+7. PRODUCTION-READY CODE SNIPPETS & SERVER ACTIONS
+====================================================================================================
+
+7.1. Firebase Admin SDK Initializer (`lib/firebaseAdmin.ts`)
+------------------------------------------------------------
+```typescript
+import * as admin from 'firebase-admin';
+
+if (!admin.apps.length) {
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+  if (projectId && clientEmail && privateKey) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      }),
+    });
+  } else {
+    // Falls back to Google Application Default Credentials in GCP environment
+    admin.initializeApp();
+  }
+}
+
+export const adminDb = admin.firestore();
+export const adminAuth = admin.auth();
+export const adminMessaging = admin.messaging();
+```
+
+7.2. User Management Server Actions (`actions/users.ts`)
+--------------------------------------------------------
+```typescript
+'use server';
+
+import { adminDb, adminAuth } from '@/lib/firebaseAdmin';
+import { logAdminAction } from '@/lib/auditLogger';
+import { revalidatePath } from 'next/cache';
+
+/**
+ * Toggle user verified creator checkmark badge.
+ */
+export async function toggleVerifiedBadge(uid: string, verified: boolean, adminEmail: string) {
+  await adminDb.collection('users').document(uid).update({ verified });
+  await logAdminAction(adminEmail, 'TOGGLE_VERIFIED', uid, { verified });
+  revalidatePath(`/admin/users/${uid}`);
+  revalidatePath('/admin/users');
+  return { success: true };
+}
+
+/**
+ * Ban user account and revoke all authentication tokens.
+ */
+export async function banUser(uid: string, reason: string, adminEmail: string) {
+  // 1. Mark banned in Firestore profile
+  await adminDb.collection('users').document(uid).update({
+    isBanned: true,
+    banReason: reason,
+    bannedAt: Date.now(),
+  });
+
+  // 2. Revoke Firebase Auth tokens immediately
+  await adminAuth.revokeRefreshTokens(uid);
+
+  // 3. Log administrative audit trail
+  await logAdminAction(adminEmail, 'BAN_USER', uid, { reason });
+  revalidatePath(`/admin/users/${uid}`);
+  return { success: true };
+}
+
+/**
+ * Unban user account.
+ */
+export async function unbanUser(uid: string, adminEmail: string) {
+  await adminDb.collection('users').document(uid).update({
+    isBanned: false,
+    banReason: null,
+    bannedAt: null,
+  });
+  await logAdminAction(adminEmail, 'UNBAN_USER', uid, {});
+  revalidatePath(`/admin/users/${uid}`);
+  return { success: true };
+}
+```
+
+7.3. Moderation Server Actions (`actions/moderation.ts`)
+--------------------------------------------------------
+```typescript
+'use server';
+
+import { adminDb } from '@/lib/firebaseAdmin';
+import { logAdminAction } from '@/lib/auditLogger';
+import { banUser } from './users';
+import { revalidatePath } from 'next/cache';
+
+export async function resolveReport(
+  reportId: string,
+  action: 'none' | 'warned' | 'content_removed' | 'suspended_24h' | 'banned_permanent',
+  adminEmail: string
+) {
+  const reportRef = adminDb.collection('reports').doc(reportId);
+  const reportSnap = await reportRef.get();
+  if (!reportSnap.exists) throw new Error('Report not found');
+
+  const report = reportSnap.data()!;
+
+  // Execute resolution action
+  if (action === 'content_removed') {
+    if (report.targetType === 'post') {
+      await adminDb.collection('community_works').doc(report.targetId).update({
+        isTakedown: true,
+        takedownReason: `Violated terms: ${report.reason}`,
+      });
+    } else if (report.targetType === 'flash') {
+      await adminDb.collection('flash_videos').doc(report.targetId).update({
+        isTakedown: true,
+      });
+    } else if (report.targetType === 'comment') {
+      await adminDb.collection('flash_comments').doc(report.targetId).delete();
+    }
+  } else if (action === 'banned_permanent') {
+    await banUser(report.targetAuthorId, `Banned via Report: ${report.reason}`, adminEmail);
+  }
+
+  // Update report state
+  await reportRef.update({
+    status: 'resolved',
+    resolutionAction: action,
+    resolvedBy: adminEmail,
+    resolvedAt: Date.now(),
+  });
+
+  await logAdminAction(adminEmail, 'RESOLVE_REPORT', reportId, { action, targetId: report.targetId });
+  revalidatePath('/admin/moderation');
+  return { success: true };
+}
+```
+
+7.4. Broadcast Notification Server Action (`actions/broadcast.ts`)
+------------------------------------------------------------------
+```typescript
+'use server';
+
+import { adminDb, adminMessaging } from '@/lib/firebaseAdmin';
+import { logAdminAction } from '@/lib/auditLogger';
+
+export async function sendBroadcastPush(
+  title: string,
+  body: string,
+  targetAudience: 'ALL' | string, // 'ALL' or specific interest domain e.g. "Color Grading"
+  targetDeepLink: string,
+  adminEmail: string
+) {
+  // Query users collection for device tokens
+  let query: FirebaseFirestore.Query = adminDb.collection('users');
+  if (targetAudience !== 'ALL') {
+    query = query.where('interests', 'array-contains', targetAudience);
+  }
+
+  const snapshot = await query.get();
+  const tokens: string[] = [];
+
+  snapshot.forEach((doc) => {
+    const data = doc.data();
+    if (data.fcmToken && data.pushNotificationsEnabled !== false) {
+      tokens.push(data.fcmToken);
+    }
+  });
+
+  if (tokens.length === 0) {
+    return { success: false, message: 'No registered device tokens found for this segment.' };
+  }
+
+  // FCM multicast chunking (max 500 per batch)
+  const batchSize = 500;
+  let successCount = 0;
+  let failureCount = 0;
+
+  for (let i = 0; i < tokens.length; i += batchSize) {
+    const chunk = tokens.slice(i, i + batchSize);
+    const response = await adminMessaging.sendEachForMulticast({
+      tokens: chunk,
+      notification: { title, body },
+      data: {
+        click_action: 'FLUTTER_NOTIFICATION_CLICK',
+        targetId: targetDeepLink,
+        source: 'CHROMA_BROADCAST',
+      },
+    });
+    successCount += response.successCount;
+    failureCount += response.failureCount;
+  }
+
+  await logAdminAction(adminEmail, 'SEND_BROADCAST', 'GLOBAL', {
+    title,
+    targetAudience,
+    successCount,
+    failureCount,
+  });
+
+  return { success: true, sent: successCount, failed: failureCount };
+}
+```
+
+====================================================================================================
+8. DEPLOYMENT & PRODUCTION RUNBOOK (VERCEL / DOCKER / GCP)
+====================================================================================================
+1. Deployment on Vercel:
+   - Connect GitHub repository to Vercel.
+   - Configure Environment Variables (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, etc.).
+   - Ensure `FIREBASE_PRIVATE_KEY` has proper newline escaping.
+   - Set Build Command: `next build`.
+   - Set Output Directory: `.next`.
+
+2. IP Whitelisting & VPN:
+   - For enterprise-grade security, restrict the `/admin` path via Next.js Middleware or Cloudflare 
+     Zero Trust / Access to company IP addresses or VPN subnets only.
+
+3. Monitoring & Alerting:
+   - Integrate Sentry for Next.js error tracking on server actions.
+   - Configure a webhook alerting the founder on Slack / Discord whenever a new high-severity report 
+     is submitted or an admin performs a user ban.
+
+====================================================================================================
+END OF FILE — admin_panel.txt
+====================================================================================================

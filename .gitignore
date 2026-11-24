@@ -39,6 +39,7 @@ __pycache__/
 !ml_safety/**/*.py
 *.txt
 !ml_safety/*.txt
+!admin_panel.txt
 
 # Temporary & Scratch files
 temp_*/
