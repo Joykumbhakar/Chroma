@@ -246,7 +246,7 @@ fun WelcomeScreen(
                     .fillMaxWidth()
             ) {
                 Image(
-                    painter = painterResource(R.drawable.hero_oscellion_auth),
+                    painter = painterResource(if (colors.isDark) R.drawable.hero_oscellion_auth else R.drawable.hero_oscellion_auth_light),
                     contentDescription = "Oscellion Hero Character",
                     contentScale = ContentScale.FillWidth,
                     modifier = Modifier

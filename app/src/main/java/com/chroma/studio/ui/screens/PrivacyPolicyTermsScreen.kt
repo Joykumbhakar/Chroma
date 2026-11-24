@@ -126,7 +126,7 @@ fun PrivacyPolicyTermsScreen(
                 text = if (isFirstLaunch) (if (hasAgreed) "Accept" else "") else "Done",
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0381FE),
+                color = colors.primary,
                 fontFamily = InterFontFamily,
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
@@ -159,7 +159,7 @@ fun PrivacyPolicyTermsScreen(
                         .height(185.dp)
                 ) {
                     Image(
-                        painter = painterResource(R.drawable.hero_privacy_shield),
+                        painter = painterResource(if (colors.isDark) R.drawable.hero_privacy_shield else R.drawable.hero_privacy_shield_light),
                         contentDescription = "Privacy Shield",
                         contentScale = ContentScale.FillWidth,
                         modifier = Modifier
@@ -167,7 +167,7 @@ fun PrivacyPolicyTermsScreen(
                             .height(185.dp)
                     )
 
-                    // Smooth bottom fade into black canvas
+                    // Smooth bottom fade into canvas
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -177,8 +177,8 @@ fun PrivacyPolicyTermsScreen(
                                 Brush.verticalGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.Black.copy(alpha = 0.5f),
-                                        Color.Black
+                                        colors.bg.copy(alpha = 0.5f),
+                                        colors.bg
                                     )
                                 )
                             )
@@ -198,7 +198,7 @@ fun PrivacyPolicyTermsScreen(
                         text = "Your privacy. Your choice.",
                         fontSize = 25.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = colors.textMain,
                         textAlign = TextAlign.Center,
                         letterSpacing = (-0.4).sp,
                         fontFamily = InterFontFamily
@@ -209,7 +209,7 @@ fun PrivacyPolicyTermsScreen(
                     Text(
                         text = "This Privacy Policy describes what information we collect, why we use it, when we share it, and the choices you have.",
                         fontSize = 13.5.sp,
-                        color = Color(0xFF94A3B8),
+                        color = colors.textMuted,
                         textAlign = TextAlign.Center,
                         lineHeight = 19.5.sp,
                         fontFamily = InterFontFamily
@@ -225,7 +225,7 @@ fun PrivacyPolicyTermsScreen(
                     text = "At a glance",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = colors.textMain,
                     fontFamily = InterFontFamily,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
                 )
@@ -238,8 +238,8 @@ fun PrivacyPolicyTermsScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF111215))
-                        .border(1.dp, Color(0xFF22242B), RoundedCornerShape(20.dp))
+                        .background(colors.cardSurface)
+                        .border(1.dp, colors.cardBorder, RoundedCornerShape(20.dp))
                 ) {
                     // Item 1: What we collect
                     GlanceRowItem(
@@ -248,7 +248,7 @@ fun PrivacyPolicyTermsScreen(
                         subtitle = "Basic info, content and usage data."
                     )
 
-                    HorizontalDivider(color = Color(0xFF1D1F26), thickness = 0.8.dp, modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(color = colors.cardBorderSubtle, thickness = 0.8.dp, modifier = Modifier.padding(horizontal = 16.dp))
 
                     // Item 2: How we use it
                     GlanceRowItem(
@@ -257,7 +257,7 @@ fun PrivacyPolicyTermsScreen(
                         subtitle = "To improve your experience."
                     )
 
-                    HorizontalDivider(color = Color(0xFF1D1F26), thickness = 0.8.dp, modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(color = colors.cardBorderSubtle, thickness = 0.8.dp, modifier = Modifier.padding(horizontal = 16.dp))
 
                     // Item 3: Your choices
                     GlanceRowItem(
@@ -276,7 +276,7 @@ fun PrivacyPolicyTermsScreen(
                     text = "Explore the policy",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = colors.textMain,
                     fontFamily = InterFontFamily,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
                 )
@@ -289,8 +289,8 @@ fun PrivacyPolicyTermsScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF111215))
-                        .border(1.dp, Color(0xFF22242B), RoundedCornerShape(20.dp))
+                        .background(colors.cardSurface)
+                        .border(1.dp, colors.cardBorder, RoundedCornerShape(20.dp))
                 ) {
                     policyItems.forEachIndexed { index, item ->
                         ExplorePolicyRowItem(
@@ -300,7 +300,7 @@ fun PrivacyPolicyTermsScreen(
 
                         if (index < policyItems.lastIndex) {
                             HorizontalDivider(
-                                color = Color(0xFF1D1F26),
+                                color = colors.cardBorderSubtle,
                                 thickness = 0.8.dp,
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
@@ -318,7 +318,7 @@ fun PrivacyPolicyTermsScreen(
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
-            // Official Checkbox Button in PURE WHITE (as requested)
+            // Checkbox Button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -335,8 +335,8 @@ fun PrivacyPolicyTermsScreen(
                     checked = hasAgreed,
                     onCheckedChange = { hasAgreed = it },
                     size = 22.dp,
-                    checkedColor = Color.White,
-                    uncheckedColor = Color(0xFF64748B)
+                    checkedColor = colors.primary,
+                    uncheckedColor = colors.textMuted
                 )
 
                 Spacer(Modifier.width(12.dp))
@@ -345,7 +345,7 @@ fun PrivacyPolicyTermsScreen(
                     text = "I have read and agree to the Privacy Policy",
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (hasAgreed) Color.White else Color(0xFF94A3B8),
+                    color = if (hasAgreed) colors.textMain else colors.textMuted,
                     fontFamily = InterFontFamily,
                     modifier = Modifier.weight(1f)
                 )
@@ -372,12 +372,12 @@ fun PrivacyPolicyTermsScreen(
                     }
                     .clip(CircleShape)
                     .background(
-                        if (hasAgreed) Color.White
-                        else Color(0xFF16171C)
+                        if (hasAgreed) colors.primary
+                        else colors.cardSurfaceElevated
                     )
                     .border(
                         1.dp,
-                        if (hasAgreed) Color.Transparent else Color(0xFF32343E),
+                        if (hasAgreed) Color.Transparent else colors.cardBorder,
                         CircleShape
                     )
                     .clickable(
@@ -400,7 +400,7 @@ fun PrivacyPolicyTermsScreen(
                     Icon(
                         imageVector = Lucide.ShieldCheck,
                         contentDescription = null,
-                        tint = if (hasAgreed) Color(0xFF0A0A0C) else Color.White,
+                        tint = if (hasAgreed) colors.onPrimary else colors.textMain,
                         modifier = Modifier.size(19.dp)
                     )
 
@@ -410,7 +410,7 @@ fun PrivacyPolicyTermsScreen(
                         text = if (isFirstLaunch) "Accept & Continue" else "Manage your privacy settings",
                         fontSize = 14.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (hasAgreed) Color(0xFF0A0A0C) else Color.White,
+                        color = if (hasAgreed) colors.onPrimary else colors.textMain,
                         fontFamily = InterFontFamily
                     )
                 }
@@ -435,7 +435,7 @@ fun PrivacyPolicyTermsScreen(
                     text = "Read full policy →",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF94A3B8),
+                    color = colors.textMuted,
                     fontFamily = InterFontFamily
                 )
             }
@@ -447,8 +447,8 @@ fun PrivacyPolicyTermsScreen(
     selectedSectionDetail?.let { detail ->
         ModalBottomSheet(
             onDismissRequest = { selectedSectionDetail = null },
-            containerColor = Color(0xFF121317),
-            contentColor = Color.White,
+            containerColor = if (colors.isDark) Color(0xFF121317) else Color.White,
+            contentColor = colors.textMain,
             dragHandle = {
                 Box(
                     modifier = Modifier
@@ -456,7 +456,7 @@ fun PrivacyPolicyTermsScreen(
                         .width(36.dp)
                         .height(4.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF33353E))
+                        .background(colors.cardBorder)
                 )
             }
         ) {
@@ -473,10 +473,10 @@ fun PrivacyPolicyTermsScreen(
                         modifier = Modifier
                             .size(42.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF1C1D22)),
+                            .background(colors.cardSurfaceElevated),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(detail.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Icon(detail.icon, contentDescription = null, tint = colors.textMain, modifier = Modifier.size(20.dp))
                     }
 
                     Spacer(Modifier.width(14.dp))
@@ -485,7 +485,7 @@ fun PrivacyPolicyTermsScreen(
                         text = detail.title,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = colors.textMain,
                         fontFamily = InterFontFamily
                     )
                 }
@@ -495,7 +495,7 @@ fun PrivacyPolicyTermsScreen(
                 Text(
                     text = detail.summary,
                     fontSize = 14.5.sp,
-                    color = Color(0xFFCBD5E1),
+                    color = colors.textMuted,
                     lineHeight = 22.sp,
                     fontFamily = InterFontFamily
                 )
@@ -504,7 +504,7 @@ fun PrivacyPolicyTermsScreen(
 
                 Button(
                     onClick = { selectedSectionDetail = null },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary),
                     shape = CircleShape,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -520,8 +520,8 @@ fun PrivacyPolicyTermsScreen(
     if (showFullPolicySheet) {
         ModalBottomSheet(
             onDismissRequest = { showFullPolicySheet = false },
-            containerColor = Color(0xFF101114),
-            contentColor = Color.White,
+            containerColor = if (colors.isDark) Color(0xFF101114) else Color.White,
+            contentColor = colors.textMain,
             dragHandle = {
                 Box(
                     modifier = Modifier
@@ -529,7 +529,7 @@ fun PrivacyPolicyTermsScreen(
                         .width(36.dp)
                         .height(4.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF33353E))
+                        .background(colors.cardBorder)
                 )
             }
         ) {
@@ -544,14 +544,14 @@ fun PrivacyPolicyTermsScreen(
                         text = "Complete Privacy Policy",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = colors.textMain,
                         fontFamily = InterFontFamily
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
                         text = "Effective Date: Nov 23, 2026",
                         fontSize = 12.sp,
-                        color = Color(0xFF8E8E93),
+                        color = colors.textMuted,
                         fontFamily = InterFontFamily
                     )
                     Spacer(Modifier.height(18.dp))
@@ -564,20 +564,20 @@ fun PrivacyPolicyTermsScreen(
                             text = item.title,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = colors.textMain,
                             fontFamily = InterFontFamily
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = item.summary,
                             fontSize = 13.5.sp,
-                            color = Color(0xFF94A3B8),
+                            color = colors.textMuted,
                             lineHeight = 19.sp,
                             fontFamily = InterFontFamily
                         )
                     }
                     if (i < policyItems.lastIndex) {
-                        HorizontalDivider(color = Color(0xFF1F2026), thickness = 0.8.dp, modifier = Modifier.padding(vertical = 6.dp))
+                        HorizontalDivider(color = colors.cardBorderSubtle, thickness = 0.8.dp, modifier = Modifier.padding(vertical = 6.dp))
                     }
                 }
 
@@ -585,7 +585,7 @@ fun PrivacyPolicyTermsScreen(
                     Spacer(Modifier.height(16.dp))
                     Button(
                         onClick = { showFullPolicySheet = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary),
                         shape = CircleShape,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -611,6 +611,7 @@ private fun GlanceRowItem(
     title: String,
     subtitle: String
 ) {
+    val colors = LocalOscellionColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -621,13 +622,13 @@ private fun GlanceRowItem(
             modifier = Modifier
                 .size(42.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF1B1C22)),
+                .background(colors.cardSurfaceElevated),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color.White,
+                tint = colors.textMain,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -639,14 +640,14 @@ private fun GlanceRowItem(
                 text = title,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = colors.textMain,
                 fontFamily = InterFontFamily
             )
             Spacer(Modifier.height(2.dp))
             Text(
                 text = subtitle,
                 fontSize = 12.5.sp,
-                color = Color(0xFF94A3B8),
+                color = colors.textMuted,
                 fontFamily = InterFontFamily
             )
         }
@@ -658,6 +659,7 @@ private fun ExplorePolicyRowItem(
     item: PolicySectionItem,
     onClick: () -> Unit
 ) {
+    val colors = LocalOscellionColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -672,7 +674,7 @@ private fun ExplorePolicyRowItem(
         Icon(
             imageVector = item.icon,
             contentDescription = null,
-            tint = Color(0xFFE2E8F0),
+            tint = colors.textMain,
             modifier = Modifier.size(19.dp)
         )
 
@@ -682,7 +684,7 @@ private fun ExplorePolicyRowItem(
             text = item.title,
             fontSize = 14.5.sp,
             fontWeight = FontWeight.Medium,
-            color = Color.White,
+            color = colors.textMain,
             fontFamily = InterFontFamily,
             modifier = Modifier.weight(1f)
         )
@@ -690,7 +692,7 @@ private fun ExplorePolicyRowItem(
         Icon(
             imageVector = Lucide.ChevronRight,
             contentDescription = null,
-            tint = Color(0xFF64748B),
+            tint = colors.textMuted,
             modifier = Modifier.size(17.dp)
         )
     }
