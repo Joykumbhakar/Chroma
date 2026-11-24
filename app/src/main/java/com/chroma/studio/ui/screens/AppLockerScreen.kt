@@ -61,7 +61,8 @@ fun AppLockerScreen(
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
-    val isDark = LocalOscellionColors.current.isDark
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
 
     var isEnabled by remember { mutableStateOf(AppLockerManager.isEnabled(context)) }
     var hasOverlayPermission by remember { mutableStateOf(AppLockerManager.hasOverlayPermission(context)) }
@@ -141,7 +142,7 @@ fun AppLockerScreen(
                 text = "Done",
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0381FE),
+                color = colors.primary,
                 fontFamily = InterFontFamily,
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
@@ -359,10 +360,10 @@ fun AppLockerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(if (isDark) Color.White.copy(alpha = 0.08f) else Color.White)
+                        .background(colors.cardSurface)
                         .border(
                             width = 0.75.dp,
-                            color = if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+                            color = colors.cardBorder,
                             shape = RoundedCornerShape(14.dp)
                         )
                         .padding(horizontal = 14.dp, vertical = 2.dp),
@@ -371,7 +372,7 @@ fun AppLockerScreen(
                     Icon(
                         imageVector = Lucide.Search,
                         contentDescription = "Search",
-                        tint = if (isDark) Color.White.copy(alpha = 0.60f) else Color(0xFF6B7280),
+                        tint = colors.textMuted,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(10.dp))
@@ -382,7 +383,7 @@ fun AppLockerScreen(
                             Text(
                                 "Search installed apps...",
                                 fontSize = 14.sp,
-                                color = if (isDark) Color.White.copy(alpha = 0.40f) else Color(0xFF9CA3AF),
+                                color = colors.textMuted.copy(alpha = 0.75f),
                                 fontFamily = InterFontFamily
                             )
                         },
@@ -392,8 +393,8 @@ fun AppLockerScreen(
                             disabledContainerColor = Color.Transparent,
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent,
-                            focusedTextColor = if (isDark) Color.White else Color(0xFF111827),
-                            unfocusedTextColor = if (isDark) Color.White else Color(0xFF111827)
+                            focusedTextColor = colors.textMain,
+                            unfocusedTextColor = colors.textMain
                         ),
                         singleLine = true,
                         modifier = Modifier.weight(1f)
@@ -406,7 +407,7 @@ fun AppLockerScreen(
                             Icon(
                                 imageVector = Lucide.X,
                                 contentDescription = "Clear search",
-                                tint = if (isDark) Color.White.copy(alpha = 0.70f) else Color(0xFF6B7280),
+                                tint = colors.textMuted,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -441,7 +442,7 @@ fun AppLockerScreen(
                         Text(
                             text = if (searchQuery.isNotEmpty()) "No applications found matching '$searchQuery'" else "No launchable apps found",
                             fontSize = 14.sp,
-                            color = if (isDark) Color.White.copy(alpha = 0.50f) else Color(0xFF6B7280),
+                            color = colors.textMuted,
                             fontFamily = InterFontFamily
                         )
                     }
@@ -452,7 +453,7 @@ fun AppLockerScreen(
                         text = "INSTALLED APPLICATIONS (${filteredApps.size})",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (isDark) Color(0xFF8E8E93) else Color(0xFF6D6D72),
+                        color = colors.textMuted,
                         letterSpacing = 0.5.sp,
                         fontFamily = InterFontFamily,
                         modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
@@ -523,14 +524,15 @@ private fun AppLockRowItem(
     isDark: Boolean,
     onToggle: (Boolean) -> Unit
 ) {
+    val colors = LocalOscellionColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
+            .background(colors.cardSurface)
             .border(
                 width = 0.5.dp,
-                color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
+                color = colors.cardBorder,
                 shape = RoundedCornerShape(16.dp)
             )
             .clickable { onToggle(!target.isLocked) }
@@ -542,7 +544,7 @@ private fun AppLockRowItem(
             modifier = Modifier
                 .size(42.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF3F4F6)),
+                .background(colors.cardSurfaceElevated),
             contentAlignment = Alignment.Center
         ) {
             if (target.icon != null) {
@@ -559,7 +561,7 @@ private fun AppLockRowItem(
                 Icon(
                     imageVector = Lucide.AppWindow,
                     contentDescription = null,
-                    tint = if (isDark) Color.White.copy(alpha = 0.70f) else Color(0xFF6B7280),
+                    tint = colors.textMuted,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -573,7 +575,7 @@ private fun AppLockRowItem(
                 text = target.appName,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isDark) Color.White else Color(0xFF111827),
+                color = colors.textMain,
                 fontFamily = InterFontFamily,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -582,7 +584,7 @@ private fun AppLockRowItem(
             Text(
                 text = target.packageName,
                 fontSize = 11.sp,
-                color = if (isDark) Color(0xFF8E8E93) else Color(0xFF6B7280),
+                color = colors.textMuted,
                 fontFamily = InterFontFamily,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

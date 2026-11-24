@@ -14,6 +14,7 @@ fun CustomGalleryPickerModal(
     onDismiss: () -> Unit,
     onLaunchCamera: () -> Unit = {},
     onRequestMediaPermission: () -> Unit = {},
+    onEditMedia: ((List<Uri>, Int, String?) -> Unit)? = null,
     onSendMedia: (List<Uri>, String?) -> Unit
 ) {
     OscellionGalleryLayout(
@@ -25,6 +26,7 @@ fun CustomGalleryPickerModal(
         showCameraTile = true,
         showAlbumsTab = false,
         onSendMediaWithCaption = onSendMedia,
+        onEditMediaWithCaption = onEditMedia,
         onLaunchCamera = onLaunchCamera,
         onClose = onDismiss
     )

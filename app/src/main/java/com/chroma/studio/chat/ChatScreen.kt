@@ -98,6 +98,7 @@ import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
 
 import com.chroma.studio.ui.screens.StoryViewerScreen
 import com.chroma.studio.ui.screens.FlashPhotoEditorScreen
+import com.chroma.studio.ui.screens.ChromaPhotoEditorScreen
 import com.chroma.studio.sticker.StickerItem
 import com.chroma.studio.sticker.StickerPickerSheet
 import com.chroma.studio.sticker.StickerStudioModal
@@ -399,6 +400,9 @@ private fun ChatScreenContent(
     var isStickerPickerOpen by remember { mutableStateOf(false) }
     var isStickerStudioOpen by remember { mutableStateOf(false) }
     var isFlashVideoPickerOpen by remember { mutableStateOf(false) }
+    var editingChatPhotoUris by remember { mutableStateOf<List<Uri>?>(null) }
+    var editingChatPhotoInitialIndex by remember { mutableIntStateOf(0) }
+    var editingChatCaption by remember { mutableStateOf<String?>(null) }
 
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
     var storyViewerInitialStoryId by remember { mutableStateOf<String?>(null) }
@@ -1832,6 +1836,7 @@ private fun ChatScreenContent(
         isStickerStudioOpen ||
         isFlashVideoPickerOpen ||
         showStoryViewer ||
+        editingChatPhotoUris != null ||
         isGalleryPickerOpen ||
         previewLightboxImage != null
 
@@ -2059,6 +2064,7 @@ private fun ChatScreenContent(
         showShareStoryAudienceSheet ||
         showOnlyFriendsManagementSheet ||
         showStoryViewer ||
+        editingChatPhotoUris != null ||
         isGalleryPickerOpen ||
         isInsideChat ||
 
@@ -2078,6 +2084,10 @@ private fun ChatScreenContent(
             showStoryGalleryPicker -> showStoryGalleryPicker = false
             showStoryCreationSheet -> showStoryCreationSheet = false
             showStoryViewer -> showStoryViewer = false
+            editingChatPhotoUris != null -> {
+                editingChatPhotoUris = null
+                isGalleryPickerOpen = true
+            }
             isGalleryPickerOpen -> isGalleryPickerOpen = false
             isNewMessageModalOpen -> isNewMessageModalOpen = false
 
@@ -4671,184 +4681,159 @@ private fun ChatScreenContent(
 
 
 
-        // Custom In-App Gallery Picker Modal
-
-        if (isGalleryPickerOpen) {
-
-            CustomGalleryPickerModal(
-
-                onDismiss = { isGalleryPickerOpen = false },
-
-                onLaunchCamera = {
-
-                    isGalleryPickerOpen = false
-
-                    launchCamera()
-
-                },
-
-                onRequestMediaPermission = {
-
-                    mediaPermissionLauncher.launch(PermissionHelper.getMediaPermissions())
-
-                },
-
-                onSendMedia = sendMediaLabel@{ uris, caption ->
-
-                    val replyQuoteSnapshot = activeReplyQuote
-
-                    // 1. Enforce 100 MB video size limit
-                    val oversizedVideo = uris.firstOrNull { ChatMediaLimiter.isVideoUri(context, it) && ChatMediaLimiter.getMediaSizeBytes(context, it) > ChatMediaLimiter.MAX_VIDEO_SIZE_BYTES }
-                    if (oversizedVideo != null) {
-                        val size = ChatMediaLimiter.getMediaSizeBytes(context, oversizedVideo)
-                        showToast("Video exceeds 100 MB limit (${ChatMediaLimiter.formatFileSize(size)}). Please choose a smaller video.")
-                        return@sendMediaLabel
-                    }
-
-                    // 2. Enforce 100 MB photos batch size limit
-                    val totalPhotoBytes = uris.filter { !ChatMediaLimiter.isVideoUri(context, it) }.sumOf { ChatMediaLimiter.getMediaSizeBytes(context, it) }
-                    if (totalPhotoBytes > ChatMediaLimiter.MAX_PHOTOS_BATCH_SIZE_BYTES) {
-                        showToast("Photos batch exceeds 100 MB limit (${ChatMediaLimiter.formatFileSize(totalPhotoBytes)}). Please select fewer photos.")
-                        return@sendMediaLabel
-                    }
-
-                    if (uris.size > 1) {
-
-                        val newMediaMsg = ChatMessage(
-
-                            id = "m_${System.currentTimeMillis()}",
-
-                            senderId = currentUser.id,
-
-                            senderName = currentUser.name,
-
-                            mediaType = "image_stack",
-
-                            mediaUrls = uris.map { it.toString() },
-
-                            mediaUrl = uris.first().toString(),
-
-                            text = caption?.takeIf { it.isNotBlank() },
-
-                            time = getCurrentTimeFormatted(),
-
-                            status = "sent",
-
-                            replyTo = replyQuoteSnapshot
-
-                        )
-
-                        if (chatViewModel == null || activeChatId.startsWith("mock_")) {
-
-                            chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newMediaMsg) else it }
-
-                        }
-
-                        coroutineScope.launch {
-
-                            for (uri in uris) {
-
-                                try {
-
-                                    val isVideo = ChatMediaLimiter.isVideoUri(context, uri)
-                                    val bytes = if (isVideo) {
-                                        ChatMediaLimiter.processAndCompressVideo(context, uri)
-                                    } else {
-                                        ChatMediaLimiter.processAndCompressPhoto(context, uri)
-                                    }
-                                    val ext = if (isVideo) "mp4" else (MediaStoreHelper.getFileExtension(context, uri) ?: "jpg")
-
-                                    if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
-
-                                        chatViewModel.sendMediaMessage(bytes, ext, caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
-
-                                    }
-
-                                } catch (e: Exception) {}
-
-                            }
-
-                        }
-
-                        SoundManager.playSend()
-
-                        showToast("${uris.size} photos stacked & sent ✨")
-
-                    } else if (uris.isNotEmpty()) {
-
-                        val uri = uris.first()
-
-                        val newMediaMsg = ChatMessage(
-
-                            id = "m_${System.currentTimeMillis()}",
-
-                            senderId = currentUser.id,
-
-                            senderName = currentUser.name,
-
-                            mediaType = "image",
-
-                            localUri = uri.toString(),
-
-                            mediaUrl = uri.toString(),
-
-                            mediaUrls = listOf(uri.toString()),
-
-                            text = caption?.takeIf { it.isNotBlank() },
-
-                            time = getCurrentTimeFormatted(),
-
-                            status = "sent",
-
-                            replyTo = replyQuoteSnapshot
-
-                        )
-
-                        if (chatViewModel == null || activeChatId.startsWith("mock_")) {
-
-                            chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newMediaMsg) else it }
-
-                        }
-
-                        coroutineScope.launch {
-
-                            try {
-
-                                val isVideo = ChatMediaLimiter.isVideoUri(context, uri)
-                                val bytes = if (isVideo) {
-                                    ChatMediaLimiter.processAndCompressVideo(context, uri)
-                                } else {
-                                    ChatMediaLimiter.processAndCompressPhoto(context, uri)
-                                }
-                                val ext = if (isVideo) "mp4" else (MediaStoreHelper.getFileExtension(context, uri) ?: "jpg")
-
-                                if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
-
-                                    chatViewModel.sendMediaMessage(bytes, ext, caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
-
-                                }
-
-                            } catch (e: Exception) {}
-
-                        }
-
-                        SoundManager.playSend()
-
-                        showToast("Photo sent ✨")
-
-                    }
-
-                    activeReplyQuote = null
-
-                    isGalleryPickerOpen = false
-
+        // Centralized Chat Media Dispatcher (handles single or batch image_stack with validation and compression)
+        val dispatchChatMedia: (List<Uri>, String?) -> Unit = sendMediaLabel@{ uris, caption ->
+            val replyQuoteSnapshot = activeReplyQuote
+
+            // 1. Enforce 100 MB video size limit
+            val oversizedVideo = uris.firstOrNull { ChatMediaLimiter.isVideoUri(context, it) && ChatMediaLimiter.getMediaSizeBytes(context, it) > ChatMediaLimiter.MAX_VIDEO_SIZE_BYTES }
+            if (oversizedVideo != null) {
+                val size = ChatMediaLimiter.getMediaSizeBytes(context, oversizedVideo)
+                showToast("Video exceeds 100 MB limit (${ChatMediaLimiter.formatFileSize(size)}). Please choose a smaller video.")
+                return@sendMediaLabel
+            }
+
+            // 2. Enforce 100 MB photos batch size limit
+            val totalPhotoBytes = uris.filter { !ChatMediaLimiter.isVideoUri(context, it) }.sumOf { ChatMediaLimiter.getMediaSizeBytes(context, it) }
+            if (totalPhotoBytes > ChatMediaLimiter.MAX_PHOTOS_BATCH_SIZE_BYTES) {
+                showToast("Photos batch exceeds 100 MB limit (${ChatMediaLimiter.formatFileSize(totalPhotoBytes)}). Please select fewer photos.")
+                return@sendMediaLabel
+            }
+
+            if (uris.size > 1) {
+                val newMediaMsg = ChatMessage(
+                    id = "m_${System.currentTimeMillis()}",
+                    senderId = currentUser.id,
+                    senderName = currentUser.name,
+                    mediaType = "image_stack",
+                    mediaUrls = uris.map { it.toString() },
+                    mediaUrl = uris.first().toString(),
+                    text = caption?.takeIf { it.isNotBlank() },
+                    time = getCurrentTimeFormatted(),
+                    status = "sent",
+                    replyTo = replyQuoteSnapshot
+                )
+
+                if (chatViewModel == null || activeChatId.startsWith("mock_")) {
+                    chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newMediaMsg) else it }
                 }
 
-            )
+                coroutineScope.launch {
+                    for (uri in uris) {
+                        try {
+                            val isVideo = ChatMediaLimiter.isVideoUri(context, uri)
+                            val bytes = if (isVideo) {
+                                ChatMediaLimiter.processAndCompressVideo(context, uri)
+                            } else {
+                                ChatMediaLimiter.processAndCompressPhoto(context, uri)
+                            }
+                            val ext = if (isVideo) "mp4" else (MediaStoreHelper.getFileExtension(context, uri) ?: "jpg")
 
+                            if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                                chatViewModel.sendMediaMessage(bytes, ext, caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
+                            }
+                        } catch (e: Exception) {}
+                    }
+                }
+
+                SoundManager.playSend()
+                showToast("${uris.size} photos stacked and sent")
+            } else if (uris.isNotEmpty()) {
+                val uri = uris.first()
+                val newMediaMsg = ChatMessage(
+                    id = "m_${System.currentTimeMillis()}",
+                    senderId = currentUser.id,
+                    senderName = currentUser.name,
+                    mediaType = "image",
+                    localUri = uri.toString(),
+                    mediaUrl = uri.toString(),
+                    mediaUrls = listOf(uri.toString()),
+                    text = caption?.takeIf { it.isNotBlank() },
+                    time = getCurrentTimeFormatted(),
+                    status = "sent",
+                    replyTo = replyQuoteSnapshot
+                )
+
+                if (chatViewModel == null || activeChatId.startsWith("mock_")) {
+                    chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newMediaMsg) else it }
+                }
+
+                coroutineScope.launch {
+                    try {
+                        val isVideo = ChatMediaLimiter.isVideoUri(context, uri)
+                        val bytes = if (isVideo) {
+                            ChatMediaLimiter.processAndCompressVideo(context, uri)
+                        } else {
+                            ChatMediaLimiter.processAndCompressPhoto(context, uri)
+                        }
+                        val ext = if (isVideo) "mp4" else (MediaStoreHelper.getFileExtension(context, uri) ?: "jpg")
+
+                        if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                            chatViewModel.sendMediaMessage(bytes, ext, caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
+                        }
+                    } catch (e: Exception) {}
+                }
+
+                SoundManager.playSend()
+                showToast("Photo sent")
+            }
+
+            activeReplyQuote = null
+            isGalleryPickerOpen = false
         }
 
+        // Custom In-App Gallery Picker Modal
+        if (isGalleryPickerOpen) {
+            CustomGalleryPickerModal(
+                onDismiss = { isGalleryPickerOpen = false },
+                onLaunchCamera = {
+                    isGalleryPickerOpen = false
+                    launchCamera()
+                },
+                onRequestMediaPermission = {
+                    mediaPermissionLauncher.launch(PermissionHelper.getMediaPermissions())
+                },
+                onSendMedia = { uris, caption ->
+                    dispatchChatMedia(uris, caption)
+                },
+                onEditMedia = { uris, startIndex, caption ->
+                    isGalleryPickerOpen = false
+                    editingChatPhotoUris = uris
+                    editingChatPhotoInitialIndex = startIndex
+                    editingChatCaption = caption
+                }
+            )
+        }
 
+        // Dedicated Multi-Photo Editor for Chat (Swipe left/right, edit, and send)
+        if (editingChatPhotoUris != null && editingChatPhotoUris!!.isNotEmpty()) {
+            val chatEditorUris = editingChatPhotoUris!!
+            val initialIdx = editingChatPhotoInitialIndex.coerceIn(0, chatEditorUris.size - 1)
+            ChromaPhotoEditorScreen(
+                photoUri = chatEditorUris[initialIdx],
+                photoUris = chatEditorUris,
+                initialIndex = initialIdx,
+                exportButtonLabel = "Send",
+                onExportSuccess = { singleEditedUri ->
+                    val urisToSend = listOf(singleEditedUri)
+                    val caption = editingChatCaption
+                    editingChatPhotoUris = null
+                    editingChatCaption = null
+                    dispatchChatMedia(urisToSend, caption)
+                },
+                onExportAllSuccess = { allEditedUris ->
+                    val urisToSend = allEditedUris
+                    val caption = editingChatCaption
+                    editingChatPhotoUris = null
+                    editingChatCaption = null
+                    dispatchChatMedia(urisToSend, caption)
+                },
+                onBack = {
+                    editingChatPhotoUris = null
+                    isGalleryPickerOpen = true
+                }
+            )
+        }
 
         // Authentic Apple iOS In-App Camera Screen (CameraX viewfinder, concentric shutter, zoom capsule, mode strip, photo review)
 

@@ -39,12 +39,12 @@ fun LayerManagerPanel(
         modifier = Modifier
             .fillMaxWidth()
             .height(260.dp)
-            .background(Color.White)
+            .background(colors.cardSurface)
             .padding(16.dp)
     ) {
         Text(
             text = "Layers & Tracks",
-            color = Color(0xFF1C1C1E),
+            color = colors.textMain,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 12.dp)
@@ -71,15 +71,19 @@ fun LayerManagerPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFFF9FAFB))
-                        .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
+                        .background(if (colors.isDark) Color(0xFF262A34) else Color(0xFFF9FAFB))
+                        .border(
+                            width = 1.dp,
+                            color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB),
+                            shape = RoundedCornerShape(10.dp)
+                        )
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Lucide.GripVertical,
                         contentDescription = "Reorder",
-                        tint = Color(0xFF9CA3AF),
+                        tint = colors.textMuted,
                         modifier = Modifier.size(20.dp)
                     )
                     
@@ -87,7 +91,7 @@ fun LayerManagerPanel(
                     
                     Text(
                         text = trackName,
-                        color = Color(0xFF1C1C1E),
+                        color = colors.textMain,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f)
@@ -97,7 +101,7 @@ fun LayerManagerPanel(
                     Icon(
                         imageVector = if (isVisible) Lucide.Eye else Lucide.EyeOff,
                         contentDescription = "Toggle Visibility",
-                        tint = if (isVisible) Color(0xFF1C1C1E) else Color(0xFF9CA3AF),
+                        tint = if (isVisible) colors.textMain else colors.textMuted,
                         modifier = Modifier
                             .size(20.dp)
                             .clickable { 
@@ -111,7 +115,7 @@ fun LayerManagerPanel(
                     Icon(
                         imageVector = Lucide.Lock,
                         contentDescription = "Toggle Lock",
-                        tint = if (isLocked) colors.primary else Color(0xFF9CA3AF),
+                        tint = if (isLocked) colors.primary else colors.textMuted,
                         modifier = Modifier
                             .size(20.dp)
                             .clickable { 

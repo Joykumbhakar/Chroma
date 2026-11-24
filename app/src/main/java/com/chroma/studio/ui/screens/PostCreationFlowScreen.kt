@@ -531,14 +531,28 @@ fun PostCreationFlowScreen(
     if (currentStep == PostCreationStep.IMAGE_EDITOR) {
         when (currentPostType) {
             PostType.PHOTO -> {
-                if (rawPhotoUri != null) {
-                    val targetUri = editedPhotoUri ?: rawPhotoUri!!
-                    val activeRaw = rawPhotoUri!!
+                if (rawPhotoUri != null || selectedPhotoUris.isNotEmpty()) {
+                    val allUris = if (selectedPhotoUris.isNotEmpty()) selectedPhotoUris else listOfNotNull(rawPhotoUri)
+                    val targetUri = editedPhotoUri ?: allUris.getOrElse(currentPhotoIndex) { allUris.first() }
                     ChromaPhotoEditorScreen(
                         photoUri = targetUri,
+                        photoUris = allUris,
+                        initialIndex = currentPhotoIndex,
                         exportButtonLabel = "Next",
                         onExportSuccess = { proEditedUri ->
+                            val activeRaw = allUris.getOrElse(currentPhotoIndex) { allUris.first() }
                             editedPhotoUris = editedPhotoUris + (activeRaw to proEditedUri)
+                            SoundManager.playReaction()
+                            currentStep = PostCreationStep.POST_DETAILS
+                        },
+                        onExportAllSuccess = { allEditedUris ->
+                            val updatedMap = editedPhotoUris.toMutableMap()
+                            allUris.forEachIndexed { idx, raw ->
+                                if (idx < allEditedUris.size) {
+                                    updatedMap[raw] = allEditedUris[idx]
+                                }
+                            }
+                            editedPhotoUris = updatedMap
                             SoundManager.playReaction()
                             currentStep = PostCreationStep.POST_DETAILS
                         },

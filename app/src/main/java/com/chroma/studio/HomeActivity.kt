@@ -2109,10 +2109,16 @@ private fun AuthenticatedRoute(
                         val photoUri = uris.first()
                         ChromaPhotoEditorScreen(
                             photoUri = photoUri,
+                            photoUris = uris,
                             exportButtonLabel = "Done",
                             onExportSuccess = { savedUri ->
                                 flashPickerPhotoUris = listOf(savedUri)
                                 flashImportedMediaUris = listOf(savedUri)
+                                navController.popBackStack()
+                            },
+                            onExportAllSuccess = { allSaved ->
+                                flashPickerPhotoUris = allSaved
+                                flashImportedMediaUris = allSaved
                                 navController.popBackStack()
                             },
                             onBack = {

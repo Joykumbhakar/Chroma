@@ -207,6 +207,7 @@ fun OscellionGalleryLayout(
     onVideoSelected: ((Uri) -> Unit)? = null,
     onPhotosSelected: ((List<Uri>) -> Unit)? = null,
     onSendMediaWithCaption: ((List<Uri>, String?) -> Unit)? = null,
+    onEditMediaWithCaption: ((List<Uri>, Int, String?) -> Unit)? = null,
     onLaunchCamera: (() -> Unit)? = null,
     onClose: () -> Unit
 ) {
@@ -806,6 +807,7 @@ fun OscellionGalleryLayout(
                             onPhotosSelected?.invoke(selectedUris.toList())
                         }
                     },
+                    onEditSelection = if (onEditMediaWithCaption != null) { { idx -> onEditMediaWithCaption(selectedUris.toList(), idx, captionText.ifBlank { null }) } } else null,
                     onRequestPermission = {
                         val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
@@ -1284,6 +1286,7 @@ private fun GalleryMainBody(
     onClearSelection: () -> Unit,
     onRemoveUri: (Uri) -> Unit,
     onSubmitSelection: () -> Unit,
+    onEditSelection: ((Int) -> Unit)? = null,
     onRequestPermission: () -> Unit,
     onOpenSystemPicker: () -> Unit
 ) {
@@ -1618,6 +1621,8 @@ private fun GalleryMainBody(
                 onSelectAll = onSelectAll,
                 onClear = onClearSelection,
                 onRemoveUri = onRemoveUri,
+                onThumbnailClick = onEditSelection,
+                onEdit = if (onEditSelection != null) { { onEditSelection(0) } } else null,
                 onSubmit = onSubmitSelection
             )
         }
@@ -2303,6 +2308,8 @@ private fun GalleryFloatingSelectionDock(
     onSelectAll: (() -> Unit)? = null,
     onClear: () -> Unit,
     onRemoveUri: (Uri) -> Unit,
+    onThumbnailClick: ((Int) -> Unit)? = null,
+    onEdit: (() -> Unit)? = null,
     onSubmit: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
@@ -2388,6 +2395,7 @@ private fun GalleryFloatingSelectionDock(
                             .size(46.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .border(1.dp, Color(0xFF0381FE).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                            .clickable { onThumbnailClick?.invoke(index) ?: onEdit?.invoke() }
                     ) {
                         val context = LocalContext.current
                         val dockThumbRequest = remember(uri) {
@@ -2489,25 +2497,82 @@ private fun GalleryFloatingSelectionDock(
                 }
             }
 
-            // Vibrant Brand Blue Action Button
-            LiquidGlassPrimaryButton(
-                onClick = onSubmit,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(42.dp)
-            ) {
-                Icon(
-                    Lucide.Send,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(15.dp)
-                )
-                Text(
-                    text = if (showCaptionInput) "Send (${selectedUris.size})" else "Confirm (${selectedUris.size})",
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+            // Action Buttons
+            if (onEdit != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = onEdit,
+                        modifier = Modifier
+                            .weight(0.38f)
+                            .height(42.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color(0xFF0381FE).copy(alpha = 0.6f)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color(0xFF0381FE).copy(alpha = 0.12f),
+                            contentColor = Color(0xFF0381FE)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Sparkles,
+                            contentDescription = "Edit",
+                            tint = Color(0xFF0381FE),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "Edit",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF0381FE)
+                        )
+                    }
+
+                    LiquidGlassPrimaryButton(
+                        onClick = onSubmit,
+                        modifier = Modifier
+                            .weight(0.62f)
+                            .height(42.dp)
+                    ) {
+                        Icon(
+                            Lucide.Send,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = if (showCaptionInput) "Send (${selectedUris.size})" else "Confirm (${selectedUris.size})",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            } else {
+                LiquidGlassPrimaryButton(
+                    onClick = onSubmit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                ) {
+                    Icon(
+                        Lucide.Send,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = if (showCaptionInput) "Send (${selectedUris.size})" else "Confirm (${selectedUris.size})",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
             }
         }
     }

@@ -21,7 +21,13 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import java.io.File
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -615,6 +621,15 @@ class ChromaPhotoEditorViewModel : ViewModel() {
         )
     }
 
+    fun loadProjectState(savedState: PhotoProjectState) {
+        undoStack.clear()
+        redoStack.clear()
+        dragSnapshot = null
+        _state.value = savedState
+    }
+
+    fun getCurrentProjectState(): PhotoProjectState = _state.value
+
     fun canUndo(): Boolean = undoStack.isNotEmpty()
     fun canRedo(): Boolean = redoStack.isNotEmpty()
 
@@ -1079,10 +1094,13 @@ class ChromaPhotoEditorViewModel : ViewModel() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChromaPhotoEditorScreen(
-    photoUri: Uri,
+    photoUri: Uri = Uri.EMPTY,
+    photoUris: List<Uri> = listOfNotNull(photoUri.takeIf { it != Uri.EMPTY }),
+    initialIndex: Int = 0,
     viewModel: ChromaPhotoEditorViewModel = viewModel(),
     exportButtonLabel: String = "Export",
     onExportSuccess: ((Uri) -> Unit)? = null,
+    onExportAllSuccess: ((List<Uri>) -> Unit)? = null,
     onExport: (PhotoProjectState) -> Unit = {},
     onExportUri: ((Uri) -> Unit)? = null,
     onBack: () -> Unit
@@ -1091,7 +1109,31 @@ fun ChromaPhotoEditorScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
     val hazeState = remember { HazeState() }
+
+    val effectiveUris = remember(photoUris, photoUri) {
+        if (photoUris.isNotEmpty()) photoUris else listOfNotNull(photoUri.takeIf { it != Uri.EMPTY })
+    }
+    var activeIndex by remember(effectiveUris, initialIndex) {
+        mutableIntStateOf(initialIndex.coerceIn(0, (effectiveUris.size - 1).coerceAtLeast(0)))
+    }
+    val savedStatesMap = remember { mutableStateMapOf<Int, PhotoProjectState>() }
+    val currentActiveUri = effectiveUris.getOrNull(activeIndex) ?: photoUri
+
+    fun switchPhoto(newIndex: Int) {
+        if (newIndex < 0 || newIndex >= effectiveUris.size || newIndex == activeIndex) return
+        savedStatesMap[activeIndex] = state
+        activeIndex = newIndex
+        val nextUri = effectiveUris[newIndex]
+        val cached = savedStatesMap[newIndex]
+        if (cached != null) {
+            viewModel.loadProjectState(cached)
+        } else {
+            viewModel.initialize(nextUri.toString(), context, forceReset = true)
+        }
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
 
     var showAddSheet by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
@@ -1110,8 +1152,12 @@ fun ChromaPhotoEditorScreen(
         if (clip?.type == MediaType.TEXT) activeToolSheet = PhotoEditorTool.TEXT
     }
 
-    LaunchedEffect(photoUri) {
-        viewModel.initialize(photoUri.toString(), context)
+    LaunchedEffect(currentActiveUri) {
+        if (savedStatesMap.containsKey(activeIndex)) {
+            viewModel.loadProjectState(savedStatesMap[activeIndex]!!)
+        } else if (currentActiveUri != Uri.EMPTY) {
+            viewModel.initialize(currentActiveUri.toString(), context)
+        }
     }
 
     // Suppress Dynamic Island while inside editor (same as ChromaVideoEditorScreen)
@@ -1132,6 +1178,48 @@ fun ChromaPhotoEditorScreen(
         if (selectedClip != null) rememberedClip = selectedClip
     }
 
+    // Comprehensive multi-photo export executor
+    val executeExportAll: (PhotoExportSettings?) -> Unit = { customSettings ->
+        savedStatesMap[activeIndex] = state
+        isExporting = true
+        isExportCompleted = false
+        scope.launch {
+            val exportedUris = mutableListOf<Uri>()
+            for (i in effectiveUris.indices) {
+                val u = effectiveUris[i]
+                val projectState = (savedStatesMap[i] ?: PhotoProjectState(
+                    clips = listOf(
+                        Clip(
+                            id = "main_clip_$i",
+                            trackId = 1,
+                            uri = u.toString(),
+                            name = "Photo ${i + 1}",
+                            type = MediaType.IMAGE
+                        )
+                    )
+                )).let { base ->
+                    if (customSettings != null) base.copy(exportSettings = customSettings) else base
+                }
+
+                val saved = exportEditedPhotoToGallery(context = context, state = projectState)
+                if (saved != null) {
+                    exportedUris.add(saved)
+                } else {
+                    exportedUris.add(u)
+                }
+            }
+            isExportCompleted = true
+            delay(650)
+            isExporting = false
+            showExportDialog = false
+            val firstUri = exportedUris.firstOrNull() ?: currentActiveUri
+            onExport(state)
+            onExportUri?.invoke(firstUri)
+            onExportSuccess?.invoke(firstUri)
+            onExportAllSuccess?.invoke(exportedUris)
+        }
+    }
+
     if (showExportDialog) {
         PhotoExportSettingsDialog(
             initialSettings = state.exportSettings,
@@ -1139,28 +1227,7 @@ fun ChromaPhotoEditorScreen(
             onDismiss = { if (!isExporting) showExportDialog = false },
             onExport = { settings ->
                 viewModel.updateExportSettings(settings.resolution, settings.format, settings.quality)
-                isExporting = true
-                isExportCompleted = false
-                scope.launch {
-                    val savedUri = exportEditedPhotoToGallery(
-                        context = context,
-                        state = state.copy(exportSettings = settings)
-                    )
-                    if (savedUri != null) {
-                        isExportCompleted = true
-                        delay(650)
-                        isExporting = false
-                        showExportDialog = false
-                        ToastManager.showToast("Saved ${settings.resolution}p ${settings.format} to Gallery")
-                        onExport(state.copy(exportSettings = settings))
-                        onExportUri?.invoke(savedUri)
-                        onExportSuccess?.invoke(savedUri)
-                    } else {
-                        isExporting = false
-                        showExportDialog = false
-                        ToastManager.showToast("Export failed")
-                    }
-                }
+                executeExportAll(settings)
             }
         )
     }
@@ -1238,6 +1305,32 @@ fun ChromaPhotoEditorScreen(
                     )
                 }
 
+                // Center: Multi-Photo Slide Counter Badge (when multiple photos)
+                if (effectiveUris.size > 1) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(topBtnBg)
+                            .border(0.5.dp, topBorder, RoundedCornerShape(999.dp))
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Images,
+                            contentDescription = null,
+                            tint = Color(0xFF0381FE),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = "${activeIndex + 1} / ${effectiveUris.size}",
+                            color = editorColors.textMain,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
                 // Right: Undo/Redo + Layers + Next/Export
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1311,25 +1404,7 @@ fun ChromaPhotoEditorScreen(
                             .background(Color(0xFF0381FE))
                             .clickable(enabled = !isExporting) {
                                 if (exportButtonLabel != "Export") {
-                                    isExporting = true
-                                    isExportCompleted = false
-                                    scope.launch {
-                                        val savedUri = exportEditedPhotoToGallery(
-                                            context = context,
-                                            state = state
-                                        )
-                                        if (savedUri != null) {
-                                            isExportCompleted = true
-                                            delay(650)
-                                            isExporting = false
-                                            onExport(state)
-                                            onExportUri?.invoke(savedUri)
-                                            onExportSuccess?.invoke(savedUri)
-                                        } else {
-                                            isExporting = false
-                                            onExportSuccess?.invoke(photoUri)
-                                        }
-                                    }
+                                    executeExportAll(null)
                                 } else {
                                     showExportDialog = true
                                 }
@@ -1349,8 +1424,11 @@ fun ChromaPhotoEditorScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
+                                val displayLabel = if (effectiveUris.size > 1 && exportButtonLabel != "Export") {
+                                    "$exportButtonLabel (${effectiveUris.size})"
+                                } else exportButtonLabel
                                 Text(
-                                    text = exportButtonLabel,
+                                    text = displayLabel,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
                                     color = Color.White
@@ -1359,6 +1437,7 @@ fun ChromaPhotoEditorScreen(
                                     imageVector = when (exportButtonLabel) {
                                         "Next" -> Lucide.ArrowRight
                                         "Done", "Save", "Select", "Share Story" -> Lucide.Check
+                                        "Send" -> Lucide.Send
                                         else -> Lucide.Share
                                     },
                                     contentDescription = exportButtonLabel,
@@ -1415,23 +1494,142 @@ fun ChromaPhotoEditorScreen(
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
-                PhotoPreviewArea(
-                    modifier = Modifier.fillMaxSize(),
-                    state = state,
-                    selectedClip = selectedClip,
-                    onTransformChange = { clipId, transform ->
-                        viewModel.updateClipTransform(clipId, transform)
+                AnimatedContent(
+                    targetState = activeIndex,
+                    transitionSpec = {
+                        if (targetState > initialState) {
+                            (slideInHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { width -> width } + fadeIn(tween(220)))
+                                .togetherWith(slideOutHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { width -> -width } + fadeOut(tween(220)))
+                        } else {
+                            (slideInHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { width -> -width } + fadeIn(tween(220)))
+                                .togetherWith(slideOutHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { width -> width } + fadeOut(tween(220)))
+                        }
                     },
-                    onDragStart = { viewModel.startDrag() },
-                    onDragEnd = { viewModel.endDrag() },
-                    onAddBrushStroke = { viewModel.addBrushStroke(it) },
-                    onAutoEnhance = { viewModel.autoEnhance() },
-                    onToggleSplitCompare = { viewModel.toggleSplitCompareMode() },
-                    onSplitFractionChange = { viewModel.setSplitCompareFraction(it) },
-                    onToggleGrid = { viewModel.toggleGridOverlay() },
-                    onToggleHistogram = { viewModel.toggleHistogramHud() },
-                    onToggleOriginal = { viewModel.setComparingOriginal(!state.isComparingOriginal) }
-                )
+                    label = "MultiPhotoSlideAnim",
+                    modifier = Modifier.fillMaxSize()
+                ) { targetIndex ->
+                    PhotoPreviewArea(
+                        modifier = Modifier.fillMaxSize(),
+                        state = state,
+                        selectedClip = selectedClip,
+                        onTransformChange = { clipId, transform ->
+                            viewModel.updateClipTransform(clipId, transform)
+                        },
+                        onDragStart = { viewModel.startDrag() },
+                        onDragEnd = { viewModel.endDrag() },
+                        onAddBrushStroke = { viewModel.addBrushStroke(it) },
+                        onAutoEnhance = { viewModel.autoEnhance() },
+                        onToggleSplitCompare = { viewModel.toggleSplitCompareMode() },
+                        onSplitFractionChange = { viewModel.setSplitCompareFraction(it) },
+                        onToggleGrid = { viewModel.toggleGridOverlay() },
+                        onToggleHistogram = { viewModel.toggleHistogramHud() },
+                        onToggleOriginal = { viewModel.setComparingOriginal(!state.isComparingOriginal) },
+                        onSwipeNext = if (activeIndex < effectiveUris.size - 1) { { switchPhoto(activeIndex + 1) } } else null,
+                        onSwipePrevious = if (activeIndex > 0) { { switchPhoto(activeIndex - 1) } } else null
+                    )
+                }
+
+                // Left / Right Floating Chevrons for multi-photo navigation
+                if (effectiveUris.size > 1) {
+                    if (activeIndex > 0) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 4.dp)
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.55f))
+                                .border(0.5.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                                .clickable { switchPhoto(activeIndex - 1) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Lucide.ChevronLeft,
+                                contentDescription = "Previous Photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    if (activeIndex < effectiveUris.size - 1) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 4.dp)
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.55f))
+                                .border(0.5.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                                .clickable { switchPhoto(activeIndex + 1) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Lucide.ChevronRight,
+                                contentDescription = "Next Photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    // Floating Multi-Photo Thumbnail Strip Dock at bottom of preview area
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xE61C1C1E),
+                        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.2f)),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 6.dp)
+                            .shadow(12.dp, RoundedCornerShape(20.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            effectiveUris.forEachIndexed { idx, uri ->
+                                val isSelected = idx == activeIndex
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (isSelected) 42.dp else 32.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .border(
+                                            width = if (isSelected) 2.dp else 0.5.dp,
+                                            color = if (isSelected) Color(0xFF0381FE) else Color.White.copy(alpha = 0.3f),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        .clickable { switchPhoto(idx) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AsyncImage(
+                                        model = uri,
+                                        contentDescription = "Thumbnail ${idx + 1}",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .alpha(if (isSelected) 1f else 0.6f)
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(2.dp)
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isSelected) Color(0xFF0381FE) else Color.Black.copy(alpha = 0.65f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "${idx + 1}",
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // ── Bottom Photo Editing Toolbar ──
@@ -1557,7 +1755,9 @@ private fun PhotoPreviewArea(
     onSplitFractionChange: (Float) -> Unit,
     onToggleGrid: () -> Unit,
     onToggleHistogram: () -> Unit,
-    onToggleOriginal: () -> Unit
+    onToggleOriginal: () -> Unit,
+    onSwipeNext: (() -> Unit)? = null,
+    onSwipePrevious: (() -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -2144,6 +2344,7 @@ private fun PhotoPreviewArea(
                                 var pastTouchSlop = false
                                 val touchSlop = viewConfiguration.touchSlop
                                 var isMultiTouch = false
+                                var canDragTarget = false
                                 var gestureConsumed = false
                                 var event: PointerEvent
 
@@ -2196,7 +2397,8 @@ private fun PhotoPreviewArea(
                                         }
                                     } else if (pointerCount == 1) {
                                         val target = activeTargetClip
-                                        val canDrag = (target?.transform?.scale ?: 1f) > 1.02f || (target?.trackId ?: 1) != 1
+                                        canDragTarget = (target?.transform?.scale ?: 1f) > 1.02f || (target?.trackId ?: 1) != 1
+                                        val canDrag = canDragTarget
 
                                         pan += panChange
                                         if (!pastTouchSlop && pan.getDistance() > touchSlop) {
@@ -2244,6 +2446,20 @@ private fun PhotoPreviewArea(
 
                                 if (isMultiTouch) {
                                     keepZoomSliderAlive()
+                                }
+
+                                // Horizontal swipe gesture to switch between multiple selected images
+                                if (!isMultiTouch && !canDragTarget && pastTouchSlop && !gestureConsumed) {
+                                    val totalDx = pan.x
+                                    val totalDy = pan.y
+                                    val swipeThresholdPx = with(density) { 45.dp.toPx() }
+                                    if (kotlin.math.abs(totalDx) > kotlin.math.abs(totalDy) * 1.15f && kotlin.math.abs(totalDx) > swipeThresholdPx) {
+                                        if (totalDx < 0f) {
+                                            onSwipeNext?.invoke()
+                                        } else {
+                                            onSwipePrevious?.invoke()
+                                        }
+                                    }
                                 }
 
                                 // Double-tap: toggle 1.0x Fit vs 1.35x Fill/Crop (Same as ChromaVideoEditorScreen)

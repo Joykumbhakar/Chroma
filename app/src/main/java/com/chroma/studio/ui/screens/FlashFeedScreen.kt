@@ -358,17 +358,17 @@ fun FlashFeedScreen(
         }
     }
 
-    // Drafts bottom sheet (Plain pure white)
+    // Drafts bottom sheet
     if (showDraftSheet) {
         ModalBottomSheet(
             onDismissRequest = { showDraftSheet = false },
-            containerColor = Color.White,
-            dragHandle = { BottomSheetDefaults.DragHandle(color = Color(0xFFD1D5DB)) }
+            containerColor = if (colors.isDark) Color(0xFF1C1C1E) else Color.White,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = colors.cardBorder) }
         ) {
             Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
                 Text(
                     "Drafts",
-                    color = Color(0xFF1C1C1E),
+                    color = colors.textMain,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 16.dp)
@@ -1121,14 +1121,15 @@ private fun FlashMoreOptionsSheet(
     onDownloadClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val colors = LocalOscellionColors.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color.White,
+        containerColor = if (colors.isDark) Color(0xFF1C1C1E) else Color.White,
         dragHandle = {
-            BottomSheetDefaults.DragHandle(color = Color(0xFFD1D5DB))
+            BottomSheetDefaults.DragHandle(color = colors.cardBorder)
         },
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
@@ -1143,7 +1144,7 @@ private fun FlashMoreOptionsSheet(
                 text = "Flash Options",
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF111827),
+                color = colors.textMain,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
@@ -1153,7 +1154,7 @@ private fun FlashMoreOptionsSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xFFFEF2F2))
+                        .background(if (colors.isDark) Color(0xFF3B1E1E) else Color(0xFFFEF2F2))
                         .clickable { onDeleteClick() }
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -1186,13 +1187,13 @@ private fun FlashMoreOptionsSheet(
                 Icon(
                     imageVector = Lucide.Share2,
                     contentDescription = "Share",
-                    tint = Color(0xFF111827),
+                    tint = colors.textMain,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(14.dp))
                 Text(
                     text = "Share Video",
-                    color = Color(0xFF111827),
+                    color = colors.textMain,
                     fontWeight = FontWeight.Medium,
                     fontSize = 15.sp
                 )
@@ -1216,13 +1217,13 @@ private fun FlashMoreOptionsSheet(
                 Icon(
                     imageVector = Lucide.Link,
                     contentDescription = "Copy Link",
-                    tint = Color(0xFF111827),
+                    tint = colors.textMain,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(14.dp))
                 Text(
                     text = "Copy Link",
-                    color = Color(0xFF111827),
+                    color = colors.textMain,
                     fontWeight = FontWeight.Medium,
                     fontSize = 15.sp
                 )
@@ -1240,13 +1241,13 @@ private fun FlashMoreOptionsSheet(
                 Icon(
                     imageVector = Lucide.Download,
                     contentDescription = "Save Video",
-                    tint = Color(0xFF111827),
+                    tint = colors.textMain,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(14.dp))
                 Text(
                     text = "Save to Device",
-                    color = Color(0xFF111827),
+                    color = colors.textMain,
                     fontWeight = FontWeight.Medium,
                     fontSize = 15.sp
                 )
@@ -1309,13 +1310,13 @@ private fun FlashMoreOptionsSheet(
                     Icon(
                         imageVector = Lucide.EyeOff,
                         contentDescription = "Not Interested",
-                        tint = Color(0xFF6B7280),
+                        tint = colors.textMuted,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(14.dp))
                     Text(
                         text = "Not Interested",
-                        color = Color(0xFF6B7280),
+                        color = colors.textMuted,
                         fontWeight = FontWeight.Medium,
                         fontSize = 15.sp
                     )
@@ -1405,11 +1406,12 @@ private fun FlashEmptyState(onUpload: () -> Unit) {
 
 @Composable
 private fun DraftItem(draft: FlashDraft, onResume: () -> Unit, onDelete: () -> Unit) {
+    val colors = LocalOscellionColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFF3F4F6))
+            .background(colors.cardSurfaceElevated)
             .clickable { onResume() }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1419,7 +1421,7 @@ private fun DraftItem(draft: FlashDraft, onResume: () -> Unit, onDelete: () -> U
             modifier = Modifier
                 .size(52.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFFE5E7EB)),
+                .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E7EB)),
             contentAlignment = Alignment.Center
         ) {
             if (draft.thumbnailUri.isNotBlank()) {
@@ -1430,19 +1432,19 @@ private fun DraftItem(draft: FlashDraft, onResume: () -> Unit, onDelete: () -> U
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
-                Icon(Lucide.FileVideo, null, tint = Color(0xFF6B7280), modifier = Modifier.size(24.dp))
+                Icon(Lucide.FileVideo, null, tint = colors.textMuted, modifier = Modifier.size(24.dp))
             }
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 draft.mediaType.name.lowercase().replaceFirstChar { it.uppercase() },
-                color = Color(0xFF1C1C1E),
+                color = colors.textMain,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp
             )
             Text(
                 draft.caption.ifBlank { "No caption" },
-                color = Color(0xFF8E8E93),
+                color = colors.textMuted,
                 fontSize = 12.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

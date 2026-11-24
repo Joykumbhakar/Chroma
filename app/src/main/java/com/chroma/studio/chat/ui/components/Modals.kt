@@ -2408,8 +2408,8 @@ private fun UserStoryPageView(
                                 modifier = Modifier
                                     .shadow(6.dp, RoundedCornerShape(20.dp), spotColor = Color.Black.copy(alpha = 0.30f))
                                     .clip(RoundedCornerShape(20.dp))
-                                    .background(Color.White)
-                                    .border(0.5.dp, Color(0xFFE5E5EA), RoundedCornerShape(20.dp))
+                                    .background(if (colors.isLight) Color.White.copy(alpha = 0.95f) else Color(0xFF1C1C1E).copy(alpha = 0.92f))
+                                    .border(0.5.dp, if (colors.isLight) Color(0xFFE5E5EA) else Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
                                     .padding(horizontal = 12.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -2419,7 +2419,7 @@ private fun UserStoryPageView(
                                     text = currentStory.locationTag,
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1C1C1E)
+                                    color = if (colors.isLight) Color(0xFF1C1C1E) else Color.White
                                 )
                             }
                         }
@@ -2428,8 +2428,8 @@ private fun UserStoryPageView(
                                 modifier = Modifier
                                     .shadow(6.dp, RoundedCornerShape(20.dp), spotColor = Color.Black.copy(alpha = 0.30f))
                                     .clip(RoundedCornerShape(20.dp))
-                                    .background(Color.White)
-                                    .border(0.5.dp, Color(0xFFE5E5EA), RoundedCornerShape(20.dp))
+                                    .background(if (colors.isLight) Color.White.copy(alpha = 0.95f) else Color(0xFF1C1C1E).copy(alpha = 0.92f))
+                                    .border(0.5.dp, if (colors.isLight) Color(0xFFE5E5EA) else Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
                                     .padding(horizontal = 12.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -2439,7 +2439,7 @@ private fun UserStoryPageView(
                                     text = currentStory.musicTrack,
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1C1C1E)
+                                    color = if (colors.isLight) Color(0xFF1C1C1E) else Color.White
                                 )
                             }
                         }

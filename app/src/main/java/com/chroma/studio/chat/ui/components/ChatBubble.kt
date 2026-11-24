@@ -3947,7 +3947,7 @@ fun MediaStackGrid(
                         bottomEnd = 6.dp
                     ) else RoundedCornerShape(16.dp)
                 )
-                .background(Color(0xFF1C1C1E))
+                .background(if (colors.isLight) colors.surfaceSecondary else Color(0xFF1C1C1E))
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onDoubleTap = {
@@ -4112,10 +4112,10 @@ fun MediaStackGrid(
                                 ambientColor = Color.Black.copy(alpha = 0.20f)
                             )
                             .clip(cardShape)
-                            .background(Color(0xFF1C1C1E))
+                            .background(if (colors.isLight) colors.surfaceSecondary else Color(0xFF1C1C1E))
                             .border(
                                 width = 0.85.dp,
-                                color = if (depth == 0) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.12f),
+                                color = if (colors.isLight) colors.borderSubtle else (if (depth == 0) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.12f)),
                                 shape = cardShape
                             )
                             .then(

@@ -388,12 +388,18 @@ fun FlashPhotoEditorScreen(
     if (previewUri != null && previewUri != Uri.EMPTY) {
         ChromaPhotoEditorScreen(
             photoUri = previewUri,
+            photoUris = photoUris,
+            initialIndex = previewIndex,
             exportButtonLabel = nextButtonLabel,
             onExportSuccess = { savedUri ->
                 val updated = photoUris.toMutableList().apply {
                     if (previewIndex in indices) this[previewIndex] = savedUri else add(savedUri)
                 }
                 onExportUris(updated)
+                onNext("Studio", null, 3000L)
+            },
+            onExportAllSuccess = { allSavedUris ->
+                onExportUris(allSavedUris)
                 onNext("Studio", null, 3000L)
             },
             onBack = onBack

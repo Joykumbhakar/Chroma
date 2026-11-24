@@ -427,6 +427,7 @@ fun ActivityGridItem(
     repository: WorkRepository,
     onClick: () -> Unit
 ) {
+    val colors = LocalOscellionColors.current
     var layers by remember(work.jsonUrl) { mutableStateOf<List<GradientLayer>?>(null) }
 
     LaunchedEffect(work.jsonUrl) {
@@ -444,7 +445,7 @@ fun ActivityGridItem(
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .background(Color(0xFF1C1C1E))
+            .background(if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFE5E7EB))
             .clickable { onClick() }
     ) {
         if (work.postType == "image" && !work.imageUrl.isNullOrBlank()) {

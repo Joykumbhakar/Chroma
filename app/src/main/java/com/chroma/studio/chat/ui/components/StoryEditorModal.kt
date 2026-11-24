@@ -185,14 +185,14 @@ fun StoryEditorModal(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Floating Apple Music Sticker Pill (Light Theme)
+            // Floating Apple Music Sticker Pill
             if (selectedMusic != null) {
                 Row(
                     modifier = Modifier
                         .shadow(6.dp, RoundedCornerShape(20.dp), spotColor = Color.Black.copy(alpha = 0.30f))
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color.White)
-                        .border(0.5.dp, Color(0xFFE5E5EA), RoundedCornerShape(20.dp))
+                        .background(if (colors.isLight) Color.White.copy(alpha = 0.95f) else Color(0xFF1C1C1E).copy(alpha = 0.92f))
+                        .border(0.5.dp, if (colors.isLight) Color(0xFFE5E5EA) else Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
                         .clickable {
                             SoundManager.playReaction()
                             selectedMusic = null
@@ -206,21 +206,21 @@ fun StoryEditorModal(
                         text = selectedMusic ?: "",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1C1C1E)
+                        color = if (colors.isLight) Color(0xFF1C1C1E) else Color.White
                     )
-                    PhosphorCloseX(tint = Color(0xFF8E8E93), size = 11.dp)
+                    PhosphorCloseX(tint = if (colors.isLight) Color(0xFF8E8E93) else Color.White.copy(alpha = 0.60f), size = 11.dp)
                 }
                 Spacer(Modifier.height(10.dp))
             }
 
-            // Floating Location Sticker Pill (Light Theme)
+            // Floating Location Sticker Pill
             if (selectedLocation != null) {
                 Row(
                     modifier = Modifier
                         .shadow(6.dp, RoundedCornerShape(20.dp), spotColor = Color.Black.copy(alpha = 0.30f))
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color.White)
-                        .border(0.5.dp, Color(0xFFE5E5EA), RoundedCornerShape(20.dp))
+                        .background(if (colors.isLight) Color.White.copy(alpha = 0.95f) else Color(0xFF1C1C1E).copy(alpha = 0.92f))
+                        .border(0.5.dp, if (colors.isLight) Color(0xFFE5E5EA) else Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
                         .clickable {
                             SoundManager.playReaction()
                             selectedLocation = null
@@ -234,22 +234,22 @@ fun StoryEditorModal(
                         text = selectedLocation ?: "",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1C1C1E)
+                        color = if (colors.isLight) Color(0xFF1C1C1E) else Color.White
                     )
-                    PhosphorCloseX(tint = Color(0xFF8E8E93), size = 11.dp)
+                    PhosphorCloseX(tint = if (colors.isLight) Color(0xFF8E8E93) else Color.White.copy(alpha = 0.60f), size = 11.dp)
                 }
                 Spacer(Modifier.height(10.dp))
             }
 
-            // Floating Poll Sticker Widget (Light Theme)
+            // Floating Poll Sticker Widget
             if (storyPoll != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.92f)
                         .shadow(12.dp, RoundedCornerShape(18.dp), spotColor = Color.Black.copy(alpha = 0.25f))
                         .clip(RoundedCornerShape(18.dp))
-                        .background(Color.White)
-                        .border(0.5.dp, Color(0xFFE5E5EA), RoundedCornerShape(18.dp))
+                        .background(if (colors.isLight) Color.White.copy(alpha = 0.95f) else Color(0xFF1C1C1E).copy(alpha = 0.92f))
+                        .border(0.5.dp, if (colors.isLight) Color(0xFFE5E5EA) else Color.White.copy(alpha = 0.15f), RoundedCornerShape(18.dp))
                         .clickable {
                             SoundManager.playReaction()
                             storyPoll = null
@@ -271,10 +271,10 @@ fun StoryEditorModal(
                                     text = storyPoll?.question ?: "Poll",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1C1C1E)
+                                    color = if (colors.isLight) Color(0xFF1C1C1E) else Color.White
                                 )
                             }
-                            PhosphorCloseX(tint = Color(0xFF8E8E93), size = 12.dp)
+                            PhosphorCloseX(tint = if (colors.isLight) Color(0xFF8E8E93) else Color.White.copy(alpha = 0.60f), size = 12.dp)
                         }
 
                         storyPoll?.options?.forEachIndexed { optIdx, opt ->
@@ -282,7 +282,7 @@ fun StoryEditorModal(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFFF2F2F7))
+                                    .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF2C2C2E))
                                     .padding(vertical = 8.dp, horizontal = 10.dp),
                                 verticalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
@@ -624,8 +624,8 @@ fun StoryEditorModal(
                     .fillMaxWidth()
                     .shadow(24.dp, RoundedCornerShape(26.dp), spotColor = Color.Black.copy(alpha = 0.35f))
                     .clip(RoundedCornerShape(26.dp))
-                    .background(Color.White)
-                    .border(0.5.dp, Color(0xFFE5E5EA), RoundedCornerShape(26.dp))
+                    .background(if (colors.isLight) Color.White else Color(0xFF1C1C1E))
+                    .border(0.5.dp, if (colors.isLight) Color(0xFFE5E5EA) else Color.White.copy(alpha = 0.12f), RoundedCornerShape(26.dp))
                     .padding(20.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -638,7 +638,7 @@ fun StoryEditorModal(
                             text = "Add Stickers & Widgets",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1C1C1E)
+                            color = colors.textDark
                         )
                         Box(
                             modifier = Modifier
@@ -646,11 +646,11 @@ fun StoryEditorModal(
                                 .clickable { isAddingSticker = false },
                             contentAlignment = Alignment.Center
                         ) {
-                            PhosphorCloseX(tint = Color(0xFF3C3C43), size = 14.dp)
+                            PhosphorCloseX(tint = colors.textMuted, size = 14.dp)
                         }
                     }
 
-                    // Main 3 Widget Actions (Light Theme Cards)
+                    // Main 3 Widget Actions
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -660,7 +660,7 @@ fun StoryEditorModal(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFFF2F2F7))
+                                .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF2C2C2E))
                                 .clickable {
                                     SoundManager.playReaction()
                                     selectedLocation = "San Francisco, CA"
@@ -674,7 +674,7 @@ fun StoryEditorModal(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 LucideMapPin(tint = Color(0xFFFF3B30), size = 16.dp)
-                                Text("Location", fontSize = 13.sp, color = Color(0xFF1C1C1E), fontWeight = FontWeight.Bold)
+                                Text("Location", fontSize = 13.sp, color = colors.textDark, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -683,7 +683,7 @@ fun StoryEditorModal(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFFF2F2F7))
+                                .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF2C2C2E))
                                 .clickable {
                                     SoundManager.playReaction()
                                     selectedMusic = "Odesza • A Moment Apart"
@@ -697,7 +697,7 @@ fun StoryEditorModal(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 PhosphorWaveform(tint = Color(0xFFFF2D55), size = 16.dp)
-                                Text("Music", fontSize = 13.sp, color = Color(0xFF1C1C1E), fontWeight = FontWeight.Bold)
+                                Text("Music", fontSize = 13.sp, color = colors.textDark, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -706,7 +706,7 @@ fun StoryEditorModal(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFFF2F2F7))
+                                .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF2C2C2E))
                                 .clickable {
                                     SoundManager.playReaction()
                                     storyPoll = PollData(
@@ -726,7 +726,7 @@ fun StoryEditorModal(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 LucideBarChart2(tint = Color(0xFF0381FE), size = 16.dp)
-                                Text("Poll", fontSize = 13.sp, color = Color(0xFF1C1C1E), fontWeight = FontWeight.Bold)
+                                Text("Poll", fontSize = 13.sp, color = colors.textDark, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -736,7 +736,7 @@ fun StoryEditorModal(
                         text = "Quick Reactions",
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF8E8E93)
+                        color = colors.textMuted
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -769,7 +769,7 @@ fun StoryEditorModal(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFFF2F2F7))
+                            .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF2C2C2E))
                             .clickable {
                                 SoundManager.playReaction()
                                 isAddingSticker = false
@@ -784,7 +784,7 @@ fun StoryEditorModal(
                             text = if (selectedPhotoUri != null) "Change Photo from Gallery" else "Choose Photo from Gallery",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF1C1C1E)
+                            color = colors.textDark
                         )
                     }
                 }
