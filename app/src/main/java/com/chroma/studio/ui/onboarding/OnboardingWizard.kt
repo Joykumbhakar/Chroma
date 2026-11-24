@@ -57,6 +57,11 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.chroma.studio.ui.components.ProfileMediaEditorModal
+import com.chroma.studio.ui.components.ProfileCropTarget
+
 enum class WizardStep {
     IDENTITY,
     PERSONAL_DETAILS,
@@ -65,10 +70,10 @@ enum class WizardStep {
 }
 
 data class GoogleUserData(
-    val email: String,
-    val googleId: String,
-    val displayName: String,
-    val photoUrl: String
+    val email: String = "",
+    val googleId: String = "",
+    val displayName: String = "",
+    val photoUrl: String = ""
 )
 
 data class WizardOutputData(
@@ -82,7 +87,8 @@ data class WizardOutputData(
     val bio: String,
     val interests: List<String>,
     val password: String = "",
-    val customEmail: String = ""
+    val customEmail: String = "",
+    val gender: String = "Private"
 )
 
 /**
@@ -98,28 +104,40 @@ data class WizardOutputData(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OnboardingWizard(
-    googleData: GoogleUserData,
+    googleData: GoogleUserData = GoogleUserData(),
+    initialUsername: String = "",
+    initialPassword: String = "",
     discoverRepo: DiscoverRepository,
     onBackToWelcome: () -> Unit,
     onComplete: (WizardOutputData) -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
 
     var currentStep by remember { mutableStateOf(WizardStep.IDENTITY) }
 
-    // Form states pre-filled with Google data
-    var displayName by remember { mutableStateOf(googleData.displayName) }
+    // Form states pre-filled with Google or direct initial data
+    var displayName by remember {
+        mutableStateOf(googleData.displayName.ifBlank { initialUsername.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() } })
+    }
     var username by remember {
-        val base = googleData.email.substringBefore("@").filter { it.isLetterOrDigit() || it == '_' }.lowercase()
+        val base = if (initialUsername.isNotBlank()) {
+            initialUsername.filter { it.isLetterOrDigit() || it == '_' }.lowercase()
+        } else if (googleData.email.isNotBlank()) {
+            googleData.email.substringBefore("@").filter { it.isLetterOrDigit() || it == '_' }.lowercase()
+        } else {
+            googleData.displayName.filter { it.isLetterOrDigit() || it == '_' }.lowercase()
+        }
         mutableStateOf(base.ifBlank { "creator" })
     }
     var avatarUri by remember { mutableStateOf<Uri?>(null) }
     var avatarUrl by remember { mutableStateOf(googleData.photoUrl) }
+    var pendingCropUri by remember { mutableStateOf<Uri?>(null) }
 
     // Password states
-    var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf(initialPassword) }
+    var confirmPassword by remember { mutableStateOf(initialPassword) }
     var showPassword by remember { mutableStateOf(false) }
     var showConfirmPassword by remember { mutableStateOf(false) }
 
@@ -130,6 +148,7 @@ fun OnboardingWizard(
 
     // Step 2 states
     var dobMillis by remember { mutableStateOf<Long?>(null) }
+    var gender by remember { mutableStateOf("Private") }
     var bio by remember { mutableStateOf("") }
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -145,10 +164,10 @@ fun OnboardingWizard(
         )
     }
 
-    // Avatar picker launcher
+    // Avatar picker launcher triggering profile crop modal
     val avatarGalleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            avatarUri = uri
+            pendingCropUri = uri
         }
     }
 
@@ -729,6 +748,72 @@ fun OnboardingWizard(
                                     }
                                 }
 
+                                val isUnderage = dobMillis?.let { it > latestAllowedBirthMillis() } ?: false
+                                if (isUnderage) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0xFFEF4444).copy(alpha = 0.12f))
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.ShieldAlert,
+                                            contentDescription = null,
+                                            tint = Color(0xFFEF4444),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "You must be 13 or older to join Chroma Studio.",
+                                            color = if (isDark) Color(0xFFFFB4AB) else Color(0xFFBA1A1A),
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+
+                                // Gender Identity Selector (Borderless compact pills)
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = "GENDER IDENTITY",
+                                        color = textMuted,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        listOf("Male", "Female", "Non-binary", "Private").forEach { g ->
+                                            val selected = gender == g
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(42.dp)
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(if (selected) Color(0xFF0381FE) else fieldBg)
+                                                    .clickable {
+                                                        gender = g
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = g,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (selected) Color.White else textPrimary,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
                                 // Short Bio
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Row(
@@ -813,10 +898,10 @@ fun OnboardingWizard(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(18.dp))
                                                 .background(if (isSelected) Color(0xFF0381FE) else fieldBg)
-                                                .border(0.5.dp, if (isSelected) Color.Transparent else fieldBorder, RoundedCornerShape(18.dp))
                                                 .clickable {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                     if (isSelected) {
-                                                        if (selectedInterests.size > 1) selectedInterests.remove(tag)
+                                                        selectedInterests.remove(tag)
                                                     } else {
                                                         selectedInterests.add(tag)
                                                     }
@@ -870,8 +955,8 @@ fun OnboardingWizard(
             if (currentStep != WizardStep.COMPLETING) {
                 val canProceed = when (currentStep) {
                     WizardStep.IDENTITY -> displayName.isNotBlank() && usernameStatus == UsernameStatus.Free && evaluatePasswordDemands(password).allMet && password == confirmPassword
-                    WizardStep.PERSONAL_DETAILS -> dobMillis != null
-                    WizardStep.INTERESTS -> selectedInterests.isNotEmpty()
+                    WizardStep.PERSONAL_DETAILS -> dobMillis != null && dobMillis!! <= latestAllowedBirthMillis()
+                    WizardStep.INTERESTS -> selectedInterests.size >= 2
                     WizardStep.COMPLETING -> false
                 }
 
@@ -889,8 +974,8 @@ fun OnboardingWizard(
                         .height(52.dp)
                         .clip(CircleShape)
                         .background(buttonBg)
-                        .studioBevel(cornerRadius = 26.dp, borderWidth = 1.dp)
                         .clickable(enabled = canProceed, role = Role.Button) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             when (currentStep) {
                                 WizardStep.IDENTITY -> currentStep = WizardStep.PERSONAL_DETAILS
                                 WizardStep.PERSONAL_DETAILS -> currentStep = WizardStep.INTERESTS
@@ -908,7 +993,8 @@ fun OnboardingWizard(
                                             bio = bio.trim(),
                                             interests = selectedInterests.toList(),
                                             password = password,
-                                            customEmail = "${username.trim().lowercase()}@oscellion.com"
+                                            customEmail = "${username.trim().lowercase()}@oscellion.com",
+                                            gender = gender
                                         )
                                     )
                                 }
@@ -947,6 +1033,19 @@ fun OnboardingWizard(
                     showDatePicker = false
                 },
                 title = "Date of Birth"
+            )
+        }
+
+        // Profile Media Crop Modal for Avatar
+        if (pendingCropUri != null) {
+            ProfileMediaEditorModal(
+                imageUri = pendingCropUri!!,
+                target = ProfileCropTarget.AVATAR,
+                onDismiss = { pendingCropUri = null },
+                onCropSuccess = { cropped ->
+                    pendingCropUri = null
+                    avatarUri = cropped
+                }
             )
         }
     }

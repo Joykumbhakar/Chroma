@@ -339,11 +339,6 @@ fun WelcomeScreen(
                             indication = null,
                             onClick = onGoogle
                         )
-                        .border(
-                            1.dp,
-                            if (isDark) Color.Transparent else Color(0xFFE2E8F0),
-                            RoundedCornerShape(colors.pillCornerRadius)
-                        )
                         .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -660,7 +655,6 @@ fun WelcomeScreen(
                         }
                         .clip(RoundedCornerShape(colors.pillCornerRadius))
                         .background(colors.glassBg.copy(alpha = 0.65f))
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(colors.pillCornerRadius))
                         .clickable(
                             interactionSource = guestInteraction,
                             indication = null,

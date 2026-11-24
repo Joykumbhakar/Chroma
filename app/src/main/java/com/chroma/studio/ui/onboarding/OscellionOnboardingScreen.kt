@@ -84,6 +84,9 @@ fun OscellionOnboardingScreen(
     var currentScreenState by remember { mutableStateOf(AuthScreenState.WELCOME) }
     var authIntentMode by remember { mutableStateOf(AuthIntentMode.LOGIN) }
 
+    var initialSignupUsername by remember { mutableStateOf("") }
+    var initialSignupPassword by remember { mutableStateOf("") }
+
     var isGoogleLoading by remember { mutableStateOf(false) }
     var isAppleLoading by remember { mutableStateOf(false) }
     var isConfirmingLoading by remember { mutableStateOf(false) }
@@ -302,7 +305,11 @@ fun OscellionOnboardingScreen(
                             launchGoogleSignIn(AuthIntentMode.LOGIN)
                         },
                         onCreateAccount = {
-                            launchGoogleSignIn(AuthIntentMode.SIGN_UP)
+                            initialSignupUsername = ""
+                            initialSignupPassword = ""
+                            activeGoogleUserData = null
+                            activeFirebaseUser = null
+                            currentScreenState = AuthScreenState.ONBOARDING_WIZARD
                         },
                         onApple = { launchAppleSignIn() },
                         onSignInExisting = {
@@ -311,47 +318,11 @@ fun OscellionOnboardingScreen(
                         onExploreGuest = { enterAsGuest() },
                         onTerms = { showTermsModal = true },
                         onSignUpWithCredentials = { uname, pwd ->
-                            scope.launch {
-                                isConfirmingLoading = true
-                                try {
-                                    val isAvailable = discoverRepo.checkUsernameAvailable(uname)
-                                    if (!isAvailable) {
-                                        Toast.makeText(context, "Username @$uname is already taken. Please try another.", Toast.LENGTH_LONG).show()
-                                        return@launch
-                                    }
-                                    val customEmail = "${uname.trim().lowercase()}@oscellion.com"
-                                    val authResult = auth.createUserWithEmailAndPassword(customEmail, pwd).await()
-                                    val user = authResult.user
-                                    if (user != null) {
-                                        val newProfile = UserProfile(
-                                            uid = user.uid,
-                                            username = uname.trim().lowercase(),
-                                            displayName = uname.trim(),
-                                            email = customEmail,
-                                            createdAt = System.currentTimeMillis()
-                                        )
-                                        discoverRepo.updateUserProfile(newProfile)
-                                        val savedAcc = SavedAccount(
-                                            uid = user.uid,
-                                            username = newProfile.username,
-                                            displayName = newProfile.displayName,
-                                            avatarUrl = "",
-                                            email = newProfile.email,
-                                            lastLoginMillis = System.currentTimeMillis(),
-                                            gender = "UNSPECIFIED"
-                                        )
-                                        SavedAccountManager.saveAccount(context, savedAcc)
-                                        com.chroma.studio.ChatStateManager.setCurrentUserId(user.uid)
-                                        com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
-                                        Toast.makeText(context, "Welcome to Oscellion, ${newProfile.displayName}!", Toast.LENGTH_SHORT).show()
-                                        onLoginSuccess()
-                                    }
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Sign up failed: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
-                                } finally {
-                                    isConfirmingLoading = false
-                                }
-                            }
+                            initialSignupUsername = uname
+                            initialSignupPassword = pwd
+                            activeGoogleUserData = null
+                            activeFirebaseUser = null
+                            currentScreenState = AuthScreenState.ONBOARDING_WIZARD
                         },
                         onSignInWithCredentials = { uname, pwd ->
                             scope.launch {
@@ -392,7 +363,13 @@ fun OscellionOnboardingScreen(
                     SignInScreen(
                         onBack = { currentScreenState = AuthScreenState.WELCOME },
                         onLoginSuccess = onLoginSuccess,
-                        onCreateAccount = { launchGoogleSignIn(AuthIntentMode.SIGN_UP) },
+                        onCreateAccount = {
+                            initialSignupUsername = ""
+                            initialSignupPassword = ""
+                            activeGoogleUserData = null
+                            activeFirebaseUser = null
+                            currentScreenState = AuthScreenState.ONBOARDING_WIZARD
+                        },
                         onGoogleSignIn = { launchGoogleSignIn(AuthIntentMode.LOGIN) },
                         onAppleSignIn = { launchAppleSignIn() },
                         appleLoading = isAppleLoading,
@@ -456,12 +433,14 @@ fun OscellionOnboardingScreen(
                     val gData = activeGoogleUserData ?: GoogleUserData(
                         email = activeFirebaseUser?.email ?: "",
                         googleId = activeFirebaseUser?.uid ?: "",
-                        displayName = activeFirebaseUser?.displayName ?: "Creator",
+                        displayName = activeFirebaseUser?.displayName ?: initialSignupUsername,
                         photoUrl = activeFirebaseUser?.photoUrl?.toString() ?: ""
                     )
 
                     OnboardingWizard(
                         googleData = gData,
+                        initialUsername = initialSignupUsername,
+                        initialPassword = initialSignupPassword,
                         discoverRepo = discoverRepo,
                         onBackToWelcome = {
                             purgeClientSession {
@@ -470,67 +449,93 @@ fun OscellionOnboardingScreen(
                         },
                         onComplete = { output ->
                             scope.launch {
-                                val uid = activeFirebaseUser?.uid ?: auth.currentUser?.uid
-                                if (uid.isNullOrBlank()) {
-                                    Toast.makeText(context, "Authentication session expired. Please sign in again.", Toast.LENGTH_LONG).show()
-                                    currentScreenState = AuthScreenState.WELCOME
-                                    return@launch
-                                }
+                                try {
+                                    var uid = activeFirebaseUser?.uid ?: auth.currentUser?.uid
+                                    val customEmail = if (output.customEmail.isNotBlank()) output.customEmail.trim().lowercase() else "${output.username.trim().lowercase()}@oscellion.com"
 
-                                val customEmail = if (output.customEmail.isNotBlank()) output.customEmail.trim().lowercase() else "${output.username.trim().lowercase()}@oscellion.com"
-
-                                // Link Custom Email (username@oscellion.com) and Password to the Google account
-                                val currentUser = auth.currentUser
-                                if (currentUser != null && output.password.isNotBlank()) {
-                                    try {
-                                        val emailCred = EmailAuthProvider.getCredential(customEmail, output.password)
-                                        currentUser.linkWithCredential(emailCred).await()
-                                    } catch (e: Exception) {
-                                        android.util.Log.w("OscellionAuth", "linkWithCredential failed: ${e.message}", e)
-                                        try {
-                                            currentUser.updatePassword(output.password).await()
-                                        } catch (pe: Exception) {
-                                            android.util.Log.w("OscellionAuth", "updatePassword fallback failed: ${pe.message}", pe)
+                                    // Direct signup case: user did not sign in via Google/Apple
+                                    if (uid.isNullOrBlank()) {
+                                        if (output.password.isBlank()) {
+                                            Toast.makeText(context, "Please set a password for your studio account", Toast.LENGTH_LONG).show()
+                                            return@launch
+                                        }
+                                        val isAvailable = discoverRepo.checkUsernameAvailable(output.username)
+                                        if (!isAvailable) {
+                                            Toast.makeText(context, "Username @${output.username} is already taken. Please choose another.", Toast.LENGTH_LONG).show()
+                                            return@launch
+                                        }
+                                        val authResult = auth.createUserWithEmailAndPassword(customEmail, output.password).await()
+                                        val newUser = authResult.user ?: throw IllegalStateException("Failed to create user account")
+                                        uid = newUser.uid
+                                        activeFirebaseUser = newUser
+                                    } else {
+                                        // Link Custom Email (username@oscellion.com) and Password to the Google account
+                                        val currentUser = auth.currentUser
+                                        if (currentUser != null && output.password.isNotBlank()) {
+                                            try {
+                                                val emailCred = EmailAuthProvider.getCredential(customEmail, output.password)
+                                                currentUser.linkWithCredential(emailCred).await()
+                                            } catch (e: Exception) {
+                                                try {
+                                                    currentUser.updatePassword(output.password).await()
+                                                } catch (_: Exception) {}
+                                            }
                                         }
                                     }
-                                }
 
-                                // Upload custom avatar to Supabase Storage if user selected an image from gallery
-                                var finalAvatar = output.avatarUrl
-                                output.avatarUri?.let { uri ->
-                                    val uploaded = withContext(Dispatchers.IO) {
-                                        SupabaseMediaStorage.uploadAvatarFromUri(context, uid, uri)
+                                    // Upload custom avatar to Supabase Storage if user selected an image
+                                    var finalAvatar = output.avatarUrl
+                                    output.avatarUri?.let { uri ->
+                                        val uploaded = withContext(Dispatchers.IO) {
+                                            SupabaseMediaStorage.uploadAvatarFromUri(context, uid, uri)
+                                        }
+                                        if (uploaded != null) {
+                                            finalAvatar = uploaded
+                                        }
                                     }
-                                    if (uploaded != null) {
-                                        finalAvatar = uploaded
-                                    }
-                                }
 
-                                // Atomic commit to Firestore database
-                                val success = discoverRepo.registerDetailedUser(
-                                    uid = uid,
-                                    displayName = output.displayName,
-                                    username = output.username,
-                                    dob = output.dobMillis,
-                                    avatarUrl = finalAvatar,
-                                    interests = output.interests,
-                                    email = output.email,
-                                    customEmail = customEmail,
-                                    googleId = output.googleId,
-                                    bio = output.bio,
-                                    isOnboarded = true
-                                )
+                                    // Atomic commit to Firestore database
+                                    val success = discoverRepo.registerDetailedUser(
+                                        uid = uid,
+                                        displayName = output.displayName,
+                                        username = output.username,
+                                        dob = output.dobMillis,
+                                        avatarUrl = finalAvatar,
+                                        interests = output.interests,
+                                        gender = output.gender,
+                                        email = if (output.email.isNotBlank()) output.email else customEmail,
+                                        customEmail = customEmail,
+                                        googleId = output.googleId,
+                                        bio = output.bio,
+                                        isOnboarded = true
+                                    )
 
-                                if (success) {
-                                    val newProfile = discoverRepo.getUserProfile(uid)
-                                    if (newProfile != null) {
-                                        SavedAccountManager.saveFromProfile(context, newProfile, customEmail)
+                                    if (success) {
+                                        val newProfile = discoverRepo.getUserProfile(uid)
+                                        if (newProfile != null) {
+                                            SavedAccountManager.saveFromProfile(context, newProfile, customEmail)
+                                        } else {
+                                            val savedAcc = SavedAccount(
+                                                uid = uid,
+                                                username = output.username,
+                                                displayName = output.displayName,
+                                                avatarUrl = finalAvatar,
+                                                email = customEmail,
+                                                lastLoginMillis = System.currentTimeMillis(),
+                                                gender = output.gender
+                                            )
+                                            SavedAccountManager.saveAccount(context, savedAcc)
+                                        }
+                                        com.chroma.studio.ChatStateManager.setCurrentUserId(uid)
+                                        com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+                                        Toast.makeText(context, "Welcome to Chroma Studio, ${output.displayName}!", Toast.LENGTH_SHORT).show()
+                                        onLoginSuccess()
+                                    } else {
+                                        Toast.makeText(context, "Failed to complete registration. Please try again.", Toast.LENGTH_LONG).show()
+                                        currentScreenState = AuthScreenState.WELCOME
                                     }
-                                    com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
-                                    Toast.makeText(context, "Welcome to Chroma Studio, ${output.displayName}!", Toast.LENGTH_SHORT).show()
-                                    onLoginSuccess()
-                                } else {
-                                    Toast.makeText(context, "Failed to complete registration. Please try again.", Toast.LENGTH_LONG).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Registration error: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
                                     currentScreenState = AuthScreenState.WELCOME
                                 }
                             }
