@@ -1339,13 +1339,15 @@ fun ProfileIdentityScreen(
         ModalBottomSheet(
             onDismissRequest = { activePickerSheet = null },
             containerColor = if (isDark) Color(0xFF1C1C1E) else Color.White,
-            dragHandle = { BottomSheetDefaults.DragHandle() }
+            dragHandle = { BottomSheetDefaults.DragHandle() },
+            windowInsets = WindowInsets(0.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
-                    .padding(bottom = 36.dp),
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(
@@ -1463,12 +1465,14 @@ fun ProfileIdentityScreen(
         ModalBottomSheet(
             onDismissRequest = { showAvatarDialog = false },
             containerColor = if (isDark) Color(0xFF1C1C1E) else Color.White,
-            dragHandle = { BottomSheetDefaults.DragHandle() }
+            dragHandle = { BottomSheetDefaults.DragHandle() },
+            windowInsets = WindowInsets(0.dp)
         ) {
             Column(
                 modifier = Modifier
                     .padding(horizontal = 20.dp)
-                    .padding(bottom = 36.dp),
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(

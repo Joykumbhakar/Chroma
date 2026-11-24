@@ -78,6 +78,9 @@ class StoryViewModel : ViewModel() {
     private val _highlights = MutableStateFlow<List<StoryHighlight>>(emptyList())
     val highlights: StateFlow<List<StoryHighlight>> = _highlights.asStateFlow()
 
+    private val _highlightsOwnerId = MutableStateFlow<String?>(null)
+    val highlightsOwnerId: StateFlow<String?> = _highlightsOwnerId.asStateFlow()
+
     private val _storyArchive = MutableStateFlow<List<Story>>(emptyList())
     val storyArchive: StateFlow<List<Story>> = _storyArchive.asStateFlow()
 
@@ -120,6 +123,7 @@ class StoryViewModel : ViewModel() {
         _uploadError.value = null
         _failedStoryUpload.value = null
         _highlights.value = emptyList()
+        _highlightsOwnerId.value = null
         _storyArchive.value = emptyList()
     }
 
@@ -277,7 +281,7 @@ class StoryViewModel : ViewModel() {
             timestamp = System.currentTimeMillis(),
             isHighlight = isHighlight,
             highlightTitle = highlightTitle,
-            expiresAt = if (isHighlight) Long.MAX_VALUE else System.currentTimeMillis() + 86400000,
+            expiresAt = System.currentTimeMillis() + 86400000,
             isUploading = true,
             uploadProgress = 0.15f,
             isFailed = false
@@ -351,6 +355,9 @@ class StoryViewModel : ViewModel() {
                 _myStories.value = _myStories.value.filter { it.id != tempId }
                 loadMyStories()
                 loadStories()
+                if (isHighlight && currentUid.isNotBlank()) {
+                    loadHighlights(currentUid)
+                }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 markStoryFailed(
@@ -396,7 +403,7 @@ class StoryViewModel : ViewModel() {
             timestamp = System.currentTimeMillis(),
             isHighlight = isHighlight,
             highlightTitle = highlightTitle,
-            expiresAt = if (isHighlight) Long.MAX_VALUE else System.currentTimeMillis() + 86400000,
+            expiresAt = System.currentTimeMillis() + 86400000,
             isUploading = true,
             uploadProgress = 0.30f,
             isFailed = false
@@ -425,6 +432,9 @@ class StoryViewModel : ViewModel() {
                 _myStories.value = _myStories.value.filter { it.id != tempId }
                 loadMyStories()
                 loadStories()
+                if (isHighlight && currentUid.isNotBlank()) {
+                    loadHighlights(currentUid)
+                }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 markStoryFailed(
@@ -497,6 +507,7 @@ class StoryViewModel : ViewModel() {
             try {
                 val success = repository.saveStoryToHighlight(storyId, highlightTitle, emoji, coverUrl)
                 if (success) {
+                    auth.currentUser?.uid?.let { loadHighlights(it) }
                     loadMyStories()
                 }
                 onComplete(success)
@@ -666,6 +677,10 @@ class StoryViewModel : ViewModel() {
             val updated = group.stories.filter { it.id != storyId }
             if (updated.isEmpty()) null else group.copy(stories = updated)
         }
+        _highlights.value = _highlights.value.map { hl ->
+            if (storyId in hl.storyIds) hl.copy(storyIds = hl.storyIds.filter { it != storyId }) else hl
+        }
+        _storyArchive.value = _storyArchive.value.filter { it.id != storyId }
         viewModelScope.launch { repository.deleteStory(storyId) }
     }
 
@@ -683,6 +698,7 @@ class StoryViewModel : ViewModel() {
             try {
                 val list = repository.fetchUserHighlights(userId)
                 _highlights.value = list
+                _highlightsOwnerId.value = userId
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.e("StoryViewModel", "loadHighlights error", e)

@@ -179,4 +179,37 @@ class StoryExpirationAndReplyTest {
         // Resuming from 60% of 5000ms requires remaining 40% (2000ms)
         assertEquals(2000, remainingDuration)
     }
+
+    @Test
+    fun testExpiredHighlightStoryExcludedFromActiveFeed() {
+        val now = System.currentTimeMillis()
+        val activeWithin24h = Story(
+            id = "story_active",
+            userId = "user_1",
+            timestamp = now - 3_600_000L, // 1 hour ago
+            expiresAt = now + 82_800_000L,
+            isHighlight = true,
+            highlightTitle = "Test Highlight"
+        )
+        val expiredNormalHighlight = Story(
+            id = "story_expired_normal",
+            userId = "user_1",
+            timestamp = now - 100_000_000L, // > 24h ago
+            expiresAt = now - 13_600_000L,
+            isHighlight = true,
+            highlightTitle = "Test Highlight"
+        )
+        val expiredLegacyCorruptedHighlight = Story(
+            id = "story_expired_corrupted",
+            userId = "user_1",
+            timestamp = now - 172_800_000L, // 48 hours ago
+            expiresAt = Long.MAX_VALUE,      // Legacy bug overwrote expiresAt
+            isHighlight = true,
+            highlightTitle = "Test Highlight"
+        )
+
+        assertTrue(StoryRepository.isStoryActiveInFeed(activeWithin24h, now))
+        assertFalse(StoryRepository.isStoryActiveInFeed(expiredNormalHighlight, now))
+        assertFalse(StoryRepository.isStoryActiveInFeed(expiredLegacyCorruptedHighlight, now))
+    }
 }

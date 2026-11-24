@@ -68,13 +68,15 @@ fun ShareStoryAudienceSheet(
                     .clip(RoundedCornerShape(9999.dp))
                     .background(if (colors.isDark) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.18f))
             )
-        }
+        },
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
         ) {
             Text(
                 text = "Share Story",
@@ -125,9 +127,7 @@ fun ShareStoryAudienceSheet(
                             modifier = Modifier
                                 .size(42.dp)
                                 .clip(CircleShape)
-                                .background(
-                                    Brush.sweepGradient(AppleStatusVibrantGradient)
-                                ),
+                                .background(Color(0xFF0381FE)),
                             contentAlignment = Alignment.Center
                         ) {
                             Box(

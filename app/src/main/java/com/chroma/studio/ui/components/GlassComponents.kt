@@ -255,7 +255,8 @@ fun GlassBottomSheet(
                 )
             }
         },
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        windowInsets = androidx.compose.foundation.layout.WindowInsets(0.dp)
     ) {
         androidx.compose.foundation.layout.Column(
             modifier = Modifier

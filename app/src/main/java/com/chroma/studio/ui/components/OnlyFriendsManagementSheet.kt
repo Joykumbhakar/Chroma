@@ -112,7 +112,8 @@ fun OnlyFriendsManagementSheet(
                     .clip(RoundedCornerShape(9999.dp))
                     .background(if (colors.isDark) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.18f))
             )
-        }
+        },
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = modifier

@@ -363,9 +363,10 @@ fun FlashFeedScreen(
         ModalBottomSheet(
             onDismissRequest = { showDraftSheet = false },
             containerColor = if (colors.isDark) Color(0xFF1C1C1E) else Color.White,
-            dragHandle = { BottomSheetDefaults.DragHandle(color = colors.cardBorder) }
+            dragHandle = { BottomSheetDefaults.DragHandle(color = colors.cardBorder) },
+            windowInsets = WindowInsets(0.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp).fillMaxWidth().navigationBarsPadding()) {
                 Text(
                     "Drafts",
                     color = colors.textMain,
@@ -1131,7 +1132,8 @@ private fun FlashMoreOptionsSheet(
         dragHandle = {
             BottomSheetDefaults.DragHandle(color = colors.cardBorder)
         },
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier

@@ -878,6 +878,7 @@ fun ConversationsScreen(
                     stories = storyGroups,
                     isLoading = isLoadingStories,
                     hasMyStory = hasMyStory,
+                    isMyStoryVerified = currentUser.isVerified,
                     isUploading = isUploadingStory,
                     isUploadFailed = isUploadFailed,
                     onRetryUpload = onRetryUpload,

@@ -45,6 +45,7 @@ fun StoriesSection(
     myStoryAvatarUrl: String = "",
     myStoryGender: String? = null,
     myStoriesList: List<Story> = emptyList(),
+    isMyStoryVerified: Boolean = false,
     isUploading: Boolean = false,
     isUploadFailed: Boolean = false,
     onRetryUpload: (() -> Unit)? = null,
@@ -158,6 +159,7 @@ fun StoriesSection(
                             storyCount = myStoriesList.size.coerceAtLeast(1),
                             isSeen = false,
                             isOnlyFriend = hasOnlyFriendStory,
+                            isVerified = isMyStoryVerified,
                             isUploading = isUploading,
                             isUploadFailed = isUploadFailed,
                             showAddBadge = true,
@@ -267,6 +269,7 @@ fun StoriesSection(
                         ) { onStoryClick?.invoke(index) }
                 ) {
                     val hasOnlyFriendStory = storyGroup.stories.any { it.audienceType == "only_friends" }
+                    val isVerified = profile.verified
                     AppleStatusAvatar(
                         name = displayName,
                         avatarUrl = avatarUrl,
@@ -276,6 +279,7 @@ fun StoriesSection(
                         storyCount = storyGroup.stories.size,
                         isSeen = isSeen,
                         isOnlyFriend = hasOnlyFriendStory,
+                        isVerified = isVerified,
                         isOnline = isOnline,
                         showAddBadge = false,
                         gender = profile.gender,

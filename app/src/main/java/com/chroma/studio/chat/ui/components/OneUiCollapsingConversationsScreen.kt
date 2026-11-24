@@ -806,6 +806,7 @@ fun OneUiCollapsingConversationsScreen(
                         myStoryAvatarUrl = currentUser.avatar ?: "",
                         myStoryGender = null,
                         myStoriesList = myStories,
+                        isMyStoryVerified = currentUser.isVerified,
                         isUploading = isUploadingStory,
                         isUploadFailed = isUploadFailed,
                         onRetryUpload = onRetryUpload,
@@ -1296,7 +1297,8 @@ fun OneUiCollapsingConversationsScreen(
             ModalBottomSheet(
                 onDismissRequest = { selectedChatForActions = null },
                 containerColor = cardBgColor,
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                windowInsets = WindowInsets(0.dp)
             ) {
                 Column(
                     modifier = Modifier

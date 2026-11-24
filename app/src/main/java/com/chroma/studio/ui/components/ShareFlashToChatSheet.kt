@@ -111,13 +111,15 @@ fun ShareFlashToChatSheet(
                     .background(if (colors.isDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.20f))
             )
         },
+        windowInsets = WindowInsets(0.dp),
         modifier = modifier
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 28.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
         ) {
             // ── 1. Video Preview Card Header ────────────────────────────────────
             Row(

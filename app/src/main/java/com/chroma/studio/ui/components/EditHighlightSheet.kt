@@ -83,13 +83,15 @@ fun EditHighlightSheet(
                     .background(Color.White.copy(alpha = 0.25f))
             )
         },
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.9f)
                 .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
         ) {
             // Header Bar
             Row(
@@ -303,15 +305,32 @@ fun EditHighlightSheet(
                                         }
                                     }
                             ) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context)
-                                        .data(storyItem.mediaUrl)
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
+                                if (storyItem.mediaUrl.isNotBlank() && storyItem.mediaUrl != "text:story") {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(storyItem.mediaUrl)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color(0xFF0072DE).copy(alpha = 0.25f))
+                                            .padding(8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = storyItem.textContent.ifBlank { "Text Story" },
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
 
                                 // Selection Badge (Top Right)
                                 Box(

@@ -13,10 +13,115 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
 
 class StoryRepository {
+    companion object {
+        const val STORY_LIFETIME_MS = 86_400_000L
+
+        /**
+         * Determines whether a story should be shown in the active 24-hour story bar.
+         * Highlights never extend a story's 24-hour feed lifetime: even if a legacy story
+         * document had `expiresAt = Long.MAX_VALUE`, its active feed lifetime is still
+         * bounded by `timestamp + 24h`.
+         */
+        fun isStoryActiveInFeed(story: Story, now: Long = System.currentTimeMillis()): Boolean {
+            val cutoff24h = if (story.timestamp > 0L) story.timestamp + STORY_LIFETIME_MS else story.expiresAt
+            val effectiveExpiresAt = when {
+                story.expiresAt <= 0L -> cutoff24h
+                story.timestamp > 0L && story.expiresAt > cutoff24h -> cutoff24h
+                else -> story.expiresAt
+            }
+            return effectiveExpiresAt > now
+        }
+    }
+
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
     private val storiesCol = db.collection("stories")
     private val usersCol = db.collection("users")
+
+    /**
+     * Updates highlight metadata on a story document without ever extending `expiresAt`.
+     * Also heals legacy corrupted `expiresAt` values (> timestamp + 24h) back to the true
+     * 24h expiration timestamp so old stories never resurrect in the active story bar.
+     */
+    private suspend fun syncStoryHighlightState(
+        storyId: String,
+        isHighlight: Boolean,
+        highlightTitle: String? = null,
+        highlightCoverUrl: String? = null
+    ) {
+        try {
+            val ref = storiesCol.document(storyId)
+            val snap = ref.get().await()
+            if (!snap.exists()) return
+            val ts = snap.getLong("timestamp") ?: 0L
+            val exp = snap.getLong("expiresAt") ?: 0L
+            val updates = mutableMapOf<String, Any>("isHighlight" to isHighlight)
+            if (highlightTitle != null) {
+                updates["highlightTitle"] = highlightTitle
+            }
+            if (highlightCoverUrl != null) {
+                updates["highlightCoverUrl"] = highlightCoverUrl
+            }
+            if (ts > 0L && exp > ts + STORY_LIFETIME_MS) {
+                updates["expiresAt"] = ts + STORY_LIFETIME_MS
+            }
+            ref.update(updates).await()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w("StoryRepository", "Failed to sync highlight state for story $storyId", e)
+        }
+    }
+
+    /** Appends a newly published story to a matching highlight album or creates a new one. */
+    private suspend fun appendStoryToHighlightAlbumByTitle(
+        userId: String,
+        storyId: String,
+        cleanTitle: String,
+        coverUrl: String,
+        now: Long
+    ) {
+        val highlightsCol = usersCol.document(userId).collection("highlights")
+        val existingSnap = highlightsCol.whereEqualTo("title", cleanTitle).limit(1).get().await()
+        val existingDoc = existingSnap.documents.firstOrNull()
+        if (existingDoc != null) {
+            val updates = mutableMapOf<String, Any>(
+                "storyIds" to FieldValue.arrayUnion(storyId),
+                "updatedAt" to now
+            )
+            if ((existingDoc.getString("coverUrl") ?: "").isBlank() && coverUrl.isNotBlank()) {
+                updates["coverUrl"] = coverUrl
+            }
+            existingDoc.reference.update(updates).await()
+        } else {
+            val hlDocId = "hl_${cleanTitle.lowercase().replace("\\s+".toRegex(), "_")}"
+            val hlRef = highlightsCol.document(hlDocId)
+            val snap = hlRef.get().await()
+            if (snap.exists()) {
+                val updates = mutableMapOf<String, Any>(
+                    "storyIds" to FieldValue.arrayUnion(storyId),
+                    "updatedAt" to now
+                )
+                if ((snap.getString("coverUrl") ?: "").isBlank() && coverUrl.isNotBlank()) {
+                    updates["coverUrl"] = coverUrl
+                }
+                hlRef.update(updates).await()
+            } else {
+                hlRef.set(
+                    mapOf(
+                        "id" to hlDocId,
+                        "userId" to userId,
+                        "title" to cleanTitle,
+                        "emoji" to "✨",
+                        "coverUrl" to coverUrl,
+                        "gradientIndex" to 0,
+                        "storyIds" to listOf(storyId),
+                        "createdAt" to now,
+                        "updatedAt" to now
+                    )
+                ).await()
+            }
+        }
+    }
 
     /** Publish a new story for the current user. Returns the story ID. */
     suspend fun publishStory(
@@ -33,8 +138,8 @@ class StoryRepository {
         val user = auth.currentUser ?: throw Exception("Not authenticated")
         val docRef = storiesCol.document()
         val now = System.currentTimeMillis()
-        // Highlighted stories live forever (Long.MAX_VALUE), regular stories expire after 24 hrs
-        val expiryTime = if (isHighlight) Long.MAX_VALUE else now + 86_400_000L
+        // All stories expire after 24 hrs — highlights fetch stories by ID separately
+        val expiryTime = now + 86_400_000L
 
         val story = Story(
             id = docRef.id,
@@ -56,19 +161,14 @@ class StoryRepository {
         if (isHighlight && highlightTitle.isNotBlank()) {
             try {
                 val cleanTitle = highlightTitle.trim()
-                val hlDocId = "hl_${cleanTitle.lowercase().replace("\\s+".toRegex(), "_")}"
-                usersCol.document(user.uid).collection("highlights").document(hlDocId).set(
-                    mapOf(
-                        "id" to hlDocId,
-                        "title" to cleanTitle,
-                        "emoji" to "✨",
-                        "coverUrl" to (if (highlightCoverUrl.isNotBlank()) highlightCoverUrl else mediaUrl),
-                        "gradientIndex" to 0,
-                        "storyIds" to FieldValue.arrayUnion(docRef.id),
-                        "createdAt" to now
-                    ),
-                    SetOptions.merge()
-                ).await()
+                val effectiveCover = if (highlightCoverUrl.isNotBlank()) highlightCoverUrl else mediaUrl
+                appendStoryToHighlightAlbumByTitle(
+                    userId = user.uid,
+                    storyId = docRef.id,
+                    cleanTitle = cleanTitle,
+                    coverUrl = effectiveCover,
+                    now = now
+                )
             } catch (e: Exception) {
                 Log.w("StoryRepository", "Failed to register story to highlights collection", e)
             }
@@ -89,8 +189,8 @@ class StoryRepository {
         val user = auth.currentUser ?: throw Exception("Not authenticated")
         val docRef = storiesCol.document()
         val now = System.currentTimeMillis()
-        // Highlighted stories live forever (Long.MAX_VALUE), regular stories expire after 24 hrs
-        val expiryTime = if (isHighlight) Long.MAX_VALUE else now + 86_400_000L
+        // All stories expire after 24 hrs — highlights fetch stories by ID separately
+        val expiryTime = now + 86_400_000L
 
         val story = Story(
             id = docRef.id,
@@ -111,19 +211,13 @@ class StoryRepository {
         if (isHighlight && highlightTitle.isNotBlank()) {
             try {
                 val cleanTitle = highlightTitle.trim()
-                val hlDocId = "hl_${cleanTitle.lowercase().replace("\\s+".toRegex(), "_")}"
-                usersCol.document(user.uid).collection("highlights").document(hlDocId).set(
-                    mapOf(
-                        "id" to hlDocId,
-                        "title" to cleanTitle,
-                        "emoji" to "✨",
-                        "coverUrl" to "",
-                        "gradientIndex" to 0,
-                        "storyIds" to FieldValue.arrayUnion(docRef.id),
-                        "createdAt" to now
-                    ),
-                    SetOptions.merge()
-                ).await()
+                appendStoryToHighlightAlbumByTitle(
+                    userId = user.uid,
+                    storyId = docRef.id,
+                    cleanTitle = cleanTitle,
+                    coverUrl = "",
+                    now = now
+                )
             } catch (e: Exception) {
                 Log.w("StoryRepository", "Failed to register text story to highlights", e)
             }
@@ -144,8 +238,8 @@ class StoryRepository {
                 val snap = storiesCol
                     .whereIn("userId", batch)
                     .get().await()
-                snap.documents.mapNotNull { it.toObject(Story::class.java) }
-                    .filter { it.expiresAt > now }
+                snap.documents.mapNotNull { doc -> doc.toObject(Story::class.java)?.copy(id = doc.id) }
+                    .filter { isStoryActiveInFeed(it, now) }
                     .filter { story ->
                         story.userId == currentUid ||
                         story.audienceType == "public" ||
@@ -180,8 +274,8 @@ class StoryRepository {
             val snap = storiesCol
                 .limit(limit)
                 .get().await()
-            val allStories = snap.documents.mapNotNull { it.toObject(Story::class.java) }
-                .filter { it.expiresAt > now }
+            val allStories = snap.documents.mapNotNull { doc -> doc.toObject(Story::class.java)?.copy(id = doc.id) }
+                .filter { isStoryActiveInFeed(it, now) }
                 .filter { story ->
                     story.userId == currentUid ||
                     story.audienceType == "public" ||
@@ -214,7 +308,9 @@ class StoryRepository {
             val snap = storiesCol
                 .whereEqualTo("userId", uid)
                 .get().await()
-            snap.toObjects(Story::class.java).filter { it.expiresAt > now }.sortedBy { it.timestamp }
+            snap.documents.mapNotNull { doc -> doc.toObject(Story::class.java)?.copy(id = doc.id) }
+                .filter { isStoryActiveInFeed(it, now) }
+                .sortedBy { it.timestamp }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             emptyList()
@@ -302,11 +398,26 @@ class StoryRepository {
         }
     }
 
-    /** Delete a story (owner only). */
+    /** Delete a story (owner only) and remove it from any highlight albums. */
     suspend fun deleteStory(storyId: String) {
-        try { storiesCol.document(storyId).delete().await() }
-        catch (e: Exception) {
+        val uid = auth.currentUser?.uid
+        try {
+            storiesCol.document(storyId).delete().await()
+        } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
+        }
+        if (!uid.isNullOrBlank()) {
+            try {
+                val hlSnap = usersCol.document(uid).collection("highlights")
+                    .whereArrayContains("storyIds", storyId)
+                    .get().await()
+                hlSnap.documents.forEach { hlDoc ->
+                    hlDoc.reference.update("storyIds", FieldValue.arrayRemove(storyId)).await()
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.w("StoryRepository", "Failed removing deleted story $storyId from highlights", e)
+            }
         }
     }
 
@@ -364,7 +475,7 @@ class StoryRepository {
 
             val story = storyDoc.toObject(Story::class.java)?.copy(id = storyDoc.id) ?: return null
             val now = System.currentTimeMillis()
-            val isAlive = story.isHighlight || (if (story.expiresAt > 0L) story.expiresAt > now else (now - story.timestamp) < 86_400_000L)
+            val isAlive = isStoryActiveInFeed(story, now)
             if (!isAlive) return null
 
             val userDoc = usersCol.document(story.userId).get().await()
@@ -400,7 +511,7 @@ class StoryRepository {
         }
     }
 
-    /** Save an existing story to user highlights so it lives forever (never expires). */
+    /** Save an existing story to user highlights (never extends 24h story bar expiry). */
     suspend fun saveStoryToHighlight(
         storyId: String,
         highlightTitle: String,
@@ -414,33 +525,24 @@ class StoryRepository {
             if (!storyDoc.exists()) return false
 
             val media = storyDoc.getString("mediaUrl") ?: ""
-            val chosenCover = if (!coverUrl.isNullOrBlank()) coverUrl else media
+            val chosenCover = if (!coverUrl.isNullOrBlank()) coverUrl else media.takeIf { it != "text:story" } ?: ""
             val cleanTitle = highlightTitle.trim().ifBlank { "Highlights" }
 
-            // Make the story immortal by setting expiresAt to Long.MAX_VALUE
-            storiesCol.document(storyId).update(
-                mapOf(
-                    "isHighlight" to true,
-                    "highlightTitle" to cleanTitle,
-                    "highlightCoverUrl" to chosenCover,
-                    "expiresAt" to Long.MAX_VALUE
-                )
-            ).await()
+            syncStoryHighlightState(
+                storyId = storyId,
+                isHighlight = true,
+                highlightTitle = cleanTitle,
+                highlightCoverUrl = chosenCover
+            )
 
             // Save or append to user's highlights subcollection
-            val highlightDocId = "hl_${cleanTitle.lowercase().replace("\\s+".toRegex(), "_")}"
-            usersCol.document(user.uid).collection("highlights").document(highlightDocId).set(
-                mapOf(
-                    "id" to highlightDocId,
-                    "title" to cleanTitle,
-                    "emoji" to emoji,
-                    "coverUrl" to chosenCover,
-                    "storyIds" to FieldValue.arrayUnion(storyId),
-                    "createdAt" to now,
-                    "updatedAt" to now
-                ),
-                SetOptions.merge()
-            ).await()
+            appendStoryToHighlightAlbumByTitle(
+                userId = user.uid,
+                storyId = storyId,
+                cleanTitle = cleanTitle,
+                coverUrl = chosenCover,
+                now = now
+            )
 
             true
         } catch (e: Exception) {
@@ -492,17 +594,13 @@ class StoryRepository {
         val chosenCover = coverUrl.trim().ifBlank { "" }
 
         return try {
-            // Mark all included stories as highlights that never expire
+            // Mark included stories as belonging to a highlight without ever extending expiresAt
             storyIds.forEach { sId ->
-                try {
-                    storiesCol.document(sId).update(
-                        mapOf(
-                            "isHighlight" to true,
-                            "highlightTitle" to cleanTitle,
-                            "expiresAt" to Long.MAX_VALUE
-                        )
-                    ).await()
-                } catch (ignored: Exception) {}
+                syncStoryHighlightState(
+                    storyId = sId,
+                    isHighlight = true,
+                    highlightTitle = cleanTitle
+                )
             }
 
             val highlight = StoryHighlight(
@@ -520,6 +618,7 @@ class StoryRepository {
                     "id" to highlight.id,
                     "userId" to highlight.userId,
                     "title" to highlight.title,
+                    "emoji" to "✨",
                     "coverUrl" to highlight.coverUrl,
                     "storyIds" to highlight.storyIds,
                     "createdAt" to highlight.createdAt,
@@ -544,22 +643,22 @@ class StoryRepository {
             val hlRef = usersCol.document(user.uid).collection("highlights").document(highlightId)
             val docSnap = hlRef.get().await()
             val currentCover = docSnap.getString("coverUrl") ?: ""
+            val hlTitle = docSnap.getString("title")
 
-            // Make story permanent
+            // Mark story as belonging to a highlight without modifying expiresAt
             val storyDoc = storiesCol.document(storyId).get().await()
             val mediaUrl = storyDoc.getString("mediaUrl") ?: ""
-            storiesCol.document(storyId).update(
-                mapOf(
-                    "isHighlight" to true,
-                    "expiresAt" to Long.MAX_VALUE
-                )
-            ).await()
+            syncStoryHighlightState(
+                storyId = storyId,
+                isHighlight = true,
+                highlightTitle = hlTitle
+            )
 
             val updates = mutableMapOf<String, Any>(
                 "storyIds" to FieldValue.arrayUnion(storyId),
                 "updatedAt" to now
             )
-            if (currentCover.isBlank() && mediaUrl.isNotBlank()) {
+            if (currentCover.isBlank() && mediaUrl.isNotBlank() && mediaUrl != "text:story") {
                 updates["coverUrl"] = mediaUrl
             }
 
@@ -581,27 +680,42 @@ class StoryRepository {
     ): Boolean {
         val user = auth.currentUser ?: return false
         val now = System.currentTimeMillis()
+        val cleanTitle = title.trim().ifBlank { "Highlights" }
         return try {
             val hlRef = usersCol.document(user.uid).collection("highlights").document(highlightId)
+            @Suppress("UNCHECKED_CAST")
+            val oldStoryIds = (hlRef.get().await().get("storyIds") as? List<String>) ?: emptyList()
+
             hlRef.update(
                 mapOf(
-                    "title" to title.trim().ifBlank { "Highlights" },
+                    "title" to cleanTitle,
                     "coverUrl" to coverUrl,
                     "storyIds" to storyIds,
                     "updatedAt" to now
                 )
             ).await()
 
-            // Ensure included stories remain permanent
+            // Ensure included stories are flagged as highlights without changing expiresAt
             storyIds.forEach { sId ->
-                try {
-                    storiesCol.document(sId).update(
-                        mapOf(
-                            "isHighlight" to true,
-                            "expiresAt" to Long.MAX_VALUE
-                        )
-                    ).await()
-                } catch (ignored: Exception) {}
+                syncStoryHighlightState(
+                    storyId = sId,
+                    isHighlight = true,
+                    highlightTitle = cleanTitle
+                )
+            }
+
+            // Clear highlight flag from stories removed from this album if not in any other album
+            val removedIds = oldStoryIds.filterNot { it in storyIds }
+            if (removedIds.isNotEmpty()) {
+                val allHighlights = fetchUserHighlights(user.uid)
+                val remainingHighlightedIds = allHighlights.flatMap { it.storyIds }.toSet()
+                removedIds.filterNot { it in remainingHighlightedIds }.forEach { orphanId ->
+                    syncStoryHighlightState(
+                        storyId = orphanId,
+                        isHighlight = false,
+                        highlightTitle = ""
+                    )
+                }
             }
             true
         } catch (e: Exception) {
@@ -615,7 +729,22 @@ class StoryRepository {
     suspend fun deleteHighlight(highlightId: String): Boolean {
         val user = auth.currentUser ?: return false
         return try {
-            usersCol.document(user.uid).collection("highlights").document(highlightId).delete().await()
+            val hlRef = usersCol.document(user.uid).collection("highlights").document(highlightId)
+            @Suppress("UNCHECKED_CAST")
+            val removedStoryIds = (hlRef.get().await().get("storyIds") as? List<String>) ?: emptyList()
+            hlRef.delete().await()
+
+            if (removedStoryIds.isNotEmpty()) {
+                val allHighlights = fetchUserHighlights(user.uid)
+                val remainingHighlightedIds = allHighlights.flatMap { it.storyIds }.toSet()
+                removedStoryIds.filterNot { it in remainingHighlightedIds }.forEach { orphanId ->
+                    syncStoryHighlightState(
+                        storyId = orphanId,
+                        isHighlight = false,
+                        highlightTitle = ""
+                    )
+                }
+            }
             true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -631,7 +760,7 @@ class StoryRepository {
             val result = mutableListOf<Story>()
             storyIds.chunked(30).forEach { chunk ->
                 val snap = storiesCol.whereIn(com.google.firebase.firestore.FieldPath.documentId(), chunk).get().await()
-                result.addAll(snap.toObjects(Story::class.java))
+                result.addAll(snap.documents.mapNotNull { doc -> doc.toObject(Story::class.java)?.copy(id = doc.id) })
             }
             val map = result.associateBy { it.id }
             storyIds.mapNotNull { map[it] }
@@ -646,7 +775,8 @@ class StoryRepository {
     suspend fun fetchUserStoryArchive(userId: String): List<Story> {
         return try {
             val snap = storiesCol.whereEqualTo("userId", userId).get().await()
-            snap.toObjects(Story::class.java).sortedByDescending { it.timestamp }
+            snap.documents.mapNotNull { doc -> doc.toObject(Story::class.java)?.copy(id = doc.id) }
+                .sortedByDescending { it.timestamp }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("StoryRepository", "Error fetching user story archive", e)
@@ -662,7 +792,8 @@ class StoryRepository {
                 query = query.whereEqualTo("highlightTitle", highlightTitle)
             }
             val snap = query.get().await()
-            snap.toObjects(Story::class.java).sortedBy { it.timestamp }
+            snap.documents.mapNotNull { doc -> doc.toObject(Story::class.java)?.copy(id = doc.id) }
+                .sortedBy { it.timestamp }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("StoryRepository", "Error fetching highlight stories", e)

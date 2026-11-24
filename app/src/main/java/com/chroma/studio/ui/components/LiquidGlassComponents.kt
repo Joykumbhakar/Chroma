@@ -1206,6 +1206,7 @@ fun LiquidGlassBottomSheet(
         scrimColor = Color.Black.copy(alpha = 0.45f),
         tonalElevation = 0.dp,
         dragHandle = dragHandle,
+        windowInsets = WindowInsets(0.dp),
         content = {
             Column(
                 modifier = Modifier

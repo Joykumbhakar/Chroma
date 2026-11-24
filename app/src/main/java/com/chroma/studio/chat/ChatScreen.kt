@@ -3292,7 +3292,7 @@ private fun ChatScreenContent(
                                 val inMyStories = myStories.find { it.id == clickedStoryId }
                                 if (inMyStories != null) {
                                     val now = System.currentTimeMillis()
-                                    val isAlive = if (inMyStories.expiresAt > 0L) inMyStories.expiresAt > now else (now - inMyStories.timestamp) < 86_400_000L
+                                    val isAlive = com.chroma.studio.data.StoryRepository.isStoryActiveInFeed(inMyStories, now)
                                     if (!isAlive) {
                                         showToast("This story has expired")
                                     } else {
@@ -3306,7 +3306,7 @@ private fun ChatScreenContent(
                                         val group = storyGroups[groupIdx]
                                         val s = group.stories.first { it.id == clickedStoryId }
                                         val now = System.currentTimeMillis()
-                                        val isAlive = if (s.expiresAt > 0L) s.expiresAt > now else (now - s.timestamp) < 86_400_000L
+                                        val isAlive = com.chroma.studio.data.StoryRepository.isStoryActiveInFeed(s, now)
                                         if (!isAlive) {
                                             showToast("This story has expired")
                                         } else {

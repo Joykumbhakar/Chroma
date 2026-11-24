@@ -648,6 +648,8 @@ fun HomeScreen(
 
                 drawerContainerColor = colors.bg,
 
+                windowInsets = WindowInsets(0.dp),
+
                 modifier = Modifier.width(300.dp)
 
             ) {
@@ -4671,7 +4673,9 @@ fun ViewModeBottomSheet(
 
             }
 
-        }
+        },
+
+        windowInsets = WindowInsets(0.dp)
 
     ) {
 

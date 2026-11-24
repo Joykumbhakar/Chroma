@@ -87,13 +87,15 @@ fun CreateHighlightFromArchiveSheet(
                     .background(Color.White.copy(alpha = 0.25f))
             )
         },
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.88f)
                 .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
         ) {
             // Header Bar
             Row(
@@ -122,10 +124,12 @@ fun CreateHighlightFromArchiveSheet(
                         onClick = {
                             if (selectedStoryIds.isNotEmpty()) {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                // Set default cover from first selected story if not set
-                                val firstStory = archiveStories.firstOrNull { it.id == selectedStoryIds.first() }
-                                if (selectedCoverUrl.isBlank() && firstStory != null) {
-                                    selectedCoverUrl = firstStory.mediaUrl
+                                // Set default cover from first media story if not set
+                                val archiveMap = archiveStories.associateBy { it.id }
+                                val firstMediaStory = selectedStoryIds.mapNotNull { archiveMap[it] }
+                                    .firstOrNull { it.mediaUrl.isNotBlank() && it.mediaUrl != "text:story" }
+                                if (selectedCoverUrl.isBlank() && firstMediaStory != null) {
+                                    selectedCoverUrl = firstMediaStory.mediaUrl
                                 }
                                 currentStep = 2
                             }
@@ -168,7 +172,10 @@ fun CreateHighlightFromArchiveSheet(
                         onClick = {
                             val title = highlightTitle.trim().ifBlank { "Highlights" }
                             val cover = selectedCoverUrl.ifBlank {
-                                archiveStories.firstOrNull { it.id == selectedStoryIds.firstOrNull() }?.mediaUrl ?: ""
+                                val archiveMap = archiveStories.associateBy { it.id }
+                                selectedStoryIds.mapNotNull { archiveMap[it] }
+                                    .firstOrNull { it.mediaUrl.isNotBlank() && it.mediaUrl != "text:story" }
+                                    ?.mediaUrl ?: ""
                             }
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             isSaving = true
@@ -289,15 +296,34 @@ fun CreateHighlightFromArchiveSheet(
                                                 }
                                             }
                                     ) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context)
-                                                .data(storyItem.mediaUrl)
-                                                .crossfade(true)
-                                                .build(),
-                                            contentDescription = "Story Thumbnail",
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
+                                        if (storyItem.mediaUrl.isNotBlank() && storyItem.mediaUrl != "text:story") {
+                                            AsyncImage(
+                                                model = ImageRequest.Builder(context)
+                                                    .data(storyItem.mediaUrl)
+                                                    .crossfade(true)
+                                                    .build(),
+                                                contentDescription = "Story Thumbnail",
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color(0xFF0072DE).copy(alpha = 0.25f))
+                                                    .padding(8.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = storyItem.textContent.ifBlank { "Text Story" },
+                                                    color = Color.White,
+                                                    fontSize = 11.sp,
+                                                    maxLines = 4,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
+                                        }
 
                                         // Dark gradient overlay for visibility
                                         Box(

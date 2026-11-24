@@ -76,7 +76,8 @@ fun RemixQuoteRepostSheet(
                     .clip(RoundedCornerShape(2.dp))
                     .background(Color.Gray.copy(alpha = 0.35f))
             )
-        }
+        },
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier

@@ -60,13 +60,15 @@ fun StoryCreationBottomSheet(
                     .clip(RoundedCornerShape(9999.dp))
                     .background(if (colors.isDark) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.18f))
             )
-        }
+        },
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
         ) {
             // Title Header
             Text(

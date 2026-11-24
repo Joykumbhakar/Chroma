@@ -41,7 +41,7 @@ import com.chroma.studio.model.ChatRoom
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.AppleStatusBlueGradient
 import com.chroma.studio.ui.components.IosAvatarView
-import com.chroma.studio.ui.components.AppleStatusVibrantGradient
+import com.chroma.studio.ui.components.getAppleStatusRingBrush
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.ChatViewModel
 import com.chroma.studio.viewmodel.StoryViewModel
@@ -227,7 +227,17 @@ fun ChatListScreen(
                                 .size(48.dp)
                                 .border(
                                     width = 1.5.dp,
-                                    brush = if (myStory != null) Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF00C6FF))) else androidx.compose.ui.graphics.SolidColor(if (isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6)),
+                                    brush = if (myStory != null) {
+                                        getAppleStatusRingBrush(
+                                            hasStatus = true,
+                                            isSeen = false,
+                                            isDark = isDark,
+                                            isOnlyFriend = myStory?.audienceType == "only_friends",
+                                            isVerified = false
+                                        )
+                                    } else {
+                                        androidx.compose.ui.graphics.SolidColor(if (isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6))
+                                    },
                                     shape = CircleShape
                                 )
                                 .padding(2.dp)
@@ -266,6 +276,14 @@ fun ChatListScreen(
                 itemsIndexed(storyGroups, key = { _, it -> it.userProfile.uid }) { index, group ->
                     val profile = group.userProfile
                     val displayName = profile.displayName.ifBlank { "User" }
+                    val hasOnlyFriendStory = group.stories.any { it.audienceType == "only_friends" }
+                    val ringBrush = getAppleStatusRingBrush(
+                        hasStatus = true,
+                        isSeen = group.allSeen,
+                        isDark = isDark,
+                        isOnlyFriend = hasOnlyFriendStory,
+                        isVerified = profile.verified
+                    )
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.clickable {
@@ -275,7 +293,7 @@ fun ChatListScreen(
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
-                                .border(2.dp, Brush.sweepGradient(AppleStatusVibrantGradient), CircleShape)
+                                .border(2.dp, ringBrush, CircleShape)
                                 .padding(2.dp)
                         ) {
                             IosAvatarView(

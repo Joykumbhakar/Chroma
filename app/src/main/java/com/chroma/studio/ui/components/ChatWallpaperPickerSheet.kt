@@ -73,13 +73,15 @@ fun ChatWallpaperPickerSheet(
         onDismissRequest = onDismiss,
         containerColor = sheetBg,
         dragHandle = { BottomSheetDefaults.DragHandle() },
-        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 36.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp)
                 .verticalScroll(rememberScrollState())
         ) {
             // One UI Header

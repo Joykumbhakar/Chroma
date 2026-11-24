@@ -62,7 +62,8 @@ result.json
 export_firebase.js
 wipe_and_init_database.js
 
-# Web build artifacts
+# Web build artifacts & Admin Panel repo
+admin-panel/
 node_modules/
 package-lock.json
 package.json

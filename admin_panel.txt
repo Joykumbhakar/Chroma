@@ -35,7 +35,7 @@ TABLE OF CONTENTS:
    3.1. Authentication, Onboarding & Identity Engine
    3.2. Creative Studio Suite (Gradient Studio, Final Cut Video, Photo Editor, AI Gen)
    3.3. Feed & Reels Discovery Algorithm
-   3.4. Threaded Comment System (Quadratic Bezier Connectors & Creator Hearts)
+   3.4. Threaded Comment System (PhotoPostCommentBottomSheet, YouTubeCommentsSheet, Voice Notes & Polls)
    3.5. Story Viewer & Real-Time Engagement Curves
    3.6. End-to-End Encrypted (E2EE) Chat & Messaging Infrastructure
    3.7. Push Notifications & FCM Dispatch Pipeline
@@ -218,14 +218,18 @@ Fields:
 ----------------------------------------------------------------------------------------------------
 Path: `users/{uid}/highlights/{highlightId}`
 Document ID: `highlightId` (UUID string)
-Purpose: Immortal Story Highlights showcased in circular profile bubbles.
+Purpose: Permanent Instagram-style Story Highlights showcased in circular profile bubbles beneath the user bio.
+Architecture Note:
+- Highlights decouple story presentation from the 24-hour expiration rule.
+- When an expired story is added to a Highlight, its `isHighlight` flag is set to true and its ID is added to `storyIds`.
+- Expired stories inside highlights remain viewable indefinitely within the highlight modal but DO NOT reappear in the live 24-hour Stories section of the feed.
 Fields:
-- `id` (string): Highlight ID.
-- `title` (string): Title label shown below the bubble (e.g. "Presets", "VFX Reel").
-- `coverUrl` (string): HTTPS URL of the circular cover image.
-- `storyIds` (array<string>): Ordered array of Story document IDs contained in this highlight.
-- `createdAt` (number): Epoch milliseconds when created.
-- `updatedAt` (number): Epoch milliseconds when last edited.
+- `id` (string): Unique highlight ID.
+- `title` (string): Title label shown below the bubble (e.g. "Studio", "VFX Reels", "Vlog").
+- `coverUrl` (string): HTTPS URL of the circular cover image (defaults to first story media or custom selected frame).
+- `storyIds` (array<string>): Ordered array of Story document IDs preserved in this highlight.
+- `createdAt` (number): Epoch milliseconds when the highlight was created.
+- `updatedAt` (number): Epoch milliseconds when the highlight was last modified.
 
 ----------------------------------------------------------------------------------------------------
 2.7. Subcollection: `users/{uid}/notifications`
@@ -372,30 +376,62 @@ Fields:
 ----------------------------------------------------------------------------------------------------
 2.12. Collection: `flash_comments`
 ----------------------------------------------------------------------------------------------------
-Path: `flash_comments/{commentId}` (also synchronized in `community_works/{postId}/comments/{commentId}`)
+Path: `flash_comments/{commentId}`
+Mirrors: 
+- `community_works/{workId}/comments/{commentId}` (for community posts & masterworks)
+- `flash_videos/{flashId}/comments/{commentId}` (for short-form video reels)
 Document ID: `commentId` (UUID string)
-Purpose: Threaded, hierarchical comment trees with SVG-style branch lines, creator hearts, and pins.
+Purpose: Authoritative real-time collection for threaded discussions, interactive polls, voice notes, media attachments, spoiler blocks, and creator badges.
 
-Fields:
-- `id` (string): Comment ID.
-- `videoId` (string): Associated post or flash video ID.
-- `userId` (string): Commenter UID.
-- `username` (string): Commenter handle.
-- `displayName` (string): Commenter display name.
-- `avatarUrl` (string): Commenter avatar URL.
-- `verified` (boolean): Commenter verified badge status.
-- `text` (string): Comment text content.
-- `timestamp` (number): Epoch milliseconds when posted.
-- `likesCount` (number, default: 0): Like counter.
-- `likedBy` (array<string>): Array of user UIDs who liked.
-- `dislikedBy` (array<string>): Array of user UIDs who disliked.
-- `isPinned` (boolean, default: false): Author-pinned comment displayed at the top.
-- `isCreatorHearted` (boolean, default: false): Creator has given an official love badge.
-- `replyToCommentId` (string, optional): null for root level comments; parent comment ID for replies.
-- `replyToUsername` (string, optional): Tagged parent commenter handle.
-- `replyCount` (number, default: 0): Total nested direct replies beneath this comment.
-- `replyFlashVideoUrl` (string, optional): URL to a video response reel if replied with video.
-- `isSpam` (boolean, default: false, ADMIN-MANAGED): Auto-flagged or admin-flagged as spam.
+Core Fields:
+- `id` (string): Unique comment identifier (UUID v4).
+- `videoId` (string): Associated post or flash video ID (matches `workId` in `community_works` or `flashId` in `flash_videos`).
+- `userId` (string): Author's Firebase UID.
+- `username` (string): Author's unique handle (e.g. "joykumbhakar").
+- `displayName` (string): Author's profile display name.
+- `avatarUrl` (string): URL to author's profile avatar.
+- `verified` (boolean, default: false): Blue checkmark badge status.
+- `text` (string): Comment text content supporting Markdown (bold `**text**`, italic `*text*`, code spans, timestamps `0:42`, and tap-to-reveal spoilers `||spoiler||`).
+- `timestamp` (number): Epoch milliseconds when created.
+- `likesCount` (number, default: 0): Aggregated total of likes.
+- `likedBy` (array<string>): Array of user UIDs who liked this comment.
+- `dislikedBy` (array<string>): Array of user UIDs who disliked this comment.
+- `reactions` (map<string, array<string>>, optional): Quick emoji reactions map (e.g. `{"❤️": ["uid1"], "🔥": ["uid2"], "💯": ["uid3"]}`).
+- `reactionCounts` (map<string, number>, optional): Counts per emoji reaction.
+- `isPinned` (boolean, default: false): Pinned status; displays at top of the thread with a cyan pin pill.
+- `isCreatorHearted` (boolean, default: false): Creator heart badge; displays author avatar overlay and red heart badge.
+- `replyToCommentId` (string, optional): null for root comments; points to parent root comment ID for threaded replies.
+- `replyToUsername` (string, optional): Tagged parent user's handle for `@mention` prefixing.
+- `replyCount` (number, default: 0): Direct nested child reply counter.
+- `replyFlashVideoUrl` (string, optional): HTTPS URL to a video response reel.
+
+Interactive & Rich Media Extensions:
+- `poll` (map, optional): Interactive in-comment poll data:
+  * `id` (string): Unique poll ID.
+  * `question` (string): Poll prompt text.
+  * `options` (array<map>): List of options, each containing:
+    - `id` (string): Option ID ("opt-1", "opt-2", etc.).
+    - `text` (string): Option title.
+    - `votesCount` (number): Number of votes cast.
+    - `voterIds` (array<string>): Array of user UIDs who voted for this option.
+  * `totalVotes` (number): Total sum of votes cast across all options.
+  * `userVotedOptionId` (string, optional): Current authenticated user's selected option.
+- `voiceNote` (map, optional): In-line voice message attachment:
+  * `audioUrl` (string): HTTPS URL to the recorded voice note audio file (AAC/M4A).
+  * `durationMs` (number): Audio duration in milliseconds.
+  * `waveformAmplitudes` (array<number>): 20-50 normalized amplitude points (0.0 to 1.0) for live scrubbable waveform rendering.
+- `media` (map, optional): Attached image, sticker, or GIF:
+  * `type` (string: "image" | "video" | "gif"): Media category.
+  * `url` (string): HTTPS media URL.
+  * `aspectRatio` (number): Media aspect ratio (width / height).
+  * `thumbnailUrl` (string, optional): Video/GIF preview thumbnail.
+- `edited` (boolean, default: false): Indicates if the author edited their comment inline.
+- `editedAt` (number, optional): Epoch timestamp of the last edit.
+- `translation` (map, optional): Cached inline translation:
+  * `translatedText` (string): Translated text content.
+  * `targetLanguage` (string): Target ISO language code (e.g. "en", "es").
+  * `detectedSourceLanguage` (string): Source detected ISO language code.
+- `isSpam` (boolean, default: false, ADMIN-MANAGED): Content flagged by automated AI moderation or admin action.
 
 ----------------------------------------------------------------------------------------------------
 2.13. Collection: `stories`
@@ -569,6 +605,7 @@ Fields:
 - `chat_settings`: Local preferences (`haze_blur_enabled`, `sound_enabled`, `vibration_enabled`).
 - `has_accepted_terms`: Boolean (Privacy Policy and Terms consent).
 - `has_completed_post_onboarding`: Boolean (Workspace initial launch completed).
+- `has_seen_tutorial`: Boolean flag indicating whether user has viewed the flagship 3-slide Stageshow onboarding walkthrough (`TutorialOnboardingScreen.kt`).
 - `theme_mode`: "system" | "light" | "dark".
 
 ====================================================================================================
@@ -577,6 +614,19 @@ Fields:
 
 3.1. Authentication, Onboarding & Identity Engine
 -------------------------------------------------
+- Flagship First-Time Open Tutorial Onboarding (`TutorialOnboardingScreen.kt`):
+  * Engineered adhering to the Stageshow design craft specification by Benji Taylor:
+    - Authentic miniature smartphone device framing (`StageshowDeviceFrame`) featuring rounded chassis,
+      camera Dynamic Island, screen bezels, and dynamic ambient backlighting (`StageshowAmbientGlow`).
+    - 3-Slide Interactive Core Showcase:
+      1. Slide 1 (Pro Studio & Color Lab): Interactive split before/after wipe, Kodak Portra 400 +18% Warmth
+         satellite chip, and S-Curve Tone Grade satellite chip straddling the hero frame.
+      2. Slide 2 (Visual Feed & Remix Engine): Stories row highlighting the VIP Golden ring and Close-Friends
+         Emerald Green ring, community post card, and Community Remix stems satellite chip.
+      3. Slide 3 (Direct Chat & Story Circles): Chat messaging bubble interface, live audio waveform voice
+         note satellite chip, and Only Friends circle satellite chip.
+    - Kinetic morphing pill indicator (`StageshowPillIndicator`) and spring-action button with haptic feedback.
+    - Persistent gate check in `HomeActivity.kt` on `has_seen_tutorial` in `SharedPreferences`.
 - Welcome screen features the 3D Oscellion hero character, Google Sign-In, Apple Sign-In, 
   and direct account creation.
 - Direct account creation routes into the multi-step OnboardingWizard:
@@ -601,9 +651,19 @@ Fields:
    - Multitrack timeline editor, trim sliders (ms precision), audio waveform preview, LUT filters.
    - Cloudinary / Supabase rendering engine.
 3. Photo Editor (`ChromaPhotoEditorScreen.kt`):
-   - Full RGB curve tone editing (blacks, shadows, midtones, highlights, whites).
+   - Stageshow Visual Discipline: Refactored toolbar using a unified studio palette (System Blue `#0381FE`
+     active pill, Destructive coral tint `#FF453A`, and neutral adaptive icons).
+   - Dark/Light Theme Aware: Adaptive background and border tokens across all panels (`PhotoCropPanel`,
+     `PhotoFilterPanel`, `PhotoCurvesPanel`, `PhotoColorMixPanel`, `PhotoEffectsPanel`, `PhotoStickersPanel`,
+     `PhotoLayerPanel`, `PhotoFramePanel`), eliminating raw hardcoded light mode colors.
+   - Post Creation Draft Isolation: When launched from the post creation flow (`exportButtonLabel == "Next"`),
+     intermediate edited photos are written to `context.cacheDir/post_drafts` instead of the public
+     Android `/Pictures/Oscellion` MediaStore gallery, with progress modal stating "Preparing Photo..." -> "Photo Ready".
+   - Full RGB curve tone editing (blacks, shadows, midtones, highlights, whites) and 5-point spline graph.
    - Multilayer manager (Main photo, image overlays, typography, markup brush, stickers).
    - 2-finger pan, zoom, and rotate gesture engine.
+   - Optical overlays: 35mm film grain, lens bloom, chromatic light leaks, and cinema letterbox/Polaroid mattes.
+   - Solid bottom drawer background extending through navigation bar insets (`navigationBarsPadding()`).
 4. AI Generator (Gemini API):
    - Intelligent caption suggestions, generative artwork synthesis, prompt expansion.
 
@@ -615,16 +675,69 @@ Fields:
   gradient in their own editor.
 - Flash reels full-screen vertical pager with loop optimization and instant caching.
 
-3.4. Threaded Comment System (`YouTubeCommentsSheet.kt`)
---------------------------------------------------------
-- Bottom sheet with `skipPartiallyExpanded = true` and `imePadding()`.
-- Hierarchical trees: root comments display with indented child replies.
-- Gutter connector lines rendered via native Compose `Path.quadraticBezierTo` for smooth curved branches.
-- Creator heart badge (`isCreatorHearted`) and author-pinned status (`isPinned`).
-- Optimistic posting and optimistic like/dislike counts.
+3.4. Threaded Comment System (`PhotoPostCommentBottomSheet.kt` & `YouTubeCommentsSheet.kt`)
+----------------------------------------------------------------------------------------------
+The ChromaStudio comment experience is an interactive flagship component engineered for high-engagement discussions across community photo masterworks and Flash video reels.
+
+Architectural Design:
+- Two-Tier Composition:
+  1. `PhotoPostCommentBottomSheet.kt`: High-performance presentation engine featuring edge-to-edge UI, gestural interactions, rich text formatting, voice player, poll voting, and animated reactions.
+  2. `YouTubeCommentsSheet.kt`: Backend synchronization coordinator connecting the presentation sheet to `FlashCommentViewModel`, Firestore listeners, optimistic mutations, and Firebase Authentication state.
+- Zero Transparent Bottom Gap:
+  * Uses `rememberModalBottomSheetState(skipPartiallyExpanded = true)` with `windowInsets = WindowInsets(0.dp)` on the modal container.
+  * Internal surface applies `Modifier.navigationBarsPadding()` directly to the composer wrapper, guaranteeing zero awkward white/dark margins below the input bar across all gesture and 3-button navigation Android devices.
+
+Key Features & Interaction Dynamics:
+1. Gutter Tree Connectors:
+   - Root comments display with left-aligned avatars; child replies are indented with smooth continuous connector lines drawn via Compose `Path.quadraticBezierTo`.
+   - Collapsible reply threads ("View 4 replies" / "Hide replies") with animated height transitions.
+2. Rich Markdown & Spoiler Blocks:
+   - Built-in lightweight Markdown renderer supporting bold (`**text**`), italic (`*text*`), code spans (`` `code` ``), and clickable video timestamps (`0:35` triggers seek).
+   - Tap-to-Reveal Spoilers: Text wrapped in `||secret||` is rendered with a dark redacted block overlay; tapping seamlessly reveals the content with a subtle fade-in.
+3. Interactive In-Comment Polls:
+   - Users can create multiple-choice polls within comments.
+   - Live vote progress bars with percentage calculation, voter tallying, and single-vote enforcement.
+4. Integrated Voice Notes:
+   - Voice note comments include an embedded audio playback bar powered by ChromaStudio's `VoiceNotePlayer` / `AudioPlayerManager`.
+   - Displays audio duration, scrubbable progress bar, play/pause state, and normalized waveform visualizers.
+5. Double-Tap Heart Celebration:
+   - Double-tapping any comment item triggers an Instagram-style floating, scaling heart animation and optimistically increments the like count.
+6. Swipe-to-Reply Gesture:
+   - Dragging a comment horizontally reveals a smooth curved reply icon. Releasing triggers haptic feedback and immediately sets the composer into reply mode with a dismissible `@mention` target capsule.
+7. 9-Action Iconora Liquid Glass Menu:
+   - Long-press or tapping the 3-dots action opens an iOS-inspired frosted Liquid Glass menu (`IconoraMenuSheet`) offering 9 comprehensive actions:
+     1. Copy Text: Copies markdown or plain text to clipboard with confirmation toast.
+     2. Reply: Activates threaded reply mode targeting the specific comment.
+     3. Pin to Top: Pins comment to top of discussion (post creator / admin only).
+     4. Creator Heart: Bestows official creator heart badge with creator avatar avatar chip.
+     5. Translate: Inline translation into the user's system language.
+     6. Share: Shares comment snippet to chat conversations or external deep links.
+     7. Mute User: Suppresses future comments from this commenter locally.
+     8. Report: Opens moderation reporting modal with categorized infraction choices.
+     9. Delete: Deletes comment permanently with confirmation dialog (author or post creator).
+8. Live Search & 6 Category Filter Chips:
+   - Instant search bar filtering comments and replies in real time.
+   - Filter chips: "All", "Pinned", "Questions", "Media", "Polls", "Voice Notes".
+9. 4-Way Sorting Dropdown:
+   - Dynamic sorting modes: "Top Comments" (engagement weighted), "Newest First", "Oldest First", and "Most Liked".
+10. Docked Minimal Composer with Origami Paper-Plane Animation:
+    - Minimal floating composer with current user avatar, auto-expanding text field, attachment pill (+), and quick emoji reaction bar (`❤️`, `🔥`, `👏`, `😂`, `😍`, `🙌`, `✨`, `💯`, `🎉`).
+    - Origami Paper-Plane Send Button: A 4-stage physics-based send button:
+      * `IDLE`: Resting filled paper-plane vector.
+      * `PULLBACK`: Slight backward compression on click.
+      * `LAUNCH`: Diagonal upward launch with trail fade-out.
+      * `CONFIRM`: Checkmark confirmation tick.
+      * `RETURN`: Smooth bounce return back to idle state.
+11. Comment Count Idempotency & Permanent Duplication Fix:
+    - Problem Solved: In posts with existing comments, opening and closing the comment drawer sheet previously caused the comment counter to double or triple (e.g. 11 -> 22 -> 33) due to redundant local mutations.
+    - Permanent Architectural Fix: Replaced additive local state mutation with canonical Firestore snapshot listeners and real-time document listeners (`commentsCount`). Opening, closing, and dismissing the drawer sheet maintains pure idempotency and never increments counters unless a genuine comment document is created.
 
 3.5. Story Viewer & Real-Time Engagement Curves (`StoryAnalyticsModal.kt`)
 --------------------------------------------------------------------------
+- Standardized Story Ring Color Hierarchy:
+  * Solid Blue Ring (`#0381FE` / `AppleStatusSolidBlue`): Displayed for default, regular users' active stories.
+  * Golden Gradient Ring (`AppleStatusGoldGradient`): Displayed for VIP verified creators and official community ambassadors.
+  * Emerald Green Ring (`#00C853` / `AppleStatusCloseFriendGreen`): Displayed for Close Friends / Only Friends exclusive stories.
 - 24-hour auto-expiring ephemeral stories.
 - Dynamic analytics modal featuring a cubic spline bezier curve tracking hourly views without mock data.
 - Live viewers list with debounced search query filter and pulsing `OnlineStatusDot` on viewer avatars.
@@ -875,11 +988,25 @@ Features:
 
 5.7. Module 7: Threaded Comments & Community Discussions (`app/admin/comments/page.tsx`)
 ----------------------------------------------------------------------------------------
-Features:
-- Nested Tree Viewer: Reconstructs root comments and branched reply trees.
-- Displays pinned comments (`isPinned = true`) and creator-hearted comments (`isCreatorHearted = true`).
-- Spam Detector: Highlights repetitive text, blacklisted URLs, or suspicious patterns.
-- Bulk Actions: Select multiple comments and purge them in a single batch operation.
+Purpose: Comprehensive content moderation, discussion tree inspection, poll auditing, and voice note review for founder and admin oversight.
+
+Features & Controls:
+1. Discussion Tree Visualizer:
+   - Full hierarchical rendering of root comments and nested reply branches for any `community_works` post or `flash_videos` reel.
+   - Status indicators: Pinned (`isPinned`), Creator Heart (`isCreatorHearted`), Edited (`edited`), and Reported flags.
+2. Media & Interactive Component Inspector:
+   - Voice Note Player: In-browser HTML5 audio player allowing admins to listen to flagged or audited voice notes with waveform preview.
+   - Poll Auditor: Inspects poll questions, individual option vote counts, percentage distribution, and voter user lists.
+   - Media Attachment Viewer: Full-resolution modal viewer for attached images, GIFs, and video responses.
+3. Automated Moderation & Spam Filter:
+   - Highlights suspected spam, hate speech, blacklisted external domains, or repetitive bot-like posting patterns.
+   - Displays AI moderation confidence scores and automated toxicity assessments.
+4. Moderation Action Suite:
+   - Pin / Unpin: Overrides comment pin state at post or global level.
+   - Creator Heart: Bestows or revokes verified creator heart badges.
+   - Delete Comment: Cascading deletion that safely removes the comment, deletes child replies from Firestore, updates the parent document's `commentCount` and `commentsCount` counters via `FieldValue.increment(-1)`, and creates an immutable audit log entry.
+   - Dismiss Report: Resolves community flags when comments comply with platform guidelines.
+   - Bulk Purge: Select multiple flagged comments across posts and delete them simultaneously.
 
 5.8. Module 8: Chat & Messaging Oversight (`app/admin/chats/page.tsx`)
 ----------------------------------------------------------------------
@@ -1081,6 +1208,87 @@ export interface FlashVideo {
   isTakedown?: boolean;
 }
 
+export interface CommentPollOption {
+  id: string;
+  text: string;
+  votesCount: number;
+  voterIds: string[];
+}
+
+export interface CommentPoll {
+  id: string;
+  question: string;
+  options: CommentPollOption[];
+  totalVotes: number;
+  userVotedOptionId?: string;
+}
+
+export interface CommentVoiceNote {
+  audioUrl: string;
+  durationMs: number;
+  waveformAmplitudes: number[];
+}
+
+export interface CommentMediaAttachment {
+  type: 'image' | 'video' | 'gif';
+  url: string;
+  aspectRatio: number;
+  thumbnailUrl?: string;
+}
+
+export interface CommentReply {
+  id: string;
+  author: {
+    name: string;
+    handle: string;
+    avatarUrl?: string;
+    userId: string;
+    verified?: boolean;
+    role?: string;
+    isSelf?: boolean;
+  };
+  text: string;
+  createdAtMillis: number;
+  likes: number;
+  likedByMe: boolean;
+  creatorHeart: boolean;
+}
+
+export interface PostComment {
+  id: string;
+  author: {
+    name: string;
+    handle: string;
+    avatarUrl?: string;
+    userId: string;
+    verified?: boolean;
+    role?: string;
+    isSelf?: boolean;
+  };
+  text: string;
+  createdAtMillis: number;
+  pinned?: boolean;
+  likes: number;
+  likedByMe: boolean;
+  creatorHeart?: boolean;
+  media?: CommentMediaAttachment;
+  voiceNote?: CommentVoiceNote;
+  poll?: CommentPoll;
+  replies: CommentReply[];
+  repliesExpanded?: boolean;
+  visibleRepliesCount?: number;
+}
+
+export interface StoryHighlight {
+  id: string;
+  userId: string;
+  title: string;
+  coverUrl: string;
+  storyIds: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface FlashComment {
   id: string;
   videoId: string;
@@ -1094,12 +1302,24 @@ export interface FlashComment {
   likesCount: number;
   likedBy: string[];
   dislikedBy: string[];
+  reactions?: Record<string, string[]>;
+  reactionCounts?: Record<string, number>;
   isPinned: boolean;
   isCreatorHearted: boolean;
   replyToCommentId?: string | null;
   replyToUsername?: string | null;
   replyCount: number;
   replyFlashVideoUrl?: string | null;
+  poll?: CommentPoll;
+  voiceNote?: CommentVoiceNote;
+  media?: CommentMediaAttachment;
+  edited?: boolean;
+  editedAt?: number;
+  translation?: {
+    translatedText: string;
+    targetLanguage: string;
+    detectedSourceLanguage: string;
+  };
   isSpam?: boolean;
 }
 
@@ -1412,6 +1632,100 @@ export async function sendBroadcastPush(
   });
 
   return { success: true, sent: successCount, failed: failureCount };
+}
+
+// -----------------------------------------------------------------------------
+// 7.5. Comment Moderation Server Actions (`actions/comments.ts`)
+// -----------------------------------------------------------------------------
+export async function deleteCommentAction(
+  adminEmail: string,
+  commentId: string,
+  videoId: string,
+  parentCommentId?: string
+) {
+  const commentRef = adminDb.collection('flash_comments').document(commentId);
+  const commentSnap = await commentRef.get();
+
+  if (!commentSnap.exists) {
+    throw new Error('Comment does not exist.');
+  }
+
+  const batch = adminDb.batch();
+
+  // 1. Delete from root flash_comments
+  batch.delete(commentRef);
+
+  // 2. Delete from subcollection mirrors
+  const flashMirrorRef = adminDb.collection('flash_videos').document(videoId).collection('comments').document(commentId);
+  batch.delete(flashMirrorRef);
+
+  const commMirrorRef = adminDb.collection('community_works').document(videoId).collection('comments').document(commentId);
+  batch.delete(commMirrorRef);
+
+  // 3. Decrement counters
+  const flashDocRef = adminDb.collection('flash_videos').document(videoId);
+  const commDocRef = adminDb.collection('community_works').document(videoId);
+
+  batch.update(flashDocRef, { commentCount: FieldValue.increment(-1), commentsCount: FieldValue.increment(-1) });
+  batch.update(commDocRef, { commentCount: FieldValue.increment(-1), commentsCount: FieldValue.increment(-1) });
+
+  if (parentCommentId) {
+    const parentRef = adminDb.collection('flash_comments').document(parentCommentId);
+    batch.update(parentRef, { replyCount: FieldValue.increment(-1) });
+  }
+
+  await batch.commit();
+
+  await logAdminAction(adminEmail, 'DELETE_COMMENT', commentId, {
+    videoId,
+    parentCommentId: parentCommentId || null,
+  });
+
+  return { success: true };
+}
+
+export async function pinCommentAction(
+  adminEmail: string,
+  commentId: string,
+  videoId: string,
+  isPinned: boolean
+) {
+  const batch = adminDb.batch();
+  const rootRef = adminDb.collection('flash_comments').document(commentId);
+  batch.update(rootRef, { isPinned });
+
+  const flashRef = adminDb.collection('flash_videos').document(videoId).collection('comments').document(commentId);
+  batch.update(flashRef, { isPinned });
+
+  const commRef = adminDb.collection('community_works').document(videoId).collection('comments').document(commentId);
+  batch.update(commRef, { isPinned });
+
+  await batch.commit();
+
+  await logAdminAction(adminEmail, isPinned ? 'PIN_COMMENT' : 'UNPIN_COMMENT', commentId, { videoId });
+  return { success: true };
+}
+
+export async function toggleCreatorHeartAction(
+  adminEmail: string,
+  commentId: string,
+  videoId: string,
+  isCreatorHearted: boolean
+) {
+  const batch = adminDb.batch();
+  const rootRef = adminDb.collection('flash_comments').document(commentId);
+  batch.update(rootRef, { isCreatorHearted });
+
+  const flashRef = adminDb.collection('flash_videos').document(videoId).collection('comments').document(commentId);
+  batch.update(flashRef, { isCreatorHearted });
+
+  const commRef = adminDb.collection('community_works').document(videoId).collection('comments').document(commentId);
+  batch.update(commRef, { isCreatorHearted });
+
+  await batch.commit();
+
+  await logAdminAction(adminEmail, isCreatorHearted ? 'HEART_COMMENT' : 'UNHEART_COMMENT', commentId, { videoId });
+  return { success: true };
 }
 ```
 

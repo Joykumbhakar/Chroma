@@ -749,7 +749,8 @@ fun DeviceMusicTrimmerModal(
                     .background(colors.textMuted.copy(alpha = 0.35f))
             )
         },
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier

@@ -1442,13 +1442,15 @@ fun StoryEditorScreen(
         ModalBottomSheet(
             onDismissRequest = { showTemplatesSheet = false },
             containerColor = themeColors.glassBg,
-            dragHandle = { BottomSheetDefaults.DragHandle(color = themeColors.glassBorder) }
+            dragHandle = { BottomSheetDefaults.DragHandle(color = themeColors.glassBorder) },
+            windowInsets = WindowInsets(0.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .padding(bottom = 20.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

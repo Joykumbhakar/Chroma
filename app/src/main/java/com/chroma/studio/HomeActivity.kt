@@ -266,7 +266,7 @@ private fun AuthenticatedRoute(
                     "flash_feed", "flash_picker", "flash_video_editor", "flash_photo_editor", "flash_post",
                     "create_post", "publish_work", "post_details", "creator_studio",
                     "drafts_list", "image_editor",
-                    "terms_agreement", "privacy_terms", "login", "post_onboarding"
+                    "terms_agreement", "privacy_terms", "login", "post_onboarding", "tutorial_onboarding"
                 )
                 val isChatTabActive = isMain && pagerState.currentPage == 3
                 val shouldHideOnChatTab = isChatTabActive && isInsideChatTab
@@ -1003,7 +1003,9 @@ private fun AuthenticatedRoute(
                     }
 
                     val hasLocalAccount = remember { com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).isNotEmpty() }
+                    val hasSeenTutorial = prefs.getBoolean("has_seen_tutorial", false)
                     val targetDestination = when {
+                        !hasSeenTutorial -> "tutorial_onboarding"
                         !hasAcceptedTerms -> "terms_agreement"
                         isFirstLaunch || (auth.currentUser == null && !hasLocalAccount) -> "login"
                         !prefs.getBoolean("has_completed_post_onboarding", false) -> "post_onboarding"
@@ -1012,6 +1014,23 @@ private fun AuthenticatedRoute(
                     val useNavBlur = remember { com.chroma.studio.utils.DevicePerformanceManager.shouldUseRealtimeBlur(this@HomeActivity) }
                     val navHostModifier = if (showBottomNav && useNavBlur) androidx.compose.ui.Modifier.haze(state = hazeState) else androidx.compose.ui.Modifier
                     NavHost(navController, startDestination = targetDestination, modifier = navHostModifier) {
+                        composable("tutorial_onboarding") {
+                            com.chroma.studio.ui.onboarding.TutorialOnboardingScreen(
+                                onFinish = {
+                                    prefs.edit().putBoolean("has_seen_tutorial", true).apply()
+                                    val nextDestination = when {
+                                        !hasAcceptedTerms -> "terms_agreement"
+                                        isFirstLaunch || (auth.currentUser == null && !hasLocalAccount) -> "login"
+                                        !prefs.getBoolean("has_completed_post_onboarding", false) -> "post_onboarding"
+                                        else -> "main"
+                                    }
+                                    navController.navigate(nextDestination) {
+                                        popUpTo("tutorial_onboarding") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+
                         composable("terms_agreement") {
                             com.chroma.studio.ui.screens.PrivacyPolicyTermsScreen(
                                 isFirstLaunch = !hasAcceptedTerms,

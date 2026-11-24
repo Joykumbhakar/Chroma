@@ -18,7 +18,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.isSystemInDarkTheme
-import com.chroma.studio.ui.components.AppleStatusBlueGradient
 import com.chroma.studio.ui.components.StoryCreationBottomSheet
 import com.chroma.studio.ui.components.ShareStoryAudienceSheet
 import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
@@ -213,6 +212,7 @@ fun UserProfileScreen(
     var showAvatarOverlay by remember { mutableStateOf(false) }
     var showAvatarActionSheet by remember { mutableStateOf(false) }
     var highlightStoriesViewerGroup by remember { mutableStateOf<UserStoryGroup?>(null) }
+    var activeHighlightTitle by remember { mutableStateOf<String?>(null) }
 
     val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker || showStoryCamera || (editingStoryImageUri != null) || showShareStoryAudienceSheet || showOnlyFriendsManagementSheet || showAvatarOverlay || showAvatarActionSheet
     LaunchedEffect(shouldHideBottomNav) {
@@ -450,8 +450,12 @@ fun UserProfileScreen(
     }
 
     val filteredStories = remember(allStoryGroups, userId) { allStoryGroups.filter { it.userId == userId && it.stories.isNotEmpty() } }
-    val effectiveMyStories = remember(myStories, filteredStories) {
-        if (myStories.isNotEmpty()) myStories else filteredStories.flatMap { it.stories }
+    val effectiveMyStories = remember(isCurrentUser, myStories, filteredStories) {
+        if (isCurrentUser) {
+            if (myStories.isNotEmpty()) myStories else filteredStories.flatMap { it.stories }
+        } else {
+            filteredStories.flatMap { it.stories }
+        }
     }
     val storyCount = remember(isCurrentUser, effectiveMyStories, filteredStories) {
         if (isCurrentUser) {
@@ -461,6 +465,13 @@ fun UserProfileScreen(
         }
     }
     val hasActiveStories = remember(storyCount) { storyCount > 0 }
+    val hasOnlyFriendStory = remember(isCurrentUser, effectiveMyStories, filteredStories) {
+        if (isCurrentUser) {
+            effectiveMyStories.any { it.audienceType == "only_friends" }
+        } else {
+            filteredStories.any { group -> group.stories.any { it.audienceType == "only_friends" } }
+        }
+    }
 
     val viewerGroups = remember(allStoryGroups, filteredStories) {
         if (filteredStories.isNotEmpty() && !allStoryGroups.any { it.userId == userId }) {
@@ -509,6 +520,7 @@ fun UserProfileScreen(
                     userId = userId,
                     isUploading = isMyStoryUploading,
                     isUploadFailed = isMyStoryFailed,
+                    isOnlyFriendStory = hasOnlyFriendStory,
                     onPostsClick = {
                         selectedTabIndex = 0
                         scope.launch { gridState.animateScrollToItem(0) }
@@ -661,11 +673,11 @@ fun UserProfileScreen(
                                         mediaUrl = hl.coverUrl ?: "",
                                         textContent = hl.title,
                                         isHighlight = true,
-                                        highlightTitle = hl.title,
-                                        expiresAt = Long.MAX_VALUE
+                                        highlightTitle = hl.title
                                     )
                                 )
                             }
+                            activeHighlightTitle = hl.title
                             highlightStoriesViewerGroup = UserStoryGroup(
                                 userId = userId,
                                 userProfile = effectiveProfile ?: UserProfile(uid = userId),
@@ -1392,9 +1404,9 @@ fun UserProfileScreen(
         }
     }
 
-    // Story Viewer Overlay (Supports standard 24h stories & immortal saved highlights)
+    // Story Viewer Overlay (Supports standard 24h stories & saved highlights independently)
     val activeHighlightGroup = highlightStoriesViewerGroup
-    if (showStoryViewer && (activeHighlightGroup != null || allStoryGroups.isNotEmpty() || filteredStories.isNotEmpty() || myStories.isNotEmpty() || effectiveMyStories.isNotEmpty())) {
+    if (showStoryViewer && (activeHighlightGroup != null || allStoryGroups.isNotEmpty() || filteredStories.isNotEmpty() || (isCurrentUser && (myStories.isNotEmpty() || effectiveMyStories.isNotEmpty())))) {
         val currentViewerGroups = if (activeHighlightGroup != null) listOf(activeHighlightGroup) else viewerGroups
         StoryViewerScreen(
             storyGroups = currentViewerGroups,
@@ -1402,15 +1414,19 @@ fun UserProfileScreen(
             currentUserId = currentUserId ?: "",
             storyViewModel = storyVm,
             likedStoryIds = likedStoryIds,
-            myStories = if (activeHighlightGroup != null) activeHighlightGroup.stories else effectiveMyStories,
+            myStories = if (activeHighlightGroup != null) emptyList() else effectiveMyStories,
             currentUserProfile = if (isCurrentUser) profile else null,
+            isHighlightViewer = activeHighlightGroup != null,
+            activeHighlightTitle = activeHighlightTitle,
             onClose = {
                 showStoryViewer = false
                 highlightStoriesViewerGroup = null
+                activeHighlightTitle = null
             },
             onAuthorClick = { clickedUid ->
                 showStoryViewer = false
                 highlightStoriesViewerGroup = null
+                activeHighlightTitle = null
                 if (clickedUid != userId && clickedUid.isNotBlank()) {
                     onNavigateToOriginal(clickedUid, "")
                 }
@@ -1441,6 +1457,7 @@ fun UserProfileScreen(
             hasActiveStories = hasActiveStories,
             storyCount = storyCount,
             isCurrentUser = isCurrentUser,
+            isOnlyFriendStory = hasOnlyFriendStory,
             onViewStory = {
                 showAvatarActionSheet = false
                 launchStoryViewer()
@@ -1710,13 +1727,15 @@ private fun UserProfileSettingsAndSignOutSheets(
             onDismissRequest = onDismissSettingsSheet,
             containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F4F7),
             dragHandle = { BottomSheetDefaults.DragHandle() },
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            windowInsets = WindowInsets(0.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .padding(bottom = 28.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 20.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -1907,13 +1926,15 @@ private fun UserProfileModalsAndSheets(
             onDismissRequest = onDismissOtherUserOptions,
             containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F4F7),
             dragHandle = { BottomSheetDefaults.DragHandle() },
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            windowInsets = WindowInsets(0.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .padding(bottom = 32.dp),
+                    .navigationBarsPadding()
+                    .padding(bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(
@@ -2063,13 +2084,15 @@ private fun UserProfileModalsAndSheets(
             onDismissRequest = { onShowReportUserSheet(false) },
             containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F2F7),
             dragHandle = { BottomSheetDefaults.DragHandle() },
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            windowInsets = WindowInsets(0.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .padding(bottom = 32.dp),
+                    .navigationBarsPadding()
+                    .padding(bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(
@@ -2177,7 +2200,8 @@ private fun UserProfileModalsAndSheets(
         ModalBottomSheet(
             onDismissRequest = { if (!isUploadingBanner) onDismissBannerLibrary() },
             containerColor = colors.bg,
-            dragHandle = { BottomSheetDefaults.DragHandle() }
+            dragHandle = { BottomSheetDefaults.DragHandle() },
+            windowInsets = WindowInsets(0.dp)
         ) {
             var libraryTab by remember { mutableIntStateOf(0) }
             val myWorksWithImages = remember(works) { works.filter { !it.imageUrl.isNullOrBlank() } }
@@ -2187,7 +2211,8 @@ private fun UserProfileModalsAndSheets(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .padding(bottom = 36.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

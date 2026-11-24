@@ -458,13 +458,15 @@ fun PrivacyPolicyTermsScreen(
                         .clip(CircleShape)
                         .background(colors.cardBorder)
                 )
-            }
+            },
+            windowInsets = WindowInsets(0.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
-                    .padding(bottom = 36.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 24.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically
@@ -531,13 +533,15 @@ fun PrivacyPolicyTermsScreen(
                         .clip(CircleShape)
                         .background(colors.cardBorder)
                 )
-            }
+            },
+            windowInsets = WindowInsets(0.dp)
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                contentPadding = PaddingValues(bottom = 36.dp)
+                    .padding(horizontal = 24.dp)
+                    .navigationBarsPadding(),
+                contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 item {
                     Text(

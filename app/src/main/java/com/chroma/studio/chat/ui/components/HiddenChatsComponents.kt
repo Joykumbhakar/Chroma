@@ -354,11 +354,13 @@ fun HiddenChatsVaultModal(
         onDismissRequest = onDismiss,
         containerColor = if (colors.isLight) Color(0xFFF8FAFC) else Color(0xFF141721),
         dragHandle = { BottomSheetDefaults.DragHandle() },
+        windowInsets = WindowInsets(0.dp),
         modifier = Modifier.fillMaxHeight(0.92f)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .navigationBarsPadding()
                 .imePadding()
                 .padding(horizontal = 18.dp)
         ) {

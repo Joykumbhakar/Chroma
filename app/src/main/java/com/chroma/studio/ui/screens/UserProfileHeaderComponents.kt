@@ -53,7 +53,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.chroma.studio.ui.components.IosAvatarView
-import com.chroma.studio.ui.components.AppleStatusVibrantGradient
+import com.chroma.studio.ui.components.getAppleStatusRingBrush
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -110,7 +110,8 @@ fun UserProfileHeroSection(
     onNavigateToUserList: ((String, String) -> Unit)?,
     onPostsClick: (() -> Unit)? = null,
     isUploading: Boolean = false,
-    isUploadFailed: Boolean = false
+    isUploadFailed: Boolean = false,
+    isOnlyFriendStory: Boolean = false
 ) {
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
@@ -233,7 +234,13 @@ fun UserProfileHeroSection(
                                 Color(0xFF0381FE)
                             )
                         )
-                        hasActiveStories -> Brush.sweepGradient(AppleStatusVibrantGradient)
+                        hasActiveStories -> getAppleStatusRingBrush(
+                            hasStatus = true,
+                            isSeen = false,
+                            isDark = colors.isDark,
+                            isOnlyFriend = isOnlyFriendStory,
+                            isVerified = profile?.verified == true
+                        )
                         else -> null
                     }
                     val infiniteTransition = rememberInfiniteTransition(label = "profile_upload_ring")
@@ -1434,6 +1441,7 @@ fun ProfileAvatarActionBottomSheet(
     onViewStory: () -> Unit,
     onViewProfilePhoto: () -> Unit,
     onChangePhoto: (() -> Unit)? = null,
+    isOnlyFriendStory: Boolean = false,
     onDismissRequest: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
@@ -1457,13 +1465,15 @@ fun ProfileAvatarActionBottomSheet(
                     .clip(RoundedCornerShape(9999.dp))
                     .background(if (colors.isDark) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.18f))
             )
-        }
+        },
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
         ) {
             // Profile Preview Header
             Row(
@@ -1479,12 +1489,19 @@ fun ProfileAvatarActionBottomSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     if (hasActiveStories) {
+                        val ringBrush = getAppleStatusRingBrush(
+                            hasStatus = true,
+                            isSeen = false,
+                            isDark = colors.isDark,
+                            isOnlyFriend = isOnlyFriendStory,
+                            isVerified = profile?.verified == true
+                        )
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .border(
                                     width = 2.dp,
-                                    brush = Brush.sweepGradient(AppleStatusVibrantGradient),
+                                    brush = ringBrush,
                                     shape = CircleShape
                                 )
                                 .padding(3.dp)
@@ -1585,19 +1602,27 @@ fun ProfileAvatarActionBottomSheet(
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val playBgBrush = if (hasActiveStories) {
+                        getAppleStatusRingBrush(
+                            hasStatus = true,
+                            isSeen = false,
+                            isDark = colors.isDark,
+                            isOnlyFriend = isOnlyFriendStory,
+                            isVerified = profile?.verified == true
+                        )
+                    } else {
+                        Brush.linearGradient(
+                            listOf(
+                                if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6),
+                                if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6)
+                            )
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (hasActiveStories) Brush.sweepGradient(AppleStatusVibrantGradient)
-                                else Brush.linearGradient(
-                                    listOf(
-                                        if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6),
-                                        if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6)
-                                    )
-                                )
-                            ),
+                            .background(playBgBrush),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

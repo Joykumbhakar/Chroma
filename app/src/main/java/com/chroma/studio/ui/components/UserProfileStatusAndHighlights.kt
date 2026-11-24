@@ -296,13 +296,24 @@ fun UserProfileHighlightsSection(
                 val list = mutableListOf<ProfileHighlightItem>()
                 for (i in 0 until arr.length()) {
                     val obj = arr.getJSONObject(i)
+                    val sArr = obj.optJSONArray("storyIds")
+                    val sIds = buildList {
+                        if (sArr != null) {
+                            for (j in 0 until sArr.length()) {
+                                val idStr = sArr.optString(j)
+                                if (idStr.isNotBlank()) add(idStr)
+                            }
+                        }
+                    }
                     list.add(
                         ProfileHighlightItem(
                             id = obj.optString("id", java.util.UUID.randomUUID().toString()),
                             title = obj.optString("title", "Highlight"),
                             emoji = obj.optString("emoji", "✨"),
-                            coverUrl = obj.optString("coverUrl").takeIf { !it.isNullOrBlank() },
-                            gradientColorIndex = obj.optInt("gradientIndex", 0)
+                            coverUrl = obj.optString("coverUrl").takeIf { !it.isNullOrBlank() && it != "text:story" },
+                            gradientColorIndex = obj.optInt("gradientIndex", 0),
+                            storyIds = sIds,
+                            updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                         )
                     )
                 }
@@ -321,6 +332,8 @@ fun UserProfileHighlightsSection(
             obj.put("emoji", item.emoji)
             obj.put("coverUrl", item.coverUrl ?: "")
             obj.put("gradientIndex", item.gradientColorIndex)
+            obj.put("storyIds", JSONArray(item.storyIds))
+            obj.put("updatedAt", item.updatedAt)
             arr.put(obj)
         }
         prefs.edit().putString("highlights_$userId", arr.toString()).apply()
@@ -330,6 +343,7 @@ fun UserProfileHighlightsSection(
     var showNewHighlightDialog by remember { mutableStateOf(false) }
 
     val vmHighlights by (storyViewModel?.highlights?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
+    val vmHighlightsOwnerId by (storyViewModel?.highlightsOwnerId?.collectAsState() ?: remember { mutableStateOf<String?>(null) })
 
     LaunchedEffect(userId, storyViewModel) {
         if (storyViewModel != null && userId.isNotBlank()) {
@@ -337,45 +351,60 @@ fun UserProfileHighlightsSection(
         }
     }
 
-    // Sync real highlights from Firestore
+    // Keep cached SharedPreferences aligned when ViewModel finishes loading or deleting highlights
+    LaunchedEffect(vmHighlights, vmHighlightsOwnerId, userId) {
+        if (vmHighlightsOwnerId == userId) {
+            val mapped = vmHighlights.mapIndexed { idx, hl ->
+                ProfileHighlightItem(
+                    id = hl.id,
+                    title = hl.title,
+                    emoji = "✨",
+                    coverUrl = hl.coverUrl.takeIf { it.isNotBlank() && it != "text:story" },
+                    gradientColorIndex = idx % 5,
+                    storyIds = hl.storyIds,
+                    updatedAt = hl.updatedAt
+                )
+            }
+            highlightsList = mapped
+            saveHighlights(mapped)
+        }
+    }
+
+    // Sync real highlights from Firestore (also used when storyViewModel is null)
     LaunchedEffect(userId) {
         try {
             FirebaseFirestore.getInstance().collection("users").document(userId)
                 .collection("highlights")
                 .get()
                 .addOnSuccessListener { snapshot ->
-                    if (!snapshot.isEmpty) {
-                        val serverItems = snapshot.documents.mapNotNull { doc ->
-                            @Suppress("UNCHECKED_CAST")
-                            val sIds = (doc.get("storyIds") as? List<String>) ?: emptyList()
-                            val uAt = doc.getLong("updatedAt") ?: doc.getLong("createdAt") ?: System.currentTimeMillis()
-                            ProfileHighlightItem(
-                                id = doc.id,
-                                title = doc.getString("title") ?: "Highlight",
-                                emoji = doc.getString("emoji") ?: "✨",
-                                coverUrl = doc.getString("coverUrl").takeIf { !it.isNullOrBlank() },
-                                gradientColorIndex = (doc.getLong("gradientIndex") ?: 0L).toInt(),
-                                storyIds = sIds,
-                                updatedAt = uAt
-                            )
-                        }
-                        if (serverItems.isNotEmpty()) {
-                            highlightsList = serverItems
-                            saveHighlights(serverItems)
-                        }
-                    }
+                    val serverItems = snapshot.documents.mapNotNull { doc ->
+                        @Suppress("UNCHECKED_CAST")
+                        val sIds = (doc.get("storyIds") as? List<String>) ?: emptyList()
+                        val uAt = doc.getLong("updatedAt") ?: doc.getLong("createdAt") ?: System.currentTimeMillis()
+                        ProfileHighlightItem(
+                            id = doc.id,
+                            title = doc.getString("title") ?: "Highlight",
+                            emoji = doc.getString("emoji") ?: "✨",
+                            coverUrl = doc.getString("coverUrl").takeIf { !it.isNullOrBlank() && it != "text:story" },
+                            gradientColorIndex = (doc.getLong("gradientIndex") ?: 0L).toInt(),
+                            storyIds = sIds,
+                            updatedAt = uAt
+                        )
+                    }.sortedByDescending { it.updatedAt }
+                    highlightsList = serverItems
+                    saveHighlights(serverItems)
                 }
         } catch (_: Exception) {}
     }
 
-    val displayHighlights = remember(vmHighlights, highlightsList) {
-        if (vmHighlights.isNotEmpty()) {
+    val displayHighlights = remember(vmHighlights, vmHighlightsOwnerId, highlightsList, userId) {
+        if (vmHighlightsOwnerId == userId) {
             vmHighlights.mapIndexed { idx, hl ->
                 ProfileHighlightItem(
                     id = hl.id,
                     title = hl.title,
                     emoji = "✨",
-                    coverUrl = hl.coverUrl.takeIf { it.isNotBlank() },
+                    coverUrl = hl.coverUrl.takeIf { it.isNotBlank() && it != "text:story" },
                     gradientColorIndex = idx % 5,
                     storyIds = hl.storyIds,
                     updatedAt = hl.updatedAt

@@ -1356,7 +1356,7 @@ fun DiscoverScreen(
                         myStoryGender = if (isLoading) null else myProfile?.gender,
 
                         myStoriesList = if (isLoading) emptyList() else myStories,
-
+                        isMyStoryVerified = myProfile?.verified == true,
                         isUploading = isUploadingStory,
 
                         isUploadFailed = failedStoryUpload != null,
@@ -3307,7 +3307,9 @@ fun CommunityGuidelinesSheet(
 
             )
 
-        }
+        },
+
+        windowInsets = WindowInsets(0.dp)
 
     ) {
 
@@ -9023,7 +9025,9 @@ fun PostOptionsDrawerSheet(
 
             )
 
-        }
+        },
+
+        windowInsets = WindowInsets(0.dp)
 
     ) {
 
@@ -9591,7 +9595,9 @@ fun OriginalPostInspectorSheet(
 
             )
 
-        }
+        },
+
+        windowInsets = WindowInsets(0.dp)
 
     ) {
 

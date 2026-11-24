@@ -83,13 +83,15 @@ fun AddToHighlightSheet(
                     .background(Color.White.copy(alpha = 0.25f))
             )
         },
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 36.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp)
         ) {
             // Header Row
             Row(

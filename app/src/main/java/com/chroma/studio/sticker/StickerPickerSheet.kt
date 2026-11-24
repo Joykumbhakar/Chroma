@@ -52,13 +52,15 @@ fun StickerPickerSheet(
         onDismissRequest = onDismiss,
         containerColor = colors.glassBg,
         dragHandle = { BottomSheetDefaults.DragHandle(color = colors.glassBorder) },
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
         ) {
             // Header
             Row(

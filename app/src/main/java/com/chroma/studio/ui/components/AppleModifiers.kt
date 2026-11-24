@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -343,9 +344,22 @@ fun IosAvatarView(
 
 /**
  * Unified Apple Status / Story Avatar Ring brushes and colors.
- * - Active / Unseen: Apple Blue Gradient Circle
- * - Seen / Viewed: Neutral Apple System Gray Circle
+ * - Default Normal User (Unseen): Plain solid Blue color ring
+ * - Verified User (Unseen): Golden ring
+ * - Close / Only Friend (Unseen): Green ring
+ * - Seen / Viewed: Neutral Apple System Gray ring
  */
+val AppleStatusSolidBlue = Color(0xFF0381FE) // Apple System Blue (plain solid Blue)
+val AppleStatusCloseFriendGreen = Color(0xFF00C853) // Vivid Emerald Green (matches OnlyFriendEmerald)
+
+val AppleStatusGoldGradient = listOf(
+    Color(0xFFFFD700), // Pure Gold
+    Color(0xFFFFA000), // Warm Amber Gold
+    Color(0xFFFFC107), // Bright Gold
+    Color(0xFFFFE082), // Shimmer Highlight
+    Color(0xFFFFD700)  // Seamless Gold Loop
+)
+
 val AppleStatusOnlyFriendGradient = listOf(
     Color(0xFF00E676), // Bright Spring Neon Green
     Color(0xFF10B981), // Emerald
@@ -375,25 +389,30 @@ fun getAppleStatusRingBrush(
     hasStatus: Boolean,
     isSeen: Boolean,
     isDark: Boolean,
-    isOnlyFriend: Boolean = false
+    isOnlyFriend: Boolean = false,
+    isVerified: Boolean = false
 ): Brush {
     return when {
         !hasStatus -> Brush.linearGradient(
             if (isDark) listOf(Color(0xFF2C2C2E), Color(0xFF1C1C1E))
             else listOf(Color(0xFFE5E5EA), Color(0xFFF2F2F7))
         )
-        // Unified vibrant Aurora sweep gradient for both Public and Only Friend unseen stories across all screens
-        !isSeen -> Brush.sweepGradient(AppleStatusVibrantGradient)
-        else -> Brush.linearGradient(
+        isSeen -> Brush.linearGradient(
             if (isDark) AppleStatusSeenGrayDark
             else AppleStatusSeenGrayLight
         )
+        // 1. Close / Only Friend stories: Green ring
+        isOnlyFriend -> SolidColor(AppleStatusCloseFriendGreen)
+        // 2. Verified user stories: Golden ring
+        isVerified -> Brush.sweepGradient(AppleStatusGoldGradient)
+        // 3. Default normal user stories: Plain solid Blue color ring
+        else -> SolidColor(AppleStatusSolidBlue)
     }
 }
 
 /**
  * Standard reusable Apple Status / Story Avatar with Segmented Arcs,
- * Vibrant Apple Aurora Multi-Gradient (Unseen), Only Friend Neon Green, Gray (Seen),
+ * Plain Solid Blue (Normal), Golden Ring (Verified), Green Ring (Only Friend), Gray (Seen),
  * real-time upload ring animations, upload skeleton/progress states, and error retry states.
  */
 @Composable
@@ -407,6 +426,7 @@ fun AppleStatusAvatar(
     storyCount: Int = 1,
     isSeen: Boolean = false,
     isOnlyFriend: Boolean = false,
+    isVerified: Boolean = false,
     isOnline: Boolean = false,
     isUploading: Boolean = false,
     isUploadFailed: Boolean = false,
@@ -417,7 +437,7 @@ fun AppleStatusAvatar(
     gapColor: Color = if (isDark) Color(0xFF121212) else Color.White,
     onAddBadgeClick: (() -> Unit)? = null
 ) {
-    val ringBrush = remember(hasStatus, isSeen, isDark, isOnlyFriend, isUploading, isUploadFailed) {
+    val ringBrush = remember(hasStatus, isSeen, isDark, isOnlyFriend, isVerified, isUploading, isUploadFailed) {
         when {
             isUploadFailed -> Brush.linearGradient(
                 listOf(Color(0xFFFF3B30), Color(0xFFFF453A), Color(0xFFFF3B30))
@@ -431,7 +451,13 @@ fun AppleStatusAvatar(
                     Color(0xFF0381FE)
                 )
             )
-            hasStatus -> getAppleStatusRingBrush(hasStatus = true, isSeen = isSeen, isDark = isDark, isOnlyFriend = isOnlyFriend)
+            hasStatus -> getAppleStatusRingBrush(
+                hasStatus = true,
+                isSeen = isSeen,
+                isDark = isDark,
+                isOnlyFriend = isOnlyFriend,
+                isVerified = isVerified
+            )
             else -> null
         }
     }

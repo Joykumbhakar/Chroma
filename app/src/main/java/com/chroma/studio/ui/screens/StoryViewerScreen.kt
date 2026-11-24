@@ -417,16 +417,45 @@ fun StoryViewerScreen(
     onClose: () -> Unit,
     onAuthorClick: (String) -> Unit,
     onReplySend: ((authorId: String, text: String, storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null,
-    initialStoryId: String? = null
+    initialStoryId: String? = null,
+    isHighlightViewer: Boolean = false,
+    activeHighlightTitle: String? = null
 ) {
     val context = LocalContext.current
     val liveStoryGroups by storyViewModel.storyGroups.collectAsState()
     val liveMyStories by storyViewModel.myStories.collectAsState()
-    val effectiveStoryGroups = if (liveStoryGroups.isNotEmpty()) liveStoryGroups else storyGroups
-    val effectiveMyStories = if (liveMyStories.isNotEmpty()) liveMyStories else myStories
+    val deletedHighlightStoryIds = remember { mutableStateListOf<String>() }
 
-    val allGroups = remember(effectiveStoryGroups, effectiveMyStories, currentUserId, currentUserProfile, initialGroupIndex, initialStoryId) {
-        val shouldPrependMyStory = (initialGroupIndex < 0 || (initialStoryId != null && effectiveMyStories.any { it.id == initialStoryId })) && effectiveMyStories.isNotEmpty()
+    // Preserve explicit caller groups (e.g., profile highlight reels or standalone chat story replies)
+    // while syncing live like/view counts for any overlapping story IDs.
+    val effectiveStoryGroups = remember(storyGroups, liveStoryGroups, liveMyStories, isHighlightViewer, deletedHighlightStoryIds.size) {
+        if (isHighlightViewer) {
+            val liveStoriesById = (liveMyStories + liveStoryGroups.flatMap { it.stories }).associateBy { it.id }
+            storyGroups.mapNotNull { grp ->
+                val filtered = grp.stories
+                    .filterNot { it.id in deletedHighlightStoryIds }
+                    .map { s -> liveStoriesById[s.id] ?: s }
+                if (filtered.isEmpty()) null else grp.copy(stories = filtered)
+            }
+        } else if (storyGroups.isEmpty()) {
+            liveStoryGroups
+        } else {
+            val liveGroupsById = liveStoryGroups.associateBy { it.userId }
+            storyGroups.map { grp -> liveGroupsById[grp.userId] ?: grp }
+        }
+    }
+    val effectiveMyStories = remember(myStories, liveMyStories, isHighlightViewer) {
+        when {
+            isHighlightViewer -> emptyList()
+            liveMyStories.isNotEmpty() -> liveMyStories
+            else -> myStories
+        }
+    }
+
+    val allGroups = remember(effectiveStoryGroups, effectiveMyStories, currentUserId, currentUserProfile, initialGroupIndex, initialStoryId, isHighlightViewer) {
+        val shouldPrependMyStory = !isHighlightViewer &&
+            (initialGroupIndex < 0 || (initialStoryId != null && effectiveMyStories.any { it.id == initialStoryId })) &&
+            effectiveMyStories.isNotEmpty()
         if (shouldPrependMyStory) {
             listOf(
                 UserStoryGroup(
@@ -491,6 +520,7 @@ fun StoryViewerScreen(
     var isPaused by remember { mutableStateOf(false) }
     var showViewers by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showHighlightSaveDialog by remember { mutableStateOf(false) }
     var showOnlyFriendsSheet by remember { mutableStateOf(false) }
     var showOnlyFriendsInfoDialog by remember { mutableStateOf(false) }
     var quickReplyText by remember { mutableStateOf("") }
@@ -530,7 +560,7 @@ fun StoryViewerScreen(
     val doubleTapHeartAlpha = remember { Animatable(0f) }
 
     val isScrollInProgress = pagerState.isScrollInProgress
-    val effectivePaused = isPaused || isScrollInProgress || showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog || isReplying || isCurrentStoryUploading || isCurrentStoryFailed
+    val effectivePaused = isPaused || isScrollInProgress || showViewers || showDeleteConfirm || showHighlightSaveDialog || showOnlyFriendsSheet || showOnlyFriendsInfoDialog || isReplying || isCurrentStoryUploading || isCurrentStoryFailed
 
     val progress = remember(pagerState.currentPage) { Animatable(0f) }
 
@@ -993,10 +1023,10 @@ fun StoryViewerScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 val displayName = if (isOwner) "Your Story" else group.userProfile.displayName.ifBlank { "User" }
-                                val titleText = if (currentStory?.isHighlight == true && currentStory.highlightTitle.isNotBlank()) {
-                                    "$displayName • ${currentStory.highlightTitle}"
-                                } else {
-                                    displayName
+                                val titleText = when {
+                                    isHighlightViewer && !activeHighlightTitle.isNullOrBlank() -> "$displayName • $activeHighlightTitle"
+                                    isHighlightViewer && currentStory?.highlightTitle?.isNotBlank() == true -> "$displayName • ${currentStory.highlightTitle}"
+                                    else -> displayName
                                 }
                                 Text(
                                     text = titleText,
@@ -1120,9 +1150,14 @@ fun StoryViewerScreen(
                         .padding(horizontal = 16.dp, vertical = 18.dp)
                 ) {
                     if (isOwner) {
-                        var showHighlightSaveDialog by remember { mutableStateOf(false) }
-                        var targetHighlightName by remember { mutableStateOf(currentStory.highlightTitle.ifBlank { "Highlights" }) }
-                        var isCurrentStoryHighlighted by remember(currentStory.id, currentStory.isHighlight) { mutableStateOf(currentStory.isHighlight) }
+                        val userHighlights by storyViewModel.highlights.collectAsState()
+                        var isCurrentStoryHighlighted by remember(currentStory.id, currentStory.isHighlight, userHighlights) {
+                            mutableStateOf(
+                                isHighlightViewer ||
+                                    currentStory.isHighlight ||
+                                    userHighlights.any { currentStory.id in it.storyIds }
+                            )
+                        }
 
                         // Admin Action Row: Viewers & Instagram-style Highlight Button
                         Row(
@@ -1220,50 +1255,46 @@ fun StoryViewerScreen(
                             }
 
                             // Instagram Highlight Button (Save to Highlights - Lives Forever)
-                            Box(
-                                modifier = Modifier
-                                    .height(44.dp)
-                                    .clip(RoundedCornerShape(22.dp))
-                                    .background(
-                                        if (isCurrentStoryHighlighted) Brush.linearGradient(listOf(Color(0xFF059669), Color(0xFF10B981)))
-                                        else SolidColor(Color.Black.copy(alpha = 0.65f))
-                                    )
-                                    .clickable {
-                                        if (isCurrentStoryHighlighted) {
-                                            ToastManager.showToast("Story is already saved in Highlights ✨")
-                                        } else {
-                                            showHighlightSaveDialog = true
-                                        }
-                                    }
-                                    .padding(horizontal = 14.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            if (!isCurrentStoryUploading && !isCurrentStoryFailed && !currentStory.id.startsWith("temp_")) {
+                                Box(
+                                    modifier = Modifier
+                                        .height(44.dp)
+                                        .clip(RoundedCornerShape(22.dp))
+                                        .background(
+                                            if (isCurrentStoryHighlighted) Brush.linearGradient(listOf(Color(0xFF059669), Color(0xFF10B981)))
+                                            else SolidColor(Color.Black.copy(alpha = 0.65f))
+                                        )
+                                        .clickable { showHighlightSaveDialog = true }
+                                        .padding(horizontal = 14.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = if (isCurrentStoryHighlighted) Lucide.BookmarkCheck else Lucide.Bookmark,
-                                        contentDescription = "Save to Highlights",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Text(
-                                        text = if (isCurrentStoryHighlighted) "Highlighted" else "Highlight",
-                                        color = Color.White,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isCurrentStoryHighlighted) Lucide.BookmarkCheck else Lucide.Bookmark,
+                                            contentDescription = "Save to Highlights",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Text(
+                                            text = if (isCurrentStoryHighlighted) "Highlighted" else "Highlight",
+                                            color = Color.White,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
 
-                        if (showHighlightSaveDialog && storyViewModel != null && currentStory != null) {
+                        if (showHighlightSaveDialog) {
                             AddToHighlightSheet(
                                 story = currentStory,
                                 storyViewModel = storyViewModel,
                                 onDismiss = { showHighlightSaveDialog = false },
-                                onHighlightAdded = { title ->
+                                onHighlightAdded = { _ ->
                                     isCurrentStoryHighlighted = true
                                     showHighlightSaveDialog = false
                                 }
@@ -1459,6 +1490,9 @@ fun StoryViewerScreen(
                         if (currentStory.id.startsWith("temp_")) {
                             storyViewModel.discardFailedUpload(currentStory.id)
                         } else {
+                            if (isHighlightViewer) {
+                                deletedHighlightStoryIds.add(currentStory.id)
+                            }
                             storyViewModel.deleteStory(currentStory.id)
                         }
                         showDeleteConfirm = false
@@ -1529,13 +1563,25 @@ private fun goNextStory(
 }
 
 private fun storyFormatTimeAgo(timestamp: Long): String {
-    val diff = System.currentTimeMillis() - timestamp
+    if (timestamp <= 0L) return "Highlight"
+    val now = System.currentTimeMillis()
+    val diff = (now - timestamp).coerceAtLeast(0L)
     val minutes = diff / 60000
     val hours = minutes / 60
     return when {
         minutes < 1 -> "Just now"
         minutes < 60 -> "${minutes}m ago"
         hours < 24 -> "${hours}h ago"
-        else -> "Yesterday"
+        hours < 48 -> "Yesterday"
+        else -> {
+            val calStory = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
+            val calNow = java.util.Calendar.getInstance().apply { timeInMillis = now }
+            val pattern = if (calStory.get(java.util.Calendar.YEAR) == calNow.get(java.util.Calendar.YEAR)) {
+                "MMM d"
+            } else {
+                "MMM d, yyyy"
+            }
+            java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault()).format(java.util.Date(timestamp))
+        }
     }
 }

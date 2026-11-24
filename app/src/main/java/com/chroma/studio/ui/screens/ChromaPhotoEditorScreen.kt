@@ -1203,6 +1203,7 @@ fun ChromaPhotoEditorScreen(
         savedStatesMap[activeIndex] = state
         isExporting = true
         isExportCompleted = false
+        val isGalleryExport = exportButtonLabel == "Export"
         scope.launch {
             val exportedUris = mutableListOf<Uri>()
             for (i in effectiveUris.indices) {
@@ -1221,7 +1222,7 @@ fun ChromaPhotoEditorScreen(
                     if (customSettings != null) base.copy(exportSettings = customSettings) else base
                 }
 
-                val saved = exportEditedPhotoToGallery(context = context, state = projectState)
+                val saved = exportEditedPhotoToGallery(context = context, state = projectState, isGalleryExport = isGalleryExport)
                 if (saved != null) {
                     exportedUris.add(saved)
                 } else {
@@ -1229,7 +1230,7 @@ fun ChromaPhotoEditorScreen(
                 }
             }
             isExportCompleted = true
-            delay(650)
+            delay(400)
             isExporting = false
             showExportDialog = false
             val firstUri = exportedUris.firstOrNull() ?: currentActiveUri
@@ -1256,8 +1257,8 @@ fun ChromaPhotoEditorScreen(
     OscellionMorphProcessingDialog(
         visible = isExporting,
         isCompleted = isExportCompleted,
-        loadingText = "Rendering & Exporting...",
-        completedText = "Saved to Gallery"
+        loadingText = if (exportButtonLabel != "Export") "Preparing Photo..." else "Rendering & Exporting...",
+        completedText = if (exportButtonLabel != "Export") "Photo Ready" else "Saved to Gallery"
     )
 
     if (showResetConfirmDialog) {
@@ -1630,6 +1631,7 @@ fun ChromaPhotoEditorScreen(
             // ── Bottom Photo Editing Toolbar ──
             PhotoHorizontalToolbar(
                 clip = rememberedClip,
+                activeTool = activeToolSheet,
                 onOpenTool = { tool ->
                     if (tool == PhotoEditorTool.TEXT) {
                         val textClip = state.clips.find { it.type == MediaType.TEXT }
@@ -1735,7 +1737,9 @@ fun ChromaPhotoEditorScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 32.dp)
+                    .background(if (isDark) Color(0xFF17171A) else Color.White)
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp)
             ) {
                 when (activeToolSheet) {
                     PhotoEditorTool.CROP -> if (targetClip != null) PhotoCropPanel(
@@ -2527,6 +2531,7 @@ private fun LiveRgbHistogramCard(
 @Composable
 private fun PhotoHorizontalToolbar(
     clip: Clip?,
+    activeTool: PhotoEditorTool? = null,
     onOpenTool: (PhotoEditorTool) -> Unit,
     onAddMedia: () -> Unit = {},
     onRotate: () -> Unit,
@@ -2536,29 +2541,30 @@ private fun PhotoHorizontalToolbar(
     data class ToolItem(
         val icon: androidx.compose.ui.graphics.vector.ImageVector,
         val label: String,
-        val color: Color,
+        val toolType: PhotoEditorTool? = null,
+        val isDestructive: Boolean = false,
         val action: () -> Unit,
         val requiresClip: Boolean = true
     )
 
     val tools = listOf(
-        ToolItem(Lucide.Plus, "Add", Color(0xFF0381FE), onAddMedia, requiresClip = false),
-        ToolItem(Lucide.Crop, "Crop", Color(0xFF0381FE), { onOpenTool(PhotoEditorTool.CROP) }),
-        ToolItem(Lucide.SlidersHorizontal, "Filter", Color(0xFFFF9500), { onOpenTool(PhotoEditorTool.FILTER) }),
-        ToolItem(Lucide.Settings2, "Adjust", Color(0xFF34C759), { onOpenTool(PhotoEditorTool.ADJUST) }),
-        ToolItem(Lucide.Activity, "Curves", Color(0xFF0072DE), { onOpenTool(PhotoEditorTool.CURVES) }, requiresClip = false),
-        ToolItem(Lucide.Palette, "Color Mix", Color(0xFF0381FE), { onOpenTool(PhotoEditorTool.COLOR_MIX) }),
-        ToolItem(Lucide.Sparkles, "Effects", Color(0xFFFF2D55), { onOpenTool(PhotoEditorTool.EFFECTS) }, requiresClip = false),
-        ToolItem(Lucide.Type, "Text", Color(0xFFFF3B30), { onOpenTool(PhotoEditorTool.TEXT) }, requiresClip = false),
-        ToolItem(Lucide.Sticker, "Stickers", Color(0xFFEC4899), { onOpenTool(PhotoEditorTool.STICKERS) }, requiresClip = false),
-        ToolItem(Lucide.Brush, "Markup", Color(0xFF30B0C7), { onOpenTool(PhotoEditorTool.MARKUP) }, requiresClip = false),
-        ToolItem(Lucide.Frame, "Frame", Color(0xFF5856D6), { onOpenTool(PhotoEditorTool.FRAME) }, requiresClip = false),
-        ToolItem(Lucide.Move, "Transform", Color(0xFF007AFF), { onOpenTool(PhotoEditorTool.TRANSFORM) }),
-        ToolItem(Lucide.Layers, "Blend", Color(0xFF8E8E93), { onOpenTool(PhotoEditorTool.BLEND) }),
-        ToolItem(Lucide.Zap, "Chroma Key", Color(0xFF34C759), { onOpenTool(PhotoEditorTool.CHROMA_KEY) }),
-        ToolItem(Lucide.RotateCw, "Rotate", Color(0xFF0381FE), { onRotate() }),
-        ToolItem(Lucide.Copy, "Duplicate", Color(0xFF5856D6), { onDuplicate() }),
-        ToolItem(Lucide.Trash2, "Delete", Color(0xFFFF3B30), { onDelete() })
+        ToolItem(Lucide.Plus, "Add", null, action = onAddMedia, requiresClip = false),
+        ToolItem(Lucide.Crop, "Crop", PhotoEditorTool.CROP, action = { onOpenTool(PhotoEditorTool.CROP) }),
+        ToolItem(Lucide.SlidersHorizontal, "Filter", PhotoEditorTool.FILTER, action = { onOpenTool(PhotoEditorTool.FILTER) }),
+        ToolItem(Lucide.Settings2, "Adjust", PhotoEditorTool.ADJUST, action = { onOpenTool(PhotoEditorTool.ADJUST) }),
+        ToolItem(Lucide.Activity, "Curves", PhotoEditorTool.CURVES, action = { onOpenTool(PhotoEditorTool.CURVES) }, requiresClip = false),
+        ToolItem(Lucide.Palette, "Color Mix", PhotoEditorTool.COLOR_MIX, action = { onOpenTool(PhotoEditorTool.COLOR_MIX) }),
+        ToolItem(Lucide.Sparkle, "Effects", PhotoEditorTool.EFFECTS, action = { onOpenTool(PhotoEditorTool.EFFECTS) }, requiresClip = false),
+        ToolItem(Lucide.Type, "Text", PhotoEditorTool.TEXT, action = { onOpenTool(PhotoEditorTool.TEXT) }, requiresClip = false),
+        ToolItem(Lucide.Sticker, "Stickers", PhotoEditorTool.STICKERS, action = { onOpenTool(PhotoEditorTool.STICKERS) }, requiresClip = false),
+        ToolItem(Lucide.Brush, "Markup", PhotoEditorTool.MARKUP, action = { onOpenTool(PhotoEditorTool.MARKUP) }, requiresClip = false),
+        ToolItem(Lucide.Frame, "Frame", PhotoEditorTool.FRAME, action = { onOpenTool(PhotoEditorTool.FRAME) }, requiresClip = false),
+        ToolItem(Lucide.Move, "Transform", PhotoEditorTool.TRANSFORM, action = { onOpenTool(PhotoEditorTool.TRANSFORM) }),
+        ToolItem(Lucide.Layers, "Blend", PhotoEditorTool.BLEND, action = { onOpenTool(PhotoEditorTool.BLEND) }),
+        ToolItem(Lucide.Zap, "Chroma Key", PhotoEditorTool.CHROMA_KEY, action = { onOpenTool(PhotoEditorTool.CHROMA_KEY) }),
+        ToolItem(Lucide.RotateCw, "Rotate", null, action = { onRotate() }),
+        ToolItem(Lucide.Copy, "Duplicate", null, action = { onDuplicate() }),
+        ToolItem(Lucide.Trash2, "Delete", null, isDestructive = true, action = { onDelete() })
     )
 
     val isDark = LocalOscellionColors.current.isDark
@@ -2574,40 +2580,60 @@ private fun PhotoHorizontalToolbar(
             .navigationBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         tools.forEach { tool ->
             val enabled = if (tool.requiresClip) clip != null else true
-            val labelColor = when {
-                !enabled -> Color(0xFF9CA3AF)
-                isDark -> Color.White.copy(alpha = 0.85f)
-                else -> Color(0xFF374151)
+            val isActive = tool.toolType != null && tool.toolType == activeTool
+            val pillBg = when {
+                isActive -> Color(0xFF0381FE).copy(alpha = if (isDark) 0.18f else 0.12f)
+                tool.isDestructive -> Color(0xFFFF453A).copy(alpha = if (isDark) 0.12f else 0.08f)
+                else -> Color.Transparent
+            }
+            val pillBorder = when {
+                isActive -> Color(0xFF0381FE).copy(alpha = 0.35f)
+                tool.isDestructive -> Color(0xFFFF453A).copy(alpha = 0.2f)
+                else -> Color.Transparent
             }
             val iconTint = when {
                 !enabled -> if (isDark) Color.White.copy(alpha = 0.25f) else Color(0xFF9CA3AF)
-                else -> tool.color
+                isActive -> Color(0xFF0381FE)
+                tool.isDestructive -> Color(0xFFFF453A)
+                isDark -> Color.White.copy(alpha = 0.9f)
+                else -> Color(0xFF1F2937)
             }
+            val labelColor = when {
+                !enabled -> Color(0xFF9CA3AF)
+                isActive -> Color(0xFF0381FE)
+                tool.isDestructive -> Color(0xFFFF453A)
+                isDark -> Color.White.copy(alpha = 0.85f)
+                else -> Color(0xFF374151)
+            }
+
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier
                     .alpha(if (enabled) 1f else 0.35f)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(pillBg)
+                    .border(0.5.dp, pillBorder, RoundedCornerShape(12.dp))
                     .clickable(enabled = enabled, onClick = tool.action)
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
                 Icon(
                     imageVector = tool.icon,
                     contentDescription = tool.label,
                     tint = iconTint,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(20.dp)
                 )
                 Text(
                     text = tool.label,
                     color = labelColor,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                    letterSpacing = (-0.01).sp,
                     maxLines = 1
                 )
             }
@@ -2721,15 +2747,15 @@ private fun PhotoCropPanel(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
-                        .border(1.dp, if (selected) Color(0xFF0381FE) else Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
+                        .background(if (selected) Color(0xFF0381FE) else (if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6)))
+                        .border(1.dp, if (selected) Color(0xFF0381FE) else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)), RoundedCornerShape(10.dp))
                         .clickable { viewModel.setCropRatio(ratio) }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = ratio.label,
-                        color = if (selected) Color.White else Color(0xFF374151),
+                        color = if (selected) Color.White else (if (colors.isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF374151)),
                         fontSize = 12.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                     )
@@ -2754,13 +2780,14 @@ private fun PhotoCropPanel(
                         .weight(1f)
                         .height(34.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
+                        .background(if (selected) Color(0xFF0381FE) else (if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6)))
+                        .border(0.5.dp, if (selected) Color(0xFF0381FE) else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)), RoundedCornerShape(8.dp))
                         .clickable { viewModel.setVideoFitMode(mode) },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = label,
-                        color = if (selected) Color.White else Color(0xFF374151),
+                        color = if (selected) Color.White else (if (colors.isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF374151)),
                         fontSize = 11.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                     )
@@ -2843,14 +2870,14 @@ private fun PhotoFilterPanel(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
-                        .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
+                        .background(if (selected) Color(0xFF0381FE) else (if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6)))
                         .clickable { selectedCategory = cat }
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = cat,
-                        color = if (selected) Color.White else Color(0xFF4B5563),
+                        color = if (selected) Color.White else (if (colors.isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF4B5563)),
                         fontSize = 12.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                     )
@@ -2879,7 +2906,7 @@ private fun PhotoFilterPanel(
                         .background(Color(0xFF262626))
                         .border(
                             width = if (isNormalSelected) 2.dp else 0.5.dp,
-                            color = if (isNormalSelected) Color(0xFF0381FE) else Color(0xFFE5E7EB),
+                            color = if (isNormalSelected) Color(0xFF0381FE) else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)),
                             shape = RoundedCornerShape(12.dp)
                         ),
                     contentAlignment = Alignment.Center
@@ -2940,7 +2967,7 @@ private fun PhotoFilterPanel(
                             .background(Brush.linearGradient(preset.previewColors))
                             .border(
                                 width = if (selected) 2.dp else 0.5.dp,
-                                color = if (selected) Color(0xFF0381FE) else Color(0xFFE5E7EB),
+                                color = if (selected) Color(0xFF0381FE) else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)),
                                 shape = RoundedCornerShape(12.dp)
                             )
                     ) {
@@ -3046,7 +3073,7 @@ private fun PhotoAdjustmentsPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFFF3F4F6))
+                .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6))
                 .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -3057,13 +3084,13 @@ private fun PhotoAdjustmentsPanel(
                         .weight(1f)
                         .height(32.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (sel) Color.White else Color.Transparent)
+                        .background(if (sel) (if (colors.isDark) Color(0xFF2C3240) else Color.White) else Color.Transparent)
                         .clickable { activeTab = tab },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = tab,
-                        color = if (sel) Color(0xFF111827) else Color(0xFF6B7280),
+                        color = if (sel) (if (colors.isDark) Color.White else Color(0xFF111827)) else (if (colors.isDark) Color.White.copy(alpha = 0.5f) else Color(0xFF6B7280)),
                         fontSize = 12.sp,
                         fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium
                     )
@@ -3150,13 +3177,14 @@ private fun PhotoCurvesPanel(
                         .weight(1f)
                         .height(30.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (sel) ch.color else Color(0xFFF3F4F6))
+                        .background(if (sel) ch.color else (if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6)))
+                        .border(0.5.dp, if (sel) ch.color else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)), RoundedCornerShape(8.dp))
                         .clickable { viewModel.setActiveCurveChannel(ch) },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = ch.label,
-                        color = if (sel) Color.White else Color(0xFF374151),
+                        color = if (sel) Color.White else (if (colors.isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF374151)),
                         fontSize = 11.sp,
                         fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium
                     )
@@ -3233,7 +3261,7 @@ private fun PhotoCurvesPanel(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFF3F4F6))
+                        .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6))
                         .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
                         .clickable { viewModel.updateActiveCurvePoints(preset) }
                         .padding(horizontal = 12.dp, vertical = 6.dp)
@@ -3323,11 +3351,17 @@ private fun PhotoColorMixPanel(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFF3F4F6))
+                        .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6))
+                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
                         .clickable { viewModel.updateSplitToning(preset) }
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Text(label, color = Color(0xFF374151), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        label,
+                        color = if (colors.isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF374151),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }
@@ -3405,8 +3439,8 @@ private fun PhotoEffectsPanel(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
-                        .border(1.dp, if (selected) Color(0xFF0381FE) else Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
+                        .background(if (selected) Color(0xFF0381FE) else (if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6)))
+                        .border(1.dp, if (selected) Color(0xFF0381FE) else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)), RoundedCornerShape(10.dp))
                         .clickable { viewModel.setLightLeak(leak) }
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 ) {
@@ -3757,13 +3791,14 @@ private fun PhotoStickersPanel(
                         .weight(1f)
                         .height(34.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (sel) Color(0xFF0381FE) else Color(0xFFF3F4F6))
+                        .background(if (sel) Color(0xFF0381FE) else (if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6)))
+                        .border(0.5.dp, if (sel) Color(0xFF0381FE) else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)), RoundedCornerShape(8.dp))
                         .clickable { activeCategory = cat },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = cat,
-                        color = if (sel) Color.White else Color(0xFF374151),
+                        color = if (sel) Color.White else (if (colors.isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF374151)),
                         fontSize = 12.sp,
                         fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium
                     )
@@ -3782,8 +3817,8 @@ private fun PhotoStickersPanel(
                             modifier = Modifier
                                 .size(44.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFFF9FAFB))
-                                .border(0.5.dp, Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
+                                .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF9FAFB))
+                                .border(0.5.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
                                 .clickable {
                                     viewModel.addClip(
                                         type = MediaType.TEXT,
@@ -3887,11 +3922,11 @@ private fun PhotoBlendPanel(clip: Clip, viewModel: ChromaPhotoEditorViewModel) {
                             .clip(RoundedCornerShape(8.dp))
                             .background(
                                 if (selected) Color(0xFF0381FE)
-                                else Color(0xFFF3F4F6)
+                                else (if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6))
                             )
                             .border(
                                 0.5.dp,
-                                if (selected) Color.Transparent else Color(0xFFE5E7EB),
+                                if (selected) Color.Transparent else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)),
                                 RoundedCornerShape(8.dp)
                             )
                             .clickable { viewModel.setBlendMode(mode) },
@@ -3899,7 +3934,7 @@ private fun PhotoBlendPanel(clip: Clip, viewModel: ChromaPhotoEditorViewModel) {
                     ) {
                         Text(
                             text = mode.name.lowercase().replaceFirstChar { it.uppercase() },
-                            color = if (selected) Color.White else Color(0xFF374151),
+                            color = if (selected) Color.White else (if (colors.isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF374151)),
                             fontSize = 12.sp,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                         )
@@ -4114,8 +4149,8 @@ private fun PhotoFramePanel(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (selected) Color(0xFF0381FE) else Color(0xFFF3F4F6))
-                        .border(1.dp, if (selected) Color(0xFF0381FE) else Color(0xFFE5E7EB), RoundedCornerShape(10.dp))
+                        .background(if (selected) Color(0xFF0381FE) else (if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6)))
+                        .border(1.dp, if (selected) Color(0xFF0381FE) else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)), RoundedCornerShape(10.dp))
                         .clickable {
                             val defaultPad = when (style) {
                                 PhotoFrameStyle.NONE -> 0f
@@ -4129,7 +4164,7 @@ private fun PhotoFramePanel(
                 ) {
                     Text(
                         text = style.label,
-                        color = if (selected) Color.White else Color(0xFF374151),
+                        color = if (selected) Color.White else (if (colors.isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF374151)),
                         fontSize = 12.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                     )
@@ -4609,7 +4644,8 @@ private fun PhotoExportSettingsDialog(
 
 private suspend fun exportEditedPhotoToGallery(
     context: Context,
-    state: PhotoProjectState
+    state: PhotoProjectState,
+    isGalleryExport: Boolean = true
 ): Uri? = withContext(Dispatchers.IO) {
     try {
         val loader = coil.Coil.imageLoader(context)
@@ -4976,6 +5012,28 @@ private suspend fun exportEditedPhotoToGallery(
             else -> "image/png"
         }
         val filename = "Oscellion_Photo_${System.currentTimeMillis()}.$ext"
+
+        val compressFormat = when (state.exportSettings.format) {
+            "JPEG" -> Bitmap.CompressFormat.JPEG
+            "WEBP" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Bitmap.CompressFormat.WEBP_LOSSY
+            } else {
+                @Suppress("DEPRECATION")
+                Bitmap.CompressFormat.WEBP
+            }
+            else -> Bitmap.CompressFormat.PNG
+        }
+
+        if (!isGalleryExport) {
+            // Internal draft export for post creation flow: do not spam the user's public gallery!
+            val draftDir = File(context.cacheDir, "post_drafts").apply { mkdirs() }
+            val draftFile = File(draftDir, filename)
+            draftFile.outputStream().use { stream ->
+                outputBitmap.compress(compressFormat, state.exportSettings.quality, stream)
+            }
+            return@withContext Uri.fromFile(draftFile)
+        }
+
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, filename)
             put(MediaStore.Images.Media.MIME_TYPE, mime)
@@ -4990,17 +5048,6 @@ private suspend fun exportEditedPhotoToGallery(
             resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
         } catch (_: Exception) {
             null
-        }
-
-        val compressFormat = when (state.exportSettings.format) {
-            "JPEG" -> Bitmap.CompressFormat.JPEG
-            "WEBP" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                Bitmap.CompressFormat.WEBP_LOSSY
-            } else {
-                @Suppress("DEPRECATION")
-                Bitmap.CompressFormat.WEBP
-            }
-            else -> Bitmap.CompressFormat.PNG
         }
 
         if (outUri != null) {

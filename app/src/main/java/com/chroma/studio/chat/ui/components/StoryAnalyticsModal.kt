@@ -219,7 +219,8 @@ fun StoryAnalyticsModal(
                     .clip(CircleShape)
                     .background(dragHandleColor)
             )
-        }
+        },
+        windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier
