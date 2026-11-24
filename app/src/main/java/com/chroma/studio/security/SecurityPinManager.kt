@@ -120,6 +120,17 @@ object SecurityPinManager {
         return BiometricHelper.canAuthenticate(context)
     }
 
+    /** Returns whether Biometric unlock is enabled (defaults to true if hardware supported). */
+    fun isBiometricEnabled(context: Context): Boolean {
+        if (!isBiometricSupported(context)) return false
+        return getPrefs(context).getBoolean(KEY_BIOMETRIC_PREF, true)
+    }
+
+    /** Enables or disables Biometric unlock as an option alongside PIN. */
+    fun setBiometricEnabled(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_BIOMETRIC_PREF, enabled).apply()
+    }
+
     /** Marks current app session as unlocked. */
     fun markUnlocked() {
         _isSessionUnlocked.value = true

@@ -102,6 +102,9 @@ fun ProfileSettingsScreen(
     var hasPinConfigured by remember {
         mutableStateOf(com.chroma.studio.security.SecurityPinManager.hasPin(context))
     }
+    var isBiometricEnabled by remember {
+        mutableStateOf(com.chroma.studio.security.SecurityPinManager.isBiometricEnabled(context))
+    }
     var showPinSetupDialog by remember { mutableStateOf(false) }
 
     // Cache calculation
@@ -454,6 +457,26 @@ fun ProfileSettingsScreen(
 
                     SettingsDivider()
 
+                    // Biometric Unlock Toggle
+                    SettingsToggleRow(
+                        icon = { Icon(Lucide.Fingerprint, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(18.dp)) },
+                        title = "Biometric Unlock",
+                        subtitle = if (isBiometricEnabled) "Face & Fingerprint unlock active" else "Disabled • Unlock using 4-digit PIN only",
+                        checked = isBiometricEnabled,
+                        onCheckedChange = { enable ->
+                            if (!enable && !hasPinConfigured) {
+                                onShowToast("Set up a 4-digit PIN before disabling Biometrics")
+                                showPinSetupDialog = true
+                            } else {
+                                isBiometricEnabled = enable
+                                com.chroma.studio.security.SecurityPinManager.setBiometricEnabled(context, enable)
+                                onShowToast(if (enable) "Biometric unlock enabled" else "Biometrics disabled (PIN only)")
+                            }
+                        }
+                    )
+
+                    SettingsDivider()
+
                     // PIN Setup / Change Row
                     SettingsActionRow(
                         icon = { Icon(Lucide.Lock, contentDescription = null, tint = Color(0xFF0381FE), modifier = Modifier.size(18.dp)) },
@@ -582,6 +605,7 @@ fun ProfileSettingsScreen(
             onSuccess = {
                 showPinSetupDialog = false
                 hasPinConfigured = true
+                isBiometricEnabled = com.chroma.studio.security.SecurityPinManager.isBiometricEnabled(context)
                 if (!screenLockEnabled) {
                     screenLockEnabled = true
                     com.chroma.studio.security.SecurityPinManager.setAppLockEnabled(context, true)

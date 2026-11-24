@@ -88,7 +88,11 @@ fun OscellionLockScreen(
     val scope = rememberCoroutineScope()
     val activity = remember(context) { context.findActivity() }
 
-    var currentView by remember { mutableStateOf(LockScreenView.BIOMETRIC_CHOICE) }
+    val isBiometricEnabled = remember { SecurityPinManager.isBiometricEnabled(context) }
+    val initialView = remember(isBiometricEnabled) {
+        if (isBiometricEnabled) LockScreenView.BIOMETRIC_CHOICE else LockScreenView.PIN_ENTRY
+    }
+    var currentView by remember(initialView) { mutableStateOf(initialView) }
     var enteredPin by remember { mutableStateOf("") }
     var isPinError by remember { mutableStateOf(false) }
     var showPinSetupDialog by remember { mutableStateOf(false) }
@@ -170,7 +174,7 @@ fun OscellionLockScreen(
             isWallpaperEditing = false
             pendingWallpaperUri = wallpaperUri
             pendingDimming = wallpaperDimming
-        } else if (currentView == LockScreenView.PIN_ENTRY) {
+        } else if (currentView == LockScreenView.PIN_ENTRY && isBiometricEnabled) {
             currentView = LockScreenView.BIOMETRIC_CHOICE
             enteredPin = ""
         } else {
@@ -827,41 +831,43 @@ fun OscellionLockScreen(
                                             modifier = Modifier.size(buttonSize),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            GlassCapsuleButton(
-                                                hazeState = hazeState,
-                                                enabled = lockoutSecondsRemaining == 0,
-                                                onClick = { triggerBiometricPrompt() },
-                                                modifier = Modifier
-                                                    .width(84.dp)
-                                                    .height(48.dp)
-                                            ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.Center,
-                                                    modifier = Modifier.padding(horizontal = 6.dp)
+                                            if (isBiometricEnabled) {
+                                                GlassCapsuleButton(
+                                                    hazeState = hazeState,
+                                                    enabled = lockoutSecondsRemaining == 0,
+                                                    onClick = { triggerBiometricPrompt() },
+                                                    modifier = Modifier
+                                                        .width(84.dp)
+                                                        .height(48.dp)
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Lucide.Fingerprint,
-                                                        contentDescription = "Use Biometric",
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                    Spacer(Modifier.width(5.dp))
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .width(1.dp)
-                                                            .height(16.dp)
-                                                            .background(Color.White.copy(alpha = 0.28f))
-                                                    )
-                                                    Spacer(Modifier.width(5.dp))
-                                                    Text(
-                                                        text = "Biometric",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Medium,
-                                                        color = Color.White,
-                                                        fontFamily = InterFontFamily,
-                                                        maxLines = 1
-                                                    )
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.Center,
+                                                        modifier = Modifier.padding(horizontal = 6.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Lucide.Fingerprint,
+                                                            contentDescription = "Use Biometric",
+                                                            tint = Color.White,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                        Spacer(Modifier.width(5.dp))
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .width(1.dp)
+                                                                .height(16.dp)
+                                                                .background(Color.White.copy(alpha = 0.28f))
+                                                        )
+                                                        Spacer(Modifier.width(5.dp))
+                                                        Text(
+                                                            text = "Biometric",
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = Color.White,
+                                                            fontFamily = InterFontFamily,
+                                                            maxLines = 1
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }

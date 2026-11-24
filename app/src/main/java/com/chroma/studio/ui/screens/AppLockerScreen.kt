@@ -35,6 +35,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.security.SecurityPinManager
 import com.chroma.studio.security.applock.AppLockTarget
 import com.chroma.studio.security.applock.AppLockerManager
 import com.chroma.studio.ui.components.*
@@ -62,6 +63,9 @@ fun AppLockerScreen(
     var isEnabled by remember { mutableStateOf(AppLockerManager.isEnabled(context)) }
     var hasOverlayPermission by remember { mutableStateOf(AppLockerManager.hasOverlayPermission(context)) }
     var isAccessibilityEnabled by remember { mutableStateOf(AppLockerManager.isAccessibilityServiceEnabled(context)) }
+    var hasPinConfigured by remember { mutableStateOf(SecurityPinManager.hasPin(context)) }
+    var isBiometricEnabled by remember { mutableStateOf(SecurityPinManager.isBiometricEnabled(context)) }
+    var showPinSetupDialog by remember { mutableStateOf(false) }
 
     var searchQuery by remember { mutableStateOf("") }
     var installedApps by remember { mutableStateOf<List<AppLockTarget>>(emptyList()) }
@@ -143,7 +147,11 @@ fun AppLockerScreen(
             item {
                 AppleSettingsGroup(
                     header = "Protection Status",
-                    footer = "When enabled, protected applications are locked immediately upon launch until verified with Face, Fingerprint, or PIN."
+                    footer = if (isBiometricEnabled) {
+                        "When enabled, protected applications require Face, Fingerprint, or PIN to unlock."
+                    } else {
+                        "When enabled, protected applications require the 4-digit PIN to unlock."
+                    }
                 ) {
                     AppleSettingToggleRow(
                         title = "Enable App Locker",
@@ -156,6 +164,46 @@ fun AppLockerScreen(
                             SoundManager.playReaction()
                             isEnabled = checked
                             AppLockerManager.setEnabled(context, checked)
+                        }
+                    )
+
+                    AppleSettingDivider()
+
+                    AppleSettingToggleRow(
+                        title = "Biometric Unlock",
+                        subtitle = if (isBiometricEnabled) "Face & Fingerprint unlock active" else "Disabled • Unlock using 4-digit PIN only",
+                        icon = Lucide.Fingerprint,
+                        iconGradient = listOf(Color(0xFF34C759), Color(0xFF30D158)),
+                        checked = isBiometricEnabled,
+                        onCheckedChange = { checked ->
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            SoundManager.playReaction()
+                            if (!isEnabled) {
+                                ToastManager.showToast("Enable App Locker first")
+                                return@AppleSettingToggleRow
+                            }
+                            if (!checked && !hasPinConfigured) {
+                                ToastManager.showToast("Set up a 4-digit PIN before disabling Biometrics")
+                                showPinSetupDialog = true
+                            } else {
+                                isBiometricEnabled = checked
+                                SecurityPinManager.setBiometricEnabled(context, checked)
+                                ToastManager.showToast(if (checked) "Biometric unlock enabled" else "Biometrics disabled (PIN only)")
+                            }
+                        }
+                    )
+
+                    AppleSettingDivider()
+
+                    AppleSettingNavRow(
+                        title = "App Lock PIN",
+                        subtitle = if (hasPinConfigured) "4-digit PIN configured" else "Set up a 4-digit PIN for locking apps",
+                        icon = Lucide.Lock,
+                        iconGradient = listOf(Color(0xFF5856D6), Color(0xFF5E5CE6)),
+                        valueText = if (hasPinConfigured) "Change" else "Set Up",
+                        onClick = {
+                            SoundManager.playReaction()
+                            showPinSetupDialog = true
                         }
                     )
                 }
@@ -382,6 +430,19 @@ fun AppLockerScreen(
                 }
             }
         }
+    }
+
+    if (showPinSetupDialog) {
+        PinSetupDialog(
+            isChangingExisting = hasPinConfigured,
+            onDismiss = { showPinSetupDialog = false },
+            onSuccess = {
+                showPinSetupDialog = false
+                hasPinConfigured = true
+                isBiometricEnabled = SecurityPinManager.isBiometricEnabled(context)
+                ToastManager.showToast("PIN configured successfully")
+            }
+        )
     }
 }
 

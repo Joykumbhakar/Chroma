@@ -45,6 +45,9 @@ fun SecurityScreen(
     var hasPinConfigured by remember {
         mutableStateOf(com.chroma.studio.security.SecurityPinManager.hasPin(context))
     }
+    var isBiometricUnlockEnabled by remember {
+        mutableStateOf(com.chroma.studio.security.SecurityPinManager.isBiometricEnabled(context))
+    }
     var showPinSetupDialog by remember { mutableStateOf(false) }
     var isSendingReset by remember { mutableStateOf(false) }
     var unrecognizedLogins by remember { mutableStateOf(profile.unrecognizedLoginsEnabled) }
@@ -142,12 +145,14 @@ fun SecurityScreen(
             item {
                 AppleSettingsGroup(
                     header = "Login Security & App Lock",
-                    footer = "Protect your app with Biometrics and a 4-digit PIN backup for fast, secure access."
+                    footer = "Protect your app with a 4-digit PIN and optional Biometrics for fast, secure access."
                 ) {
                     AppleSettingToggleRow(
-                        title = "App Lock (Biometric & PIN)",
-                        subtitle = "Require Face, Fingerprint, or PIN to open Oscellion",
-                        icon = Lucide.Fingerprint,
+                        title = "App Lock",
+                        subtitle = if (biometricPasskeyEnabled) {
+                            if (isBiometricUnlockEnabled) "Active • PIN or Biometrics required" else "Active • 4-digit PIN required"
+                        } else "Disabled • No lock required",
+                        icon = Lucide.Lock,
                         iconGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE)),
                         checked = biometricPasskeyEnabled,
                         onCheckedChange = { enabled ->
@@ -174,6 +179,30 @@ fun SecurityScreen(
                                     onCancel = {},
                                     onError = { err -> ToastManager.showToast(err) }
                                 )
+                            }
+                        }
+                    )
+
+                    AppleSettingDivider()
+
+                    AppleSettingToggleRow(
+                        title = "Biometric Unlock",
+                        subtitle = if (isBiometricUnlockEnabled) "Face & Fingerprint unlock active" else "Disabled • Unlock using 4-digit PIN only",
+                        icon = Lucide.Fingerprint,
+                        iconGradient = listOf(Color(0xFF34C759), Color(0xFF30D158)),
+                        checked = isBiometricUnlockEnabled,
+                        onCheckedChange = { enabled ->
+                            if (!biometricPasskeyEnabled) {
+                                ToastManager.showToast("Enable App Lock first")
+                                return@AppleSettingToggleRow
+                            }
+                            if (!enabled && !hasPinConfigured) {
+                                ToastManager.showToast("Set up a 4-digit PIN before disabling Biometrics")
+                                showPinSetupDialog = true
+                            } else {
+                                isBiometricUnlockEnabled = enabled
+                                com.chroma.studio.security.SecurityPinManager.setBiometricEnabled(context, enabled)
+                                ToastManager.showToast(if (enabled) "Biometric unlock enabled" else "Biometrics disabled (PIN only)")
                             }
                         }
                     )
@@ -337,6 +366,7 @@ fun SecurityScreen(
             onSuccess = {
                 showPinSetupDialog = false
                 hasPinConfigured = true
+                isBiometricUnlockEnabled = com.chroma.studio.security.SecurityPinManager.isBiometricEnabled(context)
                 if (!biometricPasskeyEnabled) {
                     biometricPasskeyEnabled = true
                     com.chroma.studio.security.SecurityPinManager.setAppLockEnabled(context, true)
