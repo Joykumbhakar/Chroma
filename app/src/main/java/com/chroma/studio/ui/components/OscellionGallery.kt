@@ -202,6 +202,8 @@ fun OscellionGalleryLayout(
     showCameraTile: Boolean = true,
     showCaptionInput: Boolean = false,
     showAlbumsTab: Boolean = (layoutMode == GalleryLayoutMode.FULL_SCREEN),
+    showHeader: Boolean = true,
+    onSelectionChanged: ((List<Uri>) -> Unit)? = null,
     onVideoSelected: ((Uri) -> Unit)? = null,
     onPhotosSelected: ((List<Uri>) -> Unit)? = null,
     onSendMediaWithCaption: ((List<Uri>, String?) -> Unit)? = null,
@@ -229,6 +231,10 @@ fun OscellionGalleryLayout(
         hasPermission = results.values.any { it }
     }
 
+    // Multi-selection state
+    val selectedUris = remember { mutableStateListOf<Uri>().apply { addAll(initialSelectedUris) } }
+    var captionText by remember { mutableStateOf("") }
+
     // Direct native System PhotoPicker fallback (zero permission barrier)
     val systemPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxSelection.coerceAtLeast(2))
@@ -242,6 +248,9 @@ fun OscellionGalleryLayout(
                     return@rememberLauncherForActivityResult
                 }
             }
+            selectedUris.clear()
+            selectedUris.addAll(uris.take(maxSelection))
+            onSelectionChanged?.invoke(selectedUris.toList())
             if (onSendMediaWithCaption != null) {
                 onSendMediaWithCaption(uris, null)
             } else {
@@ -274,10 +283,6 @@ fun OscellionGalleryLayout(
     var gridColumns by remember { mutableIntStateOf(3) } // Supports 2, 3, 4, 5 columns
     var isSearchVisible by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-
-    // Multi-selection state
-    val selectedUris = remember { mutableStateListOf<Uri>().apply { addAll(initialSelectedUris) } }
-    var captionText by remember { mutableStateOf("") }
 
     // Modern Lightbox multi-item swipe & zoom state
     var lightboxInitialIndex by remember { mutableIntStateOf(0) }
@@ -409,6 +414,7 @@ fun OscellionGalleryLayout(
                 .filter { !selectedUris.contains(it) }
                 .take(remaining)
             selectedUris.addAll(toAdd)
+            onSelectionChanged?.invoke(selectedUris.toList())
         }
     }
 
@@ -531,6 +537,7 @@ fun OscellionGalleryLayout(
                             }
                         },
                         onSearchQueryChange = { searchQuery = it },
+                        onToggleSearch = { isSearchVisible = !isSearchVisible },
                         onLaunchCamera = {
                             SoundManager.playTap(context)
                             if (onLaunchCamera != null) {
@@ -543,6 +550,7 @@ fun OscellionGalleryLayout(
                         onUpdateSelectedUris = { newUris: List<Uri> ->
                             selectedUris.clear()
                             selectedUris.addAll(newUris)
+                            onSelectionChanged?.invoke(selectedUris.toList())
                         },
                         onMediaClick = { item ->
                             SoundManager.playPop()
@@ -554,12 +562,14 @@ fun OscellionGalleryLayout(
                                 } else if (selectedUris.size < maxSelection) {
                                     selectedUris.add(item.uri)
                                 }
+                                onSelectionChanged?.invoke(selectedUris.toList())
                             }
                         },
                         onMediaLongClick = { item ->
                             SoundManager.playPop()
                             if (!selectedUris.contains(item.uri) && selectedUris.size < maxSelection) {
                                 selectedUris.add(item.uri)
+                                onSelectionChanged?.invoke(selectedUris.toList())
                             }
                         },
                         onQuickPreview = { item ->
@@ -573,10 +583,12 @@ fun OscellionGalleryLayout(
                         onClearSelection = {
                             SoundManager.playTap(context)
                             selectedUris.clear()
+                            onSelectionChanged?.invoke(emptyList())
                         },
                         onRemoveUri = { uri ->
                             SoundManager.playTap(context)
                             selectedUris.remove(uri)
+                            onSelectionChanged?.invoke(selectedUris.toList())
                         },
                         onSubmitSelection = {
                             SoundManager.playSend(context)
@@ -611,57 +623,59 @@ fun OscellionGalleryLayout(
                 .fillMaxSize()
                 .background(colors.bg)
         ) {
-            // Fullscreen Screen Header with Reachability & Clean Flat Icons
-            ChromaScreenHeader(
-                title = title,
-                badgeText = null,
-                showBackButton = true,
-                circularBackButton = false,
-                onBack = onClose,
-                actions = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        // System Picker Icon Button
-                        IconButton(
-                            onClick = {
-                                SoundManager.playTap(context)
-                                systemPickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+            if (showHeader) {
+                // Fullscreen Screen Header with Reachability & Clean Flat Icons
+                ChromaScreenHeader(
+                    title = title,
+                    badgeText = null,
+                    showBackButton = true,
+                    circularBackButton = false,
+                    onBack = onClose,
+                    actions = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            // System Picker Icon Button
+                            IconButton(
+                                onClick = {
+                                    SoundManager.playTap(context)
+                                    systemPickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                                    )
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Lucide.FolderOpen,
+                                    contentDescription = "System",
+                                    tint = colors.textMain,
+                                    modifier = Modifier.size(18.dp)
                                 )
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                Lucide.FolderOpen,
-                                contentDescription = "System",
-                                tint = colors.textMain,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                            }
 
-                        // Search Icon Button
-                        IconButton(
-                            onClick = {
-                                SoundManager.playTap(context)
-                                isSearchVisible = !isSearchVisible
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                Lucide.Search,
-                                contentDescription = "Search",
-                                tint = if (isSearchVisible) Color(0xFF0381FE) else colors.textMain,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            // Search Icon Button
+                            IconButton(
+                                onClick = {
+                                    SoundManager.playTap(context)
+                                    isSearchVisible = !isSearchVisible
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    Lucide.Search,
+                                    contentDescription = "Search",
+                                    tint = if (isSearchVisible) Color(0xFF0381FE) else colors.textMain,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
 
             // Samsung One UI Segmented Switcher (Pictures vs Albums)
-            if (showAlbumsTab) {
+            if (showAlbumsTab && showHeader) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -730,6 +744,7 @@ fun OscellionGalleryLayout(
                         }
                     },
                     onSearchQueryChange = { searchQuery = it },
+                    onToggleSearch = { isSearchVisible = !isSearchVisible },
                     onLaunchCamera = {
                         SoundManager.playTap(context)
                         if (onLaunchCamera != null) {
@@ -742,6 +757,7 @@ fun OscellionGalleryLayout(
                     onUpdateSelectedUris = { newUris: List<Uri> ->
                         selectedUris.clear()
                         selectedUris.addAll(newUris)
+                        onSelectionChanged?.invoke(selectedUris.toList())
                     },
                     onMediaClick = { item ->
                         SoundManager.playPop()
@@ -753,12 +769,14 @@ fun OscellionGalleryLayout(
                             } else if (selectedUris.size < maxSelection) {
                                 selectedUris.add(item.uri)
                             }
+                            onSelectionChanged?.invoke(selectedUris.toList())
                         }
                     },
                     onMediaLongClick = { item ->
                         SoundManager.playPop()
                         if (!selectedUris.contains(item.uri) && selectedUris.size < maxSelection) {
                             selectedUris.add(item.uri)
+                            onSelectionChanged?.invoke(selectedUris.toList())
                         }
                     },
                     onQuickPreview = { item ->
@@ -772,10 +790,12 @@ fun OscellionGalleryLayout(
                     onClearSelection = {
                         SoundManager.playTap(context)
                         selectedUris.clear()
+                        onSelectionChanged?.invoke(emptyList())
                     },
                     onRemoveUri = { uri ->
                         SoundManager.playTap(context)
                         selectedUris.remove(uri)
+                        onSelectionChanged?.invoke(selectedUris.toList())
                     },
                     onSubmitSelection = {
                         SoundManager.playSend(context)
@@ -1245,6 +1265,7 @@ private fun GalleryMainBody(
     sortOrder: GallerySortOrder,
     isSearchVisible: Boolean,
     searchQuery: String,
+    onToggleSearch: (() -> Unit)? = null,
     showCameraTile: Boolean,
     showCaptionInput: Boolean,
     captionText: String,
@@ -1286,6 +1307,9 @@ private fun GalleryMainBody(
                 mediaTypeFilter = mediaTypeFilter,
                 sortOrder = sortOrder,
                 gridColumns = gridColumns,
+                isSearchVisible = isSearchVisible,
+                onToggleSearch = onToggleSearch,
+                onOpenSystemPicker = onOpenSystemPicker,
                 onAlbumChange = onAlbumChange,
                 onTypeFilterChange = onTypeFilterChange,
                 onSortOrderChange = onSortOrderChange,
@@ -1680,12 +1704,16 @@ private fun GalleryControlsBar(
     mediaTypeFilter: GalleryMediaTypeFilter,
     sortOrder: GallerySortOrder,
     gridColumns: Int,
+    isSearchVisible: Boolean = false,
+    onToggleSearch: (() -> Unit)? = null,
+    onOpenSystemPicker: (() -> Unit)? = null,
     onAlbumChange: (String) -> Unit,
     onTypeFilterChange: (GalleryMediaTypeFilter) -> Unit,
     onSortOrderChange: (GallerySortOrder) -> Unit,
     onToggleColumns: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val context = LocalContext.current
     var albumMenuExpanded by remember { mutableStateOf(false) }
     var filterMenuExpanded by remember { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
@@ -1865,11 +1893,47 @@ private fun GalleryControlsBar(
             }
         }
 
-        // Right side: Sort Dropdown & Column Density Toggle
+        // Right side: Search, System Picker, Sort Dropdown & Column Density Toggle
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            // Search Icon Button
+            if (onToggleSearch != null) {
+                IconButton(
+                    onClick = {
+                        SoundManager.playTap(context)
+                        onToggleSearch()
+                    },
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Icon(
+                        Lucide.Search,
+                        contentDescription = "Search",
+                        tint = if (isSearchVisible) colors.primary else colors.textMain,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // System Picker Icon Button
+            if (onOpenSystemPicker != null) {
+                IconButton(
+                    onClick = {
+                        SoundManager.playTap(context)
+                        onOpenSystemPicker()
+                    },
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Icon(
+                        Lucide.FolderOpen,
+                        contentDescription = "System Picker",
+                        tint = colors.textMain,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
             // 3. Sort Order Dropdown
             Box {
                 IconButton(

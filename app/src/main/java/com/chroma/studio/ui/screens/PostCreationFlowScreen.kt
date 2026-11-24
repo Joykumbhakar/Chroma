@@ -26,7 +26,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -201,7 +200,7 @@ fun PostCreationFlowScreen(
 ) {
     val context = LocalContext.current
     val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = colors.isDark
     val scope = rememberCoroutineScope()
     val discoverRepo = remember { DiscoverRepository() }
     val workRepo = remember { WorkRepository(context) }
@@ -596,8 +595,7 @@ fun PostCreationFlowScreen(
                     onBack = {
                         if (effectiveInitialUri != null) onClose()
                         else currentStep = PostCreationStep.MEDIA_PICKER
-                    },
-                    isDark = isDark
+                    }
                 )
                 return
             }
@@ -619,18 +617,15 @@ fun PostCreationFlowScreen(
                     onBack = {
                         if (effectiveInitialUri != null) onClose()
                         else currentStep = PostCreationStep.MEDIA_PICKER
-                    },
-                    isDark = isDark
+                    }
                 )
                 return
             }
         }
     }
 
-    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
-
     Scaffold(
-        containerColor = screenBg,
+        containerColor = colors.bg,
         topBar = {
             OneUiPostCreationTopBar(
                 postType = currentPostType,
@@ -666,8 +661,7 @@ fun PostCreationFlowScreen(
                     PostCreationStep.IMAGE_EDITOR -> true
                     PostCreationStep.POST_DETAILS -> !isPublishing && !(currentPostType == PostType.FLASH && flashIsUploading)
                 },
-                isPublishing = isPublishing || (currentPostType == PostType.FLASH && flashIsUploading),
-                isDark = isDark
+                isPublishing = isPublishing || (currentPostType == PostType.FLASH && flashIsUploading)
             )
         }
     ) { innerPadding ->
@@ -690,8 +684,7 @@ fun PostCreationFlowScreen(
                                     selectedLocalWork = null
                                     useGradientCanvas = false
                                 }
-                            },
-                            isDark = isDark
+                            }
                         )
 
                         // 2. Extra quick actions for WORK or STORY
@@ -704,8 +697,7 @@ fun PostCreationFlowScreen(
                                     caption = w.name
                                     SoundManager.playReaction()
                                     currentStep = PostCreationStep.IMAGE_EDITOR
-                                },
-                                isDark = isDark
+                                }
                             )
                         }
 
@@ -715,8 +707,7 @@ fun PostCreationFlowScreen(
                                     useGradientCanvas = true
                                     SoundManager.playReaction()
                                     currentStep = PostCreationStep.IMAGE_EDITOR
-                                },
-                                isDark = isDark
+                                }
                             )
                         }
 
@@ -741,6 +732,16 @@ fun PostCreationFlowScreen(
                             maxSelection = maxMediaCount,
                             allowedMediaFilter = mediaFilter,
                             showCameraTile = true,
+                            showAlbumsTab = false,
+                            showHeader = false,
+                            onSelectionChanged = { uris ->
+                                selectedPhotoUris = uris
+                                if (uris.isNotEmpty()) {
+                                    currentPhotoIndex = 0
+                                    editedPhotoUris = emptyMap()
+                                    useGradientCanvas = false
+                                }
+                            },
                             onPhotosSelected = { uris ->
                                 if (uris.isNotEmpty()) {
                                     selectedPhotoUris = uris
@@ -820,8 +821,7 @@ fun PostCreationFlowScreen(
                         onAllowDownloadChange = { allowDownload = it },
                         isPublishing = isPublishing || (currentPostType == PostType.FLASH && flashIsUploading),
                         uploadProgress = if (currentPostType == PostType.FLASH) flashUploadProgress else 0f,
-                        onPublish = { executePublish() },
-                        isDark = isDark
+                        onPublish = { executePublish() }
                     )
                 }
             }
@@ -839,16 +839,14 @@ private fun OneUiPostCreationTopBar(
     onBack: () -> Unit,
     onNext: () -> Unit,
     isNextEnabled: Boolean,
-    isPublishing: Boolean,
-    isDark: Boolean
+    isPublishing: Boolean
 ) {
-    val barBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
-    val textMain = if (isDark) Color.White else Color(0xFF0F172A)
+    val colors = LocalOscellionColors.current
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(barBg)
+            .background(colors.bg)
             .statusBarsPadding()
             .height(56.dp)
             .padding(horizontal = 16.dp),
@@ -860,7 +858,8 @@ private fun OneUiPostCreationTopBar(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(if (isDark) Color(0xFF161A22) else Color.White)
+                .background(colors.cardSurface)
+                .border(0.5.dp, colors.glassBorder, CircleShape)
                 .clickable {
                     SoundManager.playReaction()
                     onBack()
@@ -870,7 +869,7 @@ private fun OneUiPostCreationTopBar(
             Icon(
                 imageVector = if (currentStep == PostCreationStep.MEDIA_PICKER) Lucide.X else Lucide.ChevronLeft,
                 contentDescription = "Back",
-                tint = textMain,
+                tint = colors.textMain,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -900,9 +899,9 @@ private fun OneUiPostCreationTopBar(
                         .clip(RoundedCornerShape(999.dp))
                         .background(
                             when {
-                                isActive -> Color(0xFF0381FE)
-                                isDone -> Color(0xFF0381FE).copy(alpha = 0.5f)
-                                else -> if (isDark) Color(0xFF262C38) else Color(0xFFCBD5E1)
+                                isActive -> colors.primary
+                                isDone -> colors.primary.copy(alpha = 0.5f)
+                                else -> colors.cardBorder
                             }
                         )
                 )
@@ -922,20 +921,25 @@ private fun OneUiPostCreationTopBar(
 
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(colors.pillCornerRadius))
                 .background(
-                    if (isNextEnabled) Color(0xFF0381FE)
-                    else (if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0))
+                    if (isNextEnabled) colors.primary
+                    else colors.cardSurfaceElevated
+                )
+                .border(
+                    width = 0.5.dp,
+                    color = if (isNextEnabled) Color.Transparent else colors.cardBorder,
+                    shape = RoundedCornerShape(colors.pillCornerRadius)
                 )
                 .clickable(enabled = isNextEnabled) {
                     onNext()
                 }
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 18.dp, vertical = 9.dp),
             contentAlignment = Alignment.Center
         ) {
             if (isPublishing) {
                 CircularProgressIndicator(
-                    color = Color.White,
+                    color = colors.onPrimary,
                     strokeWidth = 2.dp,
                     modifier = Modifier.size(16.dp)
                 )
@@ -944,7 +948,7 @@ private fun OneUiPostCreationTopBar(
                     text = buttonLabel,
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isNextEnabled) Color.White else (if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8)),
+                    color = if (isNextEnabled) colors.onPrimary else colors.textMuted,
                     fontFamily = InterFontFamily
                 )
             }
@@ -958,19 +962,17 @@ private fun OneUiPostCreationTopBar(
 @Composable
 private fun PostTypeSegmentedBar(
     selectedType: PostType,
-    onSelectType: (PostType) -> Unit,
-    isDark: Boolean
+    onSelectType: (PostType) -> Unit
 ) {
-    val barBg = if (isDark) Color(0xFF141822) else Color(0xFFE2E8F0)
-    val activePillBg = if (isDark) Color(0xFF0381FE) else Color(0xFF0381FE)
-    val inactiveText = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val colors = LocalOscellionColors.current
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(barBg)
+            .clip(RoundedCornerShape(colors.pillCornerRadius))
+            .background(colors.cardSurfaceElevated)
+            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(colors.pillCornerRadius))
             .padding(3.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -980,27 +982,27 @@ private fun PostTypeSegmentedBar(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(if (isSelected) activePillBg else Color.Transparent)
+                    .clip(RoundedCornerShape(colors.pillCornerRadius))
+                    .background(if (isSelected) colors.primary else Color.Transparent)
                     .clickable { onSelectType(type) }
-                    .padding(vertical = 7.dp),
+                    .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     Icon(
                         imageVector = type.icon,
                         contentDescription = type.title,
-                        tint = if (isSelected) Color.White else inactiveText,
-                        modifier = Modifier.size(13.dp)
+                        tint = if (isSelected) colors.onPrimary else colors.textMuted,
+                        modifier = Modifier.size(13.5.dp)
                     )
                     Text(
                         text = type.title.split(" ").first(),
                         fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (isSelected) Color.White else inactiveText,
+                        color = if (isSelected) colors.onPrimary else colors.textMuted,
                         fontFamily = InterFontFamily
                     )
                 }
@@ -1016,11 +1018,9 @@ private fun PostTypeSegmentedBar(
 private fun WorkSavedProjectsQuickStrip(
     works: List<ChromaWork>,
     selectedWork: ChromaWork?,
-    onSelectWork: (ChromaWork) -> Unit,
-    isDark: Boolean
+    onSelectWork: (ChromaWork) -> Unit
 ) {
-    val textMain = if (isDark) Color.White else Color(0xFF0F172A)
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val colors = LocalOscellionColors.current
 
     Column(
         modifier = Modifier
@@ -1036,13 +1036,13 @@ private fun WorkSavedProjectsQuickStrip(
                 text = "Pick From Your Chroma Works",
                 fontSize = 12.5.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = textMain,
+                color = colors.textMain,
                 fontFamily = InterFontFamily
             )
             Text(
                 text = "${works.size} projects",
                 fontSize = 11.sp,
-                color = textMuted,
+                color = colors.textMuted,
                 fontFamily = InterFontFamily
             )
         }
@@ -1055,12 +1055,12 @@ private fun WorkSavedProjectsQuickStrip(
                 Box(
                     modifier = Modifier
                         .width(130.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isDark) Color(0xFF161A24) else Color.White)
+                        .clip(RoundedCornerShape(colors.cardCornerRadius))
+                        .background(colors.cardSurface)
                         .border(
                             width = if (isSelected) 1.5.dp else 0.5.dp,
-                            color = if (isSelected) Color(0xFF0381FE) else (if (isDark) Color(0xFF262C38) else Color(0xFFE2E8F0)),
-                            shape = RoundedCornerShape(16.dp)
+                            color = if (isSelected) colors.primary else colors.cardBorder,
+                            shape = RoundedCornerShape(colors.cardCornerRadius)
                         )
                         .clickable { onSelectWork(work) }
                         .padding(10.dp)
@@ -1071,21 +1071,21 @@ private fun WorkSavedProjectsQuickStrip(
                                 .fillMaxWidth()
                                 .height(54.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFF0381FE))))
+                                .background(Brush.linearGradient(listOf(Color(0xFF6366F1), colors.primary)))
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
                             text = work.name.ifBlank { "Untitled" },
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = textMain,
+                            color = colors.textMain,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Canvas project",
                             fontSize = 10.sp,
-                            color = textMuted
+                            color = colors.textMuted
                         )
                     }
                 }
@@ -1099,27 +1099,25 @@ private fun WorkSavedProjectsQuickStrip(
  */
 @Composable
 private fun StoryGradientPromptCard(
-    onSelectGradient: () -> Unit,
-    isDark: Boolean
+    onSelectGradient: () -> Unit
 ) {
-    val textMain = if (isDark) Color.White else Color(0xFF0F172A)
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val colors = LocalOscellionColors.current
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(colors.cardCornerRadius))
             .background(
                 Brush.horizontalGradient(
-                    if (isDark) listOf(Color(0xFF1E1035), Color(0xFF0F0C20))
+                    if (colors.isDark) listOf(Color(0xFF1E1035), Color(0xFF0F0C20))
                     else listOf(Color(0xFFEEF2FF), Color(0xFFF5F3FF))
                 )
             )
             .border(
                 0.5.dp,
-                if (isDark) Color(0xFF6366F1).copy(alpha = 0.4f) else Color(0xFF6366F1).copy(alpha = 0.2f),
-                RoundedCornerShape(18.dp)
+                if (colors.isDark) Color(0xFF6366F1).copy(alpha = 0.4f) else Color(0xFF6366F1).copy(alpha = 0.2f),
+                RoundedCornerShape(colors.cardCornerRadius)
             )
             .clickable { onSelectGradient() }
             .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -1140,13 +1138,13 @@ private fun StoryGradientPromptCard(
                 text = "Create with Gradient Story Canvas",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = textMain,
+                color = colors.textMain,
                 fontFamily = InterFontFamily
             )
             Text(
                 text = "Type thoughts, quotes & design on live vibrant colors",
                 fontSize = 11.5.sp,
-                color = textMuted,
+                color = colors.textMuted,
                 fontFamily = InterFontFamily
             )
         }
@@ -1169,12 +1167,12 @@ private fun WorkStudioPresentationView(
     tools: List<String>,
     onToggleTool: (String) -> Unit,
     onNext: () -> Unit,
-    onBack: () -> Unit,
-    isDark: Boolean
+    onBack: () -> Unit
 ) {
+    val colors = LocalOscellionColors.current
     val scrollState = rememberScrollState()
-    val textMain = if (isDark) Color.White else Color(0xFF0F172A)
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val textMain = colors.textMain
+    val textMuted = colors.textMuted
 
     Column(
         modifier = Modifier
@@ -1189,9 +1187,10 @@ private fun WorkStudioPresentationView(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(if (aspectRatio == "16:9") 1.777f else if (aspectRatio == "1:1") 1f else 1.333f)
-                .clip(RoundedCornerShape(24.dp))
-                .background(if (isDark) Color(0xFF161A22) else Color.White)
-                .shadow(12.dp, RoundedCornerShape(24.dp)),
+                .clip(RoundedCornerShape(colors.cardCornerRadius))
+                .background(colors.cardSurface)
+                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(colors.cardCornerRadius))
+                .shadow(12.dp, RoundedCornerShape(colors.cardCornerRadius)),
             contentAlignment = Alignment.Center
         ) {
             if (coverUri != null) {
@@ -1205,17 +1204,17 @@ private fun WorkStudioPresentationView(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Brush.linearGradient(listOf(Color(0xFF6366F1), Color(0xFF0381FE)))),
+                        .background(Brush.linearGradient(listOf(Color(0xFF6366F1), colors.primary))),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Lucide.Palette, null, tint = Color.White, modifier = Modifier.size(40.dp))
+                        Icon(Lucide.Palette, null, tint = colors.onPrimary, modifier = Modifier.size(40.dp))
                         Spacer(Modifier.height(8.dp))
                         Text(
                             text = selectedWork?.name ?: "Chroma Canvas Project",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = colors.onPrimary
                         )
                     }
                 }
@@ -1235,8 +1234,8 @@ private fun WorkStudioPresentationView(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (isSelected) Color(0xFF0381FE) else (if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9)))
+                            .clip(RoundedCornerShape(colors.pillCornerRadius))
+                            .background(if (isSelected) colors.primary else colors.cardSurfaceElevated)
                             .clickable {
                                 SoundManager.playReaction()
                                 onAspectRatioChange(ratio)
@@ -1248,7 +1247,7 @@ private fun WorkStudioPresentationView(
                             text = ratio,
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else textMuted
+                            color = if (isSelected) colors.onPrimary else textMuted
                         )
                     }
                 }
@@ -1269,8 +1268,8 @@ private fun WorkStudioPresentationView(
                     val isSelected = category == cat
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (isSelected) Color(0xFF0381FE) else (if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9)))
+                            .clip(RoundedCornerShape(colors.pillCornerRadius))
+                            .background(if (isSelected) colors.primary else colors.cardSurfaceElevated)
                             .clickable {
                                 SoundManager.playReaction()
                                 onCategoryChange(cat)
@@ -1281,7 +1280,7 @@ private fun WorkStudioPresentationView(
                             text = cat,
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (isSelected) Color.White else textMuted
+                            color = if (isSelected) colors.onPrimary else textMuted
                         )
                     }
                 }
@@ -1302,8 +1301,8 @@ private fun WorkStudioPresentationView(
                     val isSelected = tools.contains(tool)
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (isSelected) Color(0xFF10B981) else (if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9)))
+                            .clip(RoundedCornerShape(colors.pillCornerRadius))
+                            .background(if (isSelected) colors.success else colors.cardSurfaceElevated)
                             .clickable { onToggleTool(tool) }
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
@@ -1311,7 +1310,7 @@ private fun WorkStudioPresentationView(
                             text = tool,
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (isSelected) Color.White else textMuted
+                            color = if (isSelected) colors.onPrimary else textMuted
                         )
                     }
                 }
@@ -1323,10 +1322,10 @@ private fun WorkStudioPresentationView(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
-            shape = RoundedCornerShape(999.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE))
+            shape = RoundedCornerShape(colors.pillCornerRadius),
+            colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary)
         ) {
-            Text("Proceed to Work Details", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text("Proceed to Work Details", color = colors.onPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -1345,11 +1344,11 @@ private fun StoryStudioStylingView(
     body: String,
     onBodyChange: (String) -> Unit,
     onNext: () -> Unit,
-    onBack: () -> Unit,
-    isDark: Boolean
+    onBack: () -> Unit
 ) {
-    val textMain = if (isDark) Color.White else Color(0xFF0F172A)
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val colors = LocalOscellionColors.current
+    val textMain = colors.textMain
+    val textMuted = colors.textMuted
     val activeTheme = StoryGradientThemes.getOrElse(selectedThemeIndex) { StoryGradientThemes.first() }
 
     Column(
@@ -1365,9 +1364,9 @@ private fun StoryStudioStylingView(
             modifier = Modifier
                 .width(220.dp)
                 .height(390.dp)
-                .clip(RoundedCornerShape(26.dp))
+                .clip(RoundedCornerShape(colors.sheetCornerRadius))
                 .background(Brush.verticalGradient(activeTheme.colors))
-                .shadow(16.dp, RoundedCornerShape(26.dp)),
+                .shadow(16.dp, RoundedCornerShape(colors.sheetCornerRadius)),
             contentAlignment = Alignment.Center
         ) {
             if (backgroundUri != null && !useGradientCanvas) {
@@ -1423,7 +1422,7 @@ private fun StoryStudioStylingView(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(10.dp)
-                    .clip(RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(colors.pillCornerRadius))
                     .background(Color.Black.copy(alpha = 0.55f))
                     .padding(horizontal = 8.dp, vertical = 3.dp)
             ) {
@@ -1477,14 +1476,14 @@ private fun StoryStudioStylingView(
                     placeholder = { Text("Add headline / mood...", fontSize = 13.sp, color = textMuted) },
                     singleLine = true,
                     colors = TextFieldDefaults.colors(
-                        focusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
-                        unfocusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                        focusedContainerColor = colors.inputBg,
+                        unfocusedContainerColor = colors.inputBg,
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent,
                         focusedTextColor = textMain,
                         unfocusedTextColor = textMain
                     ),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(colors.buttonCornerRadius),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1493,14 +1492,14 @@ private fun StoryStudioStylingView(
                     onValueChange = onBodyChange,
                     placeholder = { Text("Write your story message...", fontSize = 13.sp, color = textMuted) },
                     colors = TextFieldDefaults.colors(
-                        focusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
-                        unfocusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                        focusedContainerColor = colors.inputBg,
+                        unfocusedContainerColor = colors.inputBg,
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent,
                         focusedTextColor = textMain,
                         unfocusedTextColor = textMain
                     ),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(colors.buttonCornerRadius),
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 60.dp, max = 120.dp)
@@ -1513,10 +1512,10 @@ private fun StoryStudioStylingView(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
-            shape = RoundedCornerShape(999.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE))
+            shape = RoundedCornerShape(colors.pillCornerRadius),
+            colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary)
         ) {
-            Text("Proceed to Story Settings", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text("Proceed to Story Settings", color = colors.onPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -1566,12 +1565,12 @@ private fun UniversalPostDetailsInputView(
     onAllowDownloadChange: (Boolean) -> Unit,
     isPublishing: Boolean,
     uploadProgress: Float = 0f,
-    onPublish: () -> Unit,
-    isDark: Boolean
+    onPublish: () -> Unit
 ) {
+    val colors = LocalOscellionColors.current
     val scrollState = rememberScrollState()
-    val textMain = if (isDark) Color.White else Color(0xFF0F172A)
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val textMain = colors.textMain
+    val textMuted = colors.textMuted
     val focusManager = LocalFocusManager.current
 
     Column(
@@ -1632,8 +1631,8 @@ private fun UniversalPostDetailsInputView(
                     Box(
                         modifier = Modifier
                             .size(76.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0))
+                            .clip(RoundedCornerShape(colors.cardCornerRadius))
+                            .background(colors.cardSurfaceElevated)
                     ) {
                         if (useGradientCanvas && postType == PostType.STORY) {
                             val activeTheme = StoryGradientThemes.getOrElse(storyGradientIndex) { StoryGradientThemes.first() }
@@ -1777,7 +1776,7 @@ private fun UniversalPostDetailsInputView(
                                 modifier = Modifier
                                     .size(52.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0))
+                                    .background(colors.cardSurfaceElevated)
                             ) {
                                 AsyncImage(
                                     model = uri,
@@ -1856,8 +1855,8 @@ private fun UniversalPostDetailsInputView(
                             tags.forEach { tag ->
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .background(if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9))
+                                        .clip(RoundedCornerShape(colors.pillCornerRadius))
+                                        .background(colors.cardSurfaceElevated)
                                         .clickable { onRemoveTag(tag) }
                                         .padding(horizontal = 10.dp, vertical = 5.dp)
                                 ) {
@@ -1869,7 +1868,7 @@ private fun UniversalPostDetailsInputView(
                                             text = "#$tag",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF0381FE)
+                                            color = colors.primary
                                         )
                                         Icon(Lucide.X, null, tint = textMuted, modifier = Modifier.size(12.dp))
                                     }
@@ -1897,22 +1896,22 @@ private fun UniversalPostDetailsInputView(
                                 focusManager.clearFocus()
                             }),
                             colors = TextFieldDefaults.colors(
-                                focusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
-                                unfocusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                                focusedContainerColor = colors.inputBg,
+                                unfocusedContainerColor = colors.inputBg,
                                 focusedIndicatorColor = Color.Transparent,
                                 unfocusedIndicatorColor = Color.Transparent,
                                 focusedTextColor = textMain,
                                 unfocusedTextColor = textMain
                             ),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(colors.buttonCornerRadius),
                             modifier = Modifier.weight(1f)
                         )
 
                         Box(
                             modifier = Modifier
                                 .size(44.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFF0381FE))
+                                .clip(RoundedCornerShape(colors.buttonCornerRadius))
+                                .background(colors.primary)
                                 .clickable {
                                     if (tagInput.isNotBlank()) {
                                         onAddTag(tagInput)
@@ -1922,7 +1921,7 @@ private fun UniversalPostDetailsInputView(
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Lucide.Plus, contentDescription = "Add", tint = Color.White, modifier = Modifier.size(18.dp))
+                            Icon(Lucide.Plus, contentDescription = "Add", tint = colors.onPrimary, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -1947,8 +1946,8 @@ private fun UniversalPostDetailsInputView(
                             mentions.forEach { mention ->
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .background(if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9))
+                                        .clip(RoundedCornerShape(colors.pillCornerRadius))
+                                        .background(colors.cardSurfaceElevated)
                                         .clickable { onRemoveMention(mention) }
                                         .padding(horizontal = 10.dp, vertical = 5.dp)
                                 ) {
@@ -1956,7 +1955,7 @@ private fun UniversalPostDetailsInputView(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Text("@$mention", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF0381FE))
+                                        Text("@$mention", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.primary)
                                         Icon(Lucide.X, null, tint = textMuted, modifier = Modifier.size(12.dp))
                                     }
                                 }
@@ -1970,14 +1969,14 @@ private fun UniversalPostDetailsInputView(
                         placeholder = { Text("Search creator by @username...", fontSize = 13.sp, color = textMuted) },
                         singleLine = true,
                         colors = TextFieldDefaults.colors(
-                            focusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
-                            unfocusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                            focusedContainerColor = colors.inputBg,
+                            unfocusedContainerColor = colors.inputBg,
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent,
                             focusedTextColor = textMain,
                             unfocusedTextColor = textMain
                         ),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(colors.buttonCornerRadius),
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -1986,8 +1985,8 @@ private fun UniversalPostDetailsInputView(
                             items(suggestedCreators) { creator ->
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .background(if (isDark) Color(0xFF1E2430) else Color(0xFFF1F5F9))
+                                        .clip(RoundedCornerShape(colors.pillCornerRadius))
+                                        .background(colors.cardSurfaceElevated)
                                         .clickable {
                                             onAddMention(creator.username)
                                             onMentionInputChange("")
@@ -2018,16 +2017,16 @@ private fun UniversalPostDetailsInputView(
                         onValueChange = onLocationChange,
                         placeholder = { Text("Add location (e.g., Tokyo, Japan)", fontSize = 13.sp, color = textMuted) },
                         singleLine = true,
-                        leadingIcon = { Icon(Lucide.MapPin, null, tint = Color(0xFF0381FE), modifier = Modifier.size(16.dp)) },
+                        leadingIcon = { Icon(Lucide.MapPin, null, tint = colors.primary, modifier = Modifier.size(16.dp)) },
                         colors = TextFieldDefaults.colors(
-                            focusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
-                            unfocusedContainerColor = if (isDark) Color(0xFF1E2430) else Color(0xFFF8FAFC),
+                            focusedContainerColor = colors.inputBg,
+                            unfocusedContainerColor = colors.inputBg,
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent,
                             focusedTextColor = textMain,
                             unfocusedTextColor = textMain
                         ),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(colors.buttonCornerRadius),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -2055,10 +2054,10 @@ private fun UniversalPostDetailsInputView(
                             val isSelected = audience == opt
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(999.dp))
+                                    .clip(RoundedCornerShape(colors.pillCornerRadius))
                                     .background(
-                                        if (isSelected) Color(0xFF0381FE)
-                                        else (if (isDark) Color(0xFF1E2430) else Color.White)
+                                        if (isSelected) colors.primary
+                                        else colors.cardSurfaceElevated
                                     )
                                     .clickable {
                                         SoundManager.playReaction()
@@ -2070,7 +2069,7 @@ private fun UniversalPostDetailsInputView(
                                     text = opt,
                                     fontSize = 11.5.sp,
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (isSelected) Color.White else textMuted
+                                    color = if (isSelected) colors.onPrimary else textMuted
                                 )
                             }
                         }
@@ -2078,7 +2077,7 @@ private fun UniversalPostDetailsInputView(
                 }
 
                 if (postType != PostType.STORY) {
-                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    HorizontalDivider(color = colors.cardBorder, thickness = 0.5.dp)
 
                     // Allow Remix Switch
                     Row(
@@ -2097,13 +2096,13 @@ private fun UniversalPostDetailsInputView(
                         AppleSwitch(
                             checked = allowRemix,
                             onCheckedChange = onAllowRemixChange,
-                            activeTrackColor = Color(0xFF0381FE)
+                            activeTrackColor = colors.primary
                         )
                     }
                 }
 
                 if (postType == PostType.WORK) {
-                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    HorizontalDivider(color = colors.cardBorder, thickness = 0.5.dp)
 
                     // Allow Asset Download Switch
                     Row(
@@ -2122,13 +2121,13 @@ private fun UniversalPostDetailsInputView(
                         AppleSwitch(
                             checked = allowDownload,
                             onCheckedChange = onAllowDownloadChange,
-                            activeTrackColor = Color(0xFF10B981)
+                            activeTrackColor = colors.success
                         )
                     }
                 }
 
                 if (postType == PostType.STORY) {
-                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    HorizontalDivider(color = colors.cardBorder, thickness = 0.5.dp)
 
                     // Story 24h Expiration Card Notice
                     Row(
@@ -2142,10 +2141,10 @@ private fun UniversalPostDetailsInputView(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFF59E0B).copy(alpha = 0.15f)),
+                                .background(colors.warning.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Lucide.Clock, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
+                            Icon(Lucide.Clock, null, tint = colors.warning, modifier = Modifier.size(16.dp))
                         }
                         Column {
                             Text("24h Fleeting Moment", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = textMain)
@@ -2172,12 +2171,12 @@ private fun UniversalPostDetailsInputView(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
-            shape = RoundedCornerShape(999.dp),
+            shape = RoundedCornerShape(colors.pillCornerRadius),
             colors = ButtonDefaults.buttonColors(
                 containerColor = when (postType) {
-                    PostType.PHOTO -> Color(0xFF0381FE)
+                    PostType.PHOTO -> colors.primary
                     PostType.FLASH -> Color(0xFF6366F1)
-                    PostType.WORK -> Color(0xFF10B981)
+                    PostType.WORK -> colors.success
                     PostType.STORY -> Color(0xFFF43F5E)
                 }
             )
