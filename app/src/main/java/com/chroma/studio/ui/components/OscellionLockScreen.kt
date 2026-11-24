@@ -124,7 +124,13 @@ fun OscellionLockScreen(
     var isWallpaperEditing by remember { mutableStateOf(false) }
     var pendingWallpaperUri by remember { mutableStateOf(wallpaperUri) }
     var pendingDimming by remember { mutableFloatStateOf(wallpaperDimming) }
-    var customGalleryWallpaperUri by remember { mutableStateOf<String?>(null) }
+    var customWallpapers by remember { mutableStateOf(SecurityPinManager.getCustomWallpapers(context)) }
+
+    LaunchedEffect(isWallpaperEditing) {
+        if (isWallpaperEditing) {
+            customWallpapers = SecurityPinManager.getCustomWallpapers(context)
+        }
+    }
 
     // Gallery Custom Photo Picker
     val galleryLauncher = rememberLauncherForActivityResult(
@@ -141,11 +147,13 @@ fun OscellionLockScreen(
                         }
                     }
                     val localUri = Uri.fromFile(targetFile).toString()
+                    SecurityPinManager.addCustomWallpaper(context, localUri)
+                    val updatedList = SecurityPinManager.getCustomWallpapers(context)
                     withContext(Dispatchers.Main) {
-                        customGalleryWallpaperUri = localUri
+                        customWallpapers = updatedList
                         pendingWallpaperUri = localUri
-                        android.widget.Toast.makeText(context, "Custom wallpaper selected", android.widget.Toast.LENGTH_SHORT).show()
-                        ToastManager.showToast("Custom wallpaper selected")
+                        android.widget.Toast.makeText(context, "Custom wallpaper added", android.widget.Toast.LENGTH_SHORT).show()
+                        ToastManager.showToast("Custom wallpaper added")
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -1059,6 +1067,10 @@ fun OscellionLockScreen(
                                         wallpaperDimming = pendingDimming
                                         SecurityPinManager.setWallpaperUri(context, wallpaperUri)
                                         SecurityPinManager.setWallpaperDimming(context, wallpaperDimming)
+                                        if (wallpaperUri.startsWith("file://") && !wallpaperUri.contains("android_asset")) {
+                                            SecurityPinManager.addCustomWallpaper(context, wallpaperUri)
+                                            customWallpapers = SecurityPinManager.getCustomWallpapers(context)
+                                        }
                                         isWallpaperEditing = false
                                         android.widget.Toast.makeText(context, "Wallpaper updated", android.widget.Toast.LENGTH_SHORT).show()
                                         ToastManager.showToast("Wallpaper updated")
@@ -1186,9 +1198,10 @@ fun OscellionLockScreen(
                         }
                     }
 
-                    // Custom Gallery Wallpaper (if picked)
-                    val customUri = customGalleryWallpaperUri
-                    if (customUri != null) {
+                    // =============================================================
+                    // 2. ALL PREVIOUSLY IMPORTED CUSTOM WALLPAPERS
+                    // =============================================================
+                    customWallpapers.forEachIndexed { index, customUri ->
                         val isCustomSelected = pendingWallpaperUri == customUri
                         Box(
                             modifier = Modifier
@@ -1200,15 +1213,23 @@ fun OscellionLockScreen(
                                     shape = RoundedCornerShape(16.dp)
                                 )
                                 .clickable {
+                                    SoundManager.playTap(context)
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     pendingWallpaperUri = customUri
                                 }
                         ) {
                             AsyncImage(
-                                model = customUri,
-                                contentDescription = "Custom Photo",
+                                model = ImageRequest.Builder(context)
+                                    .data(customUri)
+                                    .crossfade(true)
+                                    .fallback(com.chroma.studio.R.drawable.wallpaper_stock)
+                                    .error(com.chroma.studio.R.drawable.wallpaper_stock)
+                                    .build(),
+                                contentDescription = "Custom Photo ${index + 1}",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
+                            // Bottom Vignette Label
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1222,12 +1243,40 @@ fun OscellionLockScreen(
                                 contentAlignment = Alignment.BottomCenter
                             ) {
                                 Text(
-                                    text = "Custom",
+                                    text = if (customWallpapers.size == 1) "Custom" else "Custom ${index + 1}",
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = Color.White,
                                     fontFamily = InterFontFamily,
                                     modifier = Modifier.padding(bottom = 6.dp)
+                                )
+                            }
+
+                            // Quick delete badge (Top Right)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.65f))
+                                    .clickable {
+                                        SoundManager.playTap(context)
+                                        SecurityPinManager.deleteCustomWallpaper(context, customUri)
+                                        val updated = SecurityPinManager.getCustomWallpapers(context)
+                                        customWallpapers = updated
+                                        if (pendingWallpaperUri == customUri) {
+                                            pendingWallpaperUri = updated.firstOrNull() ?: SecurityPinManager.DEFAULT_WALLPAPER
+                                        }
+                                        android.widget.Toast.makeText(context, "Wallpaper removed", android.widget.Toast.LENGTH_SHORT).show()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.X,
+                                    contentDescription = "Delete wallpaper",
+                                    tint = Color.White.copy(alpha = 0.9f),
+                                    modifier = Modifier.size(11.dp)
                                 )
                             }
                         }
@@ -1246,6 +1295,8 @@ fun OscellionLockScreen(
                                     shape = RoundedCornerShape(16.dp)
                                 )
                                 .clickable {
+                                    SoundManager.playTap(context)
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     pendingWallpaperUri = preset.uri
                                 }
                         ) {

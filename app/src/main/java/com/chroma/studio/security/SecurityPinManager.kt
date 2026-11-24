@@ -2,11 +2,14 @@ package com.chroma.studio.security
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.Uri
 import android.util.Base64
 import com.chroma.studio.chat.util.BiometricHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
+import java.io.File
 import java.security.MessageDigest
 import java.security.SecureRandom
 
@@ -25,6 +28,7 @@ object SecurityPinManager {
     private const val KEY_BIOMETRIC_PREF = "app_lock_biometric_enabled"
     private const val KEY_WALLPAPER_URI = "app_lock_wallpaper_uri"
     private const val KEY_WALLPAPER_DIMMING = "app_lock_wallpaper_dimming"
+    private const val KEY_CUSTOM_WALLPAPERS = "app_lock_custom_wallpapers"
 
     const val DEFAULT_WALLPAPER = "file:///android_asset/wallpaper/wallpaper_2.jpg"
     const val DEFAULT_DIMMING = 0.45f
@@ -159,6 +163,89 @@ object SecurityPinManager {
     /** Updates the active lock screen dimming level. */
     fun setWallpaperDimming(context: Context, dimming: Float) {
         getPrefs(context).edit().putFloat(KEY_WALLPAPER_DIMMING, dimming.coerceIn(0f, 0.85f)).apply()
+    }
+
+    /** Returns all imported custom wallpaper URIs (ordered from newest to oldest). */
+    fun getCustomWallpapers(context: Context): List<String> {
+        val list = mutableListOf<String>()
+        val raw = getPrefs(context).getString(KEY_CUSTOM_WALLPAPERS, null)
+        if (raw != null) {
+            try {
+                val jsonArray = JSONArray(raw)
+                for (i in 0 until jsonArray.length()) {
+                    val uri = jsonArray.getString(i)
+                    if (uri.startsWith("file://")) {
+                        val path = Uri.parse(uri).path
+                        if (path != null && File(path).exists() && !list.contains(uri)) {
+                            list.add(uri)
+                        }
+                    } else if (!list.contains(uri)) {
+                        list.add(uri)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Also check if active wallpaper is a custom local file that wasn't tracked yet
+        val activeWallpaper = getWallpaperUri(context)
+        if (activeWallpaper.startsWith("file://") && !activeWallpaper.contains("android_asset")) {
+            val path = Uri.parse(activeWallpaper).path
+            if (path != null && File(path).exists() && !list.contains(activeWallpaper)) {
+                list.add(0, activeWallpaper)
+            }
+        }
+
+        // Auto-discover any saved custom wallpapers in filesDir that aren't yet in the list
+        try {
+            context.filesDir.listFiles { file ->
+                file.name.startsWith("custom_wallpaper_") && file.name.endsWith(".jpg")
+            }?.sortedByDescending { it.lastModified() }?.forEach { file ->
+                val uri = Uri.fromFile(file).toString()
+                if (!list.contains(uri)) {
+                    list.add(uri)
+                }
+            }
+        } catch (_: Exception) {}
+
+        return list
+    }
+
+    /** Adds or promotes a custom wallpaper URI to the front of history. */
+    fun addCustomWallpaper(context: Context, uri: String) {
+        val current = getCustomWallpapers(context).toMutableList()
+        current.remove(uri)
+        current.add(0, uri)
+        saveCustomWallpapersList(context, current)
+    }
+
+    /** Deletes an imported custom wallpaper from history and removes the file if stored locally. */
+    fun deleteCustomWallpaper(context: Context, uri: String) {
+        val current = getCustomWallpapers(context).toMutableList()
+        current.remove(uri)
+        saveCustomWallpapersList(context, current)
+
+        // If active wallpaper was the deleted one, reset it to default
+        if (getWallpaperUri(context) == uri) {
+            setWallpaperUri(context, DEFAULT_WALLPAPER)
+        }
+
+        try {
+            if (uri.startsWith("file://")) {
+                val path = Uri.parse(uri).path
+                if (path != null) {
+                    val file = File(path)
+                    if (file.exists() && file.parentFile == context.filesDir) {
+                        file.delete()
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun saveCustomWallpapersList(context: Context, list: List<String>) {
+        val jsonArray = JSONArray()
+        list.forEach { jsonArray.put(it) }
+        getPrefs(context).edit().putString(KEY_CUSTOM_WALLPAPERS, jsonArray.toString()).apply()
     }
 
     private fun hashPin(pin: String, saltBase64: String): String {
