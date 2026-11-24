@@ -243,7 +243,6 @@
             android:theme="@style/Theme.Oscellion.Transparent"
             android:launchMode="singleInstance"
             android:excludeFromRecents="true"
-            android:noHistory="true"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:windowSoftInputMode="adjustNothing" />
     </application>

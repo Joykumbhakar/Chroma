@@ -3596,6 +3596,7 @@ private fun ChatScreenContent(
                     ) {
                         com.chroma.studio.ui.components.OscellionLockScreen(
                             titleText = "Unlock ${activeChat.name}",
+                            onBack = onBack,
                             onUnlockSuccess = {
                                 unlockedChatSessionIds = unlockedChatSessionIds + activeChatId
                             }

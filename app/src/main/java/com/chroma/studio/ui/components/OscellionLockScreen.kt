@@ -83,6 +83,7 @@ enum class LockScreenView {
 @Composable
 fun OscellionLockScreen(
     titleText: String = "Unlock the app",
+    onBack: (() -> Unit)? = null,
     onUnlockSuccess: () -> Unit
 ) {
     val context = LocalContext.current
@@ -191,7 +192,11 @@ fun OscellionLockScreen(
             currentView = LockScreenView.BIOMETRIC_CHOICE
             enteredPin = ""
         } else {
-            (activity ?: (context as? Activity))?.finish()
+            if (onBack != null) {
+                onBack()
+            } else {
+                (activity ?: (context as? Activity))?.finish()
+            }
         }
     }
 

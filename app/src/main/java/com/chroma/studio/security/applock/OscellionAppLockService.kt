@@ -17,6 +17,25 @@ class OscellionAppLockService : AccessibilityService() {
     private var lastInterceptionTime = 0L
     private var lastInterceptedPackage: String? = null
 
+    companion object {
+        @Volatile
+        var instance: OscellionAppLockService? = null
+            private set
+
+        fun performHome(): Boolean {
+            return instance?.performGlobalAction(GLOBAL_ACTION_HOME) ?: false
+        }
+
+        fun resetInterception() {
+            instance?.lastInterceptedPackage = null
+        }
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        instance = this
+    }
+
     // Broadcast receiver to instantly revoke all unlocked sessions when device locks
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -28,12 +47,16 @@ class OscellionAppLockService : AccessibilityService() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
         registerReceiver(screenOffReceiver, filter)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        if (instance == this) {
+            instance = null
+        }
         try {
             unregisterReceiver(screenOffReceiver)
         } catch (_: Exception) {}
@@ -50,9 +73,17 @@ class OscellionAppLockService : AccessibilityService() {
 
         val targetPackage = event.packageName?.toString() ?: return
 
+        // If user returned to home or launcher, reset interception cache so re-launch is instant
+        if (targetPackage.contains("launcher", ignoreCase = true) ||
+            targetPackage.contains("home", ignoreCase = true) ||
+            targetPackage == "com.android.systemui") {
+            lastInterceptedPackage = null
+            AppLockerManager.onForegroundPackageChanged(targetPackage)
+            return
+        }
+
         // Ignore our own package and system UI components
         if (targetPackage == packageName ||
-            targetPackage == "com.android.systemui" ||
             targetPackage.contains("inputmethod") ||
             targetPackage.contains("keyboard")) {
             return
@@ -63,6 +94,7 @@ class OscellionAppLockService : AccessibilityService() {
 
         // Check if package is locked
         if (!AppLockerManager.isPackageLocked(this, targetPackage)) {
+            lastInterceptedPackage = null
             return
         }
 
