@@ -80,6 +80,7 @@ fun CommunityOneUiHeader(
     isRefreshing: Boolean,
     refreshRotation: Float,
     onRefreshFeed: () -> Unit,
+    hasPendingNewDrops: Boolean = false,
     createMenuContent: @Composable () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -199,7 +200,10 @@ fun CommunityOneUiHeader(
                         }
 
                         // Notifications / Heart Button
-                        Box(modifier = Modifier.size(36.dp)) {
+                        Box(
+                            modifier = Modifier.size(36.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -207,43 +211,74 @@ fun CommunityOneUiHeader(
                                     .clickable(onClick = onToggleNotificationDrawer),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = ChromaIcons.HeartFilled,
-                                    contentDescription = "Notifications",
-                                    tint = textDark,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            if (hasUnreadNotifications) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(9.dp)
-                                        .align(Alignment.TopEnd)
-                                        .offset(x = (-4).dp, y = 4.dp)
-                                        .background(colors.cardSurface, CircleShape)
-                                        .padding(1.5.dp)
-                                        .clip(CircleShape)
-                                        .background(colors.error)
-                                )
+                                Box(modifier = Modifier.size(20.dp)) {
+                                    Icon(
+                                        imageVector = ChromaIcons.HeartFilled,
+                                        contentDescription = "Notifications",
+                                        tint = textDark,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = hasUnreadNotifications,
+                                        enter = scaleIn(spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+                                        exit = scaleOut(spring(stiffness = Spring.StiffnessMediumLow)) + fadeOut(),
+                                        modifier = Modifier.align(Alignment.TopEnd)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .offset(x = 1.5.dp, y = (-1.5).dp)
+                                                .size(8.5.dp)
+                                                .background(screenBgColor, CircleShape)
+                                                .padding(1.5.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFFFF3B30))
+                                        )
+                                    }
+                                }
                             }
                         }
 
                         // Refresh Button
                         Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .clickable(onClick = onRefreshFeed),
+                            modifier = Modifier.size(36.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Lucide.RotateCw,
-                                contentDescription = "Refresh Feed",
-                                tint = if (isRefreshing) colors.primary else textDark,
+                            Box(
                                 modifier = Modifier
-                                    .size(18.dp)
-                                    .rotate(refreshRotation)
-                            )
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                                    .clickable(onClick = onRefreshFeed),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(modifier = Modifier.size(18.dp)) {
+                                    Icon(
+                                        imageVector = Lucide.RotateCw,
+                                        contentDescription = "Refresh Feed",
+                                        tint = if (isRefreshing) colors.primary else textDark,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .rotate(refreshRotation)
+                                    )
+
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = hasPendingNewDrops && !isRefreshing,
+                                        enter = scaleIn(spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+                                        exit = scaleOut(spring(stiffness = Spring.StiffnessMediumLow)) + fadeOut(),
+                                        modifier = Modifier.align(Alignment.TopEnd)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .offset(x = 1.5.dp, y = (-1.5).dp)
+                                                .size(8.5.dp)
+                                                .background(screenBgColor, CircleShape)
+                                                .padding(1.5.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF0381FE))
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 

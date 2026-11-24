@@ -580,7 +580,7 @@ fun DiscoverScreen(
 
 
 
-    var hasPendingNewDrops by remember { mutableStateOf(true) }
+    var hasPendingNewDrops by remember { mutableStateOf(false) }
 
     val refreshProgressAnim = remember { Animatable(0f) }
 
@@ -594,7 +594,28 @@ fun DiscoverScreen(
 
     var showCreateMenu by remember { mutableStateOf(false) }
 
-    var hasUnreadNotifications by remember { mutableStateOf(true) }
+    var hasUnreadNotifications by remember { mutableStateOf(false) }
+
+    DisposableEffect(currentUserId) {
+        if (currentUserId.isBlank()) {
+            hasUnreadNotifications = false
+            return@DisposableEffect onDispose {}
+        }
+        val registration = FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(currentUserId)
+            .collection("notifications")
+            .whereEqualTo("isRead", false)
+            .limit(1)
+            .addSnapshotListener { snapshot, error ->
+                if (error == null && snapshot != null) {
+                    hasUnreadNotifications = !snapshot.isEmpty
+                }
+            }
+        onDispose {
+            registration.remove()
+        }
+    }
 
     val listState = rememberLazyListState()
 
@@ -4756,122 +4777,86 @@ fun CreatorFeedHeader(
 
 
 
-                Box(modifier = Modifier.size(36.dp)) {
-
+                // 2. NOTIFICATIONS / HEART BUTTON
+                Box(
+                    modifier = Modifier.size(36.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Box(
-
                         modifier = Modifier
-
                             .fillMaxSize()
-
                             .clip(CircleShape)
-
                             .clickable(enabled = !isSearchExpanded, onClick = onToggleNotificationDrawer),
-
                         contentAlignment = Alignment.Center
-
                     ) {
+                        Box(modifier = Modifier.size(20.dp)) {
+                            Icon(
+                                imageVector = ChromaIcons.HeartFilled,
+                                contentDescription = "Notifications",
+                                tint = colors.textMain,
+                                modifier = Modifier.fillMaxSize()
+                            )
 
-                        Icon(
-
-                            imageVector = ChromaIcons.HeartFilled,
-
-                            contentDescription = "Notifications",
-
-                            tint = colors.textMain,
-
-                            modifier = Modifier.size(20.dp)
-
-                        )
-
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = hasUnreadNotifications,
+                                enter = scaleIn(spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+                                exit = scaleOut(spring(stiffness = Spring.StiffnessMediumLow)) + fadeOut(),
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = 1.5.dp, y = (-1.5).dp)
+                                        .size(8.5.dp)
+                                        .background(headerBgColor, CircleShape)
+                                        .padding(1.5.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFF3B30))
+                                )
+                            }
+                        }
                     }
-
-                    if (hasUnreadNotifications) {
-
-                        Box(
-
-                            modifier = Modifier
-
-                                .size(8.5.dp)
-
-                                .align(Alignment.TopEnd)
-
-                                .offset(x = (-4.5).dp, y = 4.5.dp)
-
-                                .background(colors.cardSurface, CircleShape)
-
-                                .padding(1.5.dp)
-
-                                .clip(CircleShape)
-
-                                .background(colors.error)
-
-                        )
-
-                    }
-
                 }
 
-
-
-                Box(modifier = Modifier.size(36.dp)) {
-
+                // 3. REFRESH FEED BUTTON
+                Box(
+                    modifier = Modifier.size(36.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Box(
-
                         modifier = Modifier
-
                             .fillMaxSize()
-
                             .clip(CircleShape)
-
                             .clickable(enabled = !isSearchExpanded, onClick = onRefreshFeed),
-
                         contentAlignment = Alignment.Center
-
                     ) {
+                        Box(modifier = Modifier.size(18.dp)) {
+                            Icon(
+                                imageVector = LucideComposeIcons.RefreshCw,
+                                contentDescription = "Refresh Feed",
+                                tint = if (isRefreshing) colors.primary else colors.textMain,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .rotate(refreshRotation)
+                            )
 
-                        Icon(
-
-                            imageVector = LucideComposeIcons.RefreshCw,
-
-                            contentDescription = "Refresh Feed",
-
-                            tint = if (isRefreshing) colors.primary else colors.textMain,
-
-                            modifier = Modifier
-
-                                .size(18.dp)
-
-                                .rotate(refreshRotation)
-
-                        )
-
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = hasPendingNewDrops && !isRefreshing,
+                                enter = scaleIn(spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+                                exit = scaleOut(spring(stiffness = Spring.StiffnessMediumLow)) + fadeOut(),
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = 1.5.dp, y = (-1.5).dp)
+                                        .size(8.5.dp)
+                                        .background(headerBgColor, CircleShape)
+                                        .padding(1.5.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF0381FE))
+                                )
+                            }
+                        }
                     }
-
-                    if (hasPendingNewDrops && !isRefreshing) {
-
-                        Box(
-
-                            modifier = Modifier
-
-                                .size(8.5.dp)
-
-                                .align(Alignment.TopEnd)
-
-                                .offset(x = (-4.5).dp, y = 4.5.dp)
-
-                                .background(colors.cardSurface, CircleShape)
-
-                                .padding(1.5.dp)
-
-                                .clip(CircleShape)
-
-                                .background(colors.primary)
-
-                        )
-
-                    }
-
                 }
 
             }
