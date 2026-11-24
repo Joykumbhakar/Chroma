@@ -745,7 +745,7 @@ fun OneUiSettingsSliderRow(
             }
 
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = CircleShape,
                 color = valueTextColor.copy(alpha = 0.12f)
             ) {
                 Text(
@@ -754,7 +754,7 @@ fun OneUiSettingsSliderRow(
                     fontWeight = FontWeight.Bold,
                     color = valueTextColor,
                     fontFamily = InterFontFamily,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                 )
             }
         }

@@ -5,6 +5,7 @@ import android.graphics.BlurMaskFilter
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -14,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -884,16 +886,16 @@ fun SpringToggleShowcaseScreen(
                         SoundManager.playReaction()
                         onBack?.invoke()
                     },
-                    shape = RoundedCornerShape(colors.buttonCornerRadius),
+                    shape = CircleShape,
                     color = colors.primary.copy(alpha = 0.14f)
                 ) {
                     Text(
                         text = "Apply",
                         color = colors.primary,
-                        fontSize = 13.5.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = InterFontFamily,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                     )
                 }
             }
@@ -950,7 +952,7 @@ private fun ToggleShowcaseContent(
 
         // 01: Physics Controls: Presets + 4 Sliders
         OneUiSettingsGroup(title = "01 — Physics Controls & Presets") {
-            // Presets row
+            // Presets row - Borderless compact capsules
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -959,35 +961,51 @@ private fun ToggleShowcaseContent(
             ) {
                 SpringPreset.entries.forEach { preset ->
                     val isSelected = preset == selectedPreset
-                    Surface(
-                        onClick = { onPresetSelected(preset) },
-                        shape = CircleShape,
-                        color = if (isSelected) colors.primary.copy(alpha = 0.16f) else colors.cardSurfaceElevated,
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) colors.primary else colors.cardBorderSubtle
-                        ),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = when (preset) {
-                                    SpringPreset.Snappy -> "Snappy"
-                                    SpringPreset.Bouncy -> "Bouncy"
-                                    SpringPreset.Liquid -> "Liquid"
-                                    SpringPreset.Critical -> "Critical"
-                                },
-                                color = if (isSelected) colors.primary else colors.textMuted,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                fontFamily = InterFontFamily,
-                                maxLines = 1,
-                                textAlign = TextAlign.Center
+                    val pillInteraction = remember { MutableInteractionSource() }
+                    val pillPressed by pillInteraction.collectIsPressedAsState()
+                    val pillScale by animateFloatAsState(
+                        targetValue = if (pillPressed) 0.95f else 1f,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                        label = "pill_scale"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .graphicsLayer {
+                                scaleX = pillScale
+                                scaleY = pillScale
+                            }
+                            .clip(CircleShape)
+                            .background(
+                                if (isSelected) {
+                                    Brush.horizontalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE)))
+                                } else {
+                                    SolidColor(colors.cardSurfaceElevated)
+                                }
                             )
-                        }
+                            .clickable(
+                                interactionSource = pillInteraction,
+                                indication = null,
+                                onClick = { onPresetSelected(preset) }
+                            )
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = when (preset) {
+                                SpringPreset.Snappy -> "Snappy"
+                                SpringPreset.Bouncy -> "Bouncy"
+                                SpringPreset.Liquid -> "Liquid"
+                                SpringPreset.Critical -> "Critical"
+                            },
+                            color = if (isSelected) Color.White else colors.textMuted,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }
@@ -1227,11 +1245,10 @@ private fun ShowcaseHeroCard(
         contentPadding = PaddingValues(18.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // Status Badge
+            // Status Badge - Borderless compact capsule
             Surface(
                 shape = CircleShape,
-                color = colors.primary.copy(alpha = 0.12f),
-                border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.25f))
+                color = colors.primary.copy(alpha = 0.12f)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -1271,7 +1288,7 @@ private fun ShowcaseHeroCard(
                 fontFamily = InterFontFamily
             )
 
-            // Action Buttons Row
+            // Action Buttons Row - Exact Borderless Compact Capsules
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1279,7 +1296,7 @@ private fun ShowcaseHeroCard(
             ) {
                 Surface(
                     onClick = onBounceAll,
-                    shape = RoundedCornerShape(colors.buttonCornerRadius),
+                    shape = CircleShape,
                     color = colors.primary,
                     modifier = Modifier.weight(1.15f)
                 ) {
@@ -1310,12 +1327,8 @@ private fun ShowcaseHeroCard(
                         config.timeScale = if (isSlowMo) 1.0f else 0.25f
                         onConfigChanged()
                     },
-                    shape = RoundedCornerShape(colors.buttonCornerRadius),
-                    color = colors.cardSurfaceElevated,
-                    border = BorderStroke(
-                        1.dp,
-                        if (isSlowMo) Color(0xFFF59E0B) else colors.cardBorderSubtle
-                    ),
+                    shape = CircleShape,
+                    color = if (isSlowMo) Color(0xFFF59E0B).copy(alpha = 0.18f) else colors.cardSurfaceElevated,
                     modifier = Modifier.weight(1.3f)
                 ) {
                     Row(
@@ -1347,12 +1360,8 @@ private fun ShowcaseHeroCard(
                         config.hapticsEnabled = !config.hapticsEnabled
                         onConfigChanged()
                     },
-                    shape = RoundedCornerShape(colors.buttonCornerRadius),
-                    color = colors.cardSurfaceElevated,
-                    border = BorderStroke(
-                        1.dp,
-                        if (config.hapticsEnabled) Color(0xFF10B981) else colors.cardBorderSubtle
-                    ),
+                    shape = CircleShape,
+                    color = if (config.hapticsEnabled) Color(0xFF10B981).copy(alpha = 0.18f) else colors.cardSurfaceElevated,
                     modifier = Modifier.weight(1.2f)
                 ) {
                     Row(
@@ -1381,9 +1390,8 @@ private fun ShowcaseHeroCard(
 
                 Surface(
                     onClick = onResetAll,
-                    shape = RoundedCornerShape(colors.buttonCornerRadius),
+                    shape = CircleShape,
                     color = colors.cardSurfaceElevated,
-                    border = BorderStroke(1.dp, colors.cardBorderSubtle),
                     modifier = Modifier.weight(0.9f)
                 ) {
                     Row(
@@ -1458,9 +1466,8 @@ private fun OscilloscopeTelemetrySection(
             }
 
             Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = if (activeToggle.checked) Color(0xFF10B981).copy(alpha = 0.14f) else colors.cardSurfaceElevated,
-                border = BorderStroke(1.dp, if (activeToggle.checked) Color(0xFF10B981).copy(alpha = 0.4f) else colors.cardBorderSubtle)
+                shape = CircleShape,
+                color = if (activeToggle.checked) Color(0xFF10B981).copy(alpha = 0.16f) else colors.cardSurfaceElevated
             ) {
                 Text(
                     text = if (activeToggle.checked) "STATE: ON" else "STATE: OFF",
@@ -1468,7 +1475,7 @@ private fun OscilloscopeTelemetrySection(
                     fontWeight = FontWeight.Bold,
                     color = if (activeToggle.checked) Color(0xFF10B981) else colors.textMuted,
                     fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
             }
         }
@@ -1505,7 +1512,6 @@ private fun OscilloscopeTelemetrySection(
                 .height(104.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(colors.cardSurfaceElevated)
-                .border(1.dp, colors.cardBorderSubtle, RoundedCornerShape(16.dp))
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
@@ -1577,17 +1583,17 @@ private fun TelemetryValueChip(
     val colors = LocalOscellionColors.current
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        color = colors.cardSurface,
-        border = BorderStroke(1.dp, colors.cardBorderSubtle)
+        shape = CircleShape,
+        color = colors.cardSurfaceElevated
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = label,
-                fontSize = 9.5.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Medium,
                 color = colors.textMuted,
                 fontFamily = InterFontFamily,
@@ -1710,11 +1716,6 @@ fun HigCoralSpecCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
-            .border(
-                width = 0.5.dp,
-                color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
-                shape = RoundedCornerShape(20.dp)
-            )
             .padding(vertical = 4.dp)
     ) {
         SpecToggleRow(

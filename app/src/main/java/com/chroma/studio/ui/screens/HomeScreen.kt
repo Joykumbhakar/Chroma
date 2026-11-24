@@ -1144,10 +1144,11 @@ fun HomeScreen(
                         )
                 ) {
 
-                    val heroTextColor = Color.White
-                    val heroMutedColor = Color.White.copy(alpha = 0.9f)
-                    val heroIconBg = Color.White.copy(alpha = 0.16f)
-                    val heroIconBorder = Color.White.copy(alpha = 0.4f)
+                    val isDarkTheme = colors.isDark
+                    val heroTextColor = if (isDarkTheme) Color.White else if (collapseProgress > 0.35f) colors.textMain else Color.White
+                    val heroMutedColor = if (isDarkTheme) Color.White.copy(alpha = 0.85f) else if (collapseProgress > 0.35f) colors.textMuted else Color.White.copy(alpha = 0.9f)
+                    val heroIconBg = if (isDarkTheme) Color.White.copy(alpha = 0.16f) else if (collapseProgress > 0.35f) colors.glassBg else Color.White.copy(alpha = 0.25f)
+                    val heroIconBorder = if (isDarkTheme) Color.White.copy(alpha = 0.35f) else if (collapseProgress > 0.35f) colors.glassBorder else Color.White.copy(alpha = 0.45f)
 
                     // Top Bar with Animated Search
                     if (showHeader) {
@@ -1614,13 +1615,15 @@ fun HomeScreen(
 
                 val fadeEndY = remember(density) { with(density) { 110.dp.toPx() } }
                 val currentGridTotalTop = (expandedHeroHeight - with(density) { collapseOffsetPx.toDp() }).coerceAtLeast(collapsedHeroHeight)
-                val currentBoxTop = (currentGridTotalTop - (126.dp * (1f - collapseProgress))).coerceAtLeast(collapsedHeroHeight)
-                val currentColumnTop = (currentGridTotalTop - currentBoxTop).coerceAtLeast(0.dp)
+                val baseBoxTop = (currentGridTotalTop - (126.dp * (1f - collapseProgress))).coerceAtLeast(collapsedHeroHeight)
+                // When collapsed, effectiveBoxTop smoothly reaches 0.dp so colors.bg covers seamlessly behind the transparent header without any horizontal cut-off line
+                val effectiveBoxTop = (baseBoxTop * (1f - collapseProgress)).coerceAtLeast(0.dp)
+                val currentColumnTop = (currentGridTotalTop - effectiveBoxTop).coerceAtLeast(0.dp)
 
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = currentBoxTop)
+                        .padding(top = effectiveBoxTop)
                         .background(
                             Brush.verticalGradient(
                                 0.0f to colors.bg.copy(alpha = collapseProgress),

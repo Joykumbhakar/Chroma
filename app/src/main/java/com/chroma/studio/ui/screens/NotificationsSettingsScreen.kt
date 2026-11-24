@@ -3,12 +3,16 @@ package com.chroma.studio.ui.screens
 import com.chroma.studio.ui.components.OneUiCollapsingHeaderLayout
 import android.content.Context
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -131,24 +137,42 @@ fun NotificationsSettingsScreen(
         expandedHeightDp = 240.dp,
         onBack = onBack,
         headerActions = { compactTitleAlpha ->
-            Surface(
-                onClick = { saveAll() },
-                shape = RoundedCornerShape(10.dp),
-                color = if (hasChanges) colors.primary else colors.glassBg,
-                border = BorderStroke(1.dp, if (hasChanges) colors.primary else colors.glassBorder),
-                modifier = Modifier.height(34.dp)
-            ) {
-                Box(
-                    modifier = Modifier.padding(horizontal = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (hasChanges) "Save" else "Done",
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (hasChanges) Color.White else colors.textMain
+            val saveInteraction = remember { MutableInteractionSource() }
+            val isSavePressed by saveInteraction.collectIsPressedAsState()
+            val saveScale by animateFloatAsState(
+                targetValue = if (isSavePressed) 0.94f else 1f,
+                animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                label = "saveScale"
+            )
+
+            Box(
+                modifier = Modifier
+                    .height(34.dp)
+                    .graphicsLayer {
+                        scaleX = saveScale
+                        scaleY = saveScale
+                    }
+                    .clip(CircleShape)
+                    .background(
+                        if (hasChanges) {
+                            Brush.horizontalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE)))
+                        } else {
+                            SolidColor(if (colors.isDark) Color(0xFF26262B) else Color(0xFFF1F3F7))
+                        }
                     )
-                }
+                    .clickable(
+                        interactionSource = saveInteraction,
+                        indication = null
+                    ) { saveAll() }
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (hasChanges) "Save" else "Done",
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (hasChanges) Color.White else colors.textMain
+                )
             }
         }
     ) { collapseProgress ->
@@ -478,19 +502,18 @@ private fun NotificationSettingRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            val shape = RoundedCornerShape(8.5.dp)
+            val shape = RoundedCornerShape(10.dp)
             Box(
                 modifier = Modifier
                     .size(34.dp)
                     .clip(shape)
-                    .background(Brush.verticalGradient(listOf(Color(0xFF0055FF), Color(0xFF0022CC))))
-                    .border(width = 0.9.dp, brush = SettingsShineBorderBrush, shape = shape),
+                    .background(iconColor.copy(alpha = if (colors.isDark) 0.22f else 0.13f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
-                    tint = Color.White,
+                    tint = iconColor,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -517,7 +540,7 @@ private fun NotificationSettingRow(
         AppleSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            activeTrackColor = Color(0xFF0055FF)
+            activeTrackColor = Color(0xFF0381FE)
         )
     }
 }
@@ -525,7 +548,7 @@ private fun NotificationSettingRow(
 @Composable
 private fun NotificationDivider() {
     val colors = LocalOscellionColors.current
-    Divider(
+    HorizontalDivider(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 65.dp),

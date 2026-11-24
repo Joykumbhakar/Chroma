@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 
 import androidx.compose.foundation.layout.*
 
@@ -53,6 +54,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 
 import androidx.compose.ui.graphics.graphicsLayer
 
@@ -609,82 +611,40 @@ private fun SwipeableNotificationCard(
 
             ) {
 
-                // Read toggle button
-
+                // Read toggle button - Borderless compact capsule
                 Box(
-
                     modifier = Modifier
-
-                        .height(32.dp)
-
-                        .clip(RoundedCornerShape(8.dp))
-
-                        .background(colors.glassBg)
-
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-
-                        .clickable { onToggleRead(notification) }
-
-                        .padding(horizontal = 10.dp),
-
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(if (colors.isDark) Color(0xFF2C2C30) else Color(0xFFE5E7EB))
+                        .clickable { onToggleRead(notification) },
                     contentAlignment = Alignment.Center
-
                 ) {
-
                     Icon(
-
                         imageVector = if (notification.isUnread) Lucide.CheckCheck else Lucide.Mail,
-
                         contentDescription = "Toggle Read",
-
                         tint = colors.primary,
-
                         modifier = Modifier.size(16.dp)
-
                     )
-
                 }
-
-
 
                 Spacer(Modifier.width(8.dp))
 
-
-
-                // Delete action button
-
+                // Delete action button - Borderless compact capsule
                 Box(
-
                     modifier = Modifier
-
-                        .height(32.dp)
-
-                        .clip(RoundedCornerShape(8.dp))
-
-                        .background(colors.error.copy(alpha = 0.15f))
-
-                        .border(1.dp, colors.error.copy(alpha = 0.4f), RoundedCornerShape(colors.chipCornerRadius))
-
-                        .clickable { onSwipeRightRemove(notification) }
-
-                        .padding(horizontal = 10.dp),
-
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(colors.error.copy(alpha = 0.16f))
+                        .clickable { onSwipeRightRemove(notification) },
                     contentAlignment = Alignment.Center
-
                 ) {
-
                     Icon(
-
                         imageVector = Lucide.Trash2,
-
                         contentDescription = "Delete",
-
                         tint = colors.error,
-
                         modifier = Modifier.size(15.dp)
-
                     )
-
                 }
 
             }
@@ -984,262 +944,136 @@ private fun SwipeableNotificationCard(
                 when (notification.type) {
 
                     NotificationActionType.FOLLOW -> {
-
-                        // High-grade social follow button (Follow / Following)
-
+                        // High-grade social follow button (Follow / Following) - Borderless compact capsules
                         if (!isFollowingUser) {
-
                             Box(
-
                                 modifier = Modifier
-
                                     .height(30.dp)
-
-                                    .clip(RoundedCornerShape(8.dp))
-
-                                    .background(colors.primary)
-
+                                    .clip(CircleShape)
+                                    .background(Brush.horizontalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE))))
                                     .clickable { onPrimaryAction(notification) }
-
                                     .padding(horizontal = 14.dp),
-
                                 contentAlignment = Alignment.Center
-
                             ) {
-
                                 Text(
-
                                     text = "Follow",
-
                                     color = Color.White,
-
                                     fontSize = 12.sp,
-
                                     fontWeight = FontWeight.SemiBold
-
                                 )
-
                             }
-
                         } else {
-
                             Box(
-
                                 modifier = Modifier
-
                                     .height(30.dp)
-
-                                    .clip(RoundedCornerShape(8.dp))
-
-                                    .background(colors.glassBg)
-
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-
+                                    .clip(CircleShape)
+                                    .background(if (colors.isDark) Color(0xFF26262B) else Color(0xFFF1F3F7))
                                     .clickable { onPrimaryAction(notification) }
-
-                                    .padding(horizontal = 12.dp),
-
+                                    .padding(horizontal = 14.dp),
                                 contentAlignment = Alignment.Center
-
                             ) {
-
                                 Text(
-
                                     text = "Following",
-
                                     color = colors.textMain,
-
                                     fontSize = 12.sp,
-
                                     fontWeight = FontWeight.Medium
-
                                 )
-
                             }
-
                         }
-
                     }
 
                     NotificationActionType.FOLLOW_REQUEST -> {
-
-                        // Instagram-style Confirm & Delete buttons
-
+                        // Instagram-style Confirm & Delete buttons - Borderless compact capsules
                         Row(
-
                             verticalAlignment = Alignment.CenterVertically,
-
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
-
                         ) {
-
                             Box(
-
                                 modifier = Modifier
-
                                     .height(30.dp)
-
-                                    .clip(RoundedCornerShape(8.dp))
-
-                                    .background(colors.primary)
-
+                                    .clip(CircleShape)
+                                    .background(Brush.horizontalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE))))
                                     .clickable { onPrimaryAction(notification) }
-
-                                    .padding(horizontal = 12.dp),
-
+                                    .padding(horizontal = 14.dp),
                                 contentAlignment = Alignment.Center
-
                             ) {
-
                                 Text(
-
                                     text = "Confirm",
-
                                     color = Color.White,
-
                                     fontSize = 12.sp,
-
                                     fontWeight = FontWeight.SemiBold
-
                                 )
-
                             }
 
                             Box(
-
                                 modifier = Modifier
-
                                     .height(30.dp)
-
-                                    .clip(RoundedCornerShape(8.dp))
-
-                                    .background(colors.glassBg)
-
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-
+                                    .clip(CircleShape)
+                                    .background(if (colors.isDark) Color(0xFF26262B) else Color(0xFFF1F3F7))
                                     .clickable { onSwipeRightRemove(notification) }
-
-                                    .padding(horizontal = 10.dp),
-
+                                    .padding(horizontal = 12.dp),
                                 contentAlignment = Alignment.Center
-
                             ) {
-
                                 Text(
-
                                     text = "Delete",
-
                                     color = colors.textMuted,
-
                                     fontSize = 12.sp,
-
                                     fontWeight = FontWeight.Medium
-
                                 )
-
                             }
-
                         }
-
                     }
 
                     NotificationActionType.STORY_REACTION -> {
-
                         Row(
-
                             verticalAlignment = Alignment.CenterVertically,
-
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
-
                         ) {
-
                             if (!notification.detailText.isNullOrBlank()) {
-
                                 Text(
-
                                     text = notification.detailText,
-
                                     fontSize = 19.sp
-
                                 )
-
                             }
-
                             if (!notification.targetPreviewUrl.isNullOrBlank()) {
-
                                 AsyncImage(
-
                                     model = notification.targetPreviewUrl,
-
                                     contentDescription = "Story Preview",
-
                                     contentScale = ContentScale.Crop,
-
                                     modifier = Modifier
-
                                         .size(38.dp)
-
-                                        .clip(RoundedCornerShape(8.dp))
-
-                                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-
+                                        .clip(RoundedCornerShape(10.dp))
                                         .clickable { onCardClick(notification) }
-
                                 )
-
                             }
-
                         }
-
                     }
 
                     NotificationActionType.STORY_LIKE,
-
                     NotificationActionType.STORY_REPLY -> {
-
                         if (!notification.targetPreviewUrl.isNullOrBlank()) {
-
                             AsyncImage(
-
                                 model = notification.targetPreviewUrl,
-
                                 contentDescription = "Story Preview",
-
                                 contentScale = ContentScale.Crop,
-
                                 modifier = Modifier
-
                                     .size(38.dp)
-
-                                    .clip(RoundedCornerShape(8.dp))
-
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-
+                                    .clip(RoundedCornerShape(10.dp))
                                     .clickable { onCardClick(notification) }
-
                             )
-
                         } else {
-
                             Icon(
-
                                 imageVector = Lucide.Sparkles,
-
                                 contentDescription = null,
-
                                 tint = colors.primary,
-
                                 modifier = Modifier.size(18.dp)
-
                             )
-
                         }
-
                     }
 
                     NotificationActionType.MESSAGE -> {
 
-                        // Clean Reply button
+                        // Borderless compact capsule Reply button
 
                         Box(
 
@@ -1247,15 +1081,13 @@ private fun SwipeableNotificationCard(
 
                                 .height(30.dp)
 
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(CircleShape)
 
-                                .background(colors.glassBg)
-
-                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                .background(if (colors.isDark) Color(0xFF26262B) else Color(0xFFF1F3F7))
 
                                 .clickable { onPrimaryAction(notification) }
 
-                                .padding(horizontal = 12.dp),
+                                .padding(horizontal = 14.dp),
 
                             contentAlignment = Alignment.Center
 
@@ -1265,7 +1097,7 @@ private fun SwipeableNotificationCard(
 
                                 verticalAlignment = Alignment.CenterVertically,
 
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
 
                             ) {
 
@@ -1319,9 +1151,7 @@ private fun SwipeableNotificationCard(
 
                                     .size(38.dp)
 
-                                    .clip(RoundedCornerShape(8.dp))
-
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(10.dp))
 
                                     .clickable { onCardClick(notification) }
 
@@ -1367,9 +1197,7 @@ private fun SwipeableNotificationCard(
 
                                     .size(38.dp)
 
-                                    .clip(RoundedCornerShape(8.dp))
-
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(10.dp))
 
                                     .clickable { onCardClick(notification) }
 
@@ -1655,23 +1483,23 @@ private fun NotificationEmptyState(
 
 
 
-        // 5. Clean Action Button with Rounded Corners (RoundedCornerShape(12.dp))
+        // 5. Borderless compact pill capsule Refresh Button
 
         Box(
 
             modifier = Modifier
 
-                .clip(RoundedCornerShape(12.dp))
+                .clip(CircleShape)
 
                 .background(
 
-                    Brush.linearGradient(
+                    Brush.horizontalGradient(
 
                         listOf(
 
-                            Color(0xFF1A8CFF),
+                            Color(0xFF0381FE),
 
-                            Color(0xFF0062CC)
+                            Color(0xFF0072DE)
 
                         )
 
@@ -1691,7 +1519,7 @@ private fun NotificationEmptyState(
 
                 }
 
-                .padding(horizontal = 18.dp, vertical = 10.dp)
+                .padding(horizontal = 20.dp, vertical = 10.dp)
 
         ) {
 
@@ -2805,31 +2633,33 @@ fun NotificationsFeedScreen(
 
 
 
+                    val tabInteraction = remember { MutableInteractionSource() }
+                    val isTabPressed by tabInteraction.collectIsPressedAsState()
+                    val tabScale by animateFloatAsState(
+                        targetValue = if (isTabPressed) 0.94f else 1f,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                        label = "tabScale"
+                    )
+
                     Box(
 
                         modifier = Modifier
-
-                            .clip(RoundedCornerShape(10.dp))
-
+                            .graphicsLayer {
+                                scaleX = tabScale
+                                scaleY = tabScale
+                            }
+                            .clip(CircleShape)
                             .background(
-
-                                if (isSelected) colors.primary.copy(alpha = 0.15f)
-
-                                else colors.glassBg
-
+                                if (isSelected) {
+                                    Brush.horizontalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE)))
+                                } else {
+                                    SolidColor(if (colors.isDark) Color(0xFF26262B) else Color(0xFFF1F3F7))
+                                }
                             )
-
-                            .border(
-
-                                width = 1.dp,
-
-                                color = if (isSelected) colors.primary.copy(alpha = 0.6f) else colors.glassBorder,
-
-                                shape = RoundedCornerShape(10.dp)
-
-                            )
-
-                            .clickable {
+                            .clickable(
+                                interactionSource = tabInteraction,
+                                indication = null
+                            ) {
 
                                 if (selectedFilter != filter) {
 
@@ -2857,6 +2687,13 @@ fun NotificationsFeedScreen(
 
                         ) {
 
+                            Icon(
+                                imageVector = filter.icon,
+                                contentDescription = null,
+                                tint = if (isSelected) Color.White else colors.textMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
+
                             Text(
 
                                 text = label,
@@ -2865,7 +2702,7 @@ fun NotificationsFeedScreen(
 
                                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
 
-                                color = if (isSelected) colors.primary else colors.textMuted
+                                color = if (isSelected) Color.White else colors.textMuted
 
                             )
 
@@ -2875,11 +2712,11 @@ fun NotificationsFeedScreen(
 
                                     modifier = Modifier
 
-                                        .clip(RoundedCornerShape(6.dp))
+                                        .clip(CircleShape)
 
-                                        .background(if (isSelected) colors.primary else colors.primary.copy(alpha = 0.2f))
+                                        .background(if (isSelected) Color.White.copy(alpha = 0.25f) else colors.primary.copy(alpha = 0.15f))
 
-                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                        .padding(horizontal = 6.dp, vertical = 1.dp)
 
                                 ) {
 
