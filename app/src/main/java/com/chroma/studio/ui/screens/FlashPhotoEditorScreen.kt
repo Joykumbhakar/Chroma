@@ -67,6 +67,9 @@ import com.chroma.studio.ui.components.ChromaScreenHeader
 import com.chroma.studio.ui.components.GlassButton
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.GlassPanel
+import com.chroma.studio.ui.components.OscellionGreenCheck
+import com.chroma.studio.ui.components.OscellionMorphLoader
+import com.chroma.studio.ui.components.OscellionMorphProcessingDialog
 import com.chroma.studio.ui.components.PrimaryGradientButton
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
@@ -405,6 +408,7 @@ fun FlashPhotoEditorScreen(
     // Active Category Dock
     var activeCategory by remember { mutableStateOf(StudioEditorCategory.LOOKS) }
     var isExporting by remember { mutableStateOf(false) }
+    var isExportCompleted by remember { mutableStateOf(false) }
     var isComparingOriginal by remember { mutableStateOf(false) }
 
     // Transform State
@@ -628,6 +632,7 @@ fun FlashPhotoEditorScreen(
     fun handleExportAndNext() {
         val uri = previewUri ?: return
         isExporting = true
+        isExportCompleted = false
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         scope.launch {
             val renderedBitmap = renderStudioPhotoBitmap(
@@ -726,6 +731,8 @@ fun FlashPhotoEditorScreen(
                 }
             }
 
+            isExportCompleted = true
+            kotlinx.coroutines.delay(650)
             isExporting = false
             onExportUris(renderedUris)
             onNext(selectedFilter.displayName, renderedBitmap, durationPerSlideMs)
@@ -869,10 +876,11 @@ fun FlashPhotoEditorScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         if (isExporting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(14.dp),
+                            OscellionMorphLoader(
+                                modifier = Modifier.size(16.dp),
+                                isCompleted = isExportCompleted,
                                 color = Color.White,
-                                strokeWidth = 2.dp
+                                checkColor = OscellionGreenCheck
                             )
                         } else {
                             Text(
@@ -1413,6 +1421,14 @@ fun FlashPhotoEditorScreen(
                     }
                 )
             }
+
+            // Official Oscellion Morph Processing Dialog for Photo Rendering & Export
+            OscellionMorphProcessingDialog(
+                visible = isExporting,
+                isCompleted = isExportCompleted,
+                loadingText = "Rendering Photo...",
+                completedText = "Photo Ready"
+            )
         }
     }
 }

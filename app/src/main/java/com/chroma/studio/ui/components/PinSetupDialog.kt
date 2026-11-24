@@ -215,7 +215,7 @@ fun PinSetupDialog(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .wrapContentSize()
                         .offset(x = shakeAnim.value.dp)
                 ) {
                     AnimatedContent(
@@ -269,220 +269,35 @@ fun PinSetupDialog(
 
                     Spacer(Modifier.height(28.dp))
 
-                    // 4 Rounded-Square Indicator Boxes (46dp x 50dp, radius 14dp)
-                    val infiniteCaret = rememberInfiniteTransition(label = "setupPinCaret")
-                    val caretAlpha by infiniteCaret.animateFloat(
-                        initialValue = 1f,
-                        targetValue = 0.25f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(550, easing = FastOutSlowInEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "caretAlpha"
+                    OscellionPinIndicatorBoxes(
+                        enteredPinLength = currentEnteredPin.length,
+                        pinLength = 4,
+                        isError = isError
                     )
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        for (i in 0 until 4) {
-                            val isFilled = i < currentEnteredPin.length
-                            val isActive = i == currentEnteredPin.length && !isError
-
-                            Box(
-                                modifier = Modifier
-                                    .size(width = 46.dp, height = 50.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(
-                                        when {
-                                            isError -> Color(0xFFEF4444).copy(alpha = 0.18f)
-                                            isActive -> Color(0xFF3B82F6).copy(alpha = 0.14f)
-                                            isFilled -> Color.White.copy(alpha = 0.18f)
-                                            else -> Color.White.copy(alpha = 0.08f)
-                                        }
-                                    )
-                                    .border(
-                                        width = 1.25.dp,
-                                        color = when {
-                                            isError -> Color(0xFFEF4444)
-                                            isActive -> Color(0xFF3B82F6)
-                                            isFilled -> Color.White.copy(alpha = 0.55f)
-                                            else -> Color.White.copy(alpha = 0.24f)
-                                        },
-                                        shape = RoundedCornerShape(14.dp)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isFilled) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(12.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White)
-                                    )
-                                } else if (isActive) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(2.dp)
-                                            .height(20.dp)
-                                            .clip(RoundedCornerShape(2.dp))
-                                            .background(Color(0xFF60A5FA).copy(alpha = caretAlpha))
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
 
-                // Bottom: 3x4 Uniform 78dp Circular Keypad
-                Column(
+                // Bottom: Uniform 76dp Circular Keypad
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = 282.dp)
+                        .wrapContentWidth()
                         .padding(bottom = 32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                    contentAlignment = Alignment.Center
                 ) {
-                    val keyRows = listOf(
-                        listOf(PinKey("1", ""), PinKey("2", "ABC"), PinKey("3", "DEF")),
-                        listOf(PinKey("4", "GHI"), PinKey("5", "JKL"), PinKey("6", "MNO")),
-                        listOf(PinKey("7", "PQRS"), PinKey("8", "TUV"), PinKey("9", "WXYZ")),
-                        listOf(null, PinKey("0", ""), PinKey("DEL", ""))
-                    )
-
-                    for (row in keyRows) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(24.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            for (key in row) {
-                                if (key == null) {
-                                    Spacer(Modifier.size(78.dp))
-                                } else if (key.digit == "DEL") {
-                                    SetupGlassKeypadButton(
-                                        onClick = { onDeletePress() }
-                                    ) {
-                                        Icon(
-                                            imageVector = Lucide.Delete,
-                                            contentDescription = "Delete",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(25.dp)
-                                        )
-                                    }
-                                } else {
-                                    SetupGlassKeypadButton(
-                                        onClick = { onDigitPress(key.digit) }
-                                    ) {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.Center
-                                        ) {
-                                            Text(
-                                                text = key.digit,
-                                                fontSize = 28.sp,
-                                                fontWeight = FontWeight.Normal,
-                                                lineHeight = 28.sp,
-                                                color = Color.White,
-                                                fontFamily = InterFontFamily,
-                                                style = TextStyle(
-                                                    shadow = Shadow(
-                                                        color = Color.Black.copy(alpha = 0.85f),
-                                                        offset = Offset(0f, 1f),
-                                                        blurRadius = 3f
-                                                    )
-                                                )
-                                            )
-                                            if (key.letters.isNotBlank()) {
-                                                Spacer(Modifier.height(2.dp))
-                                                Text(
-                                                    text = key.letters,
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    letterSpacing = 1.2.sp,
-                                                    color = Color(0xFFE5E7EB),
-                                                    fontFamily = InterFontFamily,
-                                                    style = TextStyle(
-                                                        shadow = Shadow(
-                                                            color = Color.Black.copy(alpha = 0.85f),
-                                                            offset = Offset(0f, 1f),
-                                                            blurRadius = 3f
-                                                        )
-                                                    )
-                                                )
-                                            } else {
-                                                Spacer(Modifier.height(2.dp))
-                                                Text(
-                                                    text = " ",
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    color = Color.Transparent
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                    OscellionDialpadGrid(
+                        buttonSize = 76.dp,
+                        horizontalSpacing = 20.dp,
+                        verticalSpacing = 16.dp,
+                        onDigitClick = { onDigitPress(it) },
+                        actionSlotLeft = null,
+                        actionSlotRight = {
+                            OscellionDeleteKeypadButton(
+                                size = 76.dp,
+                                onClick = { onDeletePress() }
+                            )
                         }
-                    }
+                    )
                 }
             }
         }
     }
 }
-
-@Composable
-private fun SetupGlassKeypadButton(
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = spring(stiffness = 500f, dampingRatio = 0.6f),
-        label = "setupGlassScale"
-    )
-
-    Box(
-        modifier = modifier
-            .size(78.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(CircleShape)
-            .background(
-                if (isPressed) Color.White.copy(alpha = 0.22f)
-                else Color.White.copy(alpha = 0.08f)
-            )
-            .border(
-                width = 0.75.dp,
-                brush = Brush.verticalGradient(
-                    colors = if (isPressed) listOf(
-                        Color.White.copy(alpha = 0.75f),
-                        Color.White.copy(alpha = 0.35f),
-                        Color.White.copy(alpha = 0.15f),
-                        Color.White.copy(alpha = 0.45f)
-                    ) else listOf(
-                        Color.White.copy(alpha = 0.58f),
-                        Color.White.copy(alpha = 0.12f),
-                        Color.White.copy(alpha = 0.04f),
-                        Color.White.copy(alpha = 0.24f)
-                    )
-                ),
-                shape = CircleShape
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        content()
-    }
-}
-
-private data class PinKey(val digit: String, val letters: String)

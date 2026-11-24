@@ -38,6 +38,10 @@ import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.chat.util.BiometricHelper
 import com.chroma.studio.chat.util.findActivity
+import com.chroma.studio.ui.components.OscellionBiometricKeypadButton
+import com.chroma.studio.ui.components.OscellionDeleteKeypadButton
+import com.chroma.studio.ui.components.OscellionDialpadGrid
+import com.chroma.studio.ui.components.OscellionPinIndicatorBoxes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -249,43 +253,22 @@ fun HiddenChatsPinDialog(
                         )
                     }
 
-                    // 4 Dots PIN Indicator (With Shake Animation on Error)
-                    Row(
+                    // Flagship Oscellion PIN Indicator Boxes (With Shake Animation on Error)
+                    Box(
                         modifier = Modifier
                             .graphicsLayer { translationX = shakeOffset.value }
-                            .padding(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(vertical = 4.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        for (i in 0 until 4) {
-                            val isFilled = i < enteredPin.length
-                            val dotColor by animateColorAsState(
-                                targetValue = if (isError) Color(0xFFFF3B30) else if (isFilled) Color(0xFF0381FE) else Color.Transparent,
-                                animationSpec = tween(150),
-                                label = "dotColor"
-                            )
-                            val dotScale by animateFloatAsState(
-                                targetValue = if (isFilled) 1.25f else 1f,
-                                animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium),
-                                label = "dotScale"
-                            )
-
-                            Box(
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .graphicsLayer {
-                                        scaleX = dotScale
-                                        scaleY = dotScale
-                                    }
-                                    .clip(CircleShape)
-                                    .background(dotColor)
-                                    .border(
-                                        width = 1.5.dp,
-                                        color = if (isError) Color(0xFFFF3B30) else if (isFilled) Color(0xFF0381FE) else Color.White.copy(alpha = 0.35f),
-                                        shape = CircleShape
-                                    )
-                            )
-                        }
+                        OscellionPinIndicatorBoxes(
+                            enteredPinLength = enteredPin.length,
+                            pinLength = 4,
+                            isError = isError,
+                            boxWidth = 44.dp,
+                            boxHeight = 48.dp,
+                            boxRadius = 12.dp,
+                            spacing = 12.dp
+                        )
                     }
 
                     // Error text
@@ -299,67 +282,29 @@ fun HiddenChatsPinDialog(
                         )
                     }
 
-                    // Numeric Keypad (Samsung One UI / iOS Tactile Dialpad)
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        val rows = listOf(
-                            listOf("1", "2", "3"),
-                            listOf("4", "5", "6"),
-                            listOf("7", "8", "9"),
-                            listOf("BIO", "0", "DEL")
-                        )
-
-                        for (row in rows) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                for (key in row) {
-                                    when (key) {
-                                        "DEL" -> {
-                                            KeypadCircleButton(
-                                                label = "⌫",
-                                                isAction = true,
-                                                onClick = {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    onBackspace()
-                                                }
-                                            )
-                                        }
-                                        "BIO" -> {
-                                            if (canUseBiometric) {
-                                                KeypadCircleButton(
-                                                    label = "⚡",
-                                                    isAction = true,
-                                                    icon = {
-                                                        LucideFingerprint(tint = Color(0xFF0381FE), size = 24.dp)
-                                                    },
-                                                    onClick = {
-                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        triggerBiometric()
-                                                    }
-                                                )
-                                            } else {
-                                                Spacer(Modifier.size(62.dp))
-                                            }
-                                        }
-                                        else -> {
-                                            KeypadCircleButton(
-                                                label = key,
-                                                isAction = false,
-                                                onClick = {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    onDigitEntered(key)
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
+                    // Flagship Oscellion Dialpad Grid
+                    OscellionDialpadGrid(
+                        buttonSize = 66.dp,
+                        horizontalSpacing = 16.dp,
+                        verticalSpacing = 12.dp,
+                        onDigitClick = { digit ->
+                            onDigitEntered(digit)
+                        },
+                        actionSlotLeft = if (canUseBiometric) {
+                            {
+                                OscellionBiometricKeypadButton(
+                                    size = 66.dp,
+                                    onClick = { triggerBiometric() }
+                                )
                             }
+                        } else null,
+                        actionSlotRight = {
+                            OscellionDeleteKeypadButton(
+                                size = 66.dp,
+                                onClick = { onBackspace() }
+                            )
                         }
-                    }
+                    )
 
                     // Cancel text button
                     Text(
@@ -378,55 +323,6 @@ fun HiddenChatsPinDialog(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun KeypadCircleButton(
-    label: String,
-    isAction: Boolean,
-    icon: (@Composable () -> Unit)? = null,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = 600f),
-        label = "keyScale"
-    )
-
-    Box(
-        modifier = Modifier
-            .size(62.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(CircleShape)
-            .background(
-                if (isAction) Color.White.copy(alpha = 0.08f)
-                else Color.White.copy(alpha = 0.12f)
-            )
-            .border(0.5.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) {
-                onClick()
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        if (icon != null) {
-            icon()
-        } else {
-            Text(
-                text = label,
-                color = Color.White,
-                fontSize = if (label == "⌫") 20.sp else 23.sp,
-                fontWeight = FontWeight.SemiBold
-            )
         }
     }
 }

@@ -372,10 +372,8 @@ fun AppLockerScreen(
                             .padding(vertical = 40.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(
-                            color = Color(0xFF0381FE),
-                            strokeWidth = 2.5.dp,
-                            modifier = Modifier.size(32.dp)
+                        OscellionLoadingSpinner(
+                            modifier = Modifier.size(36.dp)
                         )
                     }
                 }

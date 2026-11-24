@@ -2,14 +2,17 @@ package com.chroma.studio.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
@@ -17,10 +20,18 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import kotlin.math.*
+
+/** Official Oscellion Emerald Green for completion checkmark & morph ring */
+val OscellionGreenCheck = Color(0xFF34C759)
 
 private const val RADIUS = 420f
 private const val CIRCUMFERENCE = 2638.9378f // 2 * PI * 420
@@ -55,7 +66,7 @@ fun OscellionMorphLoader(
     isCompleted: Boolean = false,
     color: Color = Color.White,
     trackColor: Color = Color(0xFF1F1F23),
-    checkColor: Color = Color.White,
+    checkColor: Color = OscellionGreenCheck,
     spinDurationMs: Int = 2800,
     morphToCheckMs: Int = 920,
     morphToLoadMs: Int = 650,
@@ -455,7 +466,7 @@ fun OscellionLoadingSpinner(
     innerColor: Color? = null,
     strokeWidth: Dp? = null,
     isCompleted: Boolean = false,
-    checkColor: Color = Color.White,
+    checkColor: Color = OscellionGreenCheck,
     onCompleted: (() -> Unit)? = null
 ) {
     val isDark = LocalOscellionColors.current.isDark
@@ -468,6 +479,75 @@ fun OscellionLoadingSpinner(
         checkColor = checkColor,
         onCompleted = onCompleted
     )
+}
+
+/**
+ * Official Oscellion Morph Processing Dialog.
+ * Displays the official 3D rotating emblem loader during async operations (exporting, saving, setting),
+ * and smoothly morphs into the overflowed emerald checkmark upon completion.
+ */
+@Composable
+fun OscellionMorphProcessingDialog(
+    visible: Boolean,
+    isCompleted: Boolean,
+    loadingText: String = "Processing...",
+    completedText: String = "Complete",
+    onCompleted: () -> Unit = {}
+) {
+    if (!visible) return
+
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.65f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .wrapContentSize()
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(Color(0xFF141519).copy(alpha = 0.94f))
+                    .border(
+                        1.dp,
+                        Color.White.copy(alpha = 0.12f),
+                        RoundedCornerShape(28.dp)
+                    )
+                    .padding(horizontal = 36.dp, vertical = 32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    OscellionMorphLoader(
+                        modifier = Modifier.size(80.dp),
+                        isCompleted = isCompleted,
+                        color = Color.White,
+                        checkColor = OscellionGreenCheck,
+                        onCompleted = onCompleted
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Text(
+                        text = if (isCompleted) completedText else loadingText,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
 }
 
 // ─── MATH & INTERPOLATION HELPERS ──────────────────────────────────────

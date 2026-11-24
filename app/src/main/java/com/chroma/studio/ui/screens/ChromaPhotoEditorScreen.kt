@@ -106,6 +106,9 @@ import com.chroma.studio.ui.components.editorChromeFadeOnScrub
 import com.chroma.studio.ui.components.focusSliderContainer
 import com.chroma.studio.ui.components.studioBevel
 import com.chroma.studio.ui.components.OscellionGalleryLayout
+import com.chroma.studio.ui.components.OscellionGreenCheck
+import com.chroma.studio.ui.components.OscellionMorphLoader
+import com.chroma.studio.ui.components.OscellionMorphProcessingDialog
 import com.chroma.studio.ui.components.ToastManager
 import com.chroma.studio.ui.graphics3d.AppleSettingsSquircleVectorIcon
 import com.chroma.studio.ui.theme.InterFontFamily
@@ -1097,6 +1100,7 @@ fun ChromaPhotoEditorScreen(
     var showResetConfirmDialog by remember { mutableStateOf(false) }
     var activeToolSheet by remember { mutableStateOf<PhotoEditorTool?>(null) }
     var isExporting by remember { mutableStateOf(false) }
+    var isExportCompleted by remember { mutableStateOf(false) }
 
     val selectedClip = state.clips.find { it.id == state.selectedClipId } ?: state.clips.firstOrNull()
 
@@ -1136,25 +1140,38 @@ fun ChromaPhotoEditorScreen(
             onExport = { settings ->
                 viewModel.updateExportSettings(settings.resolution, settings.format, settings.quality)
                 isExporting = true
+                isExportCompleted = false
                 scope.launch {
                     val savedUri = exportEditedPhotoToGallery(
                         context = context,
                         state = state.copy(exportSettings = settings)
                     )
-                    isExporting = false
-                    showExportDialog = false
                     if (savedUri != null) {
+                        isExportCompleted = true
+                        delay(650)
+                        isExporting = false
+                        showExportDialog = false
                         ToastManager.showToast("Saved ${settings.resolution}p ${settings.format} to Gallery")
                         onExport(state.copy(exportSettings = settings))
                         onExportUri?.invoke(savedUri)
                         onExportSuccess?.invoke(savedUri)
                     } else {
+                        isExporting = false
+                        showExportDialog = false
                         ToastManager.showToast("Export failed")
                     }
                 }
             }
         )
     }
+
+    // Official Oscellion Morph Processing Dialog for Photo Rendering & Export
+    OscellionMorphProcessingDialog(
+        visible = isExporting,
+        isCompleted = isExportCompleted,
+        loadingText = "Rendering & Exporting...",
+        completedText = "Saved to Gallery"
+    )
 
     if (showResetConfirmDialog) {
         IosAlertDialog(
@@ -1295,17 +1312,21 @@ fun ChromaPhotoEditorScreen(
                             .clickable(enabled = !isExporting) {
                                 if (exportButtonLabel != "Export") {
                                     isExporting = true
+                                    isExportCompleted = false
                                     scope.launch {
                                         val savedUri = exportEditedPhotoToGallery(
                                             context = context,
                                             state = state
                                         )
-                                        isExporting = false
                                         if (savedUri != null) {
+                                            isExportCompleted = true
+                                            delay(650)
+                                            isExporting = false
                                             onExport(state)
                                             onExportUri?.invoke(savedUri)
                                             onExportSuccess?.invoke(savedUri)
                                         } else {
+                                            isExporting = false
                                             onExportSuccess?.invoke(photoUri)
                                         }
                                     }
@@ -1317,10 +1338,11 @@ fun ChromaPhotoEditorScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         if (isExporting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(14.dp),
+                            OscellionMorphLoader(
+                                modifier = Modifier.size(16.dp),
+                                isCompleted = isExportCompleted,
                                 color = Color.White,
-                                strokeWidth = 2.dp
+                                checkColor = OscellionGreenCheck
                             )
                         } else {
                             Row(

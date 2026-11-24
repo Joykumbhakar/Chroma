@@ -1027,22 +1027,13 @@ private fun ChatScreenContent(
         )
     }
     var unlockedChatSessionIds by remember(currentUid) { mutableStateOf<Set<String>>(emptySet()) }
-    var isAppScreenLockEnabled by remember {
-        mutableStateOf(chatSecurityPrefs.getBoolean("chat_screen_lock_enabled", false))
-    }
-    var isAppScreenUnlocked by remember { mutableStateOf(!isAppScreenLockEnabled) }
 
-    // Keep prefs in sync if ProfileSettingsScreen updates screen lock or locked chats
+    // Keep prefs in sync if ProfileSettingsScreen updates locked chats
     DisposableEffect(chatSecurityPrefs) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
             when (key) {
                 "locked_chat_ids" -> {
                     lockedChatIds = prefs.getStringSet("locked_chat_ids", emptySet())?.toSet() ?: emptySet()
-                }
-                "chat_screen_lock_enabled" -> {
-                    val enabled = prefs.getBoolean("chat_screen_lock_enabled", false)
-                    isAppScreenLockEnabled = enabled
-                    if (!enabled) isAppScreenUnlocked = true
                 }
             }
         }
@@ -1050,16 +1041,13 @@ private fun ChatScreenContent(
         onDispose { chatSecurityPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
-    // Re-lock all unlocked conversations and app screen lock when app moves to background
+    // Re-lock all unlocked conversations when app moves to background
     // (skip while a system Biometric/PIN prompt is active so ConfirmDeviceCredential doesn't trip it)
     val chatLifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     DisposableEffect(chatLifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP && !com.chroma.studio.chat.util.BiometricHelper.isPromptShowing) {
                 unlockedChatSessionIds = emptySet()
-                if (isAppScreenLockEnabled) {
-                    isAppScreenUnlocked = false
-                }
             }
         }
         chatLifecycleOwner.lifecycle.addObserver(observer)
@@ -6123,23 +6111,6 @@ private fun ChatScreenContent(
             modifier = Modifier.align(Alignment.TopCenter)
 
         )
-
-        // Full-screen Messages App Screen Lock Shield (when enabled in Chat Settings)
-        if (isAppScreenLockEnabled && !isAppScreenUnlocked) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(500f)
-            ) {
-                com.chroma.studio.ui.components.OscellionLockScreen(
-                    titleText = "Unlock Messages",
-                    onUnlockSuccess = {
-                        isAppScreenUnlocked = true
-                    }
-                )
-            }
-        }
-
     }
 
 }
