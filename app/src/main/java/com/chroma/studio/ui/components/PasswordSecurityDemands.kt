@@ -77,7 +77,8 @@ fun BeveledCheckMark(
     modifier: Modifier = Modifier,
     size: Dp = 18.dp
 ) {
-    val emeraldBrush = remember { Brush.linearGradient(StudioDesignTokens.EmeraldMintGradient) }
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
+    val brandBlueBrush = remember { Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF3E91FF))) }
     val transition = updateTransition(targetState = met, label = "checkTransition")
 
     val scale by transition.animateFloat(
@@ -86,22 +87,17 @@ fun BeveledCheckMark(
     ) { if (it) 1f else 0.75f }
 
     val bgModifier = if (met) {
-        Modifier.background(emeraldBrush)
+        Modifier.background(brandBlueBrush)
     } else {
-        Modifier.background(Color(0xFF141724))
+        Modifier.background(if (isDark) Color(0xFF222634) else Color(0xFFE2E8F0))
     }
 
     val borderModifier = if (met) {
-        Modifier.border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.5f), Color(0xFF059669))), CircleShape)
+        Modifier.border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.5f), Color(0xFF0072DE))), CircleShape)
     } else {
         Modifier.border(
-            width = 1.dp,
-            brush = Brush.verticalGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.15f),
-                    Color.White.copy(alpha = 0.04f)
-                )
-            ),
+            width = 0.8.dp,
+            color = if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
             shape = CircleShape
         )
     }
@@ -131,14 +127,14 @@ fun BeveledCheckMark(
                 modifier = Modifier
                     .size(4.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.20f))
+                    .background(if (isDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.25f))
             )
         }
     }
 }
 
 // ============================================================================
-// INDIVIDUAL DEMAND ROW WITH MICRO-BEVEL & DYNAMIC CHECKMARK
+// INDIVIDUAL DEMAND ROW WITH DYNAMIC THEME SUPPORT
 // ============================================================================
 
 @Composable
@@ -147,8 +143,13 @@ fun PasswordDemandItemRow(
     title: String,
     modifier: Modifier = Modifier
 ) {
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
     val textColor by animateColorAsState(
-        targetValue = if (met) Color.White else Color(0xFF8F9BB3),
+        targetValue = if (met) {
+            if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+        } else {
+            if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+        },
         animationSpec = tween(180),
         label = "textColor"
     )
@@ -179,13 +180,12 @@ fun PasswordDemandItemRow(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(Color(0xFF059669).copy(alpha = 0.18f))
-                    .border(0.5.dp, Color(0xFF10B981).copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                    .background(if (isDark) Color(0xFF0381FE).copy(alpha = 0.18f) else Color(0xFFE0F2FE))
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
                     text = "PASSED",
-                    color = Color(0xFF34D399),
+                    color = Color(0xFF0381FE),
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.4.sp
@@ -206,6 +206,7 @@ fun PasswordRequirementChecklist(
     alwaysVisible: Boolean = true
 ) {
     val haptic = LocalHapticFeedback.current
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
     val demands = remember(password) { evaluatePasswordDemands(password) }
 
     // Haptic pulse when a new demand gets ticked off
@@ -219,12 +220,15 @@ fun PasswordRequirementChecklist(
 
     if (!alwaysVisible && password.isEmpty()) return
 
+    val cardBg = if (isDark) Color(0xFF17171A) else Color(0xFFFFFFFF)
+    val cardBorder = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000)
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF10131E))
-            .studioBevel(cornerRadius = 14.dp, borderWidth = 1.dp)
+            .background(cardBg)
+            .border(0.5.dp, cardBorder, RoundedCornerShape(14.dp))
             .padding(14.dp)
     ) {
         // ── Header & Progress Bar ──
@@ -240,12 +244,12 @@ fun PasswordRequirementChecklist(
                 Icon(
                     imageVector = Lucide.ShieldCheck,
                     contentDescription = null,
-                    tint = if (demands.allMet) Color(0xFF10B981) else Color(0xFF0284C7),
+                    tint = if (demands.allMet) Color(0xFF00C853) else Color(0xFF0381FE),
                     modifier = Modifier.size(15.dp)
                 )
                 Text(
                     text = "SECURITY REQUIREMENTS",
-                    color = Color(0xFFB0B9CF),
+                    color = if (isDark) Color(0xFFB0B9CF) else Color(0xFF475569),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.6.sp
@@ -254,24 +258,19 @@ fun PasswordRequirementChecklist(
 
             // Met counter badge
             val badgeBrush = if (demands.allMet) {
-                Brush.linearGradient(StudioDesignTokens.EmeraldMintGradient)
+                Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF3E91FF)))
             } else {
-                Brush.linearGradient(listOf(Color(0xFF1E2438), Color(0xFF1E2438)))
+                SolidColor(if (isDark) Color(0xFF222634) else Color(0xFFE2E8F0))
             }
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .background(badgeBrush)
-                    .border(
-                        0.5.dp,
-                        if (demands.allMet) Color.White.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.08f),
-                        RoundedCornerShape(8.dp)
-                    )
                     .padding(horizontal = 8.dp, vertical = 3.dp)
             ) {
                 Text(
                     text = if (demands.allMet) "All 5 Met" else "${demands.metCount} / 5 Met",
-                    color = Color.White,
+                    color = if (demands.allMet) Color.White else if (isDark) Color(0xFFE2E8F0) else Color(0xFF334155),
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -280,7 +279,7 @@ fun PasswordRequirementChecklist(
 
         Spacer(Modifier.height(8.dp))
 
-        // Multi-segment Beveled Progress Bar
+        // Multi-segment Progress Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -288,16 +287,16 @@ fun PasswordRequirementChecklist(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             val segmentGradient = when {
-                demands.metCount <= 2 -> listOf(Color(0xFFE11D48), Color(0xFFFB7185)) // Crimson
-                demands.metCount <= 4 -> listOf(Color(0xFF0284C7), Color(0xFF06B6D4)) // Cobalt
-                else -> StudioDesignTokens.EmeraldMintGradient // Emerald Mint
+                demands.metCount <= 2 -> listOf(Color(0xFFEF4444), Color(0xFFF87171)) // Crimson
+                demands.metCount <= 4 -> listOf(Color(0xFF0381FE), Color(0xFF3E91FF)) // Brand Blue
+                else -> listOf(Color(0xFF00C853), Color(0xFF69F0AE)) // Emerald
             }
             repeat(5) { index ->
                 val isSegmentMet = index < demands.metCount
                 val segmentBrush = if (isSegmentMet) {
                     Brush.horizontalGradient(segmentGradient)
                 } else {
-                    SolidColor(Color(0xFF1D2235))
+                    SolidColor(if (isDark) Color(0xFF222634) else Color(0xFFE2E8F0))
                 }
                 Box(
                     modifier = Modifier
@@ -305,11 +304,6 @@ fun PasswordRequirementChecklist(
                         .fillMaxHeight()
                         .clip(CircleShape)
                         .background(segmentBrush)
-                        .border(
-                            0.5.dp,
-                            if (isSegmentMet) Color.White.copy(alpha = 0.25f) else Color.Transparent,
-                            CircleShape
-                        )
                 )
             }
         }
@@ -346,7 +340,7 @@ fun PasswordRequirementChecklist(
 }
 
 // ============================================================================
-// HIGH-PERFORMANCE BEVELED STUDIO PASSWORD INPUT FIELD
+// HIGH-PERFORMANCE STUDIO PASSWORD INPUT FIELD
 // ============================================================================
 
 @Composable
@@ -360,27 +354,33 @@ fun StudioBeveledPasswordField(
     imeAction: ImeAction = ImeAction.Next,
     onImeAction: () -> Unit = {}
 ) {
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
     var showPassword by remember { mutableStateOf(false) }
     var isFocused by remember { mutableStateOf(false) }
 
-    val activeBorderBrush = when {
-        isError -> SolidColor(Color(0xFFFF453A))
-        allDemandsMet -> Brush.linearGradient(StudioDesignTokens.EmeraldMintGradient)
-        isFocused -> Brush.linearGradient(StudioDesignTokens.CobaltGradient)
-        else -> null
+    val fieldBg = if (isDark) Color(0xFF222226) else Color(0xFFF2F4F7)
+    val fieldBorder = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000)
+    val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000)
+    val textMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)
+
+    val activeBorderColor = when {
+        isError -> Color(0xFFFF453A)
+        allDemandsMet -> Color(0xFF00C853)
+        isFocused -> Color(0xFF0381FE)
+        else -> fieldBorder
     }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(13.dp))
-            .background(Color(0xFF0F121C))
-            .studioBevel(
-                cornerRadius = 13.dp,
-                borderWidth = if (isFocused || allDemandsMet || isError) 1.2.dp else 1.dp,
-                accentBorder = activeBorderBrush
+            .clip(RoundedCornerShape(14.dp))
+            .background(fieldBg)
+            .border(
+                width = if (isFocused || allDemandsMet || isError) 1.dp else 0.5.dp,
+                color = activeBorderColor,
+                shape = RoundedCornerShape(14.dp)
             )
-            .padding(horizontal = 14.dp, vertical = 13.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -390,9 +390,9 @@ fun StudioBeveledPasswordField(
                 imageVector = if (allDemandsMet) Lucide.ShieldCheck else Lucide.Lock,
                 contentDescription = null,
                 tint = when {
-                    allDemandsMet -> Color(0xFF10B981)
-                    isFocused || value.isNotEmpty() -> Color(0xFF0284C7)
-                    else -> Color(0xFF6B7280)
+                    allDemandsMet -> Color(0xFF00C853)
+                    isFocused || value.isNotEmpty() -> Color(0xFF0381FE)
+                    else -> textMuted
                 },
                 modifier = Modifier.size(17.dp)
             )
@@ -403,7 +403,7 @@ fun StudioBeveledPasswordField(
                 if (value.isEmpty()) {
                     Text(
                         text = placeholder,
-                        color = Color(0xFF555E75),
+                        color = textMuted,
                         fontSize = 14.5.sp,
                         fontWeight = FontWeight.Normal
                     )
@@ -412,12 +412,12 @@ fun StudioBeveledPasswordField(
                     value = value,
                     onValueChange = onValueChange,
                     textStyle = TextStyle(
-                        color = Color.White,
+                        color = textPrimary,
                         fontSize = 14.5.sp,
                         fontWeight = FontWeight.Medium,
                         fontFamily = FontFamily.SansSerif
                     ),
-                    cursorBrush = SolidColor(if (allDemandsMet) Color(0xFF10B981) else Color(0xFF0284C7)),
+                    cursorBrush = SolidColor(if (allDemandsMet) Color(0xFF00C853) else Color(0xFF0381FE)),
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Password,
@@ -448,7 +448,7 @@ fun StudioBeveledPasswordField(
                         Icon(
                             imageVector = if (showPassword) Lucide.EyeOff else Lucide.Eye,
                             contentDescription = if (showPassword) "Hide password" else "Show password",
-                            tint = Color(0xFF8F9BB3),
+                            tint = textMuted,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -459,7 +459,7 @@ fun StudioBeveledPasswordField(
 }
 
 // ============================================================================
-// HIGH-PERFORMANCE BEVELED CONFIRM PASSWORD FIELD
+// HIGH-PERFORMANCE CONFIRM PASSWORD FIELD
 // ============================================================================
 
 @Composable
@@ -473,31 +473,37 @@ fun StudioBeveledConfirmPasswordField(
     imeAction: ImeAction = ImeAction.Done,
     onImeAction: () -> Unit = {}
 ) {
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
     var showPassword by remember { mutableStateOf(false) }
     var isFocused by remember { mutableStateOf(false) }
+
+    val fieldBg = if (isDark) Color(0xFF222226) else Color(0xFFF2F4F7)
+    val fieldBorder = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000)
+    val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000)
+    val textMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)
 
     val matches = value.isNotEmpty() && value == targetPassword && allDemandsMet
     val isMismatch = value.isNotEmpty() && (!matches && (value.length >= targetPassword.length || !targetPassword.startsWith(value)))
 
-    val activeBorderBrush = when {
-        matches -> Brush.linearGradient(StudioDesignTokens.EmeraldMintGradient)
-        isMismatch -> SolidColor(Color(0xFFFF453A))
-        isFocused -> Brush.linearGradient(StudioDesignTokens.CobaltGradient)
-        else -> null
+    val activeBorderColor = when {
+        matches -> Color(0xFF00C853)
+        isMismatch -> Color(0xFFFF453A)
+        isFocused -> Color(0xFF0381FE)
+        else -> fieldBorder
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(13.dp))
-                .background(Color(0xFF0F121C))
-                .studioBevel(
-                    cornerRadius = 13.dp,
-                    borderWidth = if (isFocused || matches || isMismatch) 1.2.dp else 1.dp,
-                    accentBorder = activeBorderBrush
+                .clip(RoundedCornerShape(14.dp))
+                .background(fieldBg)
+                .border(
+                    width = if (isFocused || matches || isMismatch) 1.dp else 0.5.dp,
+                    color = activeBorderColor,
+                    shape = RoundedCornerShape(14.dp)
                 )
-                .padding(horizontal = 14.dp, vertical = 13.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -507,10 +513,10 @@ fun StudioBeveledConfirmPasswordField(
                     imageVector = if (matches) Lucide.BadgeCheck else Lucide.Lock,
                     contentDescription = null,
                     tint = when {
-                        matches -> Color(0xFF10B981)
+                        matches -> Color(0xFF00C853)
                         isMismatch -> Color(0xFFFF453A)
-                        isFocused || value.isNotEmpty() -> Color(0xFF0284C7)
-                        else -> Color(0xFF6B7280)
+                        isFocused || value.isNotEmpty() -> Color(0xFF0381FE)
+                        else -> textMuted
                     },
                     modifier = Modifier.size(17.dp)
                 )
@@ -521,7 +527,7 @@ fun StudioBeveledConfirmPasswordField(
                     if (value.isEmpty()) {
                         Text(
                             text = placeholder,
-                            color = Color(0xFF555E75),
+                            color = textMuted,
                             fontSize = 14.5.sp,
                             fontWeight = FontWeight.Normal
                         )
@@ -530,12 +536,12 @@ fun StudioBeveledConfirmPasswordField(
                         value = value,
                         onValueChange = onValueChange,
                         textStyle = TextStyle(
-                            color = Color.White,
+                            color = textPrimary,
                             fontSize = 14.5.sp,
                             fontWeight = FontWeight.Medium,
                             fontFamily = FontFamily.SansSerif
                         ),
-                        cursorBrush = SolidColor(if (matches) Color(0xFF10B981) else Color(0xFF0284C7)),
+                        cursorBrush = SolidColor(if (matches) Color(0xFF00C853) else Color(0xFF0381FE)),
                         visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
@@ -566,7 +572,7 @@ fun StudioBeveledConfirmPasswordField(
                             Icon(
                                 imageVector = if (showPassword) Lucide.EyeOff else Lucide.Eye,
                                 contentDescription = if (showPassword) "Hide password" else "Show password",
-                                tint = Color(0xFF8F9BB3),
+                                tint = textMuted,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -591,9 +597,9 @@ fun StudioBeveledConfirmPasswordField(
                         else -> "Passwords do not match yet"
                     },
                     color = when {
-                        matches -> Color(0xFF34D399)
+                        matches -> Color(0xFF00C853)
                         isMismatch -> Color(0xFFFF453A)
-                        else -> Color(0xFF94A3B8)
+                        else -> textMuted
                     },
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Medium

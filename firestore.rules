@@ -66,10 +66,11 @@ rules_version = '2';
 //      - savedBy: list of string
 //      - shareCount: int (interaction counter)
 //      - sharedBy: list of string
-//      - commentsCount: int (interaction counter)
+//      - commentCount / commentsCount: int (interaction counter)
 //      - isArchived: bool
 //    Subcollections:
 //      - /community_works/{workId}/likes/{userId} (userId is the liker's UID)
+//      - /community_works/{workId}/comments/{commentId} (comments subcollection)
 //
 // 3. Collection: usernames
 //    Document ID: {username} (lowercase username string)
@@ -118,6 +119,7 @@ rules_version = '2';
 //      - isArchived: bool
 //    Subcollections:
 //      - /flash_videos/{flashId}/likes/{userId} (userId is the liker's UID)
+//      - /flash_videos/{flashId}/comments/{commentId} (comments subcollection)
 //
 // 6. Collection: flash_comments
 //    Document ID: {commentId}
@@ -132,6 +134,7 @@ rules_version = '2';
 //      - dislikedBy: list of string
 //      - isPinned / pinned: bool
 //      - isCreatorHearted / creatorHearted: bool
+//      - replyCount: int
 //
 // 7. Collection: stories
 //    Document ID: {storyId}
@@ -281,7 +284,7 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.creatorId ||
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likes', 'likesCount', 'likedBy', 'remixCount', 'remixedBy', 'downloadCount', 'downloadedBy', 'downloadsCount', 'saveCount', 'savedBy', 'shareCount', 'sharedBy', 'commentsCount'])
+          .hasOnly(['likes', 'likesCount', 'likedBy', 'remixCount', 'remixedBy', 'downloadCount', 'downloadedBy', 'downloadsCount', 'saveCount', 'savedBy', 'shareCount', 'sharedBy', 'commentCount', 'commentsCount'])
       );
 
       // Only creator can delete their work
@@ -295,6 +298,22 @@ service cloud.firestore {
       match /likes/{userId} {
         allow read: if isAuthenticated();
         allow write: if isOwner(userId);
+      }
+
+      // Subcollection for comments
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+        allow update: if isAuthenticated() && (
+          request.auth.uid == resource.data.userId ||
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['likedBy', 'likesCount', 'dislikedBy', 'isPinned', 'pinned', 'isCreatorHearted', 'creatorHearted', 'replyCount'])
+        );
+        allow delete: if isAuthenticated() && (
+          resource == null ||
+          request.auth.uid == resource.data.userId ||
+          request.auth.uid == get(/databases/$(database)/documents/community_works/$(workId)).data.creatorId
+        );
       }
     }
 
@@ -373,6 +392,22 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         allow write: if isOwner(userId);
       }
+
+      // Subcollection for comments
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+        allow update: if isAuthenticated() && (
+          request.auth.uid == resource.data.userId ||
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['likedBy', 'likesCount', 'dislikedBy', 'isPinned', 'pinned', 'isCreatorHearted', 'creatorHearted', 'replyCount'])
+        );
+        allow delete: if isAuthenticated() && (
+          resource == null ||
+          request.auth.uid == resource.data.userId ||
+          request.auth.uid == get(/databases/$(database)/documents/flash_videos/$(flashId)).data.creatorId
+        );
+      }
     }
 
     // ===============================================================
@@ -384,11 +419,19 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.userId ||
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likedBy', 'likesCount', 'dislikedBy', 'isPinned', 'pinned', 'isCreatorHearted', 'creatorHearted'])
+          .hasOnly(['likedBy', 'likesCount', 'dislikedBy', 'isPinned', 'pinned', 'isCreatorHearted', 'creatorHearted', 'replyCount'])
       );
       allow delete: if isAuthenticated() && (
         resource == null ||
-        request.auth.uid == resource.data.userId
+        request.auth.uid == resource.data.userId ||
+        (
+          'videoId' in resource.data && resource.data.videoId != null && (
+            (exists(/databases/$(database)/documents/flash_videos/$(resource.data.videoId)) &&
+             request.auth.uid == get(/databases/$(database)/documents/flash_videos/$(resource.data.videoId)).data.creatorId) ||
+            (exists(/databases/$(database)/documents/community_works/$(resource.data.videoId)) &&
+             request.auth.uid == get(/databases/$(database)/documents/community_works/$(resource.data.videoId)).data.creatorId)
+          )
+        )
       );
     }
 

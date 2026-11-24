@@ -208,9 +208,10 @@ fun StudioCustomCalendarView(
     minDateMillis: Long? = null,
     maxDateMillis: Long? = null,
     title: String = "Select Date",
-    accentGradient: List<Color> = StudioDesignTokens.CobaltGradient
+    accentGradient: List<Color> = listOf(Color(0xFF0381FE), Color(0xFF0072DE))
 ) {
     val haptic = LocalHapticFeedback.current
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
 
     // Initialize calendar to selected date or max allowed date or today
     val initialCal = remember(selectedMillis, maxDateMillis) {
@@ -243,12 +244,15 @@ fun StudioCustomCalendarView(
         }
     }
 
+    val containerBg = if (isDark) Color(0xFF161922) else Color(0xFFFFFFFF)
+    val containerBorder = if (isDark) Color(0x1FFFFFFF) else Color(0x12000000)
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF0D0F18))
-            .studioBevel(cornerRadius = 22.dp, borderWidth = 1.dp)
+            .background(containerBg)
+            .border(0.8.dp, containerBorder, RoundedCornerShape(22.dp))
             .padding(18.dp)
     ) {
         // ── TOP HEADER: TITLE & SELECTED PREVIEW ──
@@ -260,7 +264,7 @@ fun StudioCustomCalendarView(
             Column {
                 Text(
                     text = title.uppercase(),
-                    color = Color(0xFF7A869E),
+                    color = if (isDark) Color(0xFF7A869E) else Color(0xFF64748B),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.8.sp
@@ -268,7 +272,7 @@ fun StudioCustomCalendarView(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = selectedDateText,
-                    color = Color.White,
+                    color = if (isDark) Color.White else Color(0xFF0F172A),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -278,8 +282,7 @@ fun StudioCustomCalendarView(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF161A28))
-                    .studioBevel(cornerRadius = 10.dp, borderWidth = 0.8.dp)
+                    .background(if (isDark) Color(0xFF1F2433) else Color(0xFFF1F5F9))
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         val target = maxDateMillis ?: System.currentTimeMillis()
@@ -297,12 +300,12 @@ fun StudioCustomCalendarView(
                     Icon(
                         imageVector = Lucide.CalendarDays,
                         contentDescription = "Current",
-                        tint = Color(0xFF00E5FF),
+                        tint = Color(0xFF0381FE),
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
                         text = "Recent",
-                        color = Color(0xFFBAC7E8),
+                        color = if (isDark) Color(0xFFBAC7E8) else Color(0xFF334155),
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -317,8 +320,7 @@ fun StudioCustomCalendarView(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF131725))
-                .studioBevel(cornerRadius = 14.dp, borderWidth = 0.8.dp)
+                .background(if (isDark) Color(0xFF1E2434) else Color(0xFFF1F5F9))
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -339,7 +341,7 @@ fun StudioCustomCalendarView(
                 Icon(
                     imageVector = Lucide.ChevronLeft,
                     contentDescription = "Previous Month",
-                    tint = Color(0xFFB0BBD8),
+                    tint = if (isDark) Color(0xFFB0BBD8) else Color(0xFF475569),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -348,7 +350,7 @@ fun StudioCustomCalendarView(
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (viewMode != CalendarViewMode.DAYS) Color(0xFF20263C) else Color.Transparent)
+                    .background(if (viewMode != CalendarViewMode.DAYS) (if (isDark) Color(0xFF2B334A) else Color(0xFFE2E8F0)) else Color.Transparent)
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         viewMode = if (viewMode == CalendarViewMode.DAYS) CalendarViewMode.YEARS else CalendarViewMode.DAYS
@@ -359,14 +361,14 @@ fun StudioCustomCalendarView(
             ) {
                 Text(
                     text = "${MONTH_NAMES[displayMonth]} $displayYear",
-                    color = Color.White,
+                    color = if (isDark) Color.White else Color(0xFF0F172A),
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Icon(
                     imageVector = if (viewMode == CalendarViewMode.DAYS) Lucide.ChevronDown else Lucide.ChevronUp,
                     contentDescription = null,
-                    tint = Color(0xFF00E5FF),
+                    tint = Color(0xFF0381FE),
                     modifier = Modifier.size(15.dp)
                 )
             }
@@ -387,7 +389,7 @@ fun StudioCustomCalendarView(
                 Icon(
                     imageVector = Lucide.ChevronRight,
                     contentDescription = "Next Month",
-                    tint = Color(0xFFB0BBD8),
+                    tint = if (isDark) Color(0xFFB0BBD8) else Color(0xFF475569),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -414,7 +416,7 @@ fun StudioCustomCalendarView(
                             WEEKDAY_HEADERS.forEach { dayName ->
                                 Text(
                                     text = dayName,
-                                    color = Color(0xFF64748B),
+                                    color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center,
@@ -492,7 +494,7 @@ fun StudioCustomCalendarView(
 }
 
 // ============================================================================
-// CALENDAR DAY CELL (TACTILE, SMOOTH & BEVELED)
+// CALENDAR DAY CELL (TACTILE, SMOOTH & THEMED)
 // ============================================================================
 
 @Composable
@@ -501,27 +503,27 @@ fun CalendarDayCell(
     accentGradient: List<Color>,
     onClick: () -> Unit
 ) {
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
     val isSelected = item.isSelected
     val isEnabled = item.isSelectable
 
     val cellBackground = when {
         isSelected -> Brush.linearGradient(accentGradient)
-        item.isToday -> SolidColor(Color(0xFF171C2E))
+        item.isToday -> SolidColor(if (isDark) Color(0xFF1E2638) else Color(0xFFE0F2FE))
         else -> SolidColor(Color.Transparent)
     }
 
     val cellBorder = when {
-        isSelected -> Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.45f), Color.White.copy(alpha = 0.05f)))
-        item.isToday -> SolidColor(Color(0xFF00E5FF).copy(alpha = 0.6f))
+        item.isToday && !isSelected -> SolidColor(Color(0xFF0381FE).copy(alpha = 0.5f))
         else -> null
     }
 
     val textColor = when {
         isSelected -> Color.White
-        !isEnabled -> Color(0xFF333B50)
-        !item.isCurrentMonth -> Color(0xFF4B556D)
-        item.isToday -> Color(0xFF00E5FF)
-        else -> Color(0xFFE2E8F0)
+        !isEnabled -> if (isDark) Color(0xFF333B50) else Color(0xFFCBD5E1)
+        !item.isCurrentMonth -> if (isDark) Color(0xFF4B556D) else Color(0xFF94A3B8)
+        item.isToday -> Color(0xFF0381FE)
+        else -> if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
     }
 
     Box(
@@ -557,7 +559,7 @@ fun CalendarDayCell(
                         .padding(top = 1.dp)
                         .size(3.5.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF00E5FF))
+                        .background(Color(0xFF0381FE))
                 )
             }
         }
@@ -578,6 +580,7 @@ fun CalendarYearMonthPicker(
     onYearMonthPicked: (Int, Int) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
 
     val minYear = remember(minDateMillis) {
         if (minDateMillis != null) {
@@ -616,7 +619,7 @@ fun CalendarYearMonthPicker(
         // Month Selector Strip
         Text(
             text = "SELECT MONTH",
-            color = Color(0xFF64748B),
+            color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.6.sp
@@ -635,8 +638,10 @@ fun CalendarYearMonthPicker(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) Brush.linearGradient(accentGradient) else SolidColor(Color(0xFF141827)))
-                        .studioBevel(cornerRadius = 8.dp, borderWidth = 0.8.dp)
+                        .background(
+                            if (isSelected) Brush.linearGradient(accentGradient)
+                            else SolidColor(if (isDark) Color(0xFF1E2434) else Color(0xFFF1F5F9))
+                        )
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             tempMonth = monthIdx
@@ -647,7 +652,7 @@ fun CalendarYearMonthPicker(
                 ) {
                     Text(
                         text = monthNameShort,
-                        color = if (isSelected) Color.White else Color(0xFFB5C0DC),
+                        color = if (isSelected) Color.White else if (isDark) Color(0xFFB5C0DC) else Color(0xFF334155),
                         fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                     )
@@ -660,7 +665,7 @@ fun CalendarYearMonthPicker(
         // Year Selector Grid
         Text(
             text = "SELECT YEAR",
-            color = Color(0xFF64748B),
+            color = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.6.sp
@@ -681,8 +686,10 @@ fun CalendarYearMonthPicker(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) Brush.linearGradient(accentGradient) else SolidColor(Color(0xFF141827)))
-                        .studioBevel(cornerRadius = 8.dp, borderWidth = 0.8.dp)
+                        .background(
+                            if (isSelected) Brush.linearGradient(accentGradient)
+                            else SolidColor(if (isDark) Color(0xFF1E2434) else Color(0xFFF1F5F9))
+                        )
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             tempYear = yr
@@ -693,7 +700,7 @@ fun CalendarYearMonthPicker(
                 ) {
                     Text(
                         text = yr.toString(),
-                        color = if (isSelected) Color.White else Color(0xFFB5C0DC),
+                        color = if (isSelected) Color.White else if (isDark) Color(0xFFB5C0DC) else Color(0xFF334155),
                         fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                     )
@@ -722,6 +729,7 @@ fun StudioCustomCalendarDialog(
     title: String = "Select Date"
 ) {
     val haptic = LocalHapticFeedback.current
+    val isDark = com.chroma.studio.ui.theme.LocalOscellionColors.current.isDark
     var selectedEpoch by remember { mutableStateOf(initialDateMillis ?: maxDateMillis ?: System.currentTimeMillis()) }
 
     Dialog(
@@ -731,7 +739,7 @@ fun StudioCustomCalendarDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.65f))
+                .background(Color.Black.copy(alpha = 0.60f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -759,7 +767,7 @@ fun StudioCustomCalendarDialog(
 
                 Spacer(Modifier.height(10.dp))
 
-                // Bottom Action Buttons with Micro-Bevel Edge
+                // Bottom Action Buttons with Theme-Aware Styling
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -770,8 +778,8 @@ fun StudioCustomCalendarDialog(
                             .weight(1f)
                             .height(48.dp)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF141724))
-                            .studioBevel(cornerRadius = 14.dp, borderWidth = 1.dp)
+                            .background(if (isDark) Color(0xFF1F2433) else Color(0xFFF1F5F9))
+                            .border(0.8.dp, if (isDark) Color(0x1FFFFFFF) else Color(0x0F000000), RoundedCornerShape(14.dp))
                             .clickable {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onDismissRequest()
@@ -780,7 +788,7 @@ fun StudioCustomCalendarDialog(
                     ) {
                         Text(
                             text = "Cancel",
-                            color = Color(0xFFBAC7E8),
+                            color = if (isDark) Color(0xFFBAC7E8) else Color(0xFF475569),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -796,10 +804,9 @@ fun StudioCustomCalendarDialog(
                             .height(48.dp)
                             .clip(RoundedCornerShape(14.dp))
                             .background(
-                                if (canConfirm) Brush.linearGradient(StudioDesignTokens.CobaltGradient)
-                                else SolidColor(Color(0xFF1E2232))
+                                if (canConfirm) Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE)))
+                                else SolidColor(if (isDark) Color(0xFF1E2232) else Color(0xFFE2E8F0))
                             )
-                            .studioBevel(cornerRadius = 14.dp, borderWidth = 1.dp)
                             .clickable(enabled = canConfirm) {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onDateConfirmed(selectedEpoch)
@@ -813,12 +820,12 @@ fun StudioCustomCalendarDialog(
                             Icon(
                                 imageVector = Lucide.Check,
                                 contentDescription = null,
-                                tint = if (canConfirm) Color.White else Color(0xFF64748B),
+                                tint = if (canConfirm) Color.White else if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
                                 text = "Confirm Date",
-                                color = if (canConfirm) Color.White else Color(0xFF64748B),
+                                color = if (canConfirm) Color.White else if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
                             )
