@@ -68,6 +68,17 @@ class OscellionAppLockService : AccessibilityService() {
 
         val targetPackage = event.packageName?.toString() ?: return
 
+        // If user returned to home or launcher, clear shield and reset interception cache so re-launch is instant
+        if (targetPackage.contains("launcher", ignoreCase = true) ||
+            targetPackage.contains("home", ignoreCase = true) ||
+            targetPackage == "com.android.systemui") {
+            AppLockerManager.shieldPackage = null
+            lastInterceptedPackage = null
+            AppLockerManager.onForegroundPackageChanged(targetPackage)
+            hideCoverInternal()
+            return
+        }
+
         // Ignore our own package and transient system UI. These must not count as
         // "the user left the app", otherwise they revoke the unlock session.
         if (isIgnoredPackage(targetPackage)) return

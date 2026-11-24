@@ -30,6 +30,7 @@ class AppLockActivity : ComponentActivity() {
 
     private var targetPackage: String = ""
     private var targetAppName by mutableStateOf("the app")
+    private var isRedirectingToHome = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,7 +101,9 @@ class AppLockActivity : ComponentActivity() {
     }
 
     private fun redirectToHome() {
-        AppLockerManager.shieldPackage = null
+        if (isRedirectingToHome) return
+        isRedirectingToHome = true
+
         OscellionAppLockService.performHome()
         val homeIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_HOME)
@@ -109,7 +112,20 @@ class AppLockActivity : ComponentActivity() {
         try {
             startActivity(homeIntent)
         } catch (_: Exception) {}
-        finish()
+
+        window.decorView.postDelayed({
+            AppLockerManager.shieldPackage = null
+            finish()
+            overridePendingTransition(0, 0)
+        }, 300)
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+            redirectToHome()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun finish() {
