@@ -5,6 +5,7 @@ import android.widget.ImageView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,6 +41,7 @@ import com.chroma.studio.security.applock.AppLockTarget
 import com.chroma.studio.security.applock.AppLockerManager
 import com.chroma.studio.ui.components.*
 import com.chroma.studio.ui.theme.InterFontFamily
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -59,6 +61,7 @@ fun AppLockerScreen(
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val isDark = LocalOscellionColors.current.isDark
 
     var isEnabled by remember { mutableStateOf(AppLockerManager.isEnabled(context)) }
     var hasOverlayPermission by remember { mutableStateOf(AppLockerManager.hasOverlayPermission(context)) }
@@ -255,6 +258,7 @@ fun AppLockerScreen(
                 if (!isAccessibilityEnabled && AppLockerManager.isRestrictedSettingsApplicable()) {
                     item {
                         RestrictedSettingAlertCard(
+                            isDark = isDark,
                             onOpenAppInfo = {
                                 SoundManager.playReaction()
                                 AppLockerManager.openAppInfo(context)
@@ -310,15 +314,19 @@ fun AppLockerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Color.White.copy(alpha = 0.08f))
-                        .border(0.75.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                        .background(if (isDark) Color.White.copy(alpha = 0.08f) else Color.White)
+                        .border(
+                            width = 0.75.dp,
+                            color = if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .padding(horizontal = 14.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Lucide.Search,
                         contentDescription = "Search",
-                        tint = Color.White.copy(alpha = 0.60f),
+                        tint = if (isDark) Color.White.copy(alpha = 0.60f) else Color(0xFF6B7280),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(10.dp))
@@ -329,7 +337,7 @@ fun AppLockerScreen(
                             Text(
                                 "Search installed apps...",
                                 fontSize = 14.sp,
-                                color = Color.White.copy(alpha = 0.40f),
+                                color = if (isDark) Color.White.copy(alpha = 0.40f) else Color(0xFF9CA3AF),
                                 fontFamily = InterFontFamily
                             )
                         },
@@ -339,8 +347,8 @@ fun AppLockerScreen(
                             disabledContainerColor = Color.Transparent,
                             focusedIndicatorColor = Color.Transparent,
                             unfocusedIndicatorColor = Color.Transparent,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            focusedTextColor = if (isDark) Color.White else Color(0xFF111827),
+                            unfocusedTextColor = if (isDark) Color.White else Color(0xFF111827)
                         ),
                         singleLine = true,
                         modifier = Modifier.weight(1f)
@@ -353,7 +361,7 @@ fun AppLockerScreen(
                             Icon(
                                 imageVector = Lucide.X,
                                 contentDescription = "Clear search",
-                                tint = Color.White.copy(alpha = 0.70f),
+                                tint = if (isDark) Color.White.copy(alpha = 0.70f) else Color(0xFF6B7280),
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -388,7 +396,7 @@ fun AppLockerScreen(
                         Text(
                             text = if (searchQuery.isNotEmpty()) "No applications found matching '$searchQuery'" else "No launchable apps found",
                             fontSize = 14.sp,
-                            color = Color.White.copy(alpha = 0.50f),
+                            color = if (isDark) Color.White.copy(alpha = 0.50f) else Color(0xFF6B7280),
                             fontFamily = InterFontFamily
                         )
                     }
@@ -397,10 +405,10 @@ fun AppLockerScreen(
                 item {
                     Text(
                         text = "INSTALLED APPLICATIONS (${filteredApps.size})",
-                        fontSize = 11.5.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.50f),
-                        letterSpacing = 0.8.sp,
+                        color = if (isDark) Color(0xFF8E8E93) else Color(0xFF6D6D72),
+                        letterSpacing = 0.5.sp,
                         fontFamily = InterFontFamily,
                         modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
                     )
@@ -412,6 +420,7 @@ fun AppLockerScreen(
                 ) { appTarget ->
                     AppLockRowItem(
                         target = appTarget,
+                        isDark = isDark,
                         onToggle = { isChecked ->
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             SoundManager.playReaction()
@@ -447,14 +456,19 @@ fun AppLockerScreen(
 @Composable
 private fun AppLockRowItem(
     target: AppLockTarget,
+    isDark: Boolean,
     onToggle: (Boolean) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF14171F).copy(alpha = 0.65f))
-            .border(0.75.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+            .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
+            .border(
+                width = 0.5.dp,
+                color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
+                shape = RoundedCornerShape(16.dp)
+            )
             .clickable { onToggle(!target.isLocked) }
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -464,7 +478,7 @@ private fun AppLockRowItem(
             modifier = Modifier
                 .size(42.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color.White.copy(alpha = 0.05f)),
+                .background(if (isDark) Color.White.copy(alpha = 0.05f) else Color(0xFFF3F4F6)),
             contentAlignment = Alignment.Center
         ) {
             if (target.icon != null) {
@@ -481,7 +495,7 @@ private fun AppLockRowItem(
                 Icon(
                     imageVector = Lucide.AppWindow,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.70f),
+                    tint = if (isDark) Color.White.copy(alpha = 0.70f) else Color(0xFF6B7280),
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -495,7 +509,7 @@ private fun AppLockRowItem(
                 text = target.appName,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = if (isDark) Color.White else Color(0xFF111827),
                 fontFamily = InterFontFamily,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -504,7 +518,7 @@ private fun AppLockRowItem(
             Text(
                 text = target.packageName,
                 fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.45f),
+                color = if (isDark) Color(0xFF8E8E93) else Color(0xFF6B7280),
                 fontFamily = InterFontFamily,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -513,16 +527,13 @@ private fun AppLockRowItem(
 
         Spacer(Modifier.width(12.dp))
 
-        // Lock Switch
-        Switch(
+        // Sleek Spring Pill Switch
+        SpringPillSwitch(
             checked = target.isLocked,
             onCheckedChange = onToggle,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFF0381FE),
-                uncheckedThumbColor = Color(0xFF94A3B8),
-                uncheckedTrackColor = Color(0xFF1E293B)
-            )
+            colors = PillSwitchColors.Brand,
+            trackWidth = 52.dp,
+            trackHeight = 30.dp
         )
     }
 }
@@ -534,34 +545,43 @@ private fun AppLockRowItem(
  */
 @Composable
 private fun RestrictedSettingAlertCard(
+    isDark: Boolean,
     onOpenAppInfo: () -> Unit,
     onOpenAccessibility: () -> Unit,
     onCopyAdbCommand: () -> Unit
 ) {
+    var isExpanded by remember { mutableStateOf(true) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF1E1608))
-            .border(1.dp, Color(0xFFFF9F0A).copy(alpha = 0.35f), RoundedCornerShape(20.dp))
-            .padding(18.dp)
+            .background(if (isDark) Color(0xFF1E1608) else Color(0xFFFFFBEB))
+            .border(
+                width = 1.dp,
+                color = if (isDark) Color(0xFFFF9F0A).copy(alpha = 0.35f) else Color(0xFFFDE68A),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .padding(16.dp)
     ) {
         // Warning Header
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { isExpanded = !isExpanded }
         ) {
             Box(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFFF9F0A).copy(alpha = 0.16f)),
+                    .background(if (isDark) Color(0xFFFF9F0A).copy(alpha = 0.16f) else Color(0xFFFEF3C7)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Lucide.ShieldAlert,
                     contentDescription = "Restricted Setting Warning",
-                    tint = Color(0xFFFF9F0A),
+                    tint = if (isDark) Color(0xFFFF9F0A) else Color(0xFFD97706),
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -571,140 +591,159 @@ private fun RestrictedSettingAlertCard(
                     text = "Android \"Restricted Setting\" Fix",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFFFFB340),
+                    color = if (isDark) Color(0xFFFFB340) else Color(0xFF92400E),
                     fontFamily = InterFontFamily
                 )
                 Text(
                     text = "Android 13, 14 & 15 sideload security check",
                     fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.60f),
+                    color = if (isDark) Color.White.copy(alpha = 0.60f) else Color(0xFFB45309),
                     fontFamily = InterFontFamily
                 )
             }
+            Icon(
+                imageVector = if (isExpanded) Lucide.ChevronUp else Lucide.ChevronDown,
+                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                tint = if (isDark) Color(0xFFFF9F0A) else Color(0xFFD97706),
+                modifier = Modifier.size(18.dp)
+            )
         }
 
-        Spacer(Modifier.height(14.dp))
+        AnimatedVisibility(visible = isExpanded) {
+            Column {
+                Spacer(Modifier.height(14.dp))
 
-        Text(
-            text = "If Android grays out the toggle and says \"Restricted setting: For your security, this setting is currently unavailable\", unlock it in 3 steps:",
-            fontSize = 12.5.sp,
-            lineHeight = 17.sp,
-            color = Color.White.copy(alpha = 0.85f),
-            fontFamily = InterFontFamily
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        // Steps
-        RestrictedStepItem(
-            stepNumber = "1",
-            boldText = "Trigger prompt: ",
-            normalText = "Tap '2. Accessibility' below and tap ChromaStudio once so Android registers the restriction."
-        )
-        Spacer(Modifier.height(8.dp))
-        RestrictedStepItem(
-            stepNumber = "2",
-            boldText = "Allow in App Info: ",
-            normalText = "Tap '1. App Info' below, tap the three dots (⋮) in the top-right corner, and choose 'Allow restricted settings'."
-        )
-        Spacer(Modifier.height(8.dp))
-        RestrictedStepItem(
-            stepNumber = "3",
-            boldText = "Turn ON: ",
-            normalText = "Return here, tap '2. Accessibility' again, and turn the toggle ON."
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        // Action Buttons Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Button(
-                onClick = onOpenAppInfo,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFFF9F0A),
-                    contentColor = Color.Black
-                ),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(
-                    imageVector = Lucide.Settings,
-                    contentDescription = null,
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(Modifier.width(6.dp))
                 Text(
-                    text = "1. App Info (⋮)",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = InterFontFamily,
-                    maxLines = 1
+                    text = "If Android grays out the toggle and says \"Restricted setting: For your security, this setting is currently unavailable\", unlock it in 3 steps:",
+                    fontSize = 12.5.sp,
+                    lineHeight = 17.sp,
+                    color = if (isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF78350F),
+                    fontFamily = InterFontFamily
                 )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Steps
+                RestrictedStepItem(
+                    stepNumber = "1",
+                    boldText = "Trigger prompt: ",
+                    normalText = "Tap '2. Accessibility' below and tap ChromaStudio once so Android registers the restriction.",
+                    isDark = isDark
+                )
+                Spacer(Modifier.height(8.dp))
+                RestrictedStepItem(
+                    stepNumber = "2",
+                    boldText = "Allow in App Info: ",
+                    normalText = "Tap '1. App Info' below, tap the three dots (⋮) in the top-right corner, and choose 'Allow restricted settings'.",
+                    isDark = isDark
+                )
+                Spacer(Modifier.height(8.dp))
+                RestrictedStepItem(
+                    stepNumber = "3",
+                    boldText = "Turn ON: ",
+                    normalText = "Return here, tap '2. Accessibility' again, and turn the toggle ON.",
+                    isDark = isDark
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                // Action Buttons Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = onOpenAppInfo,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDark) Color(0xFFFF9F0A) else Color(0xFFF59E0B),
+                            contentColor = if (isDark) Color.Black else Color.White
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Settings,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "1. App Info (⋮)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1
+                        )
+                    }
+
+                    Button(
+                        onClick = onOpenAccessibility,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFFEF3C7),
+                            contentColor = if (isDark) Color.White else Color(0xFF92400E)
+                        ),
+                        border = if (!isDark) BorderStroke(1.dp, Color(0xFFFDE68A)) else null,
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Zap,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp),
+                            tint = if (isDark) Color(0xFFFF9F0A) else Color(0xFFD97706)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "2. Accessibility",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                // ADB Bypass button for developers
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isDark) Color.Black.copy(alpha = 0.35f) else Color(0xFFFEF3C7))
+                        .border(
+                            width = 0.5.dp,
+                            color = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFFDE68A),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .clickable { onCopyAdbCommand() }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Lucide.Terminal,
+                        contentDescription = null,
+                        tint = if (isDark) Color.White.copy(alpha = 0.50f) else Color(0xFF92400E),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Developer ADB bypass command",
+                        fontSize = 11.5.sp,
+                        color = if (isDark) Color.White.copy(alpha = 0.65f) else Color(0xFF92400E),
+                        fontFamily = InterFontFamily,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = Lucide.Copy,
+                        contentDescription = "Copy command",
+                        tint = if (isDark) Color.White.copy(alpha = 0.50f) else Color(0xFF92400E),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
-
-            Button(
-                onClick = onOpenAccessibility,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.12f),
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(
-                    imageVector = Lucide.Zap,
-                    contentDescription = null,
-                    modifier = Modifier.size(15.dp),
-                    tint = Color(0xFFFF9F0A)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "2. Accessibility",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = InterFontFamily,
-                    maxLines = 1
-                )
-            }
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        // ADB Bypass button for developers
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color.Black.copy(alpha = 0.35f))
-                .clickable { onCopyAdbCommand() }
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Lucide.Terminal,
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.50f),
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "Developer ADB bypass command",
-                fontSize = 11.5.sp,
-                color = Color.White.copy(alpha = 0.65f),
-                fontFamily = InterFontFamily,
-                modifier = Modifier.weight(1f)
-            )
-            Icon(
-                imageVector = Lucide.Copy,
-                contentDescription = "Copy",
-                tint = Color(0xFFFF9F0A),
-                modifier = Modifier.size(14.dp)
-            )
         }
     }
 }
@@ -713,7 +752,8 @@ private fun RestrictedSettingAlertCard(
 private fun RestrictedStepItem(
     stepNumber: String,
     boldText: String,
-    normalText: String
+    normalText: String,
+    isDark: Boolean
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -721,33 +761,31 @@ private fun RestrictedStepItem(
     ) {
         Box(
             modifier = Modifier
-                .size(18.dp)
+                .size(20.dp)
                 .clip(CircleShape)
-                .background(Color(0xFFFF9F0A).copy(alpha = 0.22f)),
+                .background(if (isDark) Color(0xFFFF9F0A) else Color(0xFFF59E0B)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = stepNumber,
-                fontSize = 10.5.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFFFF9F0A),
+                color = if (isDark) Color.Black else Color.White,
                 fontFamily = InterFontFamily
             )
         }
         Spacer(Modifier.width(10.dp))
         Text(
             text = buildAnnotatedString {
+                pushStyle(SpanStyle(fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFFFB340) else Color(0xFF92400E)))
                 append(boldText)
-                addStyle(
-                    SpanStyle(fontWeight = FontWeight.Bold, color = Color.White),
-                    0,
-                    boldText.length
-                )
+                pop()
+                pushStyle(SpanStyle(fontWeight = FontWeight.Normal, color = if (isDark) Color.White.copy(alpha = 0.80f) else Color(0xFF78350F)))
                 append(normalText)
+                pop()
             },
             fontSize = 12.sp,
             lineHeight = 16.sp,
-            color = Color.White.copy(alpha = 0.75f),
             fontFamily = InterFontFamily,
             modifier = Modifier.weight(1f)
         )

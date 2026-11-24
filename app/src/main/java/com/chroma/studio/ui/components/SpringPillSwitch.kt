@@ -948,17 +948,8 @@ private fun ToggleShowcaseContent(
             onConfigChanged = onConfigChanged
         )
 
-        // 04: Live Oscilloscope Telemetry Panel
-        OneUiSettingsGroup(title = "04 — Live Oscilloscope & Telemetry") {
-            OscilloscopeTelemetrySection(
-                config = config,
-                activeToggle = activeToggle,
-                history = history
-            )
-        }
-
-        // Physics Controls: Presets + 4 Sliders
-        OneUiSettingsGroup(title = "Physics Controls & Presets") {
+        // 01: Physics Controls: Presets + 4 Sliders
+        OneUiSettingsGroup(title = "01 — Physics Controls & Presets") {
             // Presets row
             Row(
                 modifier = Modifier
@@ -1067,6 +1058,45 @@ private fun ToggleShowcaseContent(
             )
         }
 
+        // 02: Live Oscilloscope Telemetry Panel
+        OneUiSettingsGroup(title = "02 — Live Oscilloscope & Telemetry") {
+            OscilloscopeTelemetrySection(
+                config = config,
+                activeToggle = activeToggle,
+                history = history
+            )
+        }
+
+        // 03: Cobalt Accent Variant
+        OneUiSettingsGroup(title = "03 — Cobalt Accent Variant (#0381FE)") {
+            ReferenceGroupedToggleRows(
+                topTitle = "Kinetic Haptic Impulse",
+                topSubtitle = "Subtle mechanical impulse on flick",
+                bottomTitle = "Elastic Overshoot Spring",
+                bottomSubtitle = "Toggle snaps past boundary and rebounds",
+                topState = swIndigo1,
+                bottomState = swIndigo2,
+                colors = PillSwitchColors.Indigo,
+                config = config,
+                onActivate = onActiveToggleChanged
+            )
+        }
+
+        // 04: System Green Variant
+        OneUiSettingsGroup(title = "04 — System Green Variant (#34D158)") {
+            ReferenceGroupedToggleRows(
+                topTitle = "Instant Notifications",
+                topSubtitle = "Real-time delivery with kinetic bounce",
+                bottomTitle = "Background App Sync",
+                bottomSubtitle = "Dynamic synchronization when idle",
+                topState = swGreen1,
+                bottomState = swGreen2,
+                colors = PillSwitchColors.SystemGreen,
+                config = config,
+                onActivate = onActiveToggleChanged
+            )
+        }
+
         // 05: In-App Brand Settings Switch
         OneUiSettingsGroup(title = "05 — In-App Brand Settings Switch") {
             Row(
@@ -1168,30 +1198,8 @@ private fun ToggleShowcaseContent(
             }
         }
 
-        // 01: Cobalt Accent Variant
-        OneUiSettingsGroup(title = "01 — Cobalt Accent Variant (#0381FE)") {
-            ReferenceGroupedToggleRows(
-                topState = swIndigo1,
-                bottomState = swIndigo2,
-                colors = PillSwitchColors.Indigo,
-                config = config,
-                onActivate = onActiveToggleChanged
-            )
-        }
-
-        // 02: System Green Variant
-        OneUiSettingsGroup(title = "02 — System Green Variant (#2AD158)") {
-            ReferenceGroupedToggleRows(
-                topState = swGreen1,
-                bottomState = swGreen2,
-                colors = PillSwitchColors.SystemGreen,
-                config = config,
-                onActivate = onActiveToggleChanged
-            )
-        }
-
-        // 03: HIG Anatomy & I/O Labels Spec
-        OneUiSettingsGroup(title = "03 — HIG Anatomy & I/O Labels Spec") {
+        // 06: Apple HIG Accessibility Spec
+        OneUiSettingsGroup(title = "06 — Apple HIG Accessibility Spec") {
             HigCoralSpecCard(
                 topState = swSpec1,
                 bottomState = swSpec2,
@@ -1599,6 +1607,10 @@ private fun TelemetryValueChip(
 
 @Composable
 private fun ReferenceGroupedToggleRows(
+    topTitle: String,
+    topSubtitle: String,
+    bottomTitle: String,
+    bottomSubtitle: String,
     topState: SpringToggleState,
     bottomState: SpringToggleState,
     colors: PillSwitchColors,
@@ -1606,8 +1618,8 @@ private fun ReferenceGroupedToggleRows(
     onActivate: (SpringToggleState) -> Unit
 ) {
     GroupedToggleRow(
-        title = "Title",
-        subtitle = "Tap to toggle with momentum",
+        title = topTitle,
+        subtitle = topSubtitle,
         state = topState,
         colors = colors,
         config = config,
@@ -1617,8 +1629,8 @@ private fun ReferenceGroupedToggleRows(
     OneUiSettingsDivider()
 
     GroupedToggleRow(
-        title = "Title",
-        subtitle = "Physics impulse enabled",
+        title = bottomTitle,
+        subtitle = bottomSubtitle,
         state = bottomState,
         colors = colors,
         config = config,
@@ -1647,18 +1659,20 @@ private fun GroupedToggleRow(
                 state.toggle(withImpulse = true)
                 SoundManager.playReaction()
             }
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 13.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
             Text(
                 text = title,
                 color = themeColors.textMain,
-                fontSize = 19.sp,
+                fontSize = 15.5.sp,
                 fontWeight = FontWeight.SemiBold,
-                fontFamily = InterFontFamily,
-                letterSpacing = (-0.3).sp
+                fontFamily = InterFontFamily
             )
             Text(
                 text = subtitle,
@@ -1668,12 +1682,14 @@ private fun GroupedToggleRow(
             )
         }
 
+        Spacer(Modifier.width(12.dp))
+
         SpringPillSwitch(
             state = state,
             colors = colors,
             config = config,
-            trackWidth = 84.dp,
-            trackHeight = 42.dp,
+            trackWidth = 68.dp,
+            trackHeight = 34.dp,
             onActivate = onActivate
         )
     }
@@ -1686,54 +1702,51 @@ fun HigCoralSpecCard(
     config: SpringPhysicsConfig,
     onActivate: (SpringToggleState) -> Unit
 ) {
-    val coralGradient = Brush.linearGradient(
-        colors = listOf(
-            Color(0xFFFF7A45),
-            Color(0xFFFA665E),
-            Color(0xFFF25A7B)
-        ),
-        start = Offset(0f, 0f),
-        end = Offset(1000f, 650f)
-    )
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(brush = coralGradient)
-            .padding(horizontal = 20.dp, vertical = 22.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
+            .border(
+                width = 0.5.dp,
+                color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .padding(vertical = 4.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            SpecToggleRow(
-                label = "Label",
-                state = topState,
-                config = config,
-                showDimensionCallouts = true,
-                onActivate = onActivate
-            )
+        SpecToggleRow(
+            title = "I/O Glyph Indicators",
+            subtitle = "Draws internal I and O symbols inside track",
+            state = topState,
+            config = config,
+            onActivate = onActivate
+        )
 
-            SpecToggleRow(
-                label = "Label",
-                state = bottomState,
-                config = config,
-                showDimensionCallouts = false,
-                onActivate = onActivate
-            )
-        }
+        OneUiSettingsDivider()
+
+        SpecToggleRow(
+            title = "High-Contrast Track",
+            subtitle = "Enhanced visual boundaries for accessibility",
+            state = bottomState,
+            config = config,
+            onActivate = onActivate
+        )
     }
 }
 
 @Composable
 private fun SpecToggleRow(
-    label: String,
+    title: String,
+    subtitle: String,
     state: SpringToggleState,
     config: SpringPhysicsConfig,
-    showDimensionCallouts: Boolean,
     onActivate: (SpringToggleState) -> Unit
 ) {
+    val colors = LocalOscellionColors.current
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1745,81 +1758,39 @@ private fun SpecToggleRow(
                 state.toggle(withImpulse = true)
                 SoundManager.playReaction()
             }
-            .padding(end = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 13.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier.width(140.dp),
-            contentAlignment = Alignment.BottomStart
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
-                text = label,
-                color = Color(0xFF6B1515),
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = (-0.4).sp,
-                fontFamily = InterFontFamily,
-                modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
+                text = title,
+                color = colors.textMain,
+                fontSize = 15.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = InterFontFamily
             )
-
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp)
-            ) {
-                drawLine(
-                    color = Color(0xFF8A1E1E).copy(alpha = 0.55f),
-                    start = Offset(0f, 0f),
-                    end = Offset(size.width, 0f),
-                    strokeWidth = 2.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
-                )
-            }
-        }
-
-        Box(contentAlignment = Alignment.Center) {
-            if (showDimensionCallouts) {
-                Canvas(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .offset(y = (-14).dp)
-                        .width(84.dp)
-                        .height(10.dp)
-                ) {
-                    val stroke = 1.5.dp.toPx()
-                    val color = Color(0xFF8A1E1E)
-                    val midY = size.height / 2f
-                    drawLine(color, Offset(0f, 0f), Offset(0f, size.height), stroke)
-                    drawLine(color, Offset(0f, midY), Offset(size.width, midY), stroke)
-                    drawLine(color, Offset(size.width, 0f), Offset(size.width, size.height), stroke)
-                }
-
-                Canvas(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .offset(x = 16.dp)
-                        .width(10.dp)
-                        .height(42.dp)
-                ) {
-                    val stroke = 1.5.dp.toPx()
-                    val color = Color(0xFF8A1E1E)
-                    val midX = size.width / 2f
-                    drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), stroke)
-                    drawLine(color, Offset(midX, 0f), Offset(midX, size.height), stroke)
-                    drawLine(color, Offset(0f, size.height), Offset(size.width, size.height), stroke)
-                }
-            }
-
-            SpringPillSwitch(
-                state = state,
-                colors = PillSwitchColors.HigSpecCoral,
-                config = config,
-                trackWidth = 84.dp,
-                trackHeight = 42.dp,
-                showIoLabels = true,
-                onActivate = onActivate
+            Text(
+                text = subtitle,
+                color = colors.textMuted,
+                fontSize = 12.sp,
+                fontFamily = InterFontFamily
             )
         }
+
+        Spacer(Modifier.width(12.dp))
+
+        SpringPillSwitch(
+            state = state,
+            colors = PillSwitchColors.HigSpecCoral,
+            config = config,
+            trackWidth = 68.dp,
+            trackHeight = 34.dp,
+            showIoLabels = true,
+            onActivate = onActivate
+        )
     }
 }
