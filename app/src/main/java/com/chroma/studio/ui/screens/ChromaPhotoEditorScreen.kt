@@ -37,14 +37,19 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateRotation
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -1144,6 +1149,21 @@ fun ChromaPhotoEditorScreen(
     var isExporting by remember { mutableStateOf(false) }
     var isExportCompleted by remember { mutableStateOf(false) }
 
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.addClip(MediaType.IMAGE, "Image", 2, Color(0xFF064E3B), uri.toString())
+        }
+    }
+    val stickerPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.addClip(MediaType.STICKER, "Sticker", 5, Color(0xFFB45309), uri.toString())
+        }
+    }
+
     val selectedClip = state.clips.find { it.id == state.selectedClipId } ?: state.clips.firstOrNull()
 
     // Open text tool automatically when a newly created text clip is selected
@@ -1255,15 +1275,28 @@ fun ChromaPhotoEditorScreen(
         )
     }
 
-    // Exact same light-theme overrides as ChromaVideoEditorScreen
-    val editorColors = colors.copy(
-        bg = Color(0xFFF4F5F8),
-        glassBg = Color(0xFFFFFFFF),
-        textMain = Color(0xFF1C1C1E),
-        textMuted = Color(0xFF8E8E93),
-        primary = Color(0xFF3B82F6),
-        glassBorder = Color(0xFFE5E7EB)
-    )
+    val isDark = colors.isDark
+    val editorColors = if (isDark) {
+        colors.copy(
+            bg = Color(0xFF000000),
+            cardSurface = Color(0xFF161820),
+            glassBg = Color(0xFF14161E),
+            textMain = Color(0xFFFFFFFF),
+            textMuted = Color(0xFF8E8E93),
+            primary = Color(0xFF0381FE),
+            glassBorder = Color(0xFF262A34)
+        )
+    } else {
+        colors.copy(
+            bg = Color(0xFFF4F5F8),
+            cardSurface = Color(0xFFFFFFFF),
+            glassBg = Color(0xFFFFFFFF),
+            textMain = Color(0xFF1C1C1E),
+            textMuted = Color(0xFF8E8E93),
+            primary = Color(0xFF0381FE),
+            glassBorder = Color(0xFFE5E7EB)
+        )
+    }
 
     CompositionLocalProvider(
         LocalHazeState provides hazeState,
@@ -1275,8 +1308,8 @@ fun ChromaPhotoEditorScreen(
                 .background(editorColors.bg)
         ) {
             // ── Top Action Bar (Clean One UI action-only editor bar — no title/logo clutter) ──
-            val topBtnBg = if (editorColors.isDark) Color(0xFF1E222A) else Color(0xFFF3F4F6)
-            val topBorder = if (editorColors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
+            val topBtnBg = if (isDark) Color(0xFF1E222A) else Color(0xFFFFFFFF)
+            val topBorder = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1451,8 +1484,8 @@ fun ChromaPhotoEditorScreen(
             }
 
             // ── Quick Aspect Ratio Selection Chips (One-tap switch) ──
-            val chipsBg = if (editorColors.isDark) Color(0xFF14161E) else Color.White
-            val chipsBorder = if (editorColors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
+            val chipsBg = if (isDark) Color(0xFF000000) else Color(0xFFF4F5F8)
+            val chipsBorder = if (isDark) Color.White.copy(alpha = 0.06f) else Color.Transparent
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1466,8 +1499,8 @@ fun ChromaPhotoEditorScreen(
             ) {
                 PhotoCropRatio.values().forEach { ratio ->
                     val selected = state.cropRatio == ratio
-                    val pillBg = if (selected) Color(0xFF0381FE) else (if (editorColors.isDark) Color(0xFF262A34) else Color(0xFFF3F4F6))
-                    val pillText = if (selected) Color.White else (if (editorColors.isDark) Color.White.copy(alpha = 0.75f) else Color(0xFF4B5563))
+                    val pillBg = if (selected) Color(0xFF0381FE) else (if (isDark) Color(0xFF1C1C1E) else Color.White)
+                    val pillText = if (selected) Color.White else (if (isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF1C1C1E))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
@@ -1515,6 +1548,9 @@ fun ChromaPhotoEditorScreen(
                         onTransformChange = { clipId, transform ->
                             viewModel.updateClipTransform(clipId, transform)
                         },
+                        onSelectClip = { clipId ->
+                            viewModel.selectClip(clipId)
+                        },
                         onDragStart = { viewModel.startDrag() },
                         onDragEnd = { viewModel.endDrag() },
                         onAddBrushStroke = { viewModel.addBrushStroke(it) },
@@ -1529,58 +1565,16 @@ fun ChromaPhotoEditorScreen(
                     )
                 }
 
-                // Left / Right Floating Chevrons for multi-photo navigation
+                // Floating Multi-Photo Thumbnail Strip Dock at bottom of preview area
                 if (effectiveUris.size > 1) {
-                    if (activeIndex > 0) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(start = 4.dp)
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.55f))
-                                .border(0.5.dp, Color.White.copy(alpha = 0.25f), CircleShape)
-                                .clickable { switchPhoto(activeIndex - 1) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Lucide.ChevronLeft,
-                                contentDescription = "Previous Photo",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                    if (activeIndex < effectiveUris.size - 1) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 4.dp)
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.55f))
-                                .border(0.5.dp, Color.White.copy(alpha = 0.25f), CircleShape)
-                                .clickable { switchPhoto(activeIndex + 1) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Lucide.ChevronRight,
-                                contentDescription = "Next Photo",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-
-                    // Floating Multi-Photo Thumbnail Strip Dock at bottom of preview area
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = Color(0xE61C1C1E),
-                        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.2f)),
+                        color = if (isDark) Color(0xD91C1C1E) else Color(0xF2FFFFFF),
+                        border = BorderStroke(0.5.dp, if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFE5E7EB)),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 6.dp)
-                            .shadow(12.dp, RoundedCornerShape(20.dp))
+                            .padding(bottom = 8.dp)
+                            .shadow(8.dp, RoundedCornerShape(20.dp), spotColor = Color.Black.copy(alpha = 0.2f))
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
@@ -1591,12 +1585,12 @@ fun ChromaPhotoEditorScreen(
                                 val isSelected = idx == activeIndex
                                 Box(
                                     modifier = Modifier
-                                        .size(if (isSelected) 42.dp else 32.dp)
-                                        .clip(RoundedCornerShape(8.dp))
+                                        .size(if (isSelected) 44.dp else 34.dp)
+                                        .clip(RoundedCornerShape(10.dp))
                                         .border(
                                             width = if (isSelected) 2.dp else 0.5.dp,
-                                            color = if (isSelected) Color(0xFF0381FE) else Color.White.copy(alpha = 0.3f),
-                                            shape = RoundedCornerShape(8.dp)
+                                            color = if (isSelected) Color(0xFF0381FE) else (if (isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFE5E7EB)),
+                                            shape = RoundedCornerShape(10.dp)
                                         )
                                         .clickable { switchPhoto(idx) },
                                     contentAlignment = Alignment.Center
@@ -1607,22 +1601,23 @@ fun ChromaPhotoEditorScreen(
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .alpha(if (isSelected) 1f else 0.6f)
+                                            .alpha(if (isSelected) 1f else 0.65f)
                                     )
                                     Box(
                                         modifier = Modifier
                                             .align(Alignment.TopStart)
-                                            .padding(2.dp)
-                                            .size(12.dp)
+                                            .padding(3.dp)
+                                            .size(16.dp)
                                             .clip(CircleShape)
-                                            .background(if (isSelected) Color(0xFF0381FE) else Color.Black.copy(alpha = 0.65f)),
+                                            .background(if (isSelected) Color(0xFF0381FE) else Color(0x99000000)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             text = "${idx + 1}",
-                                            fontSize = 8.sp,
+                                            fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color.White
+                                            color = Color.White,
+                                            textAlign = TextAlign.Center
                                         )
                                     }
                                 }
@@ -1665,6 +1660,14 @@ fun ChromaPhotoEditorScreen(
                 viewModel.addClip(type, name, track, color, uri)
                 showAddSheet = false
             },
+            onPickImage = {
+                showAddSheet = false
+                photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            onPickSticker = {
+                showAddSheet = false
+                stickerPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
             onOpenMarkup = {
                 showAddSheet = false
                 activeToolSheet = PhotoEditorTool.MARKUP
@@ -1697,7 +1700,29 @@ fun ChromaPhotoEditorScreen(
                 trackVisibility = state.trackVisibility,
                 trackLock = state.trackLock,
                 onToggleVisibility = { viewModel.toggleTrackVisibility(it) },
-                onToggleLock = { viewModel.toggleTrackLock(it) }
+                onToggleLock = { viewModel.toggleTrackLock(it) },
+                onSelectTrack = { trackId ->
+                    val clip = state.clips.find { it.trackId == trackId }
+                    if (clip != null) {
+                        viewModel.selectClip(clip.id)
+                    }
+                    showLayersSheet = false
+                },
+                onAddTrack = { trackId ->
+                    showLayersSheet = false
+                    when (trackId) {
+                        2 -> photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        3 -> {
+                            viewModel.addClip(MediaType.TEXT, "Text", 3, Color(0xFF701A75), null)
+                            viewModel.setText("Tap to edit")
+                            viewModel.setTextColor(Color.White)
+                            viewModel.setTextSize(36f)
+                            activeToolSheet = PhotoEditorTool.TEXT
+                        }
+                        4 -> activeToolSheet = PhotoEditorTool.MARKUP
+                        5 -> stickerPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
+                }
             )
         }
     }
@@ -1741,12 +1766,34 @@ fun ChromaPhotoEditorScreen(
 // PHOTO PREVIEW AREA (Matches VideoPreviewArea with Unified Gestures & Zoom Slider)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+private fun findClipAtPosition(
+    tapPos: Offset,
+    clips: List<Clip>,
+    stageWidthPx: Float,
+    stageHeightPx: Float,
+    density: androidx.compose.ui.unit.Density
+): Clip? {
+    val overlays = clips.filter { it.trackId != 1 }.reversed()
+    for (clip in overlays) {
+        val ct = clip.transform
+        val cx = stageWidthPx / 2f + (ct.x * density.density)
+        val cy = stageHeightPx / 2f + (ct.y * density.density)
+        val halfW = (120f * density.density * ct.scale).coerceAtLeast(36f * density.density)
+        val halfH = (120f * density.density * ct.scale).coerceAtLeast(36f * density.density)
+        if (kotlin.math.abs(tapPos.x - cx) <= halfW && kotlin.math.abs(tapPos.y - cy) <= halfH) {
+            return clip
+        }
+    }
+    return null
+}
+
 @Composable
 private fun PhotoPreviewArea(
     modifier: Modifier,
     state: PhotoProjectState,
     selectedClip: Clip?,
     onTransformChange: (String, TransformState) -> Unit,
+    onSelectClip: (String?) -> Unit,
     onDragStart: () -> Unit,
     onDragEnd: () -> Unit,
     onAddBrushStroke: (List<Offset>) -> Unit,
@@ -1772,17 +1819,6 @@ private fun PhotoPreviewArea(
 
     var showSnapGuideX by remember { mutableStateOf(false) }
     var showSnapGuideY by remember { mutableStateOf(false) }
-
-    var showZoomCropSlider by remember { mutableStateOf(false) }
-    var zoomSliderHideJob by remember { mutableStateOf<Job?>(null) }
-    val keepZoomSliderAlive: () -> Unit = {
-        showZoomCropSlider = true
-        zoomSliderHideJob?.cancel()
-        zoomSliderHideJob = scope.launch {
-            delay(2000L)
-            showZoomCropSlider = false
-        }
-    }
 
     var currentStrokePoints by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var lastTapTimestamp by remember { mutableLongStateOf(0L) }
@@ -1945,6 +1981,7 @@ private fun PhotoPreviewArea(
                                 }
                             } else Modifier
 
+                            val isOverlaySelected = clip.trackId != 1 && clip.id == activeTargetClip?.id
                             AsyncImage(
                                 model = clip.uri,
                                 contentDescription = clip.name,
@@ -1953,7 +1990,13 @@ private fun PhotoPreviewArea(
                                 modifier = Modifier
                                     .then(
                                         if (clip.trackId == 1) Modifier.fillMaxSize()
-                                        else Modifier.widthIn(max = 220.dp)
+                                        else Modifier
+                                            .widthIn(max = 240.dp)
+                                            .border(
+                                                width = if (isOverlaySelected) 1.5.dp else 0.dp,
+                                                color = if (isOverlaySelected) Color(0xFF0381FE) else Color.Transparent,
+                                                shape = RoundedCornerShape(4.dp)
+                                            )
                                     )
                                     .then(blurModifier)
                                     .offset(x = ct.x.dp, y = ct.y.dp)
@@ -1995,9 +2038,20 @@ private fun PhotoPreviewArea(
                     }
 
                     MediaType.TEXT -> {
+                        val isTextSelected = clip.id == activeTargetClip?.id
                         Box(
                             modifier = Modifier
                                 .offset(x = ct.x.dp, y = ct.y.dp)
+                                .then(
+                                    if (isTextSelected) Modifier
+                                        .border(
+                                            width = 1.5.dp,
+                                            color = Color(0xFF0381FE),
+                                            shape = RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(4.dp)
+                                    else Modifier
+                                )
                                 .graphicsLayer(
                                     scaleX = ct.scale * flipH,
                                     scaleY = ct.scale * flipV,
@@ -2195,135 +2249,15 @@ private fun PhotoPreviewArea(
             }
         }
 
-        // Top HUD (Matches VideoPreviewArea Top HUD + Studio Toggles)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .editorChromeFadeOnScrub()
-                .padding(12.dp)
-                .zIndex(30f),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (state.showHistogramHud) Color(0xFF0381FE).copy(alpha = 0.75f) else Color.Black.copy(alpha = 0.4f))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                    .clickable { onToggleHistogram() }
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                val filterLabel = mainClip?.filter?.takeIf { it != FilterType.NONE }?.label
-                Text(
-                    text = buildString {
-                        append("${state.exportSettings.resolution}p • ${state.projectRatio.label}")
-                        if (filterLabel != null) append(" • $filterLabel")
-                        if (state.isComparingOriginal) append(" • ORIGINAL")
-                    },
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                // Magic Auto-Enhance
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.4f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        .clickable { onAutoEnhance() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Lucide.Sparkles, contentDescription = "Auto Enhance", tint = Color.White, modifier = Modifier.size(14.dp))
-                }
-
-                // Split Compare Wipe
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (state.isSplitCompareMode) Color(0xFF0381FE) else Color.Black.copy(alpha = 0.4f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        .clickable { onToggleSplitCompare() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Lucide.Columns2, contentDescription = "Split Compare", tint = Color.White, modifier = Modifier.size(14.dp))
-                }
-
-                // Rule of Thirds Grid
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (state.showGridOverlay) Color(0xFF0381FE) else Color.Black.copy(alpha = 0.4f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        .clickable { onToggleGrid() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Lucide.Grid3x3, contentDescription = "Grid", tint = Color.White, modifier = Modifier.size(14.dp))
-                }
-
-                // Compare Original
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (state.isComparingOriginal) Color(0xFF0381FE) else Color.Black.copy(alpha = 0.4f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        .clickable { onToggleOriginal() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Lucide.Eye, contentDescription = "Original", tint = Color.White, modifier = Modifier.size(14.dp))
-                }
-
-                // Zoom Slider Toggle
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.4f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        .clickable {
-                            if (showZoomCropSlider) showZoomCropSlider = false
-                            else keepZoomSliderAlive()
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Lucide.Maximize, contentDescription = "Zoom & Crop", tint = Color.White, modifier = Modifier.size(14.dp))
-                }
-            }
-        }
-
-        // Live Glassmorphic RGB Parade / Luminance Histogram HUD (Toggled by tapping top-left badge)
-        AnimatedVisibility(
-            visible = state.showHistogramHud,
-            enter = fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.9f),
-            exit = fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.9f),
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .editorChromeFadeOnScrub()
-                .padding(12.dp)
-                .zIndex(32f)
-        ) {
-            LiveRgbHistogramCard(
-                clip = mainClip,
-                state = state
-            )
-        }
-
         // ══════════════════════════════════════════════════════════
-        // UNIFIED TOUCH GESTURE OVERLAY (Identical to ChromaVideoEditorScreen)
+        // UNIFIED TOUCH GESTURE OVERLAY (Smooth Pan & Zoom for All Layers)
         // ══════════════════════════════════════════════════════════
         if (state.clips.isNotEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(20f)
-                    .pointerInput(state.isDrawingMode, state.isSplitCompareMode, activeTargetClip?.id) {
+                    .pointerInput(state.isDrawingMode, state.isSplitCompareMode, activeTargetClip?.id, state.clips) {
                         if (state.isDrawingMode) {
                             detectDragGestures(
                                 onDragStart = { start -> currentStrokePoints = listOf(start) },
@@ -2340,102 +2274,134 @@ private fun PhotoPreviewArea(
                         } else {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
+                                onDragStart()
+                                val stageH = size.height.toFloat()
+                                val stageW = size.width.toFloat()
+                                val hitClip = findClipAtPosition(
+                                    tapPos = down.position,
+                                    clips = state.clips,
+                                    stageWidthPx = stageW,
+                                    stageHeightPx = stageH,
+                                    density = density
+                                )
+                                val target = hitClip ?: activeTargetClip
+
+                                val isDraggingSplitHandle = state.isSplitCompareMode &&
+                                        abs(down.position.x - stageW * state.splitCompareFraction) < 36.dp.toPx()
+
                                 var pan = Offset.Zero
                                 var pastTouchSlop = false
                                 val touchSlop = viewConfiguration.touchSlop
                                 var isMultiTouch = false
-                                var canDragTarget = false
                                 var gestureConsumed = false
-                                var event: PointerEvent
-
-                                val isDraggingSplitHandle = state.isSplitCompareMode &&
-                                        abs(down.position.x - stageWidthPx * state.splitCompareFraction) < 36.dp.toPx()
-
-                                onDragStart()
 
                                 do {
-                                    event = awaitPointerEvent()
-                                    val canceled = event.changes.any { it.isConsumed }
-                                    if (canceled) break
+                                    val event = awaitPointerEvent()
+                                    val pressedPointers = event.changes.filter { it.pressed }
+                                    val pointerCount = pressedPointers.size
+                                    if (pointerCount == 0) break
 
-                                    val pointerCount = event.changes.count { it.pressed }
                                     if (pointerCount >= 2) {
                                         isMultiTouch = true
                                         pastTouchSlop = true
-                                        keepZoomSliderAlive()
-                                    }
 
-                                    val zoomChange = event.calculateZoom()
-                                    val panChange = event.calculatePan()
+                                        val zoomChange = event.calculateZoom()
+                                        val panChange = event.calculatePan()
+                                        val rotationChange = event.calculateRotation()
 
-                                    if (isDraggingSplitHandle && pointerCount == 1) {
-                                        val posX = event.changes.firstOrNull()?.position?.x ?: (stageWidthPx * state.splitCompareFraction)
-                                        onSplitFractionChange(posX / stageWidthPx.coerceAtLeast(1f))
-                                        gestureConsumed = true
-                                        event.changes.forEach { it.consume() }
-                                    } else if (pointerCount >= 2) {
-                                        keepZoomSliderAlive()
-                                        val target = activeTargetClip
-                                        if (target != null) {
-                                            val curT = target.transform
-                                            val newScale = (curT.scale * zoomChange).coerceIn(0.5f, 5.0f)
+                                        val curTarget = target
+                                        if (curTarget != null) {
+                                            val curT = curTarget.transform
+                                            val minScale = if (curTarget.trackId == 1) 0.5f else 0.2f
+                                            val maxScale = 8.0f
+                                            val newScale = (curT.scale * zoomChange).coerceIn(minScale, maxScale)
                                             val dxDp = panChange.x / density.density
                                             val dyDp = panChange.y / density.density
-                                            val maxPanX = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
-                                            val maxPanY = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
-                                            val newPanX = if (newScale <= 1.02f && target.trackId == 1) 0f else (curT.x + dxDp).coerceIn(-maxPanX, maxPanX)
-                                            val newPanY = if (newScale <= 1.02f && target.trackId == 1) 0f else (curT.y + dyDp).coerceIn(-maxPanY, maxPanY)
+
+                                            val newPanX: Float
+                                            val newPanY: Float
+                                            if (curTarget.trackId == 1) {
+                                                val maxPanX = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                                val maxPanY = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                                newPanX = if (newScale <= 1.02f) 0f else (curT.x + dxDp).coerceIn(-maxPanX, maxPanX)
+                                                newPanY = if (newScale <= 1.02f) 0f else (curT.y + dyDp).coerceIn(-maxPanY, maxPanY)
+                                            } else {
+                                                newPanX = curT.x + dxDp
+                                                newPanY = curT.y + dyDp
+                                            }
+
+                                            val newRotation = if (curTarget.trackId != 1) {
+                                                (curT.rotation + rotationChange) % 360f
+                                            } else curT.rotation
 
                                             onTransformChange(
-                                                target.id,
-                                                curT.copy(scale = newScale, x = newPanX, y = newPanY)
+                                                curTarget.id,
+                                                curT.copy(
+                                                    scale = newScale,
+                                                    x = newPanX,
+                                                    y = newPanY,
+                                                    rotation = newRotation
+                                                )
                                             )
                                             gestureConsumed = true
                                         }
+
                                         event.changes.forEach {
                                             if (it.positionChange() != Offset.Zero) it.consume()
                                         }
                                     } else if (pointerCount == 1) {
-                                        val target = activeTargetClip
-                                        canDragTarget = (target?.transform?.scale ?: 1f) > 1.02f || (target?.trackId ?: 1) != 1
-                                        val canDrag = canDragTarget
-
+                                        val panChange = event.calculatePan()
                                         pan += panChange
-                                        if (!pastTouchSlop && pan.getDistance() > touchSlop) {
-                                            pastTouchSlop = true
-                                        }
 
-                                        if (pastTouchSlop && canDrag && target != null) {
-                                            if (target.trackId == 1) keepZoomSliderAlive()
-                                            val curT = target.transform
-                                            val dxDp = panChange.x / density.density
-                                            val dyDp = panChange.y / density.density
-                                            val maxPanX = max(100f, (curT.scale - 0.7f).coerceAtLeast(0f) * 200f)
-                                            val maxPanY = max(100f, (curT.scale - 0.7f).coerceAtLeast(0f) * 200f)
-                                            var newPanX = (curT.x + dxDp).coerceIn(-maxPanX, maxPanX)
-                                            var newPanY = (curT.y + dyDp).coerceIn(-maxPanY, maxPanY)
-
-                                            // Magnetic center snap with haptic feedback
-                                            val snapNearX = abs(newPanX) < 4.5f
-                                            val snapNearY = abs(newPanY) < 4.5f
-                                            if (snapNearX && !showSnapGuideX) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            }
-                                            if (snapNearY && !showSnapGuideY) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            }
-                                            showSnapGuideX = snapNearX
-                                            showSnapGuideY = snapNearY
-                                            if (snapNearX) newPanX = 0f
-                                            if (snapNearY) newPanY = 0f
-
-                                            onTransformChange(
-                                                target.id,
-                                                curT.copy(x = newPanX, y = newPanY)
-                                            )
+                                        if (isDraggingSplitHandle) {
+                                            val posX = pressedPointers.first().position.x
+                                            onSplitFractionChange((posX / stageW).coerceIn(0.05f, 0.95f))
                                             gestureConsumed = true
-                                            event.changes.forEach {
-                                                if (it.positionChange() != Offset.Zero) it.consume()
+                                            event.changes.forEach { it.consume() }
+                                        } else {
+                                            if (!pastTouchSlop && pan.getDistance() > touchSlop) {
+                                                pastTouchSlop = true
+                                            }
+
+                                            if (pastTouchSlop) {
+                                                val curTarget = target
+                                                val canDrag = curTarget != null && (
+                                                    curTarget.trackId != 1 || curTarget.transform.scale > 1.02f
+                                                )
+
+                                                if (canDrag) {
+                                                    val curT = curTarget!!.transform
+                                                    val dxDp = panChange.x / density.density
+                                                    val dyDp = panChange.y / density.density
+
+                                                    var newPanX = curT.x + dxDp
+                                                    var newPanY = curT.y + dyDp
+
+                                                    if (curTarget.trackId == 1) {
+                                                        val maxPanX = max(100f, (curT.scale - 0.7f).coerceAtLeast(0f) * 200f)
+                                                        val maxPanY = max(100f, (curT.scale - 0.7f).coerceAtLeast(0f) * 200f)
+                                                        newPanX = newPanX.coerceIn(-maxPanX, maxPanX)
+                                                        newPanY = newPanY.coerceIn(-maxPanY, maxPanY)
+
+                                                        val snapNearX = abs(newPanX) < 4.5f
+                                                        val snapNearY = abs(newPanY) < 4.5f
+                                                        if (snapNearX && !showSnapGuideX) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        if (snapNearY && !showSnapGuideY) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        showSnapGuideX = snapNearX
+                                                        showSnapGuideY = snapNearY
+                                                        if (snapNearX) newPanX = 0f
+                                                        if (snapNearY) newPanY = 0f
+                                                    }
+
+                                                    onTransformChange(
+                                                        curTarget.id,
+                                                        curT.copy(x = newPanX, y = newPanY)
+                                                    )
+                                                    gestureConsumed = true
+                                                    event.changes.forEach {
+                                                        if (it.positionChange() != Offset.Zero) it.consume()
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -2444,44 +2410,42 @@ private fun PhotoPreviewArea(
                                 showSnapGuideX = false
                                 showSnapGuideY = false
 
-                                if (isMultiTouch) {
-                                    keepZoomSliderAlive()
-                                }
-
                                 // Horizontal swipe gesture to switch between multiple selected images
-                                if (!isMultiTouch && !canDragTarget && pastTouchSlop && !gestureConsumed) {
+                                if (!isMultiTouch && !gestureConsumed && pastTouchSlop) {
                                     val totalDx = pan.x
                                     val totalDy = pan.y
                                     val swipeThresholdPx = with(density) { 45.dp.toPx() }
-                                    if (kotlin.math.abs(totalDx) > kotlin.math.abs(totalDy) * 1.15f && kotlin.math.abs(totalDx) > swipeThresholdPx) {
-                                        if (totalDx < 0f) {
-                                            onSwipeNext?.invoke()
-                                        } else {
-                                            onSwipePrevious?.invoke()
-                                        }
+                                    if (abs(totalDx) > abs(totalDy) * 1.15f && abs(totalDx) > swipeThresholdPx) {
+                                        if (totalDx < 0f) onSwipeNext?.invoke() else onSwipePrevious?.invoke()
                                     }
                                 }
 
-                                // Double-tap: toggle 1.0x Fit vs 1.35x Fill/Crop (Same as ChromaVideoEditorScreen)
+                                // Tap selection & Double-tap zoom toggle
                                 if (!pastTouchSlop && !isMultiTouch && !gestureConsumed) {
                                     val now = System.currentTimeMillis()
                                     if (now - lastTapTimestamp < 300L) {
                                         lastTapTimestamp = 0L
-                                        val target = activeTargetClip
-                                        if (target != null) {
-                                            val curT = target.transform
+                                        val curTarget = target
+                                        if (curTarget != null) {
+                                            val curT = curTarget.transform
                                             val nextScale = if (curT.scale > 1.15f) 1.0f else 1.35f
                                             val nextPanX = if (nextScale == 1.0f) 0f else curT.x
                                             val nextPanY = if (nextScale == 1.0f) 0f else curT.y
                                             onTransformChange(
-                                                target.id,
+                                                curTarget.id,
                                                 curT.copy(scale = nextScale, x = nextPanX, y = nextPanY)
                                             )
                                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            ToastManager.showToast(if (nextScale == 1.0f) "Zoom: 1.0x (Fit)" else "Zoom: 1.35x (Fill)")
                                         }
                                     } else {
                                         lastTapTimestamp = now
+                                        // Tap selection: select hit overlay, or deselect if tapped background
+                                        if (hitClip != null) {
+                                            onSelectClip(hitClip.id)
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        } else if (selectedClip != null) {
+                                            onSelectClip(null)
+                                        }
                                     }
                                 }
 
@@ -2490,231 +2454,6 @@ private fun PhotoPreviewArea(
                         }
                     }
             )
-        }
-
-        // Floating Zoom & Crop Smooth Slider Bar (Exact same UI as ChromaVideoEditorScreen)
-        val previewScrubState = LocalSliderScrubbingState.current
-        val isZoomScrubbing = previewScrubState.isScrubbing && previewScrubState.activeId == "PhotoPreviewZoom"
-        val isOtherPreviewScrubbing = previewScrubState.isScrubbing && previewScrubState.activeId != "PhotoPreviewZoom"
-        val zoomBarOuterAlpha by animateFloatAsState(
-            targetValue = if (isOtherPreviewScrubbing) 0f else 1f,
-            animationSpec = tween(180),
-            label = "zoomBarOuterAlpha"
-        )
-        val zoomChromeAlpha by animateFloatAsState(
-            targetValue = if (isZoomScrubbing) 0f else 1f,
-            animationSpec = tween(180),
-            label = "zoomChromeAlpha"
-        )
-        val zoomBoxBg by androidx.compose.animation.animateColorAsState(
-            targetValue = if (isZoomScrubbing) Color.Transparent else Color(0xE614161E),
-            animationSpec = tween(180),
-            label = "zoomBoxBg"
-        )
-        val zoomBoxBorder by androidx.compose.animation.animateColorAsState(
-            targetValue = if (isZoomScrubbing) Color.Transparent else Color.White.copy(alpha = 0.18f),
-            animationSpec = tween(180),
-            label = "zoomBoxBorder"
-        )
-        AnimatedVisibility(
-            visible = showZoomCropSlider && state.clips.isNotEmpty(),
-            enter = fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.92f),
-            exit = fadeOut(tween(450)) + scaleOut(tween(450), targetScale = 0.92f),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .graphicsLayer { alpha = zoomBarOuterAlpha }
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-                .zIndex(45f)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .widthIn(max = 380.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(zoomBoxBg)
-                    .border(1.dp, zoomBoxBorder, RoundedCornerShape(20.dp))
-                    .shadow(if (isZoomScrubbing) 0.dp else 16.dp, RoundedCornerShape(20.dp), spotColor = Color.Black)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { keepZoomSliderAlive() }
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .graphicsLayer { alpha = zoomChromeAlpha },
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Maximize2,
-                                contentDescription = null,
-                                tint = Color(0xFF0381FE),
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Text(
-                                text = "ZOOM & CROP",
-                                color = Color.White.copy(alpha = 0.9f),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.8.sp
-                            )
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFF0381FE).copy(alpha = 0.2f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "${String.format("%.2f", activeScale)}x",
-                                    color = Color(0xFF60A5FA),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-
-                            if (activeScale != 1f || activePanX != 0f || activePanY != 0f) {
-                                Text(
-                                    text = "Reset",
-                                    color = Color(0xFFFF453A),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .clickable {
-                                            keepZoomSliderAlive()
-                                            val target = activeTargetClip ?: return@clickable
-                                            onTransformChange(
-                                                target.id,
-                                                target.transform.copy(scale = 1f, x = 0f, y = 0f)
-                                            )
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            ToastManager.showToast("Zoom reset to 1.0x")
-                                        }
-                                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .graphicsLayer { alpha = zoomChromeAlpha }
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.12f))
-                                .clickable {
-                                    keepZoomSliderAlive()
-                                    val target = activeTargetClip ?: return@clickable
-                                    val curT = target.transform
-                                    val newScale = (curT.scale - 0.2f).coerceAtLeast(0.5f)
-                                    val maxPanX = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
-                                    val maxPanY = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
-                                    val newPanX = if (newScale <= 1.02f) 0f else curT.x.coerceIn(-maxPanX, maxPanX)
-                                    val newPanY = if (newScale <= 1.02f) 0f else curT.y.coerceIn(-maxPanY, maxPanY)
-                                    onTransformChange(
-                                        target.id,
-                                        curT.copy(scale = newScale, x = newPanX, y = newPanY)
-                                    )
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.ZoomOut,
-                                contentDescription = "Zoom Out",
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .focusSliderContainer(
-                                    sliderId = "PhotoPreviewZoom",
-                                    isDark = true,
-                                    cornerRadius = 14.dp,
-                                    horizontalPadding = 10.dp,
-                                    verticalPadding = 4.dp
-                                )
-                        ) {
-                            AppleSlider(
-                                value = activeScale.coerceIn(0.5f, 4.0f),
-                                sliderId = "PhotoPreviewZoom",
-                                onValueChange = { newScale ->
-                                    keepZoomSliderAlive()
-                                    val target = activeTargetClip ?: return@AppleSlider
-                                    val curT = target.transform
-                                    val maxPanX = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
-                                    val maxPanY = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
-                                    val newPanX = if (newScale <= 1.02f) 0f else curT.x.coerceIn(-maxPanX, maxPanX)
-                                    val newPanY = if (newScale <= 1.02f) 0f else curT.y.coerceIn(-maxPanY, maxPanY)
-                                    onTransformChange(
-                                        target.id,
-                                        curT.copy(scale = newScale, x = newPanX, y = newPanY)
-                                    )
-                                },
-                                onValueChangeFinished = { keepZoomSliderAlive() },
-                                valueRange = 0.5f..4.0f,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .graphicsLayer { alpha = zoomChromeAlpha }
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.12f))
-                                .clickable {
-                                    keepZoomSliderAlive()
-                                    val target = activeTargetClip ?: return@clickable
-                                    val curT = target.transform
-                                    val newScale = (curT.scale + 0.2f).coerceAtMost(4.0f)
-                                    val maxPanX = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
-                                    val maxPanY = max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
-                                    val newPanX = if (newScale <= 1.02f) 0f else curT.x.coerceIn(-maxPanX, maxPanX)
-                                    val newPanY = if (newScale <= 1.02f) 0f else curT.y.coerceIn(-maxPanY, maxPanY)
-                                    onTransformChange(
-                                        target.id,
-                                        curT.copy(scale = newScale, x = newPanX, y = newPanY)
-                                    )
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.ZoomIn,
-                                contentDescription = "Zoom In",
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -4448,10 +4187,11 @@ private fun PhotoFramePanel(
 private fun AddPhotoMediaSheet(
     onDismiss: () -> Unit,
     onAddMedia: (MediaType, String, Int, Color, String?) -> Unit,
+    onPickImage: () -> Unit,
+    onPickSticker: () -> Unit,
     onOpenMarkup: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    var activeGalleryPickerType by remember { mutableStateOf<MediaType?>(null) }
 
     GlassBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -4489,12 +4229,12 @@ private fun AddPhotoMediaSheet(
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
                             when (i) {
-                                0 -> activeGalleryPickerType = MediaType.IMAGE
+                                0 -> onPickImage()
                                 1 -> {
                                     onAddMedia(MediaType.TEXT, "Text", 3, Color(0xFF701A75), null)
                                     onDismiss()
                                 }
-                                2 -> activeGalleryPickerType = MediaType.STICKER
+                                2 -> onPickSticker()
                                 3 -> onOpenMarkup()
                             }
                         }
@@ -4515,30 +4255,6 @@ private fun AddPhotoMediaSheet(
 
             Spacer(Modifier.height(12.dp))
         }
-    }
-
-    if (activeGalleryPickerType != null) {
-        OscellionGalleryLayout(
-            layoutMode = GalleryLayoutMode.BOTTOM_SHEET,
-            title = if (activeGalleryPickerType == MediaType.STICKER) "Sticker Overlay" else "Image Overlay",
-            badgeText = "Editor",
-            allowedMediaFilter = GalleryMediaTypeFilter.PHOTOS,
-            showCameraTile = true,
-            showCaptionInput = false,
-            onVideoSelected = {},
-            onPhotosSelected = { uris ->
-                val currentType = activeGalleryPickerType
-                activeGalleryPickerType = null
-                uris.firstOrNull()?.let { uri ->
-                    when (currentType) {
-                        MediaType.STICKER -> onAddMedia(MediaType.STICKER, "Sticker", 5, Color(0xFFB45309), uri.toString())
-                        else -> onAddMedia(MediaType.IMAGE, "Image", 2, Color(0xFF064E3B), uri.toString())
-                    }
-                }
-                onDismiss()
-            },
-            onClose = { activeGalleryPickerType = null }
-        )
     }
 }
 
@@ -4669,9 +4385,15 @@ private fun PhotoLayerManagerPanel(
     trackVisibility: Map<Int, Boolean>,
     trackLock: Map<Int, Boolean>,
     onToggleVisibility: (Int) -> Unit,
-    onToggleLock: (Int) -> Unit
+    onToggleLock: (Int) -> Unit,
+    onSelectTrack: (Int) -> Unit = {},
+    onAddTrack: (Int) -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+    val rowBg = if (isDark) Color(0xFF1E222A) else Color(0xFFF9FAFB)
+    val rowBorder = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
+
     val trackNames = mapOf(
         1 to "Track 1 • Main Photo",
         2 to "Track 2 • Image Overlay",
@@ -4705,15 +4427,20 @@ private fun PhotoLayerManagerPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFFF9FAFB))
-                    .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(14.dp))
+                    .background(rowBg)
+                    .border(1.dp, rowBorder, RoundedCornerShape(14.dp))
+                    .clickable {
+                        if (count > 0) onSelectTrack(trackId)
+                        else if (trackId != 1) onAddTrack(trackId)
+                    }
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     AppleSettingsSquircleVectorIcon(
                         icon = trackIcons[trackId] ?: Lucide.Layers,
@@ -4736,7 +4463,29 @@ private fun PhotoLayerManagerPanel(
                     }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (count == 0 && trackId != 1) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(Color(0xFF0381FE).copy(alpha = 0.12f))
+                                .clickable { onAddTrack(trackId) }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(Lucide.Plus, contentDescription = null, tint = Color(0xFF0381FE), modifier = Modifier.size(12.dp))
+                                Text("Add", color = Color(0xFF0381FE), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+
                     GlassIconButton(
                         onClick = { onToggleVisibility(trackId) },
                         modifier = Modifier.size(32.dp)
