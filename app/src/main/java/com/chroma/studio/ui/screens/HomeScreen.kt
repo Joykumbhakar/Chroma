@@ -1116,7 +1116,6 @@ fun HomeScreen(
 
             val heroContentAlpha = (1f - (collapseProgress / 0.40f)).coerceIn(0f, 1f)
             val heroContentTranslationY = -collapseProgress * with(density) { 36.dp.toPx() }
-            val topBarBackdropAlpha = (collapseProgress / 0.65f).coerceIn(0f, 1f)
 
             Box(
                 modifier = Modifier
@@ -1136,24 +1135,7 @@ fun HomeScreen(
                         .height(currentHeroHeight)
                         .zIndex(1f)
                         .clipToBounds()
-                        .background(
-                            if (topBarBackdropAlpha > 0.01f) {
-                                colors.bg.copy(alpha = 0.94f * topBarBackdropAlpha)
-                            } else {
-                                Color.Transparent
-                            }
-                        )
-                        .drawBehind {
-                            if (topBarBackdropAlpha > 0.1f) {
-                                val stroke = 0.5.dp.toPx()
-                                drawLine(
-                                    color = colors.cardBorderSubtle.copy(alpha = topBarBackdropAlpha),
-                                    start = Offset(0f, size.height - stroke / 2f),
-                                    end = Offset(size.width, size.height - stroke / 2f),
-                                    strokeWidth = stroke
-                                )
-                            }
-                        }
+                        .background(Color.Transparent)
                         .padding(
                             start = 20.dp,
                             end = 20.dp,
