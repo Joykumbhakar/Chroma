@@ -1316,6 +1316,8 @@ fun IosDynamicIslandHost(
                 is DynamicIslandEvent.Like -> 2000L
                 is DynamicIslandEvent.Follow -> 2200L
                 is DynamicIslandEvent.RemixOrDownload -> 2000L
+                is DynamicIslandEvent.Comment -> 3000L
+                is DynamicIslandEvent.StoryReaction -> 2400L
             }
             delay(duration)
             if (currentEvent == event && !isExpanded) {
@@ -1332,6 +1334,8 @@ fun IosDynamicIslandHost(
                     is DynamicIslandEvent.Follow -> 348.dp
                     is DynamicIslandEvent.Like -> 340.dp
                     is DynamicIslandEvent.RemixOrDownload -> 340.dp
+                    is DynamicIslandEvent.Comment -> 350.dp
+                    is DynamicIslandEvent.StoryReaction -> 340.dp
                     is DynamicIslandEvent.Status -> if (event.actionLabel != null || event.message.isNotBlank()) 348.dp else 300.dp
                 }
             } else {
@@ -1340,6 +1344,8 @@ fun IosDynamicIslandHost(
                     is DynamicIslandEvent.Follow -> 250.dp
                     is DynamicIslandEvent.Like -> 240.dp
                     is DynamicIslandEvent.RemixOrDownload -> 250.dp
+                    is DynamicIslandEvent.Comment -> 270.dp
+                    is DynamicIslandEvent.StoryReaction -> 250.dp
                     is DynamicIslandEvent.Status -> if (event.actionLabel != null) 250.dp else if (event.title.length > 20) 260.dp else 220.dp
                 }
             },
@@ -1353,6 +1359,8 @@ fun IosDynamicIslandHost(
                     is DynamicIslandEvent.Follow -> 72.dp
                     is DynamicIslandEvent.Like -> 68.dp
                     is DynamicIslandEvent.RemixOrDownload -> 68.dp
+                    is DynamicIslandEvent.Comment -> 84.dp
+                    is DynamicIslandEvent.StoryReaction -> 72.dp
                     is DynamicIslandEvent.Status -> if (event.message.isNotBlank()) 72.dp else 56.dp
                 }
             } else 44.dp,
@@ -1366,6 +1374,8 @@ fun IosDynamicIslandHost(
                     is DynamicIslandEvent.Follow -> 28.dp
                     is DynamicIslandEvent.Like -> 28.dp
                     is DynamicIslandEvent.RemixOrDownload -> 28.dp
+                    is DynamicIslandEvent.Comment -> 28.dp
+                    is DynamicIslandEvent.StoryReaction -> 28.dp
                     is DynamicIslandEvent.Status -> 26.dp
                 }
             } else 22.dp,
@@ -1628,6 +1638,78 @@ fun IosDynamicIslandHost(
                                 }
                                 Spacer(Modifier.width(6.dp))
                                 Icon(Lucide.Download, null, tint = Color(0xFFFF9500), modifier = Modifier.size(13.dp))
+                            }
+                        }
+
+                        is DynamicIslandEvent.Comment -> {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                ) {
+                                    if (event.userAvatar.isNotBlank()) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context).data(event.userAvatar).crossfade(true).build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.size(22.dp).clip(CircleShape)
+                                        )
+                                    } else {
+                                        Icon(Lucide.MessageCircle, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "${event.userName}: ${event.commentText.ifBlank { "commented" }}",
+                                        color = Color.White,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        fontFamily = InterFontFamily,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Spacer(Modifier.width(6.dp))
+                                Icon(Lucide.MessageCircle, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(13.dp))
+                            }
+                        }
+
+                        is DynamicIslandEvent.StoryReaction -> {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                ) {
+                                    if (event.userAvatar.isNotBlank()) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context).data(event.userAvatar).crossfade(true).build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.size(22.dp).clip(CircleShape)
+                                        )
+                                    } else {
+                                        Text(text = event.reactionEmoji, fontSize = 16.sp)
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "${event.userName} reacted to story",
+                                        color = Color.White,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        fontFamily = InterFontFamily,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Spacer(Modifier.width(6.dp))
+                                Text(text = event.reactionEmoji, fontSize = 14.sp)
                             }
                         }
                     }
@@ -2066,6 +2148,156 @@ fun IosDynamicIslandHost(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text("View", color = Color(0xFFFF9F0A), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)
+                                    }
+                                    Icon(
+                                        Lucide.X,
+                                        contentDescription = "Close",
+                                        tint = Color.White.copy(alpha = 0.70f),
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clickable { dismissIsland() }
+                                    )
+                                }
+                            }
+                        }
+
+                        is DynamicIslandEvent.Comment -> {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (event.userAvatar.isNotBlank()) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context).data(event.userAvatar).crossfade(true).build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.size(34.dp).clip(CircleShape)
+                                        )
+                                    } else {
+                                        Icon(Lucide.MessageCircle, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(26.dp))
+                                    }
+
+                                    Spacer(Modifier.width(10.dp))
+
+                                    Column {
+                                        Text(
+                                            text = event.userName,
+                                            color = Color.White,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = InterFontFamily,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = event.commentText.ifBlank { "commented on: ${event.targetTitle}" },
+                                            color = Color(0xFFD1D1D6),
+                                            fontSize = 12.sp,
+                                            fontFamily = InterFontFamily,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .height(30.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0x3338BDF8))
+                                            .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                event.onClick?.invoke()
+                                                dismissIsland()
+                                            }
+                                            .padding(horizontal = 12.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("View", color = Color(0xFF38BDF8), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)
+                                    }
+                                    Icon(
+                                        Lucide.X,
+                                        contentDescription = "Close",
+                                        tint = Color.White.copy(alpha = 0.70f),
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clickable { dismissIsland() }
+                                    )
+                                }
+                            }
+                        }
+
+                        is DynamicIslandEvent.StoryReaction -> {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (event.userAvatar.isNotBlank()) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context).data(event.userAvatar).crossfade(true).build(),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.size(34.dp).clip(CircleShape)
+                                        )
+                                    } else {
+                                        Text(text = event.reactionEmoji, fontSize = 24.sp)
+                                    }
+
+                                    Spacer(Modifier.width(10.dp))
+
+                                    Column {
+                                        Text(
+                                            text = event.userName,
+                                            color = Color.White,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = InterFontFamily,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "reacted ${event.reactionEmoji} to your story",
+                                            color = Color(0xFFD1D1D6),
+                                            fontSize = 12.sp,
+                                            fontFamily = InterFontFamily,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .height(30.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0x33FF2D55))
+                                            .border(1.dp, Color(0xFFFF2D55).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                event.onClick?.invoke()
+                                                dismissIsland()
+                                            }
+                                            .padding(horizontal = 12.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("View", color = Color(0xFFFF375F), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)
                                     }
                                     Icon(
                                         Lucide.X,

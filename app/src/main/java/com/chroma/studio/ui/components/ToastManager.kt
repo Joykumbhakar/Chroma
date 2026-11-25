@@ -32,9 +32,14 @@ object ToastManager {
 
         _toasts.tryEmit(ToastData(message, actionLabel, onAction, durationMs))
 
-        // Note: Routine local user actions (copied, saved, deleted) do NOT trigger the Dynamic Island HUD.
-        // Dynamic Island is strictly reserved for incoming external notifications (messages, likes, follows)
-        // when the user is not in that screen!
+        // Surface local user action feedback in the unified Dynamic Island status HUD
+        DynamicIslandManager.showStatus(
+            title = message,
+            icon = icon,
+            actionLabel = actionLabel,
+            durationMs = durationMs,
+            onAction = onAction
+        )
     }
 }
 

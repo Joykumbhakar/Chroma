@@ -699,6 +699,194 @@ private fun AuthenticatedRoute(
                     }
                 }
 
+                // Real-time activity notifications listener (Likes, Comments, Replies, Follows, Remixes, Story Reactions)
+                LaunchedEffect(activeUidKey) {
+                    val uidToListen = activeUidKey ?: return@LaunchedEffect
+                    var isInitialNotifSnapshot = true
+                    val notifRegistration = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .document(uidToListen)
+                        .collection("notifications")
+                        .whereEqualTo("isRead", false)
+                        .addSnapshotListener { snapshot, e ->
+                            if (e != null || snapshot == null) return@addSnapshotListener
+                            if (isInitialNotifSnapshot) {
+                                isInitialNotifSnapshot = false
+                                return@addSnapshotListener
+                            }
+                            snapshot.documentChanges.forEach { change ->
+                                if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                                    val doc = change.document
+                                    val notifId = doc.id
+                                    val typeStr = doc.getString("type") ?: "LIKE"
+                                    val type = runCatching {
+                                        com.chroma.studio.model.NotificationActionType.valueOf(typeStr)
+                                    }.getOrDefault(com.chroma.studio.model.NotificationActionType.LIKE)
+
+                                    val actorUid = doc.getString("actorUid") ?: ""
+                                    if (actorUid == uidToListen) return@forEach // Skip self actions
+
+                                    val actorName = doc.getString("actorName")?.ifBlank { null } ?: "Someone"
+                                    val actorAvatar = doc.getString("actorAvatarUrl") ?: ""
+                                    val actionText = doc.getString("actionText") ?: ""
+                                    val detailText = doc.getString("detailText") ?: ""
+                                    val targetId = doc.getString("targetId") ?: ""
+                                    val targetPreviewUrl = doc.getString("targetPreviewUrl") ?: ""
+
+                                    val isAppForeground = com.chroma.studio.ChatStateManager.isAppInForeground.value
+                                    if (!isAppForeground) return@forEach
+
+                                    // Play crystal chime / notification sound
+                                    com.chroma.studio.chat.sound.SoundManager.playNotification(this@HomeActivity)
+
+                                    fun markRead() {
+                                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                            com.chroma.studio.data.NotificationDispatcher.updateNotificationRead(uidToListen, notifId, true)
+                                        }
+                                    }
+
+                                    when (type) {
+                                        com.chroma.studio.model.NotificationActionType.LIKE,
+                                        com.chroma.studio.model.NotificationActionType.LIKE_COMMENT -> {
+                                            com.chroma.studio.ui.components.DynamicIslandManager.showLike(
+                                                userName = actorName,
+                                                userAvatar = actorAvatar,
+                                                targetTitle = if (actionText.isNotBlank()) actionText else "your post",
+                                                targetThumbnail = targetPreviewUrl,
+                                                onClick = {
+                                                    markRead()
+                                                    if (targetId.isNotBlank()) {
+                                                        navController.navigate("userProfile/$uidToListen?postId=$targetId")
+                                                    } else {
+                                                        navController.navigate("notifications_feed")
+                                                    }
+                                                }
+                                            )
+                                        }
+
+                                        com.chroma.studio.model.NotificationActionType.COMMENT,
+                                        com.chroma.studio.model.NotificationActionType.REPLY -> {
+                                            com.chroma.studio.ui.components.DynamicIslandManager.showComment(
+                                                userName = actorName,
+                                                userAvatar = actorAvatar,
+                                                commentText = detailText.ifBlank { actionText },
+                                                targetTitle = "your post",
+                                                targetThumbnail = targetPreviewUrl,
+                                                onClick = {
+                                                    markRead()
+                                                    if (targetId.isNotBlank()) {
+                                                        navController.navigate("userProfile/$uidToListen?postId=$targetId")
+                                                    } else {
+                                                        navController.navigate("notifications_feed")
+                                                    }
+                                                }
+                                            )
+                                        }
+
+                                        com.chroma.studio.model.NotificationActionType.FOLLOW,
+                                        com.chroma.studio.model.NotificationActionType.FOLLOW_REQUEST -> {
+                                            com.chroma.studio.ui.components.DynamicIslandManager.showFollow(
+                                                userId = actorUid,
+                                                userName = actorName,
+                                                userAvatar = actorAvatar,
+                                                onFollowBack = {
+                                                    markRead()
+                                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                                        try {
+                                                            com.chroma.studio.data.DiscoverRepository.getInstance().setFollow(uidToListen, actorUid, true)
+                                                        } catch (_: Throwable) {}
+                                                    }
+                                                },
+                                                onClick = {
+                                                    markRead()
+                                                    if (actorUid.isNotBlank()) {
+                                                        navController.navigate("userProfile/$actorUid")
+                                                    } else {
+                                                        navController.navigate("notifications_feed")
+                                                    }
+                                                }
+                                            )
+                                        }
+
+                                        com.chroma.studio.model.NotificationActionType.REMIX -> {
+                                            com.chroma.studio.ui.components.DynamicIslandManager.showRemix(
+                                                userName = actorName,
+                                                userAvatar = actorAvatar,
+                                                workTitle = actionText.ifBlank { "Artwork" },
+                                                onClick = {
+                                                    markRead()
+                                                    if (targetId.isNotBlank()) {
+                                                        navController.navigate("userProfile/$uidToListen?postId=$targetId")
+                                                    } else {
+                                                        navController.navigate("notifications_feed")
+                                                    }
+                                                }
+                                            )
+                                        }
+
+                                        com.chroma.studio.model.NotificationActionType.STORY_LIKE,
+                                        com.chroma.studio.model.NotificationActionType.STORY_REACTION,
+                                        com.chroma.studio.model.NotificationActionType.STORY_REPLY -> {
+                                            val emoji = if (detailText.isNotBlank()) detailText else if (type == com.chroma.studio.model.NotificationActionType.STORY_LIKE) "❤️" else "🔥"
+                                            com.chroma.studio.ui.components.DynamicIslandManager.showStoryReaction(
+                                                userName = actorName,
+                                                userAvatar = actorAvatar,
+                                                reactionEmoji = emoji,
+                                                storyThumbnail = targetPreviewUrl,
+                                                onClick = {
+                                                    markRead()
+                                                    navController.navigate("notifications_feed")
+                                                }
+                                            )
+                                        }
+
+                                        com.chroma.studio.model.NotificationActionType.MENTION -> {
+                                            com.chroma.studio.ui.components.DynamicIslandManager.showComment(
+                                                userName = actorName,
+                                                userAvatar = actorAvatar,
+                                                commentText = "mentioned you: $detailText",
+                                                targetTitle = "in a post",
+                                                targetThumbnail = targetPreviewUrl,
+                                                onClick = {
+                                                    markRead()
+                                                    if (targetId.isNotBlank()) {
+                                                        navController.navigate("userProfile/$uidToListen?postId=$targetId")
+                                                    } else {
+                                                        navController.navigate("notifications_feed")
+                                                    }
+                                                }
+                                            )
+                                        }
+
+                                        com.chroma.studio.model.NotificationActionType.SYSTEM_DROP,
+                                        com.chroma.studio.model.NotificationActionType.PROJECT_EXPORT,
+                                        com.chroma.studio.model.NotificationActionType.PROJECT_COLLAB -> {
+                                            com.chroma.studio.ui.components.DynamicIslandManager.showStatus(
+                                                title = actorName.ifBlank { "Chroma Studio" },
+                                                message = actionText.ifBlank { detailText },
+                                                icon = com.composables.icons.lucide.Lucide.Info,
+                                                actionLabel = "View",
+                                                onAction = {
+                                                    markRead()
+                                                    navController.navigate("notifications_feed")
+                                                }
+                                            )
+                                        }
+
+                                        com.chroma.studio.model.NotificationActionType.MESSAGE -> {
+                                            // Handled by chat room listener
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    try {
+                        kotlinx.coroutines.awaitCancellation()
+                    } finally {
+                        notifRegistration.remove()
+                    }
+                }
+
 
 
                     androidx.compose.material3.Scaffold(

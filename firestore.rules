@@ -22,8 +22,10 @@ service cloud.firestore {
     }
 
     function isChatParticipant(data) {
-      return ('participantIds' in data && request.auth.uid in data.participantIds) ||
-             ('participants' in data && request.auth.uid in data.participants);
+      return data != null && (
+        ('participantIds' in data && request.auth.uid in data.participantIds) ||
+        ('participants' in data && request.auth.uid in data.participants)
+      );
     }
 
     // 1. Users Collection
@@ -125,8 +127,10 @@ service cloud.firestore {
 
     // 4. Chats Collection
     match /chats/{chatId} {
-      allow read, update: if isAuthenticated() && isChatParticipant(resource.data);
+      allow get: if isAuthenticated() && (resource == null || isChatParticipant(resource.data));
+      allow list: if isAuthenticated() && isChatParticipant(resource.data);
       allow create: if isAuthenticated() && isChatParticipant(request.resource.data);
+      allow update: if isAuthenticated() && isChatParticipant(resource.data);
       allow delete: if isAuthenticated() && isChatParticipant(resource.data);
 
       match /messages/{messageId} {
@@ -140,7 +144,7 @@ service cloud.firestore {
           (
             request.auth.uid == resource.data.senderId ||
             request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['delivered', 'read', 'readAt', 'deliveredAt', 'status', 'reactions', 'reactionCounts'])
+              .hasOnly(['delivered', 'isDelivered', 'read', 'isRead', 'readAt', 'deliveredAt', 'status', 'reactions', 'reactionCounts', 'pollVotes'])
           );
         allow delete: if isAuthenticated() &&
           isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data) &&
@@ -243,7 +247,12 @@ service cloud.firestore {
 
     // 11. WebRTC Calls Collection
     match /calls/{callId} {
-      allow read: if isAuthenticated() && (
+      allow get: if isAuthenticated() && (
+        resource == null ||
+        request.auth.uid == resource.data.callerId ||
+        request.auth.uid == resource.data.calleeId
+      );
+      allow list: if isAuthenticated() && (
         request.auth.uid == resource.data.callerId ||
         request.auth.uid == resource.data.calleeId
       );

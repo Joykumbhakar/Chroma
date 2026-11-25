@@ -47,6 +47,23 @@ sealed class DynamicIslandEvent {
         val onClick: (() -> Unit)? = null
     ) : DynamicIslandEvent()
 
+    data class Comment(
+        val userName: String,
+        val userAvatar: String = "",
+        val commentText: String = "",
+        val targetTitle: String = "your post",
+        val targetThumbnail: String = "",
+        val onClick: (() -> Unit)? = null
+    ) : DynamicIslandEvent()
+
+    data class StoryReaction(
+        val userName: String,
+        val userAvatar: String = "",
+        val reactionEmoji: String = "❤️",
+        val storyThumbnail: String = "",
+        val onClick: (() -> Unit)? = null
+    ) : DynamicIslandEvent()
+
     data class Status(
         val title: String,
         val message: String = "",
@@ -153,6 +170,44 @@ object DynamicIslandManager {
                 userAvatar = userAvatar,
                 workTitle = workTitle,
                 isRemix = true,
+                onClick = onClick
+            )
+        )
+    }
+
+    fun showComment(
+        userName: String,
+        userAvatar: String = "",
+        commentText: String = "",
+        targetTitle: String = "your post",
+        targetThumbnail: String = "",
+        onClick: (() -> Unit)? = null
+    ) {
+        post(
+            DynamicIslandEvent.Comment(
+                userName = userName,
+                userAvatar = userAvatar,
+                commentText = commentText,
+                targetTitle = targetTitle,
+                targetThumbnail = targetThumbnail,
+                onClick = onClick
+            )
+        )
+    }
+
+    fun showStoryReaction(
+        userName: String,
+        userAvatar: String = "",
+        reactionEmoji: String = "❤️",
+        storyThumbnail: String = "",
+        onClick: (() -> Unit)? = null
+    ) {
+        post(
+            DynamicIslandEvent.StoryReaction(
+                userName = userName,
+                userAvatar = userAvatar,
+                reactionEmoji = reactionEmoji,
+                storyThumbnail = storyThumbnail,
                 onClick = onClick
             )
         )

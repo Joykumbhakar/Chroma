@@ -46,7 +46,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -205,6 +207,14 @@ fun generateQrBitmap(
     }
 }
 
+private fun formatCount(count: Int): String {
+    return when {
+        count >= 1_000_000 -> String.format("%.1fM", count / 1_000_000f)
+        count >= 1_000 -> String.format("%.1fK", count / 1_000f)
+        else -> count.toString()
+    }
+}
+
 /**
  * Profile Pass Card View with Customization and Role display
  */
@@ -213,38 +223,63 @@ fun ProfilePassCardView(
     profile: UserProfile,
     userId: String,
     customization: PassCustomization = PassCustomization(),
+    worksCount: Int = 0,
+    isFlipped: Boolean = false,
+    onFlipCard: (() -> Unit)? = null,
     onQrClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current.density
     val scope = rememberCoroutineScope()
     val profileShareUrl = "https://oscellion.vercel.app/u/${profile.username.ifBlank { userId }}"
+
+    var internalFlipped by remember { mutableStateOf(false) }
+    val effectiveFlipped = isFlipped || internalFlipped
+    val rotation by animateFloatAsState(
+        targetValue = if (effectiveFlipped) 180f else 0f,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
+        label = "passCardFlip"
+    )
 
     var isCopied by remember { mutableStateOf(false) }
 
     val qrBitmap = remember(profileShareUrl, customization.qrColor) {
         generateQrBitmap(
             profileShareUrl,
-            sizePx = 360,
+            sizePx = 480,
             foregroundColor = customization.qrColor.toArgb()
         )
     }
 
     val primaryTextColor = if (!customization.isDarkText) Color.White else Color(0xFF1D1D1F)
-    val secondaryTextColor = if (!customization.isDarkText) Color.White.copy(alpha = 0.75f) else Color(0xFF86868B)
-    val buttonBgColor = if (!customization.isDarkText) Color.White.copy(alpha = 0.15f) else Color(0xFFF2F2F7)
+    val secondaryTextColor = if (!customization.isDarkText) Color.White.copy(alpha = 0.70f) else Color(0xFF86868B)
 
-    val cardShape = RoundedCornerShape(20.dp)
+    val cardShape = RoundedCornerShape(24.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                rotationY = rotation
+                cameraDistance = 14f * density
+            }
             .clip(cardShape)
             .border(
-                width = 0.5.dp,
-                color = if (!customization.isDarkText) Color.White.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.10f),
+                width = 1.dp,
+                brush = Brush.linearGradient(
+                    listOf(
+                        Color.White.copy(alpha = if (!customization.isDarkText) 0.35f else 0.15f),
+                        Color.White.copy(alpha = if (!customization.isDarkText) 0.08f else 0.04f),
+                        Color.White.copy(alpha = if (!customization.isDarkText) 0.20f else 0.10f)
+                    )
+                ),
                 shape = cardShape
             )
+            .clickable {
+                if (onFlipCard != null) onFlipCard()
+                else internalFlipped = !internalFlipped
+            }
     ) {
         // ── Card Background Layer ──
         when (customization.bgMode) {
@@ -281,7 +316,7 @@ fun ProfilePassCardView(
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .background(Brush.linearGradient(listOf(Color(0xFFEEF2FF), Color(0xFFDBEAFE))))
+                            .background(Brush.linearGradient(customization.gradientColors))
                     )
                 }
             }
@@ -320,11 +355,24 @@ fun ProfilePassCardView(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(Brush.linearGradient(listOf(Color(0xFFEEF2FF), Color(0xFFDBEAFE))))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF0F1117), Color(0xFF191D26), Color(0xFF0C0E12))
+                            )
+                        )
                         .drawBehind {
+                            // Specular radial glow from top-right corner
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    listOf(Color(0xFF0381FE).copy(alpha = 0.20f), Color.Transparent),
+                                    center = Offset(size.width * 0.85f, size.height * 0.15f),
+                                    radius = size.width * 0.75f
+                                )
+                            )
+                            // Subtle geometric dot matrix
                             val dotSpacing = 20.dp.toPx()
-                            val dotRadius = 1.dp.toPx()
-                            val dotColor = Color(0xFF1D1D1F).copy(alpha = 0.04f)
+                            val dotRadius = 0.8.dp.toPx()
+                            val dotColor = Color.White.copy(alpha = 0.04f)
                             var x = dotSpacing
                             while (x < size.width) {
                                 var y = dotSpacing
@@ -349,436 +397,289 @@ fun ProfilePassCardView(
                     Brush.horizontalGradient(
                         listOf(
                             Color.Transparent,
-                            Color.White.copy(alpha = if (!customization.isDarkText) 0.55f else 0.25f),
+                            Color.White.copy(alpha = 0.65f),
+                            Color.White.copy(alpha = 0.20f),
                             Color.Transparent
                         )
                     )
                 )
         )
 
-        // ── Card Foreground Content ──
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // ── 1. Top Section: Brand Identity & Official Badge ──
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        // ── Card Foreground Content (Flippable Front / Back) ──
+        if (rotation <= 90f) {
+            // FRONT FACE: Authentic Creator Pass Card
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Top Bar
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Lucide.Sparkles,
-                        contentDescription = null,
-                        tint = if (!customization.isDarkText) Color.White.copy(alpha = 0.9f) else customization.accentColor,
-                        modifier = Modifier.size(13.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        AiWaveSphereIcon(modifier = Modifier.size(20.dp))
+                        Text(
+                            text = "OSCELLION",
+                            color = primaryTextColor,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(100.dp))
+                            .background(Color.White.copy(alpha = 0.10f))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(100.dp))
+                            .padding(horizontal = 9.dp, vertical = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (profile.verified) Color(0xFFFFD700) else Color(0xFF34C759))
+                        )
+                        Text(
+                            text = if (profile.verified) "VERIFIED PASS" else "CREATOR PASS",
+                            color = primaryTextColor,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.8.sp
+                        )
+                    }
+                }
+
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = Color.White.copy(alpha = 0.10f)
+                )
+
+                // Identity Hero
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    val statusRingBrush = getAppleStatusRingBrush(
+                        hasStatus = true,
+                        isSeen = false,
+                        isDark = true,
+                        isVerified = profile.verified
                     )
+                    Box(
+                        modifier = Modifier
+                            .size(62.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, statusRingBrush, CircleShape)
+                            .padding(3.dp)
+                            .clip(CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        IosAvatarView(
+                            name = profile.displayName.ifBlank { profile.username },
+                            avatarUrl = profile.avatarUrl,
+                            size = 56.dp,
+                            gender = profile.gender,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(
+                                text = profile.displayName.ifBlank { "Creator" },
+                                color = primaryTextColor,
+                                fontSize = 18.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (profile.verified) {
+                                VerifiedBadge(size = 16.dp, showGlow = true)
+                            }
+                        }
+
+                        Text(
+                            text = "@${profile.username.ifBlank { "creator" }}",
+                            color = secondaryTextColor,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        // Status pill
+                        val followerStr = formatCount(profile.followersCount)
+                        val roleStr = profile.role?.takeIf { it.isNotBlank() } ?: "Creator"
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(alpha = 0.10f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "$followerStr Followers  •  $roleStr",
+                                color = primaryTextColor.copy(alpha = 0.9f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                // Smart Chip & Serial
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(36.dp)
+                            .height(26.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(Color(0xFFFFD700), Color(0xFFB8860B), Color(0xFFD4AF37))
+                                )
+                            )
+                            .border(0.5.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(5.dp))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .fillMaxSize(0.6f)
+                                .border(0.5.dp, Color(0xFF4A3510), RoundedCornerShape(2.dp))
+                        )
+                    }
+
                     Text(
-                        text = "CHROMA STUDIO",
-                        color = primaryTextColor.copy(alpha = 0.95f),
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Bold,
+                        text = "OSC • ${userId.take(8).uppercase()} • VERIFIED",
+                        color = secondaryTextColor.copy(alpha = 0.70f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
                         letterSpacing = 1.2.sp
                     )
-                    Text(
-                        text = "•",
-                        color = secondaryTextColor.copy(alpha = 0.6f),
-                        fontSize = 10.sp
+                }
+
+                // Tap Hint
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Lucide.QrCode,
+                        contentDescription = null,
+                        tint = secondaryTextColor,
+                        modifier = Modifier.size(12.dp)
                     )
+                    Spacer(Modifier.width(6.dp))
                     Text(
-                        text = "CREATOR PASS",
+                        text = "Tap card to reveal QR Code  ↺",
                         color = secondaryTextColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        } else {
+            // BACK FACE: High-Contrast Scannable QR Matrix
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { rotationY = 180f }
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        AiWaveSphereIcon(modifier = Modifier.size(20.dp))
+                        Text(
+                            text = "OSCELLION",
+                            color = primaryTextColor,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp
+                        )
+                    }
+
+                    Text(
+                        text = "SCAN TO CONNECT",
+                        color = Color(0xFF38BDF8),
                         fontSize = 9.5.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         letterSpacing = 0.8.sp
                     )
                 }
 
-                // Official Pass Badge
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = Color.White.copy(alpha = 0.10f)
+                )
+
+                Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(100.dp))
-                        .background(if (!customization.isDarkText) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.05f))
-                        .border(
-                            0.5.dp,
-                            if (!customization.isDarkText) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.08f),
-                            RoundedCornerShape(100.dp)
-                        )
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) {
-                    Icon(
-                        imageVector = Lucide.ShieldCheck,
-                        contentDescription = null,
-                        tint = if (!customization.isDarkText) Color(0xFF34C759) else Color(0xFF059669),
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Text(
-                        text = "OFFICIAL PASS",
-                        color = primaryTextColor,
-                        fontSize = 8.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.6.sp
-                    )
-                }
-            }
-
-            HorizontalDivider(
-                thickness = 0.5.dp,
-                color = if (!customization.isDarkText) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.06f)
-            )
-
-            // ── 2. Middle Section: Identity (Left) + Scannable QR Badge (Right) ──
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                // Left Column: Avatar + Profile Name + Handle + Organized Metadata Chips
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Circular Avatar with Dual Rim
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(if (!customization.isDarkText) Color(0xFF2C2C2E) else Color(0xFFF5F5F7))
-                                .border(
-                                    width = 1.5.dp,
-                                    color = if (!customization.isDarkText) Color.White.copy(alpha = 0.85f) else Color.White,
-                                    shape = CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            IosAvatarView(
-                                name = profile.displayName.ifBlank { profile.username },
-                                avatarUrl = profile.avatarUrl,
-                                size = 62.dp,
-                                gender = profile.gender,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-
-                        // Display Name & Username
-                        Column(verticalArrangement = Arrangement.spacedBy((-2).dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = profile.displayName.ifBlank { "Creator" },
-                                    color = primaryTextColor,
-                                    fontSize = 17.sp,
-                                    lineHeight = 19.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                if (profile.verified) {
-                                    VerifiedBadge(size = 15.dp, showGlow = true, animated = true)
-                                }
-                            }
-
-                            Text(
-                                text = "@${profile.username.ifBlank { "creator" }}",
-                                color = secondaryTextColor,
-                                fontSize = 12.5.sp,
-                                lineHeight = 14.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    // Organized Info Badges with Icons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Role Chip
-                        val roleText = profile.role
-                        if (!roleText.isNullOrBlank()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(customization.accentColor.copy(alpha = if (!customization.isDarkText) 0.28f else 0.12f))
-                                    .border(
-                                        width = 0.5.dp,
-                                        color = customization.accentColor.copy(alpha = 0.4f),
-                                        shape = RoundedCornerShape(6.dp)
-                                    )
-                                    .padding(horizontal = 7.dp, vertical = 3.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Briefcase,
-                                    contentDescription = null,
-                                    tint = if (!customization.isDarkText) Color.White else customization.accentColor,
-                                    modifier = Modifier.size(11.dp)
-                                )
-                                Text(
-                                    text = roleText,
-                                    color = if (!customization.isDarkText) Color.White else customization.accentColor,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-
-                        // Followers Chip
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (!customization.isDarkText) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.05f))
-                                .border(
-                                    width = 0.5.dp,
-                                    color = if (!customization.isDarkText) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.08f),
-                                    shape = RoundedCornerShape(6.dp)
-                                )
-                                .padding(horizontal = 7.dp, vertical = 3.dp)
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Users,
-                                contentDescription = null,
-                                tint = secondaryTextColor,
-                                modifier = Modifier.size(11.dp)
-                            )
-                            val formattedFollowers = if (profile.followersCount >= 1000) {
-                                String.format("%.1fk", profile.followersCount / 1000f)
-                            } else {
-                                profile.followersCount.toString()
-                            }
-                            Text(
-                                text = "$formattedFollowers Followers",
-                                color = primaryTextColor,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-
-                        // Location Chip (if available)
-                        if (profile.location.isNotBlank()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(if (!customization.isDarkText) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.05f))
-                                    .border(
-                                        width = 0.5.dp,
-                                        color = if (!customization.isDarkText) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.08f),
-                                        shape = RoundedCornerShape(6.dp)
-                                    )
-                                    .padding(horizontal = 7.dp, vertical = 3.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.MapPin,
-                                    contentDescription = null,
-                                    tint = secondaryTextColor,
-                                    modifier = Modifier.size(11.dp)
-                                )
-                                Text(
-                                    text = profile.location,
-                                    color = secondaryTextColor,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Right Column: Scannable QR Code Frame
-                val qrContainerModifier = when (customization.qrFrameStyle) {
-                    QrFrameStyle.SOLID_WHITE -> Modifier
-                        .clip(RoundedCornerShape(14.dp))
+                        .size(150.dp)
+                        .clip(RoundedCornerShape(18.dp))
                         .background(Color.White)
-                        .border(0.5.dp, Color(0xFFE5E5EA), RoundedCornerShape(14.dp))
-                    QrFrameStyle.FROSTED_GLASS -> Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color.White.copy(alpha = 0.35f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                    QrFrameStyle.SOLID_DARK -> Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xFF1C1C1E))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
-                    QrFrameStyle.MINIMAL -> Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                }
-
-                Box(
-                    modifier = qrContainerModifier
-                        .clickable { onQrClick() }
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+                        .padding(12.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        if (qrBitmap != null) {
-                            Image(
-                                bitmap = qrBitmap.asImageBitmap(),
-                                contentDescription = "Scan to connect QR",
-                                modifier = Modifier.size(80.dp)
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Lucide.QrCode,
-                                contentDescription = "QR Code",
-                                tint = customization.qrColor,
-                                modifier = Modifier.size(80.dp)
-                            )
-                        }
-
-                        val scanLabelColor = when (customization.qrFrameStyle) {
-                            QrFrameStyle.SOLID_DARK -> Color.White.copy(alpha = 0.7f)
-                            QrFrameStyle.FROSTED_GLASS -> if (!customization.isDarkText) Color.White else Color(0xFF1D1D1F)
-                            else -> Color(0xFF86868B)
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Icon(
-                                imageVector = Lucide.QrCode,
-                                contentDescription = null,
-                                tint = scanLabelColor,
-                                modifier = Modifier.size(9.dp)
-                            )
-                            Text(
-                                text = "CONNECT",
-                                color = scanLabelColor,
-                                fontSize = 8.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.8.sp
-                            )
-                        }
+                    if (qrBitmap != null) {
+                        Image(
+                            bitmap = qrBitmap.asImageBitmap(),
+                            contentDescription = "Scan to connect QR",
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 }
-            }
 
-            // ── 3. Bottom Section: Action Buttons ──
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Copy Link Button
-                val copyBgColor by animateColorAsState(
-                    targetValue = if (isCopied) Color(0xFF34C759) else buttonBgColor,
-                    label = "copy_btn_bg"
-                )
-                val copyTextColor by animateColorAsState(
-                    targetValue = if (isCopied || !customization.isDarkText) Color.White else primaryTextColor,
-                    label = "copy_btn_text"
+                Text(
+                    text = "oscellion.vercel.app/u/${profile.username.ifBlank { "creator" }}",
+                    color = primaryTextColor.copy(alpha = 0.9f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.4.sp
                 )
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(38.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(copyBgColor)
-                        .border(
-                            0.5.dp,
-                            if (!customization.isDarkText) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f),
-                            RoundedCornerShape(10.dp)
-                        )
-                        .clickable {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Profile Link", profileShareUrl))
-                            isCopied = true
-                            ToastManager.showToast("Profile link copied!")
-                            scope.launch {
-                                delay(2000)
-                                isCopied = false
-                            }
-                        },
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isCopied) Lucide.Check else Lucide.Copy,
-                            contentDescription = null,
-                            tint = copyTextColor,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = if (isCopied) "Copied" else "Copy Link",
-                            color = copyTextColor,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
-                    }
-                }
-
-                // Share Button
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(38.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(customization.accentColor)
-                        .clickable {
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(
-                                    Intent.EXTRA_TEXT,
-                                    "Connect with ${profile.displayName} (@${profile.username}) on Oscellion: $profileShareUrl"
-                                )
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Profile"))
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Lucide.Share2,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = "Share Pass",
-                            color = Color.White,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
-                    }
+                    Text(
+                        text = "Tap card to flip back  ↺",
+                        color = secondaryTextColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }
@@ -993,6 +894,7 @@ fun AppleProfileCardSheet(
 ) {
     val colors = LocalOscellionColors.current
     val context = LocalContext.current
+    val density = LocalDensity.current.density
     val scope = rememberCoroutineScope()
     val profileShareUrl = "https://oscellion.vercel.app/u/${profile.username.ifBlank { userId }}"
 
@@ -1076,13 +978,130 @@ fun AppleProfileCardSheet(
                 }
             }
 
+            var isFlipped by remember { mutableStateOf(false) }
+
             // ── The Customized Profile Pass Card ──
             ProfilePassCardView(
                 profile = profile,
                 userId = userId,
                 customization = customization,
+                worksCount = worksCount,
+                isFlipped = isFlipped,
+                onFlipCard = { isFlipped = !isFlipped },
                 onQrClick = { showEnlargedQr = true }
             )
+
+            // ── Quick Tactile Action Deck ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 1. Flip Card Button
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFECEFF4))
+                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                        .clickable {
+                            isFlipped = !isFlipped
+                            com.chroma.studio.chat.sound.SoundManager.playTap(context)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.QrCode,
+                            contentDescription = null,
+                            tint = colors.textMain,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = if (isFlipped) "Show Front" else "Show QR",
+                            color = colors.textMain,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                // 2. Copy Link Button
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFECEFF4))
+                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                        .clickable {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Profile Link", profileShareUrl))
+                            ToastManager.showToast("Profile link copied!")
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Copy,
+                            contentDescription = null,
+                            tint = colors.textMain,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = "Copy Link",
+                            color = colors.textMain,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                // 3. Share Button
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
+                        .clickable {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    "Connect with ${profile.displayName} (@${profile.username}) on Oscellion: $profileShareUrl"
+                                )
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share Profile"))
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Share2,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = "Share",
+                            color = Color.White,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
 
             // ── Identity Unchangeable Notice ──
             Row(
