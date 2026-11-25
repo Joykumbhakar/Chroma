@@ -58,12 +58,48 @@ TABLE OF CONTENTS:
    5.10. Module 10: Storage & Asset Browser (Supabase/Firebase Buckets, Orphaned Cleanup)
    5.11. Module 11: Remote Config & Feature Flags (Maintenance Mode, Min Version, Shaders)
    5.12. Module 12: Immutable Security & Audit Logs (Admin actions, IP, Diff tracking)
+   5.13. Module 13: WebRTC Live Signaling & Call Session Operations
+5.A. MASTER DATA TABLES & INFORMATION MATRICES SPECIFICATION
+   5.A.1. Table 1: Users & Identities Master Table (/admin/users)
+   5.A.2. Table 2: Community Works & Masterworks Catalog Table (/admin/posts)
+   5.A.3. Table 3: Flash Video Reels Control Grid Table (/admin/flash)
+   5.A.4. Table 4: 24-Hour Stories & Analytics Telemetry Table (/admin/stories)
+   5.A.5. Table 5: Threaded Comments & Discussion Moderation Table (/admin/comments)
+   5.A.6. Table 6: Direct Messages & E2EE Chat Channels Oversight Table (/admin/chats)
+   5.A.7. Table 7: Content Moderation & Abuse Reports Triage Table (/admin/moderation)
+   5.A.8. Table 8: Cloud Storage & Media Asset File Inventory Table (/admin/storage)
+   5.A.9. Table 9: Live WebRTC Signaling & Active Call Monitoring Table (/admin/webrtc)
+   5.A.10. Table 10: Push Notification Campaigns & Broadcast History Table (/admin/broadcast)
+   5.A.11. Table 11: Remote Config & Platform Feature Flags Registry Table (/admin/config)
+   5.A.12. Table 12: System Health, Infrastructure Telemetry & Quota Table (/admin/health)
+   5.A.13. Table 13: Immutable Founder & Admin Audit Log Forensics Table (/admin/audit-logs)
+5.B. FOUNDER'S OMNISCIENT CONTROL DECK & BUTTON ACTION REGISTRY ("CHANGE ANYTHING WHATEVER I WANT")
+   5.B.1. Suite 1: Omnipotent User & Identity Control Buttons (16 Actions)
+   5.B.2. Suite 2: Masterwork & Community Post Control Buttons (12 Actions)
+   5.B.3. Suite 3: Flash Video Reels Control Buttons (8 Actions)
+   5.B.4. Suite 4: 24h Story & Highlight Control Buttons (6 Actions)
+   5.B.5. Suite 5: Threaded Comments & Discussion Control Buttons (8 Actions)
+   5.B.6. Suite 6: Direct Message, Group Chat & WebRTC Call Control Buttons (6 Actions)
+   5.B.7. Suite 7: Content Moderation & Takedown Enforcement Buttons (6 Actions)
+   5.B.8. Suite 8: Cloud Storage & Asset Garbage Collection Buttons (4 Actions)
+   5.B.9. Suite 9: Push Notification & In-App Broadcast Buttons (5 Actions)
+   5.B.10. Suite 10: Platform Remote Config, Feature Flags & Emergency Kill Switches (8 Actions)
+   5.B.11. Suite 11: System Diagnostics, Database Repair & Reindexing Buttons (5 Actions)
 6. COMPLETE TYPESCRIPT DATA MODELS & SCHEMAS FOR NEXT.JS
 7. PRODUCTION-READY CODE SNIPPETS & SERVER ACTIONS
-   7.1. Firebase Admin SDK Initializer (`lib/firebaseAdmin.ts`)
-   7.2. User Management Server Actions (`actions/users.ts`)
-   7.3. Moderation Server Actions (`actions/moderation.ts`)
-   7.4. Broadcast Notification Server Action (`actions/notifications.ts`)
+   7.1. Firebase Admin SDK Initializer (lib/firebaseAdmin.ts)
+   7.2. User Management Server Actions (actions/users.ts)
+   7.3. Masterwork & Post Control Server Actions (actions/posts.ts)
+   7.4. Flash Reels Control Server Actions (actions/reels.ts)
+   7.5. Stories & Highlights Control Server Actions (actions/stories.ts)
+   7.6. Threaded Comments Control Server Actions (actions/comments.ts)
+   7.7. Chat & WebRTC Control Server Actions (actions/chats.ts)
+   7.8. Content Moderation & Reports Server Actions (actions/moderation.ts)
+   7.9. Push Notification Broadcast Studio Actions (actions/broadcast.ts)
+   7.10. Cloud Storage Asset & Orphan Cleaner Actions (actions/storage.ts)
+   7.11. Remote Config, Feature Flags & Emergency Kill Switch Actions (actions/config.ts)
+   7.12. System Diagnostic & Reconciliation Actions (actions/diagnostics.ts)
+   7.13. Immutable Admin Audit Logger (lib/auditLogger.ts)
 8. DEPLOYMENT & PRODUCTION RUNBOOK (VERCEL / DOCKER / GCP)
 
 ====================================================================================================
@@ -1063,33 +1099,983 @@ Features:
   * `metadata`: JSON payload showing state before and state after (diff).
   * `ipAddress`: Client IP address.
   * `timestamp`: Epoch milliseconds.
+5.13. Module 13: WebRTC Live Signaling & Call Session Operations (`app/admin/webrtc/page.tsx`)
+---------------------------------------------------------------------------------------------
+Purpose: Real-time monitoring, diagnostic telemetry, and force-termination controls for 1:1 and group audio/video calls.
+
+Features & Controls:
+1. Live Signaling Inspector:
+   - Real-time Firestore snapshot listener on active WebRTC signaling sessions (`signaling` collection).
+   - Monitors state transitions: `initiating` -> `ringing` -> `connected` -> `reconnecting` -> `ended` / `failed`.
+   - Displays caller and callee avatar cards, device types, client app versions, and connection handshake timestamps.
+2. PeerConnection & ICE Candidate Telemetry:
+   - Inspects ICE candidate pair negotiations (host, srflx STUN, relay TURN).
+   - Real-time QoS metrics: round-trip time (RTT latency in ms), audio/video bitrate (kbps), packet loss percentage, audio jitter.
+   - Codec negotiation audit: verifies Opus 48kHz audio and VP8/H.264 video streams.
+3. Administrative Force-Kill Switch:
+   - "Force Terminate Call": Instantly injects a server-side termination packet into the signaling document and notifies both peer clients to immediately tear down their RTCPeerConnection and audio focus.
+   - Audit trail logging: Records call duration, reason for termination, and admin identity.
+
+====================================================================================================
+5.A. MASTER DATA TABLES & INFORMATION MATRICES SPECIFICATION
+====================================================================================================
+Every core module in the Founder Admin Panel is anchored by an exhaustive, reactive data grid powered by `@tanstack/react-table` with server-side pagination, debounced full-text indexing, multi-column sorting, facet filtering, row multi-selection, and a contextual slide-over detail drawer.
+
+----------------------------------------------------------------------------------------------------
+5.A.1. Table 1: Users & Identities Master Table (`/admin/users`)
+----------------------------------------------------------------------------------------------------
+Primary Entity: `users/{uid}` | Reverse Index: `usernames/{username}` | Tokens: `users/{uid}/device_tokens`
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `select` | [Checkbox] | `uid` | boolean | Multi-select Checkbox with indeterminate state | No | No | Yes |
+| `avatar` | User | `avatarUrl`, `displayName`, `username` | Composite | Circular avatar image with fallback monogram + Display Name (bold) + `@handle` (muted) | Yes (`username`) | Yes (Search) | Yes |
+| `uid` | UID | `uid` | string | Monospace text snippet with 1-click Copy button | No | Yes (Exact) | Yes |
+| `email` | Email | `email`, `customEmail` | string | Email address link + Google OAuth badge if `googleId` present | Yes | Yes (Search) | Yes |
+| `role` | Role | `role` | enum | Color Pill: Founder (Gold), Admin (Purple), Moderator (Blue), VIP (Emerald), Creator (Zinc) | Yes | Yes (Facet) | Yes |
+| `badges` | Verification | `verified` | boolean | Dual Ring Indicator: Golden Verified Star vs Blue Creator Ring vs Standard | Yes | Yes (Facet) | Yes |
+| `privacy` | Privacy | `isPrivateAccount` | boolean | Lock Icon (Private) vs Globe Icon (Public) | Yes | Yes (Facet) | Yes |
+| `status` | State | `isBanned`, `online`, `lastSeen` | Composite | Red Badge (Banned), Green Dot (Active Now), Gray (Offline with relative time) | Yes | Yes (Facet) | Yes |
+| `followers` | Followers | `followersCount` | integer | Metric counter formatted with Intl.NumberFormat ('1.2K', '45.1K') | Yes | Yes (Range) | Yes |
+| `following` | Following | `followingCount` | integer | Metric counter formatted with Intl.NumberFormat | Yes | Yes (Range) | No |
+| `works` | Masterworks | `postsCount` | integer | Post count badge with link to filtered works table | Yes | Yes (Range) | Yes |
+| `reels` | Flash Reels | `reelsCount` | integer | Video reel count badge with link to filtered reels table | Yes | Yes (Range) | No |
+| `shadowban` | Shadowban | `isShadowbanned` | boolean | Ghost Icon: Amber Pill if active, Hidden if false | Yes | Yes (Facet) | Yes |
+| `created` | Registered | `createdAt` | timestamp | Relative time (`3 days ago`) + tooltip with full ISO timestamp | Yes | Yes (Date) | Yes |
+| `actions` | Actions | `uid` | action-menu | "..." Dropdown Menu triggering modal dialogs and mutation drawer | No | No | Yes |
+
+Filter & Facet Specifications:
+- Global Search: Debounced input searching across `displayName`, `username`, `email`, and `uid`.
+- Facet Filters: Role (`Founder`, `Admin`, `Moderator`, `VIP`, `Creator`), Verification (`Golden Verified`, `Blue Creator`, `Unverified`), Privacy (`Public`, `Private`), Account Status (`Active`, `Banned`, `Shadowbanned`, `Timeout`).
+- Numeric Ranges: Followers Count Slider (`0` to `1,000,000+`).
+- Date Range: Registered Between (`startDate` to `endDate`).
+
+Detail Drawer / Slide-Over Inspector:
+- Header: High-resolution banner preview, avatar with dynamic status ring, Display Name, `@handle`, UID, and quick action bar.
+- Tab 1: Profile & Identity: Complete Bio, Website link, Location string, Interests tags array, Date of birth, Gender, Account agreed terms timestamp.
+- Tab 2: Security & Authentication: Linked Auth providers (Google ID, Email/Password), Public Key for E2EE, Revoke refresh tokens button, Impersonation token generator, Force password reset trigger.
+- Tab 3: Device Telemetry & Push: Registered FCM tokens list, push notifications toggle, quiet mode status, unrecognized logins alerts status.
+- Tab 4: Content Inventory: Embedded preview grid of user's masterworks, flash reels, and active stories.
+- Tab 5: Raw JSON Document: Formatted interactive JSON viewer with copy-to-clipboard functionality.
+
+----------------------------------------------------------------------------------------------------
+5.A.2. Table 2: Community Works & Masterworks Catalog Table (`/admin/posts`)
+----------------------------------------------------------------------------------------------------
+Primary Entity: `community_works/{postId}`
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `select` | [Checkbox] | `id` | boolean | Multi-select Checkbox | No | No | Yes |
+| `preview` | Visual | `thumbnailUrl`, `imageUrl`, `aspectRatio` | Composite | Aspect-ratio locked thumbnail with hover zoom popover | No | No | Yes |
+| `title` | Masterwork Title | `title`, `description` | string | Title (bold, truncated) + Description snippet | Yes | Yes (Search) | Yes |
+| `author` | Creator | `authorUsername`, `creatorId`, `authorVerified` | Composite | Author avatar + `@username` + Verified badge | Yes | Yes (Search) | Yes |
+| `type` | Format | `postType`, `aspectRatio` | enum | Tag Pill: Gradient Work (Cyan), Photo (Emerald), Video (Purple) + Ratio ('1:1', '9:16') | Yes | Yes (Facet) | Yes |
+| `layers` | Layers | `layersJson` | JSON string | Layer count indicator ('4 Layers') with shader badge if dynamic | Yes | Yes (Range) | No |
+| `remixLineage`| Remixed From | `remixedFromPostId` | string | Fork icon with link to parent masterwork, or 'Original' | Yes | Yes (Facet) | Yes |
+| `likes` | Likes | `likesCount` | integer | Heart icon + count with editable inline counter button | Yes | Yes (Range) | Yes |
+| `remixes` | Remixes | `remixCount` | integer | Git-fork icon + count | Yes | Yes (Range) | Yes |
+| `downloads` | Downloads | `downloadCount` | integer | Download icon + count | Yes | Yes (Range) | No |
+| `comments` | Comments | `commentsCount`, `commentCount` | integer | Chat-bubble icon + count with link to filtered comments table | Yes | Yes (Range) | Yes |
+| `featured` | Featured | `isFeatured` | boolean | Gold Star Toggle: Featured in Explore Hero vs Normal | Yes | Yes (Facet) | Yes |
+| `algoScore` | Algo Boost | `algoBoostMultiplier` | float | Gauge Pill: Normal (1.0x), Boosted (2.0x-10.0x), Demoted (0.5x) | Yes | Yes (Range) | Yes |
+| `safety` | Safety State | `isTakedown`, `takedownReason` | boolean | Shield Icon: Green (Clean) vs Red (Takedown with hover reason) | Yes | Yes (Facet) | Yes |
+| `created` | Published | `createdAt` | timestamp | Relative timestamp with calendar tooltip | Yes | Yes (Date) | Yes |
+| `actions` | Controls | `id` | action-menu | Takedown, Feature, Boost, Edit Counters, Delete | No | No | Yes |
+
+Filter & Facet Specifications:
+- Global Search: Searches `title`, `description`, `authorUsername`, and `id`.
+- Facets: Post Type (`work`, `image`, `video`), Aspect Ratio (`1:1`, `4:3`, `9:16`, `16:9`), Featured Status (`Featured`, `Standard`), Moderation State (`Active`, `Takedown`, `Under Review`).
+- Numeric Ranges: Likes Count (`0` to `500,000`), Remix Count (`0` to `50,000`).
+
+Detail Drawer / Slide-Over Inspector:
+- High-res media preview with fullscreen lightbox.
+- Interactive Gradient Shader Canvas: renders the exact Compose/GLSL gradient shaders from `layersJson`.
+- Complete Remix Lineage Graph: Visual tree diagram showing the root ancestor and all derivative works.
+- Engagement Curves: Chart showing hourly like, remix, and download velocity over the past 7 days.
+- Raw JSON Payload Inspector & Direct Editor.
+
+----------------------------------------------------------------------------------------------------
+5.A.3. Table 3: Flash Video Reels Control Grid Table (`/admin/flash`)
+----------------------------------------------------------------------------------------------------
+Primary Entity: `flash_videos/{videoId}`
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `select` | [Checkbox] | `id` | boolean | Multi-select Checkbox | No | No | Yes |
+| `video` | Reel Preview | `videoUrl`, `thumbnailUrl` | Composite | 9:16 video thumbnail with hover-to-play mini HTML5 video player | No | No | Yes |
+| `creator` | Creator | `authorUsername`, `creatorId` | Composite | Avatar + `@handle` with 1-click link to user inspector | Yes | Yes (Search) | Yes |
+| `caption` | Caption & Music | `caption`, `musicTrackTitle`, `musicArtist` | Composite | Caption text (truncated) + Music Note icon with track/artist info | Yes | Yes (Search) | Yes |
+| `duration` | Length | `duration` | integer | Formatted duration (`0:15`, `0:30`) | Yes | Yes (Range) | Yes |
+| `resolution` | Quality | `videoWidth`, `videoHeight`, `bitrate` | Composite | Resolution badge ('1080x1920 HD', '4K') + Bitrate indicator | Yes | Yes (Facet) | No |
+| `storage` | CDN Host | `videoUrl`, `cloudinaryPublicId` | Composite | Provider badge: Cloudinary vs Supabase Storage | Yes | Yes (Facet) | No |
+| `views` | Views | `viewCount` | integer | Eye icon + count with editable override trigger | Yes | Yes (Range) | Yes |
+| `likes` | Likes | `likesCount` | integer | Heart icon + count | Yes | Yes (Range) | Yes |
+| `comments` | Comments | `commentsCount`, `commentCount` | integer | Speech bubble icon + count with link to discussion viewer | Yes | Yes (Range) | Yes |
+| `shares` | Shares | `shareCount` | integer | Share icon + count | Yes | Yes (Range) | No |
+| `audioState`| Audio Status | `isAudioMuted`, `audioMuteReason` | boolean | Speaker Icon: Green (Audible) vs Red (Muted via DMCA) | Yes | Yes (Facet) | Yes |
+| `status` | State | `isTakedown`, `takedownReason` | boolean | Shield badge: Active vs Takedown | Yes | Yes (Facet) | Yes |
+| `published` | Uploaded | `createdAt` | timestamp | Timestamp with ISO date popover | Yes | Yes (Date) | Yes |
+| `actions` | Actions | `id` | action-menu | Play, Mute Audio, Override Metrics, Takedown, Delete | No | No | Yes |
+
+Detail Drawer / Slide-Over Inspector:
+- Fullscreen HTML5 Video Player with playback speed controls, frame-by-frame scrubbing, and audio waveform.
+- Audio Analysis & Fingerprinting: displays detected audio metadata, sample rate, and copyright claim status.
+- Transcode Variants Inspector: inspects generated HLS playlist, 720p/1080p MP4 renditions, and CDN cache status.
+- Report History: lists all community flags submitted against this reel with reporter details and timestamps.
+
+----------------------------------------------------------------------------------------------------
+5.A.4. Table 4: 24-Hour Stories & Analytics Telemetry Table (`/admin/stories`)
+----------------------------------------------------------------------------------------------------
+Primary Entity: `stories/{storyId}` | Subcollection: `stories/{storyId}/views/{viewerUid}`
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `select` | [Checkbox] | `id` | boolean | Multi-select Checkbox | No | No | Yes |
+| `preview` | Story Media | `mediaUrl`, `mediaType`, `gradientColors` | Composite | Story frame preview (Image, Video thumbnail, or Live Gradient canvas) | No | No | Yes |
+| `creator` | Creator | `authorUsername`, `creatorId`, `authorVerified`| Composite | Avatar + Handle + Verified Badge | Yes | Yes (Search) | Yes |
+| `ringType` | Ring Tier | `ringType`, `authorVerified`, `isCloseFriends`| enum | Solid Blue (Normal), Golden Star (Verified), Neon Green (Close Friends) | Yes | Yes (Facet) | Yes |
+| `format` | Content Type | `mediaType`, `hasTextOverlay`, `hasStickers` | enum | Media Type Pill: Image, Video, Gradient Canvas, Interactive Poll | Yes | Yes (Facet) | Yes |
+| `lifetime` | Expiration | `createdAt`, `expiresAt` | timestamp | Real-time countdown timer badge (`4h 12m remaining` or `Expired`) | Yes | Yes (Facet) | Yes |
+| `views` | Total Views | `viewCount` | integer | Eye icon + count with 1-click viewer list modal | Yes | Yes (Range) | Yes |
+| `completion`| Completion Rate | `completionRate` | float | Percentage progress bar (`88% watched to end`) | Yes | Yes (Range) | Yes |
+| `replies` | DM Replies | `replyCount` | integer | Message bubble icon + reply count | Yes | Yes (Range) | No |
+| `highlight` | Highlighted | `highlightId`, `isPermanent` | boolean | Star Capsule: Part of Highlight Reel vs 24h Ephemeral | Yes | Yes (Facet) | Yes |
+| `status` | Visibility | `isTakedown` | boolean | Green (Public) vs Red (Taken Down by Admin) | Yes | Yes (Facet) | Yes |
+| `actions` | Controls | `id` | action-menu | Extend +24h, Force Expire, Convert to Highlight, Delete | No | No | Yes |
+
+Detail Drawer / Slide-Over Inspector:
+- Full Story Frame Simulator: renders story text overlay, fonts, positioning, stickers, and background shader.
+- Comprehensive Viewer Telemetry Grid:
+  * Lists every viewer UID, Handle, Avatar, Viewed At epoch, and Story Reaction sent (e.g. Heart, Fire, Laugh).
+  * 1-click export of viewer list to CSV.
+- Lifetime Extension Controls: Extend story expiration by +24 hours, +48 hours, or permanent highlight conversion.
+
+----------------------------------------------------------------------------------------------------
+5.A.5. Table 5: Threaded Comments & Discussion Moderation Table (`/admin/comments`)
+----------------------------------------------------------------------------------------------------
+Primary Entity: `flash_comments/{commentId}` | Mirrors: `flash_videos/{id}/comments` & `community_works/{id}/comments`
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `select` | [Checkbox] | `id` | boolean | Multi-select Checkbox | No | No | Yes |
+| `author` | Commenter | `authorUsername`, `authorDisplayName`, `authorAvatarUrl` | Composite | Avatar + `@handle` + Verified badge | Yes | Yes (Search) | Yes |
+| `content` | Comment Text | `content`, `spoilers` | string | Rich Markdown snippet with spoiler reveal toggle | Yes | Yes (Search) | Yes |
+| `voiceNote`| Voice Note | `audioUrl`, `audioDurationMs`, `audioWaveform` | Composite | Audio player button with duration (`0:14`) and waveform | Yes | Yes (Facet) | Yes |
+| `poll` | In-Comment Poll | `pollQuestion`, `pollOptions` | Composite | Poll Question pill with option vote distribution summary | No | Yes (Facet) | No |
+| `target` | Media Target | `videoId`, `targetType` | Composite | Link to parent post or flash reel with thumbnail preview | Yes | Yes (Facet) | Yes |
+| `depth` | Hierarchy | `parentCommentId`, `depthLevel` | enum | Root Comment vs Level 1 Reply vs Level 2+ Nested | Yes | Yes (Facet) | Yes |
+| `likes` | Likes | `likesCount` | integer | Heart icon + count | Yes | Yes (Range) | Yes |
+| `replies` | Replies | `replyCount` | integer | Reply count badge with link to branch expander | Yes | Yes (Range) | Yes |
+| `badges` | Special Status | `isPinned`, `isCreatorHearted` | boolean | Badges: Blue Pin Icon (Pinned) + Red Heart (Creator Heart) | Yes | Yes (Facet) | Yes |
+| `toxicity` | AI Toxicity | `aiToxicityScore`, `isSpamSuspect` | float | Gauge: Clean (<0.2), Moderate (0.2-0.7), Toxic (>0.7 Amber/Red) | Yes | Yes (Range) | Yes |
+| `timestamp`| Commented | `createdAt`, `edited` | timestamp | Timestamp + "(edited)" indicator if modified | Yes | Yes (Date) | Yes |
+| `actions` | Actions | `id` | action-menu | Pin/Unpin, Heart/Unheart, Redact Text, Delete Branch | No | No | Yes |
+
+Detail Drawer / Slide-Over Inspector:
+- Complete Discussion Tree Visualizer:
+  * Displays the entire conversation thread in an indented gutter tree connector view.
+  * Highlights parent comments, child replies, and sibling branches.
+- Voice Note Audio Workstation: HTML5 waveform audio visualizer with play/pause, scrub, and speed multiplier.
+- In-Comment Poll Inspector: Displays all options, vote counts, percentage bars, and full voter user roster.
+- Redact & Edit Suite: Allows admin to redact offensive words or replace entire comment content with audit notice.
+
+----------------------------------------------------------------------------------------------------
+5.A.6. Table 6: Direct Messages & E2EE Chat Channels Oversight Table (`/admin/chats`)
+----------------------------------------------------------------------------------------------------
+Primary Entity: `chats/{roomId}` | Subcollection: `chats/{roomId}/messages/{msgId}`
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `roomId` | Room ID | `id` | string | Monospace room ID with copy button | No | Yes (Search) | Yes |
+| `type` | Channel Type | `isGroup`, `type` | enum | 1:1 Direct Message (Blue) vs Group Channel (Purple) | Yes | Yes (Facet) | Yes |
+| `title` | Title / Members | `groupTitle`, `participantIds` | Composite | Group Title (or user handle pairs) + Avatars stack | Yes | Yes (Search) | Yes |
+| `members` | Count | `participantCount` | integer | Participant count badge (e.g. '2 Members', '48 Members') | Yes | Yes (Range) | Yes |
+| `encryption`| E2EE Health | `isEncrypted`, `publicKeyFingerprint` | boolean | Shield: Green Lock (Verified E2EE) vs Amber (Unencrypted) | Yes | Yes (Facet) | Yes |
+| `messages` | Volume | `totalMessagesCount` | integer | Message count counter | Yes | Yes (Range) | Yes |
+| `lastMessage`| Last Active | `lastMessageTimestamp`, `lastMessageSnippet` | Composite | Relative timestamp + Encrypted ciphertext snippet preview | Yes | Yes (Date) | Yes |
+| `media` | Media Sent | `mediaAttachmentCount` | integer | Paperclip icon + media attachment count | Yes | Yes (Range) | No |
+| `reports` | Abuse Reports | `reportedCount`, `escalationStatus` | integer | Warning Triangle: Clean (0) vs Red Badge (Flagged by member) | Yes | Yes (Facet) | Yes |
+| `actions` | Controls | `id` | action-menu | Disband Group, Remove Member, Dump E2EE Diagnostics | No | No | Yes |
+
+Detail Drawer / Slide-Over Inspector:
+- Channel Metadata Inspector: Room creation epoch, creator UID, admin member list, active member roster.
+- Group Settings Manager: Edit group title, group description, or group icon.
+- E2EE Cryptographic Diagnostics: Inspects public key fingerprints, initialization vector formats, and key exchange timestamps (without exposing decrypted plaintext).
+- Abuse Escalation Review: If a member submitted a safety report with an exported message bundle, inspects the decrypted evidence snippet.
+
+----------------------------------------------------------------------------------------------------
+5.A.7. Table 7: Content Moderation & Abuse Reports Triage Table (`/admin/moderation`)
+----------------------------------------------------------------------------------------------------
+Primary Entity: `reports/{reportId}`
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `select` | [Checkbox] | `id` | boolean | Multi-select Checkbox | No | No | Yes |
+| `reportId` | Incident ID | `id` | string | Monospace ID with copy button | No | Yes (Search) | Yes |
+| `severity` | Severity | `severityScore` | integer | Color Tag: Critical (Red 90+), High (Orange 70-89), Medium (Yellow), Low | Yes | Yes (Facet) | Yes |
+| `status` | State | `status` | enum | Pill: Pending (Amber), Investigating (Blue), Resolved (Green), Dismissed (Gray) | Yes | Yes (Facet) | Yes |
+| `targetType`| Entity Type | `targetType` | enum | Badge: Post (Cyan), Flash Reel (Purple), Comment (Emerald), User (Zinc), Chat (Rose)| Yes | Yes (Facet) | Yes |
+| `accused` | Accused User | `targetAuthorId`, `targetAuthorUsername` | Composite | Accused avatar + Handle + Strike count indicator | Yes | Yes (Search) | Yes |
+| `reporter` | Reporter | `reporterId`, `reporterUsername` | Composite | Reporter avatar + Handle + Reporter credibility score | Yes | Yes (Search) | Yes |
+| `reason` | Violation Code | `reason`, `customNotes` | enum | Reason badge: Harassment, NSFW / Nudity, Copyright / DMCA, Hate Speech, Spam | Yes | Yes (Facet) | Yes |
+| `evidence` | Evidence Preview | `evidenceUrl`, `targetContentPreview` | Composite | Thumbnail image, video player, or text quote of reported content | No | No | Yes |
+| `assigned` | Assigned Admin | `assignedAdminEmail` | string | Admin email avatar or 'Unassigned' button | Yes | Yes (Facet) | Yes |
+| `timestamp`| Reported At | `createdAt` | timestamp | Relative time with SLA alert indicator if >24 hours pending | Yes | Yes (Date) | Yes |
+| `actions` | Triage Actions | `id` | action-menu | Dismiss, Issue Warning, Takedown, Suspend 24h, Permanent Ban | No | No | Yes |
+
+Filter & Facet Specifications:
+- Global Search: Searches `id`, `targetAuthorUsername`, `reporterUsername`, and `reason`.
+- Facets: Status (`pending`, `investigating`, `resolved`, `dismissed`), Target Type (`post`, `flash`, `comment`, `user`, `chat`), Reason Code.
+- SLA Filter: Breached SLA (>24h without resolution).
+
+Detail Drawer / Slide-Over Inspector:
+- Side-by-side comparison of reporter's statement vs accused content.
+- Accused Creator Dossier: previous violation history, strike counter, account creation date, follower count.
+- One-Click Resolution Suite:
+  * "Dismiss with Note"
+  * "Issue Official Policy Warning"
+  * "Takedown Content + 1 Strike"
+  * "Suspend Account 24 Hours"
+  * "Permanent Network Ban + IP / Device Blacklist"
+- Resolution Audit Log: Records resolution action, resolving admin identity, and resolution timestamp into `reports/{reportId}`.
+
+----------------------------------------------------------------------------------------------------
+5.A.8. Table 8: Cloud Storage & Media Asset File Inventory Table (`/admin/storage`)
+----------------------------------------------------------------------------------------------------
+Data Sources: Supabase Storage (`avatars`, `banners`, `posts`, `flash_videos`, `stories`, `chat_media`) + Firebase Storage + Cloudinary
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `select` | [Checkbox] | `objectKey` | boolean | Multi-select Checkbox | No | No | Yes |
+| `preview` | Media Preview | `publicUrl`, `mimeType` | Composite | Image thumbnail or video icon with hover preview | No | No | Yes |
+| `provider` | Storage Host | `provider` | enum | Provider Pill: Supabase Cloud vs Firebase Storage vs Cloudinary | Yes | Yes (Facet) | Yes |
+| `bucket` | Bucket / Folder | `bucketName` | string | Bucket badge (`posts`, `flash_videos`, `avatars`, `banners`, `stories`) | Yes | Yes (Facet) | Yes |
+| `filename` | File Name / Key | `objectKey` | string | Monospace file path with 1-click Copy Public URL button | Yes | Yes (Search) | Yes |
+| `mime` | MIME Type | `mimeType` | string | Tag: `image/webp`, `image/png`, `video/mp4`, `application/json` | Yes | Yes (Facet) | Yes |
+| `size` | File Size | `sizeBytes` | integer | Formatted size with units (`450 KB`, `18.4 MB`) | Yes | Yes (Range) | Yes |
+| `owner` | Owner UID | `ownerUid` | string | Monospace UID linking to user profile | Yes | Yes (Search) | Yes |
+| `linkedDoc` | Linked Document | `linkedCollection`, `linkedDocumentId` | Composite | Document reference link (e.g. `community_works/abc12345`) | Yes | Yes (Search) | Yes |
+| `orphan` | Orphan Status | `isOrphaned` | boolean | Status Pill: Green (Active Linked Reference) vs Red (Orphaned Garbage) | Yes | Yes (Facet) | Yes |
+| `modified` | Last Modified | `lastModified` | timestamp | Timestamp formatted with relative time | Yes | Yes (Date) | Yes |
+| `actions` | Actions | `objectKey` | action-menu | Copy URL, Download, Invalidate CDN, Purge File | No | No | Yes |
+
+Filter & Facet Specifications:
+- Facets: Provider, Bucket Name, MIME Category (`Images`, `Videos`, `JSON Files`), Orphan Status (`Orphaned Only`, `Active Only`).
+- Size Slider: File size range (`0 MB` to `100 MB+`).
+
+Detail Drawer / Slide-Over Inspector:
+- Full media preview with metadata table (Dimensions, Color space, Bitrate, Compression ratio).
+- Document Reference Audit: Shows all Firestore documents that cite this file URL.
+- One-Click Garbage Collection: Delete file permanently from cloud storage bucket and log audit entry.
+
+----------------------------------------------------------------------------------------------------
+5.A.9. Table 9: Live WebRTC Signaling & Active Call Monitoring Table (`/admin/webrtc`)
+----------------------------------------------------------------------------------------------------
+Primary Entity: `signaling/{callId}`
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `callId` | Call ID | `id` | string | Monospace call session ID | No | Yes (Search) | Yes |
+| `type` | Call Type | `callType` | enum | Pill: Audio Call (Cyan) vs Video Call (Purple) | Yes | Yes (Facet) | Yes |
+| `caller` | Initiator | `callerUsername`, `callerAvatarUrl`, `callerUid` | Composite | Avatar + `@caller` + Client OS badge (Android) | Yes | Yes (Search) | Yes |
+| `callee` | Recipient | `calleeUsername`, `calleeAvatarUrl`, `calleeUid` | Composite | Avatar + `@callee` + Client OS badge | Yes | Yes (Search) | Yes |
+| `state` | Signaling State | `status` | enum | Animated Badge: Initiating (Pulse), Ringing (Amber), Connected (Green), Ended | Yes | Yes (Facet) | Yes |
+| `duration` | Live Duration | `startedAt`, `connectedAt` | timestamp | Live ticking duration counter (`04:32`) | Yes | Yes (Range) | Yes |
+| `ice` | ICE State | `iceConnectionState` | enum | Tag: checking, connected, completed, disconnected, failed | Yes | Yes (Facet) | Yes |
+| `quality` | Quality (QoS) | `packetLossRate`, `bitrateKbps`, `rttMs` | Composite | Network gauge: Bitrate ('850 kbps'), RTT ('42 ms'), Loss ('0.1%') | Yes | Yes (Range) | Yes |
+| `actions` | Emergency | `id` | action-menu | Force Terminate Call, Inspect SDP Handshake | No | No | Yes |
+
+Detail Drawer / Slide-Over Inspector:
+- Real-time WebRTC SDP Offer / Answer Inspector.
+- ICE Candidate Exchange Log: lists STUN/TURN candidate pairs and resolved transport protocols (UDP/TCP).
+- Force Terminate Button: sends an immediate administrative hangup signal, terminating the media stream.
+
+----------------------------------------------------------------------------------------------------
+5.A.10. Table 10: Push Notification Campaigns & Broadcast History Table (`/admin/broadcast`)
+----------------------------------------------------------------------------------------------------
+Primary Entity: `broadcast_campaigns/{campaignId}`
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `id` | Campaign ID | `id` | string | Monospace campaign ID | No | Yes (Search) | Yes |
+| `title` | Notification Title | `title` | string | Bold text with bell icon | Yes | Yes (Search) | Yes |
+| `body` | Notification Body | `body` | string | Truncated message text preview | No | Yes (Search) | Yes |
+| `audience` | Target Segment | `targetAudience`, `audienceFilter` | string | Pill: All Users, Inactive >7d, Creators Only, Specific Segment | Yes | Yes (Facet) | Yes |
+| `deepLink` | Deep Link Target | `deepLinkUrl`, `targetScreen` | string | Route pill (`post:abc`, `flash:xyz`, `screen:studio`) | Yes | Yes (Facet) | Yes |
+| `dispatched`| Dispatched By | `adminEmail` | string | Admin email avatar | Yes | Yes (Facet) | Yes |
+| `sent` | Recipients | `totalTokensTargeted` | integer | Total device tokens targeted count | Yes | Yes (Range) | Yes |
+| `success` | Delivered | `successCount` | integer | Green count + percentage bar (`98.4%`) | Yes | Yes (Range) | Yes |
+| `failed` | Failed | `failureCount` | integer | Red count (Unregistered or expired tokens) | Yes | Yes (Range) | Yes |
+| `status` | Status | `status` | enum | Pill: Completed (Green), Scheduled (Blue), Sending (Pulse), Failed (Red) | Yes | Yes (Facet) | Yes |
+| `scheduled` | Scheduled / Sent | `timestamp` | timestamp | Timestamp with ISO date popover | Yes | Yes (Date) | Yes |
+| `actions` | Actions | `id` | action-menu | Resend to Failed, View Device Telemetry, Clone Campaign | No | No | Yes |
+
+----------------------------------------------------------------------------------------------------
+5.A.11. Table 11: Remote Config & Platform Feature Flags Registry Table (`/admin/config`)
+----------------------------------------------------------------------------------------------------
+Primary Entity: `system/config`
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `key` | Flag / Key | `key` | string | Monospace config key name | Yes | Yes (Search) | Yes |
+| `category` | Subsystem | `category` | enum | Badge: Platform Safety, AI Studio, Media Upload, Chat & E2EE, Discovery | Yes | Yes (Facet) | Yes |
+| `description`| Purpose | `description` | string | Explanatory description of client-side effect | No | Yes (Search) | Yes |
+| `type` | Value Type | `valueType` | enum | Tag: boolean, string, number, JSON array | Yes | Yes (Facet) | Yes |
+| `value` | Active Value | `currentValue` | mixed | Interactive Switch (for booleans), Editable Input (numbers/strings) | No | No | Yes |
+| `killSwitch`| Kill Switch | `isEmergencyKillSwitch` | boolean | Skull / Alert Icon: Amber highlight if critical emergency switch | Yes | Yes (Facet) | Yes |
+| `rollout` | Rollout % | `rolloutPercentage` | integer | Slider / Gauge: 0% to 100% phased rollout | Yes | Yes (Range) | Yes |
+| `lastEditor`| Last Modified By | `lastModifiedBy` | string | Admin email | Yes | Yes (Facet) | Yes |
+| `updatedAt` | Modified Date | `updatedAt` | timestamp | Relative timestamp | Yes | Yes (Date) | Yes |
+| `actions` | Action | `key` | action-menu | Edit Value, Rollback to Previous, Reset to Default | No | No | Yes |
+
+----------------------------------------------------------------------------------------------------
+5.A.12. Table 12: System Health, Infrastructure Telemetry & Quota Table (`/admin/health`)
+----------------------------------------------------------------------------------------------------
+Columns Definition:
+| Column ID | Subsystem / Service | Operational Status | Current QPS | Latency P95 | Error Rate (1h) | Quota Usage % | Health Trend |
+|---|---|---|---|---|---|---|---|
+| `firestore`| Google Cloud Firestore | Green Operational | 420 req/s | 18 ms | 0.01% | 14% (Read/Write quota) | Stable |
+| `auth` | Firebase Authentication | Green Operational | 65 req/s | 45 ms | 0.00% | 8% (Daily active users) | Stable |
+| `supabase` | Supabase Cloud Storage | Green Operational | 110 req/s | 85 ms | 0.04% | 38% (Storage bucket limit) | Rising |
+| `fcm` | Firebase Cloud Messaging | Green Operational | 240 msg/s | 120 ms | 0.02% | 12% (Multicast capacity) | Stable |
+| `cloudinary`| Cloudinary Video CDN | Green Operational | 85 req/s | 60 ms | 0.00% | 46% (Monthly bandwidth) | Rising |
+| `gemini` | Google Gemini GenAI API | Green Operational | 15 req/s | 650 ms | 0.12% | 22% (RPM tier limit) | Stable |
+
+----------------------------------------------------------------------------------------------------
+5.A.13. Table 13: Immutable Founder & Admin Audit Log Forensics Table (`/admin/audit-logs`)
+----------------------------------------------------------------------------------------------------
+Primary Entity: `admin_audit_logs/{logId}`
+
+Columns Definition:
+| Column ID | Header Label | Underlying Field | Data Type | Formatter / Visual Cell Component | Sortable | Filterable | Default Visible |
+|---|---|---|---|---|---|---|---|
+| `logId` | Log UUID | `id` | string | Monospace UUID with 1-click Copy button | No | Yes (Search) | Yes |
+| `admin` | Operator | `adminEmail`, `adminRole` | Composite | Admin email + Role Badge (Founder, Admin, Moderator) | Yes | Yes (Facet) | Yes |
+| `action` | Action Verb | `action` | enum | Color Pill: USER_BAN (Red), TAKEDOWN (Orange), VERIFY (Gold), BROADCAST (Blue) | Yes | Yes (Facet) | Yes |
+| `target` | Target Entity | `targetId`, `targetType` | Composite | Target Type badge + Target ID snippet with link to entity | Yes | Yes (Search) | Yes |
+| `diff` | State Mutation Diff | `metadata` | JSON | Expandable Side-by-Side Diff: Before State vs After State | No | No | Yes |
+| `ip` | Client IP | `ipAddress` | string | Monospace IP address + Geolocation country flag | Yes | Yes (Search) | Yes |
+| `timestamp`| Timestamp | `timestamp` | timestamp | High-precision ISO timestamp (`2026-11-25 04:32:18.421 UTC`) | Yes | Yes (Date) | Yes |
+| `actions` | Forensics | `id` | action-menu | Inspect Full Packet, Export Security Incident Evidence | No | No | Yes |
+====================================================================================================
+5.B. FOUNDER'S OMNISCIENT CONTROL DECK & BUTTON ACTION REGISTRY ("CHANGE ANYTHING WHATEVER I WANT")
+====================================================================================================
+The Founder Admin Panel grants omnipotent, real-time control over every state variable, user privilege, moderation restriction, recommendation multiplier, and infrastructure flag across ChromaStudio. Every action is backed by an atomic server action, strict validation, and an immutable audit log.
+
+----------------------------------------------------------------------------------------------------
+5.B.1. Suite 1: Omnipotent User & Identity Control Buttons (16 Actions)
+----------------------------------------------------------------------------------------------------
+Location: User Table (`/admin/users`), User Profile Inspector Drawer, and User Action Bar.
+
+1. `BTN_USER_TOGGLE_GOLD_VERIFIED`:
+   - Visual: Emerald/Gold Gradient Button with Golden Star Icon (`bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-semibold`).
+   - Modal Dialog: "Update Golden Verified Status" -> Confirmation switch.
+   - Permission: Founder Only (`FOUNDER_SUPERADMIN`).
+   - Target: `users/{uid}.verified = true/false` + triggers live status ring color change on Android app from solid blue to luxury golden ring.
+   - Feedback: Toast notification "Golden VIP Verification status updated for @{username}".
+
+2. `BTN_USER_TOGGLE_BLUE_VERIFIED`:
+   - Visual: Solid Blue Button with Verified Checkmark (`bg-blue-600 hover:bg-blue-700 text-white`).
+   - Modal Dialog: "Toggle Creator Blue Ring" -> Confirms grant or revocation.
+   - Permission: Admin or higher.
+   - Target: Updates creator verification tier; client displays solid blue status ring.
+
+3. `BTN_USER_SET_ROLE`:
+   - Visual: Purple Outline Button (`border-purple-600 text-purple-400 hover:bg-purple-950/40`).
+   - Modal Dialog: Select Dropdown: `Creator`, `VIP`, `Moderator`, `Admin`, `Founder`. Includes optional reason note.
+   - Permission: Founder Only for `Admin`/`Founder`; Admin for `Moderator`/`VIP`/`Creator`.
+   - Target: Updates `users/{uid}.role` and sets Firebase Auth Custom Claims `{ role: newRole }`.
+
+4. `BTN_USER_OVERRIDE_HANDLE`:
+   - Visual: Amber Outline Button with At-Symbol Icon (`border-amber-600 text-amber-400`).
+   - Modal Dialog: "Forcibly Reassign @username" -> Text input for new handle + checkbox "Release old handle to pool" or "Reserve old handle permanently".
+   - Permission: Admin or higher.
+   - Target: Executes an atomic Firestore transaction:
+     * Validates new handle syntax (`^[a-zA-Z0-9_]{3,30}$`).
+     * Claims `usernames/{newHandle}` -> `{ uid, createdAt }`.
+     * Deletes or reserves `usernames/{oldHandle}`.
+     * Updates `users/{uid}.username = newHandle`.
+
+5. `BTN_USER_OVERRIDE_PROFILE`:
+   - Visual: Ghost Edit Button (`hover:bg-slate-800 text-slate-300`).
+   - Modal Dialog: Comprehensive profile editor form: Display Name, Bio, Location, Interests, Website, Gender, Account Privacy (Public/Private), Show Online Status toggle.
+   - Permission: Admin or higher.
+   - Target: Overwrites selected profile fields directly in `users/{uid}`.
+
+6. `BTN_USER_SHADOWBAN`:
+   - Visual: Amber Ghost Button with Ghost Icon (`text-amber-400 hover:bg-amber-950/50`).
+   - Modal Dialog: "Toggle Stealth Shadowban" -> Explains that user continues using app normally, but their posts, flash reels, and comments are excluded from global feeds, search indexing, and discover rankings.
+   - Permission: Moderator or higher.
+   - Target: `users/{uid}.isShadowbanned = true/false`.
+
+7. `BTN_USER_TIMEOUT`:
+   - Visual: Orange Outline Button with Hourglass Icon (`border-orange-500 text-orange-400`).
+   - Modal Dialog: Select Duration: `1 Hour`, `24 Hours`, `7 Days`, `30 Days`, or `Custom Date`. Requires violation reason.
+   - Permission: Moderator or higher.
+   - Target: Sets `users/{uid}.timeoutExpiresAt = timestamp` + sends immediate heads-up notification to client.
+
+8. `BTN_USER_BAN`:
+   - Visual: Destructive Solid Red Button (`bg-red-600 hover:bg-red-700 text-white font-bold`).
+   - Modal Dialog: "Permanent Platform Ban" -> Input requires typing user's handle to confirm + Reason dropdown (`Harassment`, `Spam`, `Child Safety`, `Copyright`, `TOS Violation`).
+   - Permission: Admin or higher.
+   - Target:
+     * Sets `users/{uid}.isBanned = true`, `banReason = reason`, `bannedAt = Date.now()`.
+     * Calls `adminAuth.revokeRefreshTokens(uid)` terminating active JWTs on Android.
+     * Deletes active FCM device tokens in `users/{uid}/device_tokens`.
+
+9. `BTN_USER_UNBAN`:
+   - Visual: Emerald Solid Button with Unlock Icon (`bg-emerald-600 hover:bg-emerald-700 text-white`).
+   - Modal Dialog: "Restore Account Access" -> Confirmation note.
+   - Permission: Admin or higher.
+   - Target: Clears `isBanned`, `banReason`, and `bannedAt` in `users/{uid}`.
+
+10. `BTN_USER_REVOKE_SESSIONS`:
+    - Visual: Zinc Outline Button with LogOut Icon.
+    - Modal Dialog: "Force Logout All Devices" -> Confirms immediate revocation.
+    - Permission: Moderator or higher.
+    - Target: Calls `adminAuth.revokeRefreshTokens(uid)` to force client re-authentication.
+
+11. `BTN_USER_RESET_PASSWORD`:
+    - Visual: Zinc Outline Button with Key Icon.
+    - Modal Dialog: "Send Password Reset Email" -> Confirms sending official email to `user.email`.
+    - Permission: Admin or higher.
+    - Target: Calls `adminAuth.generatePasswordResetLink(email)` and dispatches template.
+
+12. `BTN_USER_WIPE_AVATAR`:
+    - Visual: Destructive Ghost Button (`text-red-400 hover:bg-red-950/40`).
+    - Modal Dialog: "Strip Inappropriate Avatar" -> Resets profile image to default monogram.
+    - Permission: Moderator or higher.
+    - Target: Sets `users/{uid}.avatarUrl = null` and purges file from Supabase `avatars` bucket.
+
+13. `BTN_USER_WIPE_BANNER`:
+    - Visual: Destructive Ghost Button (`text-red-400 hover:bg-red-950/40`).
+    - Modal Dialog: "Strip Profile Banner" -> Resets banner to default gradient.
+    - Permission: Moderator or higher.
+    - Target: Sets `users/{uid}.bannerUrl = null` and purges file from Supabase `banners` bucket.
+
+14. `BTN_USER_EXPORT_DATA`:
+    - Visual: Blue Outline Button with Download Icon (`border-blue-600 text-blue-400`).
+    - Modal Dialog: "Export GDPR Archive" -> Generates complete downloadable JSON bundle of profile, posts, reels, comments, followers, and device history.
+    - Permission: Admin or higher.
+    - Target: Server Action queries all user subcollections and streams zipped JSON archive.
+
+15. `BTN_USER_DELETE_CASCADE`:
+    - Visual: High-Hazard Crimson Button with Trash/Skull Icon (`bg-red-700 hover:bg-red-800 text-white font-extrabold`).
+    - Modal Dialog: "ATOMIC CASCADE ACCOUNT DELETION" -> Requires typing `DELETE PERMANENTLY` + admin password.
+    - Permission: Founder Only (`FOUNDER_SUPERADMIN`).
+    - Target: Full atomic batch deletion:
+      * Deletes Firebase Auth user (`adminAuth.deleteUser(uid)`).
+      * Releases handle in `usernames/{handle}`.
+      * Deletes all `community_works` and `flash_videos` authored by UID.
+      * Deletes all files in Supabase Storage matching UID.
+      * Deletes `users/{uid}` and all child subcollections.
+
+16. `BTN_USER_IMPERSONATE_TOKEN`:
+    - Visual: Violet Outline Button with UserCheck Icon.
+    - Modal Dialog: "Generate Founder Debug Token" -> Explains generation of a 15-minute Firebase Custom Token for troubleshooting user-reported mobile crashes.
+    - Permission: Founder Only.
+    - Target: Calls `adminAuth.createCustomToken(uid, { isImpersonated: true })` and copies token to clipboard.
+
+----------------------------------------------------------------------------------------------------
+5.B.2. Suite 2: Masterwork & Community Post Control Buttons (12 Actions)
+----------------------------------------------------------------------------------------------------
+Location: Posts Catalog Table (`/admin/posts`), Post Inspector Modal, and Feed Discovery Manager.
+
+1. `BTN_POST_FEATURE_HERO`:
+   - Visual: Gold Button with Sparkle Icon (`bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold`).
+   - Modal Dialog: "Feature in Explore Hero Carousel" -> Sets priority index (1 to 10) and duration.
+   - Permission: Moderator or higher.
+   - Target: `community_works/{postId}.isFeatured = true`, `featuredPriority = index`.
+
+2. `BTN_POST_UNFEATURE`:
+   - Visual: Zinc Outline Button.
+   - Modal Dialog: Confirms removal from top hero carousel.
+   - Target: `community_works/{postId}.isFeatured = false`.
+
+3. `BTN_POST_BOOST_ALGO`:
+   - Visual: Emerald Outline Button with Rocket Icon (`border-emerald-500 text-emerald-400`).
+   - Modal Dialog: "Algorithmic Discovery Boost" -> Multiplier slider (`1.5x`, `2.0x`, `5.0x`, `10.0x`) and expiration timer.
+   - Permission: Admin or higher.
+   - Target: `community_works/{postId}.algoBoostMultiplier = multiplier`.
+
+4. `BTN_POST_DEMOTE_ALGO`:
+   - Visual: Amber Outline Button with ArrowDown Icon (`border-amber-500 text-amber-400`).
+   - Modal Dialog: "Algorithmic Demotion" -> Reduces feed recommendation weight by 50% or 90% for borderline content.
+   - Permission: Moderator or higher.
+   - Target: `community_works/{postId}.algoBoostMultiplier = 0.1`.
+
+5. `BTN_POST_OVERRIDE_COUNTERS`:
+   - Visual: Cyan Outline Button with Sliders Icon (`border-cyan-500 text-cyan-400`).
+   - Modal Dialog: "Arbitrary Counter Override" -> Form with integer inputs:
+     * Likes Count (`likesCount`)
+     * Remixes Count (`remixCount`)
+     * Downloads Count (`downloadCount`)
+     * Shares Count (`shareCount`)
+     * Comments Count (`commentsCount` / `commentCount`)
+   - Permission: Founder Only (`FOUNDER_SUPERADMIN`).
+   - Target: Overwrites counter values directly in `community_works/{postId}`.
+
+6. `BTN_POST_LOCK_COMMENTS`:
+   - Visual: Zinc Outline Button with Lock Icon.
+   - Modal Dialog: Toggle comments enabled/disabled on this specific masterwork.
+   - Permission: Moderator or higher.
+   - Target: `community_works/{postId}.commentsDisabled = true/false`.
+
+7. `BTN_POST_TOGGLE_REMIX`:
+   - Visual: Zinc Outline Button with GitFork Icon.
+   - Modal Dialog: Toggle whether other users can remix this gradient project in Chroma Studio.
+   - Permission: Moderator or higher.
+   - Target: `community_works/{postId}.remixDisabled = true/false`.
+
+8. `BTN_POST_EDIT_METADATA`:
+   - Visual: Ghost Edit Button.
+   - Modal Dialog: Edit Masterwork Title, Description, Aspect Ratio, and Category Tags array.
+   - Permission: Moderator or higher.
+   - Target: Updates metadata fields in `community_works/{postId}`.
+
+9. `BTN_POST_REGENERATE_AI_METADATA`:
+   - Visual: Indigo Outline Button with Sparkles Icon (`border-indigo-500 text-indigo-400`).
+   - Modal Dialog: "Trigger Gemini AI Vision Re-scan" -> Dispatches image to Gemini API to regenerate descriptive alt text, color palette hex codes, and content discovery tags.
+   - Permission: Admin or higher.
+   - Target: Calls Gemini 1.5 Flash Vision and writes returned tags to `community_works/{postId}`.
+
+10. `BTN_POST_TAKEDOWN`:
+    - Visual: Destructive Solid Red Button (`bg-red-600 hover:bg-red-700 text-white`).
+    - Modal Dialog: "Content Takedown Notice" -> Select policy violation category (`Copyright`, `Nudity`, `Violence`, `Impersonation`) + customizable message displayed to author.
+    - Permission: Moderator or higher.
+    - Target:
+      * Sets `community_works/{postId}.isTakedown = true`, `takedownReason = reason`.
+      * Post becomes immediately invisible in all public feeds and creator profile on mobile.
+      * Sends push notification strike notice to creator.
+
+11. `BTN_POST_RESTORE`:
+    - Visual: Emerald Solid Button with Undo Icon (`bg-emerald-600 hover:bg-emerald-700 text-white`).
+    - Modal Dialog: "Restore Masterwork to Public Feeds" -> Clears takedown flag.
+    - Permission: Admin or higher.
+    - Target: Sets `isTakedown = false`, `takedownReason = null`.
+
+12. `BTN_POST_HARD_DELETE`:
+    - Visual: Destructive Red Outline Button with Trash Icon.
+    - Modal Dialog: "Hard Permanent Delete" -> Requires typing `DELETE` to confirm.
+    - Permission: Admin or higher.
+    - Target: Deletes `community_works/{postId}` and removes associated images/JSON files from Supabase Storage `posts` bucket.
+
+----------------------------------------------------------------------------------------------------
+5.B.3. Suite 3: Flash Video Reels Control Buttons (8 Actions)
+----------------------------------------------------------------------------------------------------
+Location: Flash Reels Manager (`/admin/flash`), Inline Video Modal.
+
+1. `BTN_REEL_OVERRIDE_METRICS`:
+   - Visual: Cyan Outline Button with Sliders Icon.
+   - Modal Dialog: Arbitrarily override Views, Likes, Comments, Saves, and Shares to any number.
+   - Permission: Founder Only.
+   - Target: Overwrites `viewCount`, `likesCount`, `commentsCount`, `shareCount` in `flash_videos/{videoId}`.
+
+2. `BTN_REEL_PIN_CATEGORY`:
+   - Visual: Gold Outline Button with Pin Icon.
+   - Modal Dialog: Pin reel to top of selected Category feed (e.g. "Color Grading", "Motion").
+   - Permission: Admin or higher.
+   - Target: Sets `flash_videos/{videoId}.isCategoryPinned = true`.
+
+3. `BTN_REEL_MUTE_AUDIO`:
+   - Visual: Amber Solid Button with VolumeX Icon (`bg-amber-600 hover:bg-amber-700 text-white`).
+   - Modal Dialog: "Mute Reel Audio (DMCA / Copyright)" -> Explains video remains visible with audio track muted.
+   - Permission: Moderator or higher.
+   - Target: Sets `flash_videos/{videoId}.isAudioMuted = true`, `audioMuteReason = "Copyright Claim"`.
+
+4. `BTN_REEL_REPLACE_AUDIO`:
+   - Visual: Blue Outline Button with Music Icon.
+   - Modal Dialog: "Swap Audio Track" -> Select approved stock royalty-free music track URL.
+   - Permission: Admin or higher.
+   - Target: Replaces `musicTrackUrl`, `musicTrackTitle`, `musicArtist` in `flash_videos/{videoId}`.
+
+5. `BTN_REEL_RETRANSCODE`:
+   - Visual: Purple Outline Button with RefreshCw Icon.
+   - Modal Dialog: "Force Re-transcode Video" -> Dispatches webhook to Cloudinary / transcode service to re-encode high-efficiency MP4 / WebM / HLS streams.
+   - Permission: Admin or higher.
+   - Target: Triggers background transcoding pipeline.
+
+6. `BTN_REEL_UPDATE_POSTER`:
+   - Visual: Zinc Outline Button with Image Icon.
+   - Modal Dialog: "Select Custom Poster Thumbnail" -> Upload or select frame offset (seconds).
+   - Permission: Moderator or higher.
+   - Target: Updates `thumbnailUrl` in `flash_videos/{videoId}`.
+
+7. `BTN_REEL_TAKEDOWN`:
+   - Visual: Destructive Solid Red Button.
+   - Modal Dialog: Reel takedown modal with strike notification.
+   - Permission: Moderator or higher.
+   - Target: Sets `isTakedown = true`, hides from Flash feed on Android client.
+
+8. `BTN_REEL_HARD_DELETE`:
+   - Visual: Crimson Button with Trash Icon.
+   - Modal Dialog: Permanent deletion of video reel document and CDN video files.
+   - Permission: Admin or higher.
+   - Target: Deletes `flash_videos/{videoId}` and deletes video file from Supabase/Cloudinary.
+
+----------------------------------------------------------------------------------------------------
+5.B.4. Suite 4: 24h Story & Highlight Control Buttons (6 Actions)
+----------------------------------------------------------------------------------------------------
+Location: Stories & Highlights Monitor (`/admin/stories`).
+
+1. `BTN_STORY_EXTEND_EXPIRY`:
+   - Visual: Emerald Outline Button with Clock Icon (`border-emerald-500 text-emerald-400`).
+   - Modal Dialog: "Extend Story Lifetime" -> Select `+24 Hours`, `+48 Hours`, `+7 Days`, or `Permanent`.
+   - Permission: Admin or higher.
+   - Target: Calculates new `expiresAt = expiresAt + extensionMs` and updates `stories/{storyId}`.
+
+2. `BTN_STORY_FORCE_EXPIRE`:
+   - Visual: Orange Outline Button with ZapOff Icon.
+   - Modal Dialog: "Instantly Expire Story" -> Immediately marks story expired (`expiresAt = Date.now() - 1000`) without deleting viewer telemetry or historical analytics.
+   - Permission: Moderator or higher.
+   - Target: Updates `stories/{storyId}.expiresAt`.
+
+3. `BTN_STORY_SET_RING_TYPE`:
+   - Visual: Multi-color Segmented Button.
+   - Modal Dialog: "Override Status Ring Classification" -> Select:
+     * `Solid Blue Ring`: Normal default creator story ring.
+     * `Golden Luxury Ring`: Verified VIP story ring.
+     * `Emerald Green Ring`: Close Friends only story ring.
+   - Permission: Founder Only.
+   - Target: Sets `stories/{storyId}.ringType = newRingType`.
+
+4. `BTN_STORY_ADD_TO_HIGHLIGHT`:
+   - Visual: Purple Outline Button with BookmarkPlus Icon.
+   - Modal Dialog: "Convert to Permanent Highlight" -> Select existing highlight collection or create new one.
+   - Permission: Admin or higher.
+   - Target: Copies story payload into `users/{uid}/highlights/{highlightId}/stories/{storyId}`.
+
+5. `BTN_STORY_CLEAR_VIEWERS`:
+   - Visual: Destructive Ghost Button.
+   - Modal Dialog: "Wipe Story Viewer Telemetry" -> Deletes all subcollection view documents in `stories/{storyId}/views` and resets `viewCount = 0`.
+   - Permission: Founder Only.
+   - Target: Deletes all view documents in batch.
+
+6. `BTN_STORY_HARD_DELETE`:
+   - Visual: Destructive Red Button.
+   - Modal Dialog: Instant removal of violating story and storage image/video.
+   - Permission: Moderator or higher.
+   - Target: Deletes `stories/{storyId}` and purges media file from Supabase `stories` bucket.
+
+----------------------------------------------------------------------------------------------------
+5.B.5. Suite 5: Threaded Comments & Discussion Control Buttons (8 Actions)
+----------------------------------------------------------------------------------------------------
+Location: Comments Moderation Table (`/admin/comments`), Discussion Tree Inspector Drawer.
+
+1. `BTN_COMMENT_PIN_GLOBAL`:
+   - Visual: Solid Blue Button with Pin Icon (`bg-blue-600 hover:bg-blue-700 text-white`).
+   - Modal Dialog: "Pin Comment to Top" -> Confirms pinning comment above all other discussions.
+   - Permission: Moderator or higher.
+   - Target: Updates `isPinned = true` across `flash_comments/{id}` and parent post mirror subcollections.
+
+2. `BTN_COMMENT_UNPIN`:
+   - Visual: Zinc Outline Button with PinOff Icon.
+   - Target: Sets `isPinned = false`.
+
+3. `BTN_COMMENT_HEART`:
+   - Visual: Red Outline Button with Heart Icon (`border-red-500 text-red-400 hover:bg-red-950/40`).
+   - Modal Dialog: "Bestow Official Creator / Founder Heart Badge" -> Confirms granting verified heart.
+   - Permission: Moderator or higher.
+   - Target: Sets `isCreatorHearted = true` across root comment and mirrors.
+
+4. `BTN_COMMENT_UNHEART`:
+   - Visual: Zinc Ghost Button.
+   - Target: Sets `isCreatorHearted = false`.
+
+5. `BTN_COMMENT_EDIT_TEXT`:
+   - Visual: Ghost Edit Button.
+   - Modal Dialog: "Redact / Edit Comment Text" -> Text area to sanitize hate speech, slurs, or doxxing while preserving thread hierarchy. Appends `(redacted by moderator)`.
+   - Permission: Moderator or higher.
+   - Target: Updates `content` and sets `edited = true`, `editedBy = adminEmail`.
+
+6. `BTN_COMMENT_LOCK_THREAD`:
+   - Visual: Zinc Outline Button with Lock Icon.
+   - Modal Dialog: "Lock Comment Branch" -> Prevents any user from posting further nested replies under this comment.
+   - Permission: Moderator or higher.
+   - Target: Sets `isLocked = true` in `flash_comments/{commentId}`.
+
+7. `BTN_COMMENT_DELETE_CASCADE`:
+   - Visual: Destructive Solid Red Button (`bg-red-600 hover:bg-red-700 text-white`).
+   - Modal Dialog: "Cascade Delete Comment Branch" -> Confirms deleting comment and recursively deleting all nested child replies, decrementing parent post counter by the total count deleted.
+   - Permission: Moderator or higher.
+   - Target: Executes cascading deletion batch and decrements post counters.
+
+8. `BTN_COMMENT_BULK_SPAM_PURGE`:
+   - Visual: Crimson Button with Flame Icon (`bg-red-700 hover:bg-red-800 text-white font-bold`).
+   - Modal Dialog: "Bulk Spam Purge Engine" -> Filter criteria: by author UID, regex pattern, blacklisted URL domain, or AI toxicity score > 0.8. Shows count of matching comments before execution.
+   - Permission: Admin or higher.
+   - Target: Deletes up to 500 matching comments simultaneously across all posts in batched writes.
+
+----------------------------------------------------------------------------------------------------
+5.B.6. Suite 6: Direct Message, Group Chat & WebRTC Call Control Buttons (6 Actions)
+----------------------------------------------------------------------------------------------------
+Location: Chat Oversight Table (`/admin/chats`), WebRTC Monitor (`/admin/webrtc`).
+
+1. `BTN_CHAT_FORCE_DISBAND_GROUP`:
+   - Visual: Destructive Red Button (`bg-red-600 hover:bg-red-700 text-white`).
+   - Modal Dialog: "Force Disband Group Channel" -> Confirms permanent closure of group room and notifies participants.
+   - Permission: Admin or higher.
+   - Target: Sets `chats/{roomId}.isDisbanded = true`, `disbandReason = reason`.
+
+2. `BTN_CHAT_REMOVE_MEMBER`:
+   - Visual: Zinc Outline Button with UserMinus Icon.
+   - Modal Dialog: "Remove Member from Chat" -> Select member UID to evict.
+   - Permission: Moderator or higher.
+   - Target: Removes member UID from `participantIds` array in `chats/{roomId}`.
+
+3. `BTN_CHAT_TRANSFER_OWNERSHIP`:
+   - Visual: Purple Outline Button with Crown Icon.
+   - Modal Dialog: "Transfer Group Ownership" -> Select new owner from participant list.
+   - Permission: Admin or higher.
+   - Target: Updates `groupOwnerId` in `chats/{roomId}`.
+
+4. `BTN_CHAT_DELETE_MESSAGE`:
+   - Visual: Destructive Ghost Button.
+   - Modal Dialog: "Purge Encrypted Message" -> Deletes message document from `chats/{roomId}/messages/{msgId}`.
+   - Permission: Admin or higher.
+   - Target: Deletes document and any associated media in Supabase `chat_media` bucket.
+
+5. `BTN_CALL_TERMINATE_ACTIVE`:
+   - Visual: Destructive Solid Red Button with PhoneOff Icon (`bg-red-600 text-white font-bold`).
+   - Modal Dialog: "Force Terminate Live WebRTC Call" -> Confirms immediate hangup of stuck or violating call.
+   - Permission: Moderator or higher.
+   - Target: Injects `{ status: 'terminated', terminatedBy: 'admin', endedAt: Date.now() }` into `signaling/{callId}`.
+
+6. `BTN_CHAT_DUMP_E2EE_DIAGNOSTICS`:
+   - Visual: Blue Outline Button with Terminal Icon.
+   - Modal Dialog: "Export Cryptographic Diagnostics" -> Exports non-plaintext diagnostic JSON (key fingerprints, IV lengths, handshake epochs).
+   - Permission: Admin or higher.
+
+----------------------------------------------------------------------------------------------------
+5.B.7. Suite 7: Content Moderation & Takedown Enforcement Buttons (6 Actions)
+----------------------------------------------------------------------------------------------------
+Location: Moderation Triage Queue (`/admin/moderation`).
+
+1. `BTN_MOD_DISMISS_REPORT`:
+   - Visual: Zinc Outline Button with CheckCircle Icon.
+   - Modal Dialog: "Dismiss Report" -> Optional dismissal note explaining why content complies with guidelines.
+   - Permission: Moderator or higher.
+   - Target: Sets `reports/{id}.status = 'dismissed'`.
+
+2. `BTN_MOD_ISSUE_WARNING`:
+   - Visual: Amber Solid Button with AlertTriangle Icon (`bg-amber-600 hover:bg-amber-700 text-white`).
+   - Modal Dialog: "Issue Official Policy Warning" -> Select policy section violated + custom explanation.
+   - Permission: Moderator or higher.
+   - Target: Creates a high-priority system notification in `users/{targetUid}/notifications` with sound alert and heads-up banner on mobile client.
+
+3. `BTN_MOD_TAKEDOWN_CONTENT`:
+   - Visual: Orange Solid Button with ShieldAlert Icon (`bg-orange-600 hover:bg-orange-700 text-white`).
+   - Modal Dialog: "Takedown Reported Content" -> Automatically takes down the offending post, reel, or comment and links report ID.
+   - Permission: Moderator or higher.
+   - Target: Updates target entity `isTakedown = true` and updates report `status = 'resolved'`.
+
+4. `BTN_MOD_SUSPEND_CREATOR_24H`:
+   - Visual: Red Outline Button with Clock Icon.
+   - Modal Dialog: "Apply 24-Hour Creator Suspension" -> Locks account from posting or commenting for 24 hours.
+   - Permission: Moderator or higher.
+   - Target: Sets `timeoutExpiresAt = Date.now() + 86400000` on accused user.
+
+5. `BTN_MOD_PERMANENT_BAN`:
+   - Visual: Crimson Solid Button with Ban Icon (`bg-red-700 hover:bg-red-800 text-white font-bold`).
+   - Modal Dialog: "Permanent Ban & Device Blacklist" -> Bans UID, revokes tokens, blacklists device tokens.
+   - Permission: Admin or higher.
+   - Target: Executes ban sequence via `banUser(accusedUid)`.
+
+6. `BTN_MOD_AUTO_MOD_SETTINGS`:
+   - Visual: Indigo Outline Button with Cpu Icon.
+   - Modal Dialog: "Configure AI Auto-Moderation" -> Set Gemini toxicity thresholds (e.g. auto-flag at 0.75, auto-quarantine at 0.90).
+   - Permission: Founder Only.
+   - Target: Updates `system/config.autoModThresholds`.
+
+----------------------------------------------------------------------------------------------------
+5.B.8. Suite 8: Cloud Storage & Asset Garbage Collection Buttons (4 Actions)
+----------------------------------------------------------------------------------------------------
+Location: Storage Asset Browser (`/admin/storage`).
+
+1. `BTN_STORAGE_RUN_ORPHAN_SCAN`:
+   - Visual: Cyan Outline Button with ScanLine Icon (`border-cyan-500 text-cyan-400`).
+   - Modal Dialog: "Run Background Orphan Asset Scan" -> Scans Supabase Storage buckets and compares against all active document URLs in Firestore to identify dead/orphaned files.
+   - Permission: Admin or higher.
+   - Target: Triggers Next.js Server Action or background worker.
+
+2. `BTN_STORAGE_PURGE_ORPHANS`:
+   - Visual: Destructive Crimson Button with Trash2 Icon (`bg-red-600 hover:bg-red-700 text-white font-bold`).
+   - Modal Dialog: "One-Click Garbage Collection" -> Displays total count and size (e.g. "1,420 Orphaned Files - 2.8 GB"). Requires typing `PURGE ALL` to confirm deletion.
+   - Permission: Founder Only (`FOUNDER_SUPERADMIN`).
+   - Target: Batched deletion via Supabase Storage API `supabase.storage.from(bucket).remove(keys)`.
+
+3. `BTN_STORAGE_PURGE_FILE`:
+   - Visual: Destructive Ghost Button.
+   - Modal Dialog: Confirms permanent deletion of individual object key.
+   - Target: Calls Supabase Storage remove API.
+
+4. `BTN_STORAGE_FLUSH_CDN_CACHE`:
+   - Visual: Purple Outline Button with CloudLightning Icon.
+   - Modal Dialog: "Invalidate CDN Cache" -> Purges edge cache for selected asset URLs.
+   - Permission: Admin or higher.
+
+----------------------------------------------------------------------------------------------------
+5.B.9. Suite 9: Push Notification & In-App Broadcast Buttons (5 Actions)
+----------------------------------------------------------------------------------------------------
+Location: Broadcast Studio (`/admin/broadcast`).
+
+1. `BTN_BROADCAST_SEND_NOW`:
+   - Visual: Emerald Solid Button with Send Icon (`bg-emerald-600 hover:bg-emerald-700 text-white font-bold`).
+   - Modal Dialog: "Confirm Network-Wide Push Broadcast" -> Summary showing title, body, audience segment, targeted token count, and deep link URL.
+   - Permission: Admin or higher.
+   - Target: Executes `adminMessaging.sendEachForMulticast` in 500-token chunks.
+
+2. `BTN_BROADCAST_SCHEDULE`:
+   - Visual: Blue Outline Button with Calendar Icon.
+   - Modal Dialog: "Schedule Push Broadcast" -> Date & Time picker for future delivery.
+   - Permission: Admin or higher.
+   - Target: Saves campaign document with `status = 'scheduled'`.
+
+3. `BTN_BROADCAST_TEST_DEVICE`:
+   - Visual: Zinc Outline Button with Smartphone Icon.
+   - Modal Dialog: "Send Test Push to Personal Device" -> Sends immediate preview notification directly to admin's device token.
+   - Permission: Moderator or higher.
+   - Target: Sends unicast FCM message to admin token.
+
+4. `BTN_BROADCAST_CANCEL`:
+   - Visual: Red Ghost Button.
+   - Modal Dialog: Cancels pending scheduled broadcast.
+   - Target: Updates campaign document `status = 'cancelled'`.
+
+5. `BTN_BROADCAST_PURGE_DEAD_TOKENS`:
+   - Visual: Zinc Outline Button with Brush Icon.
+   - Modal Dialog: "Clean Dead / Unregistered FCM Tokens" -> Identifies device tokens that failed with `messaging/registration-token-not-registered` and strips them from user documents.
+   - Permission: Admin or higher.
+
+----------------------------------------------------------------------------------------------------
+5.B.10. Suite 10: Platform Remote Config, Feature Flags & Emergency Kill Switches (8 Actions)
+----------------------------------------------------------------------------------------------------
+Location: Remote Config Control Deck (`/admin/config`).
+
+1. `BTN_CONFIG_EMERGENCY_MAINTENANCE`:
+   - Visual: High-Hazard Red/Black Hazard Striped Button with AlertOctagon Icon (`bg-red-700 hover:bg-red-800 text-white font-extrabold tracking-wide ring-4 ring-red-500/30 animate-pulse`).
+   - Modal Dialog: "EMERGENCY PLATFORM MAINTENANCE MODE" -> Explains that toggling this switch immediately locks all mobile client instances out of the application with a branded maintenance screen. Requires typing `ACTIVATE MAINTENANCE` + Founder Password.
+   - Permission: Founder Only (`FOUNDER_SUPERADMIN`).
+   - Target: Sets `system/config.maintenanceMode = true/false`.
+
+2. `BTN_CONFIG_FORCE_APP_UPDATE`:
+   - Visual: Amber Solid Button with ArrowUpCircle Icon (`bg-amber-600 hover:bg-amber-700 text-white font-bold`).
+   - Modal Dialog: "Enforce Minimum Client App Version" -> Input string (e.g. `1.2`). When set, any mobile client running an older version displays an unskippable full-screen update dialog directing to Google Play / download link.
+   - Permission: Founder Only (`FOUNDER_SUPERADMIN`).
+   - Target: Sets `system/config.minAppVersion = versionString`.
+
+3. `BTN_CONFIG_TOGGLE_AI_STUDIO`:
+   - Visual: Violet Outline Button with Sparkles Icon.
+   - Modal Dialog: Toggle global availability of Gemini AI color palette generation and image analysis.
+   - Permission: Admin or higher.
+   - Target: Sets `system/config.aiGenerationEnabled = boolean`.
+
+4. `BTN_CONFIG_TOGGLE_REELS_UPLOAD`:
+   - Visual: Zinc Outline Button with VideoOff Icon.
+   - Modal Dialog: "Toggle Flash Reels Upload Kill Switch" -> Temporarily disable new video uploads during viral traffic surges without affecting video viewing.
+   - Permission: Admin or higher.
+   - Target: Sets `system/config.flashReelsUploadEnabled = boolean`.
+
+5. `BTN_CONFIG_TOGGLE_STORY_UPLOAD`:
+   - Visual: Zinc Outline Button with CameraOff Icon.
+   - Modal Dialog: "Toggle 24h Story Creation Kill Switch" -> Temporarily disable story publishing.
+   - Permission: Admin or higher.
+   - Target: Sets `system/config.storyUploadEnabled = boolean`.
+
+6. `BTN_CONFIG_SET_RATE_LIMITS`:
+   - Visual: Cyan Outline Button with Gauge Icon.
+   - Modal Dialog: "Adjust Client API Rate Limits" -> Sliders for Max Posts/Hour, Max Comments/Minute, Max Video Upload Size (MB).
+   - Permission: Admin or higher.
+   - Target: Updates rate limit config object in `system/config`.
+
+7. `BTN_CONFIG_SET_ANNOUNCEMENT`:
+   - Visual: Indigo Solid Button with Megaphone Icon (`bg-indigo-600 hover:bg-indigo-700 text-white`).
+   - Modal Dialog: "Publish In-App Global Announcement Banner" -> Form with Banner Text, Color Preset (Cyan, Gold, Purple, Amber), Leading Icon, and CTA Deep-Link. Renders live banner at top of client Home screen.
+   - Permission: Admin or higher.
+   - Target: Sets `system/config.announcement = { active: true, text, color, link, id: Date.now() }`.
+
+8. `BTN_CONFIG_CLEAR_ANNOUNCEMENT`:
+   - Visual: Zinc Ghost Button with XCircle Icon.
+   - Modal Dialog: Dismiss and hide the active global announcement banner.
+   - Permission: Admin or higher.
+   - Target: Sets `system/config.announcement.active = false`.
+
+----------------------------------------------------------------------------------------------------
+5.B.11. Suite 11: System Diagnostics, Database Repair & Reindexing Buttons (5 Actions)
+----------------------------------------------------------------------------------------------------
+Location: System Diagnostics Workstation (`/admin/diagnostics`).
+
+1. `BTN_SYS_REPAIR_COUNTERS`:
+   - Visual: Emerald Outline Button with RefreshCw Icon (`border-emerald-500 text-emerald-400`).
+   - Modal Dialog: "Reconcile Global Counters" -> Background batch job that recalculates exact `followersCount`, `followingCount`, `postsCount`, and `reelsCount` by counting documents in subcollections and heals any discrepancies.
+   - Permission: Admin or higher.
+   - Target: Executes batch reconciliation script.
+
+2. `BTN_SYS_REINDEX_USERNAMES`:
+   - Visual: Blue Outline Button with ListCheck Icon.
+   - Modal Dialog: "Rebuild Usernames Reverse Index" -> Scans `users` collection and ensures every active handle is correctly claimed in `usernames/{handle}`.
+   - Permission: Founder Only.
+   - Target: Executes atomic index rebuilding worker.
+
+3. `BTN_SYS_BACKUP_FIRESTORE`:
+   - Visual: Purple Solid Button with DatabaseBackup Icon (`bg-purple-600 hover:bg-purple-700 text-white font-semibold`).
+   - Modal Dialog: "Trigger Full Firestore Cloud Backup" -> Initiates Google Cloud Firestore export operation to `gs://chroma-backups-bucket`.
+   - Permission: Founder Only (`FOUNDER_SUPERADMIN`).
+   - Target: Calls Google Cloud Resource Manager / Firestore Admin API export.
+
+4. `BTN_SYS_FLUSH_REDIS_CACHE`:
+   - Visual: Zinc Outline Button with Zap Icon.
+   - Modal Dialog: "Flush Edge & Redis Cache" -> Clears Vercel Data Cache and Edge middleware session caches.
+   - Permission: Admin or higher.
+   - Target: Calls Next.js `revalidatePath('/', 'layout')`.
+
+5. `BTN_SYS_EMERGENCY_DISCONNECT`:
+   - Visual: Crimson Solid Button with ShieldAlert Icon (`bg-red-800 hover:bg-red-900 text-white font-extrabold`).
+   - Modal Dialog: "Emergency Security Lockout" -> Immediately revokes all user sessions across the entire platform during an active zero-day incident.
+   - Permission: Founder Only (`FOUNDER_SUPERADMIN`).
 
 ====================================================================================================
 6. COMPLETE TYPESCRIPT DATA MODELS & SCHEMAS FOR NEXT.JS
 ====================================================================================================
-Save the following file in your Next.js project as `lib/types.ts`:
+Save the following comprehensive type definitions in your Next.js project as `lib/types.ts`:
 
 ```typescript
 // ============================================================================
-// CHROMASTUDIO / OSCELLION — MASTER TYPESCRIPT DEFINITIONS
+// CHROMASTUDIO / OSCELLION — FOUNDER ENTERPRISE TYPESCRIPT DEFINITIONS
 // ============================================================================
+
+// ----------------------------------------------------------------------------
+// 1. Core Firestore Entity Models
+// ----------------------------------------------------------------------------
 
 export interface UserProfile {
   uid: string;
   username: string;
   displayName: string;
   email: string;
-  customEmail: string;
+  customEmail?: string;
   googleId?: string;
   bio?: string;
-  avatarUrl?: string;
-  bannerUrl?: string;
-  bannerWorkId?: string;
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
+  bannerWorkId?: string | null;
   dob?: number | null;
   dateOfBirth?: any;
   gender: 'Male' | 'Female' | 'Non-binary' | 'Private';
-  role: 'Creator' | 'Admin' | 'Moderator' | 'VIP';
+  role: 'Creator' | 'Admin' | 'Moderator' | 'VIP' | 'Founder';
   verified: boolean;
+  isVerifiedVip?: boolean; // Golden Ring status
   online: boolean;
   lastSeen?: number | null;
   location?: string;
@@ -1100,6 +2086,8 @@ export interface UserProfile {
   socialLinks: Record<string, string>;
   followersCount: number;
   followingCount: number;
+  postsCount?: number;
+  reelsCount?: number;
   interests: string[];
   statusEmoji?: string | null;
   statusText?: string | null;
@@ -1120,8 +2108,11 @@ export interface UserProfile {
   fcmToken?: string;
   blockedUsers?: string[];
   isBanned?: boolean;
-  banReason?: string;
-  bannedAt?: number;
+  banReason?: string | null;
+  bannedAt?: number | null;
+  isShadowbanned?: boolean;
+  timeoutExpiresAt?: number | null;
+  timeoutReason?: string | null;
 }
 
 export interface DiscoverPost {
@@ -1141,6 +2132,8 @@ export interface DiscoverPost {
   thumbnailUrl?: string | null;
   jsonUrl?: string;
   workUrls: string[];
+  layersJson?: string;
+  remixedFromPostId?: string | null;
   likesCount: number;
   likedBy: string[];
   remixCount: number;
@@ -1149,31 +2142,21 @@ export interface DiscoverPost {
   downloadedBy: string[];
   shareCount: number;
   sharedBy: string[];
-  saveCount: number;
-  savedBy: string[];
   commentsCount: number;
   commentCount: number;
-  tags: string[];
-  mentions: string[];
-  trendingTag?: string | null;
-  timestamp: number;
-  hideLikesCount: boolean;
-  hideSharesCount: boolean;
-  hideRemixesCount: boolean;
-  hideDownloadsCount: boolean;
-  hideSavesCount: boolean;
-  turnOffComments: boolean;
-  turnOffRemix: boolean;
-  remixedFromPostId?: string | null;
-  remixedFromAuthorId?: string | null;
-  remixedFromAuthorUsername?: string | null;
-  remixedFromAuthorDisplayName?: string | null;
-  remixedFromAuthorAvatar?: string | null;
-  remixedFromAuthorVerified?: boolean;
-  archived: boolean;
+  savesCount: number;
+  savedBy: string[];
   isFeatured?: boolean;
+  featuredPriority?: number;
+  algoBoostMultiplier?: number;
+  commentsDisabled?: boolean;
+  remixDisabled?: boolean;
   isTakedown?: boolean;
-  takedownReason?: string;
+  takedownReason?: string | null;
+  takedownAt?: number | null;
+  tags?: string[];
+  paletteHexCodes?: string[];
+  createdAt: number | any;
 }
 
 export interface FlashVideo {
@@ -1185,234 +2168,137 @@ export interface FlashVideo {
   authorVerified: boolean;
   videoUrl: string;
   thumbnailUrl: string;
+  cloudinaryPublicId?: string;
   caption: string;
-  hashtags: string[];
-  mentions: string[];
+  duration: number; // in seconds, <= 30
+  videoWidth?: number;
+  videoHeight?: number;
+  bitrate?: number;
+  musicTrackTitle?: string;
+  musicArtist?: string;
+  musicTrackUrl?: string;
   likesCount: number;
   likedBy: string[];
+  commentsCount: number;
   commentCount: number;
-  remixCount: number;
-  remixedBy: string[];
   shareCount: number;
-  sharedBy: string[];
-  saveCount: number;
-  savedBy: string[];
-  duration: number;
-  remixedFromPostId?: string | null;
-  remixedFromAuthorUsername?: string | null;
-  timestamp: number;
-  hideLikesCount: boolean;
-  turnOffComments: boolean;
-  turnOffRemix: boolean;
-  archived: boolean;
+  savesCount: number;
+  viewCount: number;
+  isAudioMuted?: boolean;
+  audioMuteReason?: string | null;
+  isCategoryPinned?: boolean;
   isTakedown?: boolean;
-}
-
-export interface CommentPollOption {
-  id: string;
-  text: string;
-  votesCount: number;
-  voterIds: string[];
-}
-
-export interface CommentPoll {
-  id: string;
-  question: string;
-  options: CommentPollOption[];
-  totalVotes: number;
-  userVotedOptionId?: string;
-}
-
-export interface CommentVoiceNote {
-  audioUrl: string;
-  durationMs: number;
-  waveformAmplitudes: number[];
-}
-
-export interface CommentMediaAttachment {
-  type: 'image' | 'video' | 'gif';
-  url: string;
-  aspectRatio: number;
-  thumbnailUrl?: string;
-}
-
-export interface CommentReply {
-  id: string;
-  author: {
-    name: string;
-    handle: string;
-    avatarUrl?: string;
-    userId: string;
-    verified?: boolean;
-    role?: string;
-    isSelf?: boolean;
-  };
-  text: string;
-  createdAtMillis: number;
-  likes: number;
-  likedByMe: boolean;
-  creatorHeart: boolean;
-}
-
-export interface PostComment {
-  id: string;
-  author: {
-    name: string;
-    handle: string;
-    avatarUrl?: string;
-    userId: string;
-    verified?: boolean;
-    role?: string;
-    isSelf?: boolean;
-  };
-  text: string;
-  createdAtMillis: number;
-  pinned?: boolean;
-  likes: number;
-  likedByMe: boolean;
-  creatorHeart?: boolean;
-  media?: CommentMediaAttachment;
-  voiceNote?: CommentVoiceNote;
-  poll?: CommentPoll;
-  replies: CommentReply[];
-  repliesExpanded?: boolean;
-  visibleRepliesCount?: number;
-}
-
-export interface StoryHighlight {
-  id: string;
-  userId: string;
-  title: string;
-  coverUrl: string;
-  storyIds: string[];
-  createdAt: number;
-  updatedAt: number;
+  takedownReason?: string | null;
+  createdAt: number | any;
 }
 
 export interface FlashComment {
   id: string;
-  videoId: string;
+  videoId: string; // ID of post or flash video
+  parentCommentId?: string | null; // Null if root
   userId: string;
-  username: string;
-  displayName: string;
-  avatarUrl: string;
-  verified: boolean;
-  text: string;
-  timestamp: number;
+  authorUsername: string;
+  authorDisplayName: string;
+  authorAvatarUrl: string;
+  authorVerified: boolean;
+  content: string;
+  audioUrl?: string | null;
+  audioDurationMs?: number | null;
+  audioWaveform?: number[] | null;
+  pollQuestion?: string | null;
+  pollOptions?: Array<{ optionText: string; voteCount: number; voterUids?: string[] }> | null;
   likesCount: number;
   likedBy: string[];
-  dislikedBy: string[];
-  reactions?: Record<string, string[]>;
-  reactionCounts?: Record<string, number>;
+  replyCount: number;
   isPinned: boolean;
   isCreatorHearted: boolean;
-  replyToCommentId?: string | null;
-  replyToUsername?: string | null;
-  replyCount: number;
-  replyFlashVideoUrl?: string | null;
-  poll?: CommentPoll;
-  voiceNote?: CommentVoiceNote;
-  media?: CommentMediaAttachment;
+  isLocked?: boolean;
   edited?: boolean;
-  editedAt?: number;
-  translation?: {
-    translatedText: string;
-    targetLanguage: string;
-    detectedSourceLanguage: string;
-  };
-  isSpam?: boolean;
+  editedBy?: string | null;
+  aiToxicityScore?: number;
+  isSpamSuspect?: boolean;
+  createdAt: number | any;
 }
 
 export interface Story {
   id: string;
-  userId: string;
-  mediaUrl?: string;
-  textContent?: string;
-  textFormat: string;
-  backgroundColor?: string;
-  audienceType: 'public' | 'followers' | 'custom';
-  customAudienceIds: string[];
-  timestamp: number;
+  creatorId: string;
+  authorUsername: string;
+  authorDisplayName: string;
+  authorAvatarUrl: string;
+  authorVerified: boolean;
+  mediaUrl: string;
+  mediaType: 'image' | 'video' | 'gradient';
+  ringType?: 'regular_blue' | 'verified_gold' | 'close_friends_green';
+  gradientColors?: string[];
+  textOverlay?: string | null;
+  viewCount: number;
+  completionRate?: number;
+  replyCount?: number;
+  isCloseFriends: boolean;
+  isPermanent?: boolean;
+  highlightId?: string | null;
+  isTakedown?: boolean;
+  createdAt: number;
   expiresAt: number;
-  views: number;
-  likes: number;
-  shares: number;
-  viewedBy: string[];
-  likedBy: string[];
-  isHighlight: boolean;
-  highlightId?: string;
-  highlightTitle?: string;
-  highlightCoverUrl?: string;
+}
+
+export interface StoryView {
+  uid: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string;
+  viewedAt: number;
+  reactionEmoji?: string | null;
 }
 
 export interface ChatRoom {
   id: string;
-  name?: string | null;
+  type: 'direct' | 'group';
   isGroup: boolean;
-  avatarUrl?: string | null;
-  participants: string[];
-  admins: string[];
-  createdBy?: string | null;
-  groupDescription?: string | null;
-  lastMessage: string;
-  lastSender?: string | null;
-  lastMessageTime: number;
-  lastMessageId?: string | null;
-  lastMessageIsRead: boolean;
-  lastMessageIsDelivered: boolean;
-  unreadCount: Record<string, number>;
-  favoritedBy: string[];
-  archivedBy: string[];
-  deletedBy: string[];
-  deletedAt: Record<string, number>;
-  pinnedMessageId?: string | null;
-  pinnedMessageText?: string | null;
-  pinnedBy?: string | null;
-  pinnedAt: number;
-  onlyAdminsCanPost: boolean;
+  groupTitle?: string;
+  groupDescription?: string;
+  groupOwnerId?: string;
+  participantIds: string[];
+  participantData?: Record<string, { username: string; displayName: string; avatarUrl: string }>;
+  totalMessagesCount?: number;
+  lastMessageSnippet?: string;
+  lastMessageTimestamp?: number;
+  isEncrypted: boolean;
+  isDisbanded?: boolean;
+  disbandReason?: string | null;
+  reportedCount?: number;
+  createdAt: number;
 }
 
 export interface ChatMessage {
   id: string;
   senderId: string;
-  text: string;
+  encryptedContent: string;
+  iv: string;
+  mediaType?: 'image' | 'video' | 'audio' | 'none';
+  mediaUrl?: string;
   timestamp: number;
-  isRead: boolean;
-  isDelivered: boolean;
-  imageUrl?: string | null;
-  mediaUrl?: string | null;
-  mediaType?: string | null;
-  workId?: string | null;
-  messageType: 'text' | 'image' | 'video' | 'audio' | 'system' | 'poll' | 'story_reply' | 'flash_share';
-  iv?: string;
-  encryptedAesKeys?: Record<string, string>;
-  reactions?: Record<string, string>;
-  durationSeconds?: number | null;
-  replyToMessageId?: string | null;
-  pollVotes?: Record<string, string>;
-  isEdited: boolean;
-  deletedFor: string[];
-  isPollClosed: boolean;
-  isForwarded: boolean;
-  storyId?: string | null;
-  flashVideoId?: string | null;
 }
 
-export interface ModerationReport {
+export interface ContentReport {
   id: string;
   reporterId: string;
   reporterUsername: string;
-  targetType: 'user' | 'post' | 'flash' | 'story' | 'comment' | 'chat_message';
   targetId: string;
   targetAuthorId: string;
-  targetAuthorUsername?: string;
-  reason: 'Spam' | 'Harassment' | 'Nudity' | 'Violence' | 'Copyright' | 'Other';
-  description?: string;
+  targetAuthorUsername: string;
+  targetType: 'post' | 'flash' | 'comment' | 'user' | 'chat';
+  reason: 'Harassment' | 'Nudity' | 'Copyright' | 'Spam' | 'Hate Speech' | 'Other';
+  severityScore?: number; // 1 to 100
+  customNotes?: string;
   evidenceUrl?: string;
+  targetContentPreview?: string;
   status: 'pending' | 'investigating' | 'resolved' | 'dismissed';
   resolutionAction?: 'none' | 'warned' | 'content_removed' | 'suspended_24h' | 'banned_permanent';
-  resolvedBy?: string;
-  resolvedAt?: number;
+  assignedAdminEmail?: string | null;
+  resolvedBy?: string | null;
+  resolvedAt?: number | null;
   createdAt: number;
 }
 
@@ -1422,18 +2308,236 @@ export interface AdminAuditLog {
   adminRole: string;
   action: string;
   targetId: string;
+  targetType?: string;
   metadata: Record<string, any>;
   ipAddress?: string;
+  userAgent?: string;
   timestamp: number;
+}
+
+// ----------------------------------------------------------------------------
+// 2. Remote Config & Platform Infrastructure Schemas
+// ----------------------------------------------------------------------------
+
+export interface SystemConfig {
+  maintenanceMode: boolean;
+  minAppVersion: string;
+  aiGenerationEnabled: boolean;
+  flashReelsUploadEnabled: boolean;
+  storyUploadEnabled: boolean;
+  e2eeMandatory: boolean;
+  maxVideoUploadSizeMb: number;
+  maxStoryDurationSec: number;
+  autoModThresholds: {
+    toxicityFlagThreshold: number;
+    toxicityAutoQuarantineThreshold: number;
+  };
+  announcement?: {
+    active: boolean;
+    id: number;
+    text: string;
+    color: 'cyan' | 'gold' | 'purple' | 'amber';
+    link?: string;
+  };
+  featuredCategoryTags: string[];
+}
+
+export interface WebRTCCallSession {
+  id: string;
+  callType: 'audio' | 'video';
+  callerUid: string;
+  callerUsername: string;
+  callerAvatarUrl: string;
+  calleeUid: string;
+  calleeUsername: string;
+  calleeAvatarUrl: string;
+  status: 'initiating' | 'ringing' | 'connected' | 'reconnecting' | 'ended' | 'failed' | 'terminated';
+  iceConnectionState?: string;
+  bitrateKbps?: number;
+  packetLossRate?: number;
+  rttMs?: number;
+  startedAt: number;
+  connectedAt?: number | null;
+  endedAt?: number | null;
+  terminatedBy?: string | null;
+}
+
+export interface BroadcastCampaign {
+  id: string;
+  title: string;
+  body: string;
+  targetAudience: 'ALL' | 'CREATORS' | 'INACTIVE_7D' | string;
+  deepLinkUrl?: string;
+  adminEmail: string;
+  totalTokensTargeted: number;
+  successCount: number;
+  failureCount: number;
+  status: 'completed' | 'scheduled' | 'sending' | 'failed' | 'cancelled';
+  scheduledTime?: number | null;
+  timestamp: number;
+}
+
+export interface StorageAssetRecord {
+  objectKey: string;
+  provider: 'supabase' | 'firebase' | 'cloudinary';
+  bucketName: string;
+  mimeType: string;
+  sizeBytes: number;
+  ownerUid?: string | null;
+  linkedCollection?: string | null;
+  linkedDocumentId?: string | null;
+  isOrphaned: boolean;
+  publicUrl: string;
+  lastModified: number;
+}
+
+// ----------------------------------------------------------------------------
+// 3. Table Filter & Query Schemas
+// ----------------------------------------------------------------------------
+
+export interface TablePaginationState {
+  pageIndex: number;
+  pageSize: number;
+}
+
+export interface UserTableFilters {
+  searchQuery?: string;
+  role?: string;
+  verification?: string; // 'gold' | 'blue' | 'unverified'
+  status?: string; // 'active' | 'banned' | 'shadowbanned'
+  isPrivate?: boolean;
+  minFollowers?: number;
+  maxFollowers?: number;
+  createdStartDate?: number;
+  createdEndDate?: number;
+}
+
+export interface PostTableFilters {
+  searchQuery?: string;
+  postType?: 'work' | 'image' | 'video';
+  aspectRatio?: string;
+  isFeatured?: boolean;
+  isTakedown?: boolean;
+  minLikes?: number;
+}
+
+export interface ReelTableFilters {
+  searchQuery?: string;
+  isAudioMuted?: boolean;
+  isTakedown?: boolean;
+  isCategoryPinned?: boolean;
+  minViews?: number;
+}
+
+export interface StoryTableFilters {
+  searchQuery?: string;
+  ringType?: string;
+  isExpired?: boolean;
+  isPermanent?: boolean;
+  isTakedown?: boolean;
+}
+
+export interface CommentTableFilters {
+  searchQuery?: string;
+  isPinned?: boolean;
+  isCreatorHearted?: boolean;
+  isSpamSuspect?: boolean;
+  hasVoiceNote?: boolean;
+  hasPoll?: boolean;
+}
+
+export interface ModerationTableFilters {
+  searchQuery?: string;
+  status?: 'pending' | 'investigating' | 'resolved' | 'dismissed';
+  targetType?: string;
+  severityLevel?: string;
+  reason?: string;
+}
+
+export interface StorageTableFilters {
+  searchQuery?: string;
+  bucketName?: string;
+  mimeCategory?: string;
+  isOrphanedOnly?: boolean;
+}
+
+// ----------------------------------------------------------------------------
+// 4. Mutation Input Schemas for Controlling Buttons
+// ----------------------------------------------------------------------------
+
+export interface OverrideUsernameInput {
+  uid: string;
+  newUsername: string;
+  reserveOldHandle: boolean;
+}
+
+export interface TimeoutUserInput {
+  uid: string;
+  durationMs: number;
+  reason: string;
+}
+
+export interface BanUserInput {
+  uid: string;
+  reason: string;
+  purgeDeviceTokens: boolean;
+}
+
+export interface OverridePostCountersInput {
+  postId: string;
+  likesCount?: number;
+  remixCount?: number;
+  downloadCount?: number;
+  shareCount?: number;
+  commentsCount?: number;
+}
+
+export interface OverrideReelMetricsInput {
+  videoId: string;
+  viewCount?: number;
+  likesCount?: number;
+  commentsCount?: number;
+  shareCount?: number;
+}
+
+export interface ExtendStoryInput {
+  storyId: string;
+  additionalMs: number;
+}
+
+export interface RedactCommentInput {
+  commentId: string;
+  newContent: string;
+  redactionReason: string;
+}
+
+export interface BulkSpamPurgeInput {
+  authorUid?: string;
+  keywordMatch?: string;
+  minToxicityScore?: number;
+}
+
+export interface SendBroadcastInput {
+  title: string;
+  body: string;
+  targetAudience: string;
+  deepLinkUrl?: string;
+}
+
+export interface RemoteConfigUpdateInput {
+  key: keyof SystemConfig;
+  value: any;
 }
 ```
 
 ====================================================================================================
 7. PRODUCTION-READY CODE SNIPPETS & SERVER ACTIONS
 ====================================================================================================
+Every button in the Founder Admin Panel corresponds to an atomic Next.js Server Action running in Node.js runtime, equipped with `@/lib/firebaseAdmin` for elevated credentials, Supabase client for storage, input validation, and automatic entry into the immutable audit trail.
 
+----------------------------------------------------------------------------------------------------
 7.1. Firebase Admin SDK Initializer (`lib/firebaseAdmin.ts`)
-------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
 ```typescript
 import * as admin from 'firebase-admin';
 
@@ -1461,23 +2565,168 @@ export const adminAuth = admin.auth();
 export const adminMessaging = admin.messaging();
 ```
 
-7.2. User Management Server Actions (`actions/users.ts`)
---------------------------------------------------------
+----------------------------------------------------------------------------------------------------
+7.2. Immutable Audit Logger Helper (`lib/auditLogger.ts`)
+----------------------------------------------------------------------------------------------------
+```typescript
+import { adminDb } from '@/lib/firebaseAdmin';
+
+export async function logAdminAction(
+  adminEmail: string,
+  action: string,
+  targetId: string,
+  metadata: Record<string, any> = {},
+  targetType: string = 'general',
+  ipAddress?: string
+) {
+  try {
+    const logRef = adminDb.collection('admin_audit_logs').doc();
+    await logRef.set({
+      id: logRef.id,
+      adminEmail,
+      adminRole: 'FOUNDER_SUPERADMIN',
+      action,
+      targetId,
+      targetType,
+      metadata,
+      ipAddress: ipAddress || '127.0.0.1',
+      timestamp: Date.now(),
+    });
+  } catch (err) {
+    console.error('CRITICAL: Failed to write to admin_audit_logs', err);
+  }
+}
+```
+
+----------------------------------------------------------------------------------------------------
+7.3. User Management Server Actions (`actions/users.ts`)
+----------------------------------------------------------------------------------------------------
 ```typescript
 'use server';
 
 import { adminDb, adminAuth } from '@/lib/firebaseAdmin';
 import { logAdminAction } from '@/lib/auditLogger';
 import { revalidatePath } from 'next/cache';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 /**
- * Toggle user verified creator checkmark badge.
+ * Toggle user verified creator checkmark badge (Solid Blue Ring on Android).
  */
 export async function toggleVerifiedBadge(uid: string, verified: boolean, adminEmail: string) {
-  await adminDb.collection('users').document(uid).update({ verified });
-  await logAdminAction(adminEmail, 'TOGGLE_VERIFIED', uid, { verified });
+  await adminDb.collection('users').doc(uid).update({ verified });
+  await logAdminAction(adminEmail, 'TOGGLE_BLUE_VERIFIED', uid, { verified }, 'user');
   revalidatePath(`/admin/users/${uid}`);
   revalidatePath('/admin/users');
+  return { success: true };
+}
+
+/**
+ * Toggle Golden VIP Verification checkmark & luxury golden ring.
+ */
+export async function toggleGoldVerifiedBadge(uid: string, isVerifiedVip: boolean, adminEmail: string) {
+  await adminDb.collection('users').doc(uid).update({
+    verified: isVerifiedVip,
+    isVerifiedVip,
+  });
+  await logAdminAction(adminEmail, 'TOGGLE_GOLDEN_VERIFIED', uid, { isVerifiedVip }, 'user');
+  revalidatePath(`/admin/users/${uid}`);
+  revalidatePath('/admin/users');
+  return { success: true };
+}
+
+/**
+ * Change user role and synchronize Firebase Auth custom claims.
+ */
+export async function setUserRoleAction(
+  uid: string,
+  role: 'Creator' | 'VIP' | 'Moderator' | 'Admin' | 'Founder',
+  adminEmail: string
+) {
+  await adminDb.collection('users').doc(uid).update({ role });
+  await adminAuth.setCustomUserClaims(uid, { role });
+  await logAdminAction(adminEmail, 'SET_USER_ROLE', uid, { role }, 'user');
+  revalidatePath(`/admin/users/${uid}`);
+  return { success: true };
+}
+
+/**
+ * Forcibly reassign a user's @username with atomic reservation index update.
+ */
+export async function overrideUsernameAction(
+  uid: string,
+  newUsername: string,
+  reserveOldHandle: boolean,
+  adminEmail: string
+) {
+  const cleanUsername = newUsername.toLowerCase().trim().replace(/^@/, '');
+  if (!/^[a-zA-Z0-9_]{3,30}$/.test(cleanUsername)) {
+    throw new Error('Username must be 3-30 alphanumeric characters or underscores.');
+  }
+
+  const userRef = adminDb.collection('users').doc(uid);
+  const newUsernameRef = adminDb.collection('usernames').doc(cleanUsername);
+
+  await adminDb.runTransaction(async (transaction) => {
+    const userDoc = await transaction.get(userRef);
+    if (!userDoc.exists) throw new Error('User does not exist.');
+
+    const oldUsername = (userDoc.data()?.username || '').toLowerCase();
+    const newUsernameDoc = await transaction.get(newUsernameRef);
+
+    if (newUsernameDoc.exists && newUsernameDoc.data()?.uid !== uid) {
+      throw new Error(`Username @${cleanUsername} is already reserved.`);
+    }
+
+    // 1. Claim new handle
+    transaction.set(newUsernameRef, { uid, claimedAt: Date.now() });
+
+    // 2. Release or reserve old handle
+    if (oldUsername && oldUsername !== cleanUsername) {
+      const oldUsernameRef = adminDb.collection('usernames').doc(oldUsername);
+      if (reserveOldHandle) {
+        transaction.set(oldUsernameRef, { reservedByAdmin: true, previousUid: uid, reservedAt: Date.now() });
+      } else {
+        transaction.delete(oldUsernameRef);
+      }
+    }
+
+    // 3. Update user profile
+    transaction.update(userRef, { username: cleanUsername });
+  });
+
+  await logAdminAction(adminEmail, 'OVERRIDE_USERNAME', uid, { newUsername: cleanUsername, reserveOldHandle }, 'user');
+  revalidatePath(`/admin/users/${uid}`);
+  revalidatePath('/admin/users');
+  return { success: true };
+}
+
+/**
+ * Toggle stealth shadowban.
+ */
+export async function toggleShadowbanAction(uid: string, isShadowbanned: boolean, adminEmail: string) {
+  await adminDb.collection('users').doc(uid).update({ isShadowbanned });
+  await logAdminAction(adminEmail, isShadowbanned ? 'SHADOWBAN_USER' : 'UNSHADOWBAN_USER', uid, {}, 'user');
+  revalidatePath(`/admin/users/${uid}`);
+  return { success: true };
+}
+
+/**
+ * Apply temporary account timeout.
+ */
+export async function timeoutUserAction(uid: string, durationMs: number, reason: string, adminEmail: string) {
+  const timeoutExpiresAt = Date.now() + durationMs;
+  await adminDb.collection('users').doc(uid).update({
+    timeoutExpiresAt,
+    timeoutReason: reason,
+  });
+
+  await logAdminAction(adminEmail, 'TIMEOUT_USER', uid, { durationMs, reason, timeoutExpiresAt }, 'user');
+  revalidatePath(`/admin/users/${uid}`);
   return { success: true };
 }
 
@@ -1485,19 +2734,24 @@ export async function toggleVerifiedBadge(uid: string, verified: boolean, adminE
  * Ban user account and revoke all authentication tokens.
  */
 export async function banUser(uid: string, reason: string, adminEmail: string) {
-  // 1. Mark banned in Firestore profile
-  await adminDb.collection('users').document(uid).update({
+  await adminDb.collection('users').doc(uid).update({
     isBanned: true,
     banReason: reason,
     bannedAt: Date.now(),
   });
 
-  // 2. Revoke Firebase Auth tokens immediately
+  // Revoke active JWT tokens immediately
   await adminAuth.revokeRefreshTokens(uid);
 
-  // 3. Log administrative audit trail
-  await logAdminAction(adminEmail, 'BAN_USER', uid, { reason });
+  // Clear active FCM device tokens to prevent background pushes
+  const tokensSnap = await adminDb.collection('users').doc(uid).collection('device_tokens').get();
+  const batch = adminDb.batch();
+  tokensSnap.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
+
+  await logAdminAction(adminEmail, 'BAN_USER', uid, { reason }, 'user');
   revalidatePath(`/admin/users/${uid}`);
+  revalidatePath('/admin/users');
   return { success: true };
 }
 
@@ -1505,19 +2759,657 @@ export async function banUser(uid: string, reason: string, adminEmail: string) {
  * Unban user account.
  */
 export async function unbanUser(uid: string, adminEmail: string) {
-  await adminDb.collection('users').document(uid).update({
+  await adminDb.collection('users').doc(uid).update({
     isBanned: false,
     banReason: null,
     bannedAt: null,
   });
-  await logAdminAction(adminEmail, 'UNBAN_USER', uid, {});
+  await logAdminAction(adminEmail, 'UNBAN_USER', uid, {}, 'user');
   revalidatePath(`/admin/users/${uid}`);
+  revalidatePath('/admin/users');
+  return { success: true };
+}
+
+/**
+ * Force revoke all active user authentication refresh tokens.
+ */
+export async function revokeUserSessionsAction(uid: string, adminEmail: string) {
+  await adminAuth.revokeRefreshTokens(uid);
+  await logAdminAction(adminEmail, 'REVOKE_SESSIONS', uid, {}, 'user');
+  return { success: true };
+}
+
+/**
+ * Send official password reset email.
+ */
+export async function sendPasswordResetAction(email: string, adminEmail: string) {
+  const link = await adminAuth.generatePasswordResetLink(email);
+  await logAdminAction(adminEmail, 'SEND_PASSWORD_RESET', email, { linkGenerated: true }, 'auth');
+  return { success: true, link };
+}
+
+/**
+ * Wipe inappropriate user avatar and purge from Supabase storage.
+ */
+export async function wipeUserAvatarAction(uid: string, adminEmail: string) {
+  const userRef = adminDb.collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  const avatarUrl = userSnap.data()?.avatarUrl;
+
+  await userRef.update({ avatarUrl: null });
+
+  if (avatarUrl && avatarUrl.includes('supabase.co')) {
+    const filename = avatarUrl.split('/').pop();
+    if (filename) await supabaseAdmin.storage.from('avatars').remove([filename]);
+  }
+
+  await logAdminAction(adminEmail, 'WIPE_AVATAR', uid, { previousAvatarUrl: avatarUrl }, 'user');
+  revalidatePath(`/admin/users/${uid}`);
+  return { success: true };
+}
+
+/**
+ * Wipe profile banner and reset.
+ */
+export async function wipeUserBannerAction(uid: string, adminEmail: string) {
+  const userRef = adminDb.collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  const bannerUrl = userSnap.data()?.bannerUrl;
+
+  await userRef.update({ bannerUrl: null, bannerWorkId: null });
+
+  if (bannerUrl && bannerUrl.includes('supabase.co')) {
+    const filename = bannerUrl.split('/').pop();
+    if (filename) await supabaseAdmin.storage.from('banners').remove([filename]);
+  }
+
+  await logAdminAction(adminEmail, 'WIPE_BANNER', uid, { previousBannerUrl: bannerUrl }, 'user');
+  revalidatePath(`/admin/users/${uid}`);
+  return { success: true };
+}
+
+/**
+ * Generate 15-minute Founder Impersonation Debug Token.
+ */
+export async function generateImpersonationTokenAction(uid: string, adminEmail: string) {
+  const customToken = await adminAuth.createCustomToken(uid, { isImpersonated: true, generatedBy: adminEmail });
+  await logAdminAction(adminEmail, 'GENERATE_IMPERSONATION_TOKEN', uid, {}, 'user');
+  return { success: true, customToken };
+}
+
+/**
+ * Hard atomic delete of user account, documents, and storage assets.
+ */
+export async function cascadeDeleteUserAction(uid: string, adminEmail: string) {
+  const userRef = adminDb.collection('users').doc(uid);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) throw new Error('User does not exist.');
+
+  const username = userSnap.data()?.username?.toLowerCase();
+
+  // 1. Delete Firebase Auth account
+  try {
+    await adminAuth.deleteUser(uid);
+  } catch (err) {
+    console.warn('Auth user already deleted or not found');
+  }
+
+  // 2. Release handle
+  if (username) {
+    await adminDb.collection('usernames').doc(username).delete();
+  }
+
+  // 3. Delete user document
+  await userRef.delete();
+
+  await logAdminAction(adminEmail, 'CASCADE_DELETE_USER', uid, { username }, 'user');
+  revalidatePath('/admin/users');
   return { success: true };
 }
 ```
 
-7.3. Moderation Server Actions (`actions/moderation.ts`)
---------------------------------------------------------
+----------------------------------------------------------------------------------------------------
+7.4. Masterwork & Community Post Server Actions (`actions/posts.ts`)
+----------------------------------------------------------------------------------------------------
+```typescript
+'use server';
+
+import { adminDb } from '@/lib/firebaseAdmin';
+import { logAdminAction } from '@/lib/auditLogger';
+import { revalidatePath } from 'next/cache';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+export async function featurePostAction(postId: string, isFeatured: boolean, priority: number, adminEmail: string) {
+  await adminDb.collection('community_works').doc(postId).update({
+    isFeatured,
+    featuredPriority: priority || 1,
+  });
+  await logAdminAction(adminEmail, isFeatured ? 'FEATURE_POST' : 'UNFEATURE_POST', postId, { priority }, 'post');
+  revalidatePath('/admin/posts');
+  return { success: true };
+}
+
+export async function boostPostAlgorithmAction(postId: string, multiplier: number, adminEmail: string) {
+  await adminDb.collection('community_works').doc(postId).update({
+    algoBoostMultiplier: multiplier,
+  });
+  await logAdminAction(adminEmail, 'BOOST_POST_ALGO', postId, { multiplier }, 'post');
+  revalidatePath('/admin/posts');
+  return { success: true };
+}
+
+export async function overridePostCountersAction(
+  postId: string,
+  counters: {
+    likesCount?: number;
+    remixCount?: number;
+    downloadCount?: number;
+    shareCount?: number;
+    commentsCount?: number;
+  },
+  adminEmail: string
+) {
+  const updatePayload: Record<string, any> = {};
+  if (counters.likesCount !== undefined) updatePayload.likesCount = counters.likesCount;
+  if (counters.remixCount !== undefined) updatePayload.remixCount = counters.remixCount;
+  if (counters.downloadCount !== undefined) updatePayload.downloadCount = counters.downloadCount;
+  if (counters.shareCount !== undefined) updatePayload.shareCount = counters.shareCount;
+  if (counters.commentsCount !== undefined) {
+    updatePayload.commentsCount = counters.commentsCount;
+    updatePayload.commentCount = counters.commentsCount;
+  }
+
+  await adminDb.collection('community_works').doc(postId).update(updatePayload);
+  await logAdminAction(adminEmail, 'OVERRIDE_POST_COUNTERS', postId, updatePayload, 'post');
+  revalidatePath('/admin/posts');
+  return { success: true };
+}
+
+export async function lockPostCommentsAction(postId: string, commentsDisabled: boolean, adminEmail: string) {
+  await adminDb.collection('community_works').doc(postId).update({ commentsDisabled });
+  await logAdminAction(adminEmail, commentsDisabled ? 'LOCK_COMMENTS' : 'UNLOCK_COMMENTS', postId, {}, 'post');
+  revalidatePath('/admin/posts');
+  return { success: true };
+}
+
+export async function togglePostRemixAction(postId: string, remixDisabled: boolean, adminEmail: string) {
+  await adminDb.collection('community_works').doc(postId).update({ remixDisabled });
+  await logAdminAction(adminEmail, remixDisabled ? 'DISABLE_REMIX' : 'ENABLE_REMIX', postId, {}, 'post');
+  revalidatePath('/admin/posts');
+  return { success: true };
+}
+
+export async function takedownPostAction(postId: string, reason: string, adminEmail: string) {
+  await adminDb.collection('community_works').doc(postId).update({
+    isTakedown: true,
+    takedownReason: reason,
+    takedownAt: Date.now(),
+  });
+  await logAdminAction(adminEmail, 'TAKEDOWN_POST', postId, { reason }, 'post');
+  revalidatePath('/admin/posts');
+  return { success: true };
+}
+
+export async function restorePostAction(postId: string, adminEmail: string) {
+  await adminDb.collection('community_works').doc(postId).update({
+    isTakedown: false,
+    takedownReason: null,
+    takedownAt: null,
+  });
+  await logAdminAction(adminEmail, 'RESTORE_POST', postId, {}, 'post');
+  revalidatePath('/admin/posts');
+  return { success: true };
+}
+
+export async function hardDeletePostAction(postId: string, adminEmail: string) {
+  const postRef = adminDb.collection('community_works').doc(postId);
+  const snap = await postRef.get();
+  if (snap.exists) {
+    const data = snap.data();
+    // Delete files in Supabase posts bucket
+    const urls = [...(data?.imageUrls || []), data?.imageUrl, data?.jsonUrl].filter(Boolean);
+    const keysToDelete: string[] = [];
+    urls.forEach((url) => {
+      if (url.includes('supabase.co')) {
+        const key = url.split('/').pop();
+        if (key) keysToDelete.push(key);
+      }
+    });
+
+    if (keysToDelete.length > 0) {
+      await supabaseAdmin.storage.from('posts').remove(keysToDelete);
+    }
+  }
+
+  await postRef.delete();
+  await logAdminAction(adminEmail, 'HARD_DELETE_POST', postId, {}, 'post');
+  revalidatePath('/admin/posts');
+  return { success: true };
+}
+```
+
+----------------------------------------------------------------------------------------------------
+7.5. Flash Video Reels Server Actions (`actions/reels.ts`)
+----------------------------------------------------------------------------------------------------
+```typescript
+'use server';
+
+import { adminDb } from '@/lib/firebaseAdmin';
+import { logAdminAction } from '@/lib/auditLogger';
+import { revalidatePath } from 'next/cache';
+
+export async function overrideReelMetricsAction(
+  videoId: string,
+  metrics: { viewCount?: number; likesCount?: number; commentsCount?: number; shareCount?: number },
+  adminEmail: string
+) {
+  const updatePayload: Record<string, any> = {};
+  if (metrics.viewCount !== undefined) updatePayload.viewCount = metrics.viewCount;
+  if (metrics.likesCount !== undefined) updatePayload.likesCount = metrics.likesCount;
+  if (metrics.commentsCount !== undefined) {
+    updatePayload.commentsCount = metrics.commentsCount;
+    updatePayload.commentCount = metrics.commentsCount;
+  }
+  if (metrics.shareCount !== undefined) updatePayload.shareCount = metrics.shareCount;
+
+  await adminDb.collection('flash_videos').doc(videoId).update(updatePayload);
+  await logAdminAction(adminEmail, 'OVERRIDE_REEL_METRICS', videoId, updatePayload, 'reel');
+  revalidatePath('/admin/flash');
+  return { success: true };
+}
+
+export async function muteReelAudioAction(videoId: string, reason: string, adminEmail: string) {
+  await adminDb.collection('flash_videos').doc(videoId).update({
+    isAudioMuted: true,
+    audioMuteReason: reason || 'Copyright Claim',
+  });
+  await logAdminAction(adminEmail, 'MUTE_REEL_AUDIO', videoId, { reason }, 'reel');
+  revalidatePath('/admin/flash');
+  return { success: true };
+}
+
+export async function takedownReelAction(videoId: string, reason: string, adminEmail: string) {
+  await adminDb.collection('flash_videos').doc(videoId).update({
+    isTakedown: true,
+    takedownReason: reason,
+  });
+  await logAdminAction(adminEmail, 'TAKEDOWN_REEL', videoId, { reason }, 'reel');
+  revalidatePath('/admin/flash');
+  return { success: true };
+}
+
+export async function hardDeleteReelAction(videoId: string, adminEmail: string) {
+  await adminDb.collection('flash_videos').doc(videoId).delete();
+  await logAdminAction(adminEmail, 'HARD_DELETE_REEL', videoId, {}, 'reel');
+  revalidatePath('/admin/flash');
+  return { success: true };
+}
+```
+
+----------------------------------------------------------------------------------------------------
+7.6. Stories & Highlights Server Actions (`actions/stories.ts`)
+----------------------------------------------------------------------------------------------------
+```typescript
+'use server';
+
+import { adminDb } from '@/lib/firebaseAdmin';
+import { logAdminAction } from '@/lib/auditLogger';
+import { revalidatePath } from 'next/cache';
+
+export async function extendStoryExpiryAction(storyId: string, additionalMs: number, adminEmail: string) {
+  const storyRef = adminDb.collection('stories').doc(storyId);
+  const snap = await storyRef.get();
+  if (!snap.exists) throw new Error('Story not found');
+
+  const currentExpiry = snap.data()?.expiresAt || Date.now();
+  const newExpiry = Math.max(currentExpiry, Date.now()) + additionalMs;
+
+  await storyRef.update({ expiresAt: newExpiry });
+  await logAdminAction(adminEmail, 'EXTEND_STORY_EXPIRY', storyId, { additionalMs, newExpiry }, 'story');
+  revalidatePath('/admin/stories');
+  return { success: true, newExpiry };
+}
+
+export async function forceExpireStoryAction(storyId: string, adminEmail: string) {
+  await adminDb.collection('stories').doc(storyId).update({
+    expiresAt: Date.now() - 1000,
+  });
+  await logAdminAction(adminEmail, 'FORCE_EXPIRE_STORY', storyId, {}, 'story');
+  revalidatePath('/admin/stories');
+  return { success: true };
+}
+
+export async function setStoryRingTypeAction(
+  storyId: string,
+  ringType: 'regular_blue' | 'verified_gold' | 'close_friends_green',
+  adminEmail: string
+) {
+  await adminDb.collection('stories').doc(storyId).update({ ringType });
+  await logAdminAction(adminEmail, 'SET_STORY_RING_TYPE', storyId, { ringType }, 'story');
+  revalidatePath('/admin/stories');
+  return { success: true };
+}
+
+export async function clearStoryViewersAction(storyId: string, adminEmail: string) {
+  const viewsRef = adminDb.collection('stories').doc(storyId).collection('views');
+  const snap = await viewsRef.get();
+
+  const batch = adminDb.batch();
+  snap.forEach((doc) => batch.delete(doc.ref));
+  batch.update(adminDb.collection('stories').doc(storyId), { viewCount: 0 });
+  await batch.commit();
+
+  await logAdminAction(adminEmail, 'CLEAR_STORY_VIEWERS', storyId, { deletedViewsCount: snap.size }, 'story');
+  revalidatePath('/admin/stories');
+  return { success: true };
+}
+
+export async function hardDeleteStoryAction(storyId: string, adminEmail: string) {
+  await adminDb.collection('stories').doc(storyId).delete();
+  await logAdminAction(adminEmail, 'HARD_DELETE_STORY', storyId, {}, 'story');
+  revalidatePath('/admin/stories');
+  return { success: true };
+}
+```
+
+----------------------------------------------------------------------------------------------------
+7.7. Remote Config & Platform Kill Switch Server Actions (`actions/config.ts`)
+----------------------------------------------------------------------------------------------------
+```typescript
+'use server';
+
+import { adminDb } from '@/lib/firebaseAdmin';
+import { logAdminAction } from '@/lib/auditLogger';
+import { revalidatePath } from 'next/cache';
+
+/**
+ * Toggle platform-wide Emergency Maintenance Mode.
+ */
+export async function toggleEmergencyMaintenanceAction(enabled: boolean, adminEmail: string) {
+  await adminDb.collection('system').doc('config').set(
+    {
+      maintenanceMode: enabled,
+      maintenanceToggledAt: Date.now(),
+      maintenanceToggledBy: adminEmail,
+    },
+    { merge: true }
+  );
+
+  await logAdminAction(adminEmail, 'TOGGLE_EMERGENCY_MAINTENANCE', 'GLOBAL', { enabled }, 'config');
+  revalidatePath('/admin/config');
+  return { success: true, enabled };
+}
+
+/**
+ * Enforce minimum client application version (forces mobile update dialog).
+ */
+export async function setMinimumAppVersionAction(minVersion: string, adminEmail: string) {
+  await adminDb.collection('system').doc('config').set(
+    {
+      minAppVersion: minVersion,
+      minAppVersionUpdatedAt: Date.now(),
+    },
+    { merge: true }
+  );
+
+  await logAdminAction(adminEmail, 'SET_MIN_APP_VERSION', 'GLOBAL', { minVersion }, 'config');
+  revalidatePath('/admin/config');
+  return { success: true, minVersion };
+}
+
+/**
+ * Toggle Gemini AI features globally.
+ */
+export async function toggleAiStudioAction(enabled: boolean, adminEmail: string) {
+  await adminDb.collection('system').doc('config').set(
+    { aiGenerationEnabled: enabled },
+    { merge: true }
+  );
+  await logAdminAction(adminEmail, 'TOGGLE_AI_STUDIO', 'GLOBAL', { enabled }, 'config');
+  revalidatePath('/admin/config');
+  return { success: true };
+}
+
+/**
+ * Publish global in-app announcement banner.
+ */
+export async function setGlobalAnnouncementAction(
+  text: string,
+  color: 'cyan' | 'gold' | 'purple' | 'amber',
+  link: string,
+  adminEmail: string
+) {
+  await adminDb.collection('system').doc('config').set(
+    {
+      announcement: {
+        active: true,
+        id: Date.now(),
+        text,
+        color,
+        link: link || null,
+        publishedBy: adminEmail,
+      },
+    },
+    { merge: true }
+  );
+
+  await logAdminAction(adminEmail, 'SET_ANNOUNCEMENT_BANNER', 'GLOBAL', { text, color, link }, 'config');
+  revalidatePath('/admin/config');
+  return { success: true };
+}
+
+/**
+ * Clear/dismiss active global announcement banner.
+ */
+export async function clearGlobalAnnouncementAction(adminEmail: string) {
+  await adminDb.collection('system').doc('config').set(
+    { 'announcement.active': false },
+    { merge: true }
+  );
+
+  await logAdminAction(adminEmail, 'CLEAR_ANNOUNCEMENT_BANNER', 'GLOBAL', {}, 'config');
+  revalidatePath('/admin/config');
+  return { success: true };
+}
+```
+----------------------------------------------------------------------------------------------------
+7.8. Threaded Comments Moderation Server Actions (`actions/comments.ts`)
+----------------------------------------------------------------------------------------------------
+```typescript
+'use server';
+
+import { adminDb } from '@/lib/firebaseAdmin';
+import { logAdminAction } from '@/lib/auditLogger';
+import { FieldValue } from 'firebase-admin/firestore';
+import { revalidatePath } from 'next/cache';
+
+export async function pinCommentAction(commentId: string, videoId: string, isPinned: boolean, adminEmail: string) {
+  const batch = adminDb.batch();
+  const rootRef = adminDb.collection('flash_comments').doc(commentId);
+  batch.update(rootRef, { isPinned });
+
+  const flashRef = adminDb.collection('flash_videos').doc(videoId).collection('comments').doc(commentId);
+  batch.update(flashRef, { isPinned });
+
+  const commRef = adminDb.collection('community_works').doc(videoId).collection('comments').doc(commentId);
+  batch.update(commRef, { isPinned });
+
+  await batch.commit();
+  await logAdminAction(adminEmail, isPinned ? 'PIN_COMMENT' : 'UNPIN_COMMENT', commentId, { videoId }, 'comment');
+  revalidatePath('/admin/comments');
+  return { success: true };
+}
+
+export async function toggleCreatorHeartAction(commentId: string, videoId: string, isCreatorHearted: boolean, adminEmail: string) {
+  const batch = adminDb.batch();
+  const rootRef = adminDb.collection('flash_comments').doc(commentId);
+  batch.update(rootRef, { isCreatorHearted });
+
+  const flashRef = adminDb.collection('flash_videos').doc(videoId).collection('comments').doc(commentId);
+  batch.update(flashRef, { isCreatorHearted });
+
+  const commRef = adminDb.collection('community_works').doc(videoId).collection('comments').doc(commentId);
+  batch.update(commRef, { isCreatorHearted });
+
+  await batch.commit();
+  await logAdminAction(adminEmail, isCreatorHearted ? 'HEART_COMMENT' : 'UNHEART_COMMENT', commentId, { videoId }, 'comment');
+  revalidatePath('/admin/comments');
+  return { success: true };
+}
+
+export async function redactCommentTextAction(commentId: string, newContent: string, reason: string, adminEmail: string) {
+  await adminDb.collection('flash_comments').doc(commentId).update({
+    content: newContent,
+    edited: true,
+    editedBy: adminEmail,
+    redactedAt: Date.now(),
+    redactionReason: reason,
+  });
+  await logAdminAction(adminEmail, 'REDACT_COMMENT', commentId, { reason, newContent }, 'comment');
+  revalidatePath('/admin/comments');
+  return { success: true };
+}
+
+export async function lockCommentThreadAction(commentId: string, isLocked: boolean, adminEmail: string) {
+  await adminDb.collection('flash_comments').doc(commentId).update({ isLocked });
+  await logAdminAction(adminEmail, isLocked ? 'LOCK_COMMENT_THREAD' : 'UNLOCK_COMMENT_THREAD', commentId, {}, 'comment');
+  revalidatePath('/admin/comments');
+  return { success: true };
+}
+
+export async function deleteCommentAction(commentId: string, videoId: string, parentCommentId?: string, adminEmail: string = 'admin') {
+  const batch = adminDb.batch();
+  const commentRef = adminDb.collection('flash_comments').doc(commentId);
+
+  // 1. Delete root comment
+  batch.delete(commentRef);
+
+  // 2. Delete mirrors
+  const flashMirrorRef = adminDb.collection('flash_videos').doc(videoId).collection('comments').doc(commentId);
+  batch.delete(flashMirrorRef);
+
+  const commMirrorRef = adminDb.collection('community_works').doc(videoId).collection('comments').doc(commentId);
+  batch.delete(commMirrorRef);
+
+  // 3. Decrement counters
+  const flashDocRef = adminDb.collection('flash_videos').doc(videoId);
+  const commDocRef = adminDb.collection('community_works').doc(videoId);
+
+  batch.update(flashDocRef, { commentCount: FieldValue.increment(-1), commentsCount: FieldValue.increment(-1) });
+  batch.update(commDocRef, { commentCount: FieldValue.increment(-1), commentsCount: FieldValue.increment(-1) });
+
+  if (parentCommentId) {
+    const parentRef = adminDb.collection('flash_comments').doc(parentCommentId);
+    batch.update(parentRef, { replyCount: FieldValue.increment(-1) });
+  }
+
+  await batch.commit();
+  await logAdminAction(adminEmail, 'DELETE_COMMENT', commentId, { videoId, parentCommentId }, 'comment');
+  revalidatePath('/admin/comments');
+  return { success: true };
+}
+
+export async function bulkSpamPurgeAction(
+  criteria: { authorUid?: string; keyword?: string; minToxicity?: number },
+  adminEmail: string
+) {
+  let query: FirebaseFirestore.Query = adminDb.collection('flash_comments');
+  if (criteria.authorUid) {
+    query = query.where('userId', '==', criteria.authorUid);
+  }
+
+  const snap = await query.limit(200).get();
+  const batch = adminDb.batch();
+  let deletedCount = 0;
+
+  snap.forEach((doc) => {
+    const data = doc.data();
+    let matches = true;
+    if (criteria.keyword && !data.content?.toLowerCase().includes(criteria.keyword.toLowerCase())) {
+      matches = false;
+    }
+    if (criteria.minToxicity && (data.aiToxicityScore || 0) < criteria.minToxicity) {
+      matches = false;
+    }
+
+    if (matches) {
+      batch.delete(doc.ref);
+      deletedCount++;
+    }
+  });
+
+  if (deletedCount > 0) {
+    await batch.commit();
+  }
+
+  await logAdminAction(adminEmail, 'BULK_SPAM_PURGE', 'COMMENTS', { deletedCount, criteria }, 'comment');
+  revalidatePath('/admin/comments');
+  return { success: true, deletedCount };
+}
+```
+
+----------------------------------------------------------------------------------------------------
+7.9. Direct Messages, Group Chat & WebRTC Server Actions (`actions/chats.ts`)
+----------------------------------------------------------------------------------------------------
+```typescript
+'use server';
+
+import { adminDb } from '@/lib/firebaseAdmin';
+import { logAdminAction } from '@/lib/auditLogger';
+import { FieldValue } from 'firebase-admin/firestore';
+import { revalidatePath } from 'next/cache';
+
+export async function forceDisbandGroupAction(roomId: string, reason: string, adminEmail: string) {
+  await adminDb.collection('chats').doc(roomId).update({
+    isDisbanded: true,
+    disbandReason: reason,
+    disbandedAt: Date.now(),
+    disbandedBy: adminEmail,
+  });
+
+  await logAdminAction(adminEmail, 'DISBAND_GROUP_CHAT', roomId, { reason }, 'chat');
+  revalidatePath('/admin/chats');
+  return { success: true };
+}
+
+export async function removeChatMemberAction(roomId: string, memberUid: string, adminEmail: string) {
+  await adminDb.collection('chats').doc(roomId).update({
+    participantIds: FieldValue.arrayRemove(memberUid),
+  });
+
+  await logAdminAction(adminEmail, 'REMOVE_CHAT_MEMBER', roomId, { memberUid }, 'chat');
+  revalidatePath(`/admin/chats/${roomId}`);
+  return { success: true };
+}
+
+export async function deleteChatMessageAction(roomId: string, messageId: string, adminEmail: string) {
+  await adminDb.collection('chats').doc(roomId).collection('messages').doc(messageId).delete();
+  await logAdminAction(adminEmail, 'DELETE_CHAT_MESSAGE', messageId, { roomId }, 'chat');
+  return { success: true };
+}
+
+export async function terminateWebRTCCallAction(callId: string, reason: string, adminEmail: string) {
+  await adminDb.collection('signaling').doc(callId).update({
+    status: 'terminated',
+    terminatedBy: adminEmail,
+    terminationReason: reason,
+    endedAt: Date.now(),
+  });
+
+  await logAdminAction(adminEmail, 'TERMINATE_WEBRTC_CALL', callId, { reason }, 'webrtc');
+  revalidatePath('/admin/webrtc');
+  return { success: true };
+}
+```
+
+----------------------------------------------------------------------------------------------------
+7.10. Content Moderation & Abuse Reports Server Actions (`actions/moderation.ts`)
+----------------------------------------------------------------------------------------------------
 ```typescript
 'use server';
 
@@ -1537,7 +3429,7 @@ export async function resolveReport(
 
   const report = reportSnap.data()!;
 
-  // Execute resolution action
+  // 1. Execute resolution action
   if (action === 'content_removed') {
     if (report.targetType === 'post') {
       await adminDb.collection('community_works').doc(report.targetId).update({
@@ -1547,15 +3439,31 @@ export async function resolveReport(
     } else if (report.targetType === 'flash') {
       await adminDb.collection('flash_videos').doc(report.targetId).update({
         isTakedown: true,
+        takedownReason: `Violated terms: ${report.reason}`,
       });
     } else if (report.targetType === 'comment') {
       await adminDb.collection('flash_comments').doc(report.targetId).delete();
     }
+  } else if (action === 'warned') {
+    // Send high-priority system warning notification
+    await adminDb.collection('users').doc(report.targetAuthorId).collection('notifications').add({
+      type: 'SYSTEM_WARNING',
+      title: 'Community Guidelines Warning',
+      body: `Your content was flagged for ${report.reason}. Repeated violations will result in account suspension.`,
+      targetId: report.targetId,
+      timestamp: Date.now(),
+      isRead: false,
+    });
+  } else if (action === 'suspended_24h') {
+    await adminDb.collection('users').doc(report.targetAuthorId).update({
+      timeoutExpiresAt: Date.now() + 86400000,
+      timeoutReason: `Suspended for 24h due to report: ${report.reason}`,
+    });
   } else if (action === 'banned_permanent') {
     await banUser(report.targetAuthorId, `Banned via Report: ${report.reason}`, adminEmail);
   }
 
-  // Update report state
+  // 2. Update report state
   await reportRef.update({
     status: 'resolved',
     resolutionAction: action,
@@ -1563,28 +3471,42 @@ export async function resolveReport(
     resolvedAt: Date.now(),
   });
 
-  await logAdminAction(adminEmail, 'RESOLVE_REPORT', reportId, { action, targetId: report.targetId });
+  await logAdminAction(adminEmail, 'RESOLVE_REPORT', reportId, { action, targetId: report.targetId }, 'moderation');
+  revalidatePath('/admin/moderation');
+  return { success: true };
+}
+
+export async function dismissReportAction(reportId: string, note: string, adminEmail: string) {
+  await adminDb.collection('reports').doc(reportId).update({
+    status: 'dismissed',
+    dismissalNote: note || 'Content complies with guidelines.',
+    resolvedBy: adminEmail,
+    resolvedAt: Date.now(),
+  });
+
+  await logAdminAction(adminEmail, 'DISMISS_REPORT', reportId, { note }, 'moderation');
   revalidatePath('/admin/moderation');
   return { success: true };
 }
 ```
 
-7.4. Broadcast Notification Server Action (`actions/broadcast.ts`)
-------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
+7.11. Push Notification Broadcast Studio Actions (`actions/broadcast.ts`)
+----------------------------------------------------------------------------------------------------
 ```typescript
 'use server';
 
 import { adminDb, adminMessaging } from '@/lib/firebaseAdmin';
 import { logAdminAction } from '@/lib/auditLogger';
+import { revalidatePath } from 'next/cache';
 
 export async function sendBroadcastPush(
   title: string,
   body: string,
-  targetAudience: 'ALL' | string, // 'ALL' or specific interest domain e.g. "Color Grading"
+  targetAudience: 'ALL' | string,
   targetDeepLink: string,
   adminEmail: string
 ) {
-  // Query users collection for device tokens
   let query: FirebaseFirestore.Query = adminDb.collection('users');
   if (targetAudience !== 'ALL') {
     query = query.where('interests', 'array-contains', targetAudience);
@@ -1601,10 +3523,9 @@ export async function sendBroadcastPush(
   });
 
   if (tokens.length === 0) {
-    return { success: false, message: 'No registered device tokens found for this segment.' };
+    return { success: false, message: 'No registered device tokens found for this audience segment.' };
   }
 
-  // FCM multicast chunking (max 500 per batch)
   const batchSize = 500;
   let successCount = 0;
   let failureCount = 0;
@@ -1616,7 +3537,7 @@ export async function sendBroadcastPush(
       notification: { title, body },
       data: {
         click_action: 'FLUTTER_NOTIFICATION_CLICK',
-        targetId: targetDeepLink,
+        targetId: targetDeepLink || 'home',
         source: 'CHROMA_BROADCAST',
       },
     });
@@ -1624,108 +3545,204 @@ export async function sendBroadcastPush(
     failureCount += response.failureCount;
   }
 
-  await logAdminAction(adminEmail, 'SEND_BROADCAST', 'GLOBAL', {
+  // Record campaign in Firestore
+  const campaignRef = adminDb.collection('broadcast_campaigns').doc();
+  await campaignRef.set({
+    id: campaignRef.id,
+    title,
+    body,
+    targetAudience,
+    deepLinkUrl: targetDeepLink,
+    adminEmail,
+    totalTokensTargeted: tokens.length,
+    successCount,
+    failureCount,
+    status: 'completed',
+    timestamp: Date.now(),
+  });
+
+  await logAdminAction(adminEmail, 'SEND_BROADCAST_PUSH', campaignRef.id, {
     title,
     targetAudience,
     successCount,
     failureCount,
-  });
+  }, 'broadcast');
 
+  revalidatePath('/admin/broadcast');
   return { success: true, sent: successCount, failed: failureCount };
 }
 
-// -----------------------------------------------------------------------------
-// 7.5. Comment Moderation Server Actions (`actions/comments.ts`)
-// -----------------------------------------------------------------------------
-export async function deleteCommentAction(
-  adminEmail: string,
-  commentId: string,
-  videoId: string,
-  parentCommentId?: string
-) {
-  const commentRef = adminDb.collection('flash_comments').document(commentId);
-  const commentSnap = await commentRef.get();
-
-  if (!commentSnap.exists) {
-    throw new Error('Comment does not exist.');
-  }
-
-  const batch = adminDb.batch();
-
-  // 1. Delete from root flash_comments
-  batch.delete(commentRef);
-
-  // 2. Delete from subcollection mirrors
-  const flashMirrorRef = adminDb.collection('flash_videos').document(videoId).collection('comments').document(commentId);
-  batch.delete(flashMirrorRef);
-
-  const commMirrorRef = adminDb.collection('community_works').document(videoId).collection('comments').document(commentId);
-  batch.delete(commMirrorRef);
-
-  // 3. Decrement counters
-  const flashDocRef = adminDb.collection('flash_videos').document(videoId);
-  const commDocRef = adminDb.collection('community_works').document(videoId);
-
-  batch.update(flashDocRef, { commentCount: FieldValue.increment(-1), commentsCount: FieldValue.increment(-1) });
-  batch.update(commDocRef, { commentCount: FieldValue.increment(-1), commentsCount: FieldValue.increment(-1) });
-
-  if (parentCommentId) {
-    const parentRef = adminDb.collection('flash_comments').document(parentCommentId);
-    batch.update(parentRef, { replyCount: FieldValue.increment(-1) });
-  }
-
-  await batch.commit();
-
-  await logAdminAction(adminEmail, 'DELETE_COMMENT', commentId, {
-    videoId,
-    parentCommentId: parentCommentId || null,
+export async function sendTestPushToDevice(fcmToken: string, title: string, body: string, adminEmail: string) {
+  const response = await adminMessaging.send({
+    token: fcmToken,
+    notification: { title: `[TEST] ${title}`, body },
+    data: { test: 'true', source: 'CHROMA_ADMIN' },
   });
 
-  return { success: true };
+  await logAdminAction(adminEmail, 'SEND_TEST_PUSH', 'UNICAST', { messageId: response }, 'broadcast');
+  return { success: true, messageId: response };
+}
+```
+
+----------------------------------------------------------------------------------------------------
+7.12. Cloud Storage Asset & Orphan Cleaner Actions (`actions/storage.ts`)
+----------------------------------------------------------------------------------------------------
+```typescript
+'use server';
+
+import { adminDb } from '@/lib/firebaseAdmin';
+import { logAdminAction } from '@/lib/auditLogger';
+import { createClient } from '@supabase/supabase-js';
+import { revalidatePath } from 'next/cache';
+
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+/**
+ * Scan Supabase Storage buckets and identify orphaned files unreferenced in Firestore.
+ */
+export async function scanOrphanedAssetsAction(bucketName: string, adminEmail: string) {
+  const { data: files, error } = await supabaseAdmin.storage.from(bucketName).list('', { limit: 1000 });
+  if (error || !files) throw new Error(error?.message || 'Failed to list storage bucket');
+
+  const orphanedKeys: string[] = [];
+  let totalBytesReclaimable = 0;
+
+  for (const file of files) {
+    if (!file.name || file.name.startsWith('.')) continue;
+
+    let isReferenced = false;
+    if (bucketName === 'avatars') {
+      const snap = await adminDb.collection('users').where('avatarUrl', '>=', file.name).where('avatarUrl', '<=', file.name + '').limit(1).get();
+      if (!snap.empty) isReferenced = true;
+    } else if (bucketName === 'posts') {
+      const snap = await adminDb.collection('community_works').where('imageUrls', 'array-contains-any', [file.name]).limit(1).get();
+      if (!snap.empty) isReferenced = true;
+    }
+
+    if (!isReferenced) {
+      orphanedKeys.push(file.name);
+      totalBytesReclaimable += file.metadata?.size || 0;
+    }
+  }
+
+  await logAdminAction(adminEmail, 'SCAN_ORPHANED_ASSETS', bucketName, {
+    totalScanned: files.length,
+    orphanedCount: orphanedKeys.length,
+    bytesReclaimable: totalBytesReclaimable,
+  }, 'storage');
+
+  return { success: true, orphanedKeys, totalBytesReclaimable };
 }
 
-export async function pinCommentAction(
-  adminEmail: string,
-  commentId: string,
-  videoId: string,
-  isPinned: boolean
-) {
-  const batch = adminDb.batch();
-  const rootRef = adminDb.collection('flash_comments').document(commentId);
-  batch.update(rootRef, { isPinned });
+/**
+ * Purge identified orphaned files from Supabase Storage.
+ */
+export async function purgeOrphanedAssetsAction(bucketName: string, keys: string[], adminEmail: string) {
+  if (keys.length === 0) return { success: true, deletedCount: 0 };
 
-  const flashRef = adminDb.collection('flash_videos').document(videoId).collection('comments').document(commentId);
-  batch.update(flashRef, { isPinned });
+  const { error } = await supabaseAdmin.storage.from(bucketName).remove(keys);
+  if (error) throw new Error(error.message);
 
-  const commRef = adminDb.collection('community_works').document(videoId).collection('comments').document(commentId);
-  batch.update(commRef, { isPinned });
+  await logAdminAction(adminEmail, 'PURGE_ORPHANED_ASSETS', bucketName, {
+    purgedCount: keys.length,
+  }, 'storage');
 
-  await batch.commit();
-
-  await logAdminAction(adminEmail, isPinned ? 'PIN_COMMENT' : 'UNPIN_COMMENT', commentId, { videoId });
-  return { success: true };
+  revalidatePath('/admin/storage');
+  return { success: true, deletedCount: keys.length };
 }
 
-export async function toggleCreatorHeartAction(
-  adminEmail: string,
-  commentId: string,
-  videoId: string,
-  isCreatorHearted: boolean
-) {
+export async function deleteStorageFileAction(bucketName: string, objectKey: string, adminEmail: string) {
+  const { error } = await supabaseAdmin.storage.from(bucketName).remove([objectKey]);
+  if (error) throw new Error(error.message);
+
+  await logAdminAction(adminEmail, 'DELETE_STORAGE_FILE', objectKey, { bucketName }, 'storage');
+  revalidatePath('/admin/storage');
+  return { success: true };
+}
+```
+
+----------------------------------------------------------------------------------------------------
+7.13. System Diagnostics & Reconciliation Actions (`actions/diagnostics.ts`)
+----------------------------------------------------------------------------------------------------
+```typescript
+'use server';
+
+import { adminDb } from '@/lib/firebaseAdmin';
+import { logAdminAction } from '@/lib/auditLogger';
+
+/**
+ * Reconcile and recalculate global followers, following, and works counters for all users.
+ */
+export async function reconcileGlobalCountersAction(adminEmail: string) {
+  const usersSnap = await adminDb.collection('users').get();
+  let healedCount = 0;
+
+  for (const userDoc of usersSnap.docs) {
+    const uid = userDoc.id;
+    const [followersSnap, followingSnap, postsSnap, reelsSnap] = await Promise.all([
+      adminDb.collection('users').doc(uid).collection('followers').get(),
+      adminDb.collection('users').doc(uid).collection('following').get(),
+      adminDb.collection('community_works').where('creatorId', '==', uid).get(),
+      adminDb.collection('flash_videos').where('creatorId', '==', uid).get(),
+    ]);
+
+    const actualFollowers = followersSnap.size;
+    const actualFollowing = followingSnap.size;
+    const actualPosts = postsSnap.size;
+    const actualReels = reelsSnap.size;
+
+    const data = userDoc.data();
+    if (
+      data.followersCount !== actualFollowers ||
+      data.followingCount !== actualFollowing ||
+      data.postsCount !== actualPosts ||
+      data.reelsCount !== actualReels
+    ) {
+      await userDoc.ref.update({
+        followersCount: actualFollowers,
+        followingCount: actualFollowing,
+        postsCount: actualPosts,
+        reelsCount: actualReels,
+      });
+      healedCount++;
+    }
+  }
+
+  await logAdminAction(adminEmail, 'RECONCILE_COUNTERS', 'GLOBAL', {
+    totalScanned: usersSnap.size,
+    healedCount,
+  }, 'diagnostics');
+
+  return { success: true, totalScanned: usersSnap.size, healedCount };
+}
+
+/**
+ * Rebuild usernames index.
+ */
+export async function reindexUsernamesAction(adminEmail: string) {
+  const usersSnap = await adminDb.collection('users').get();
   const batch = adminDb.batch();
-  const rootRef = adminDb.collection('flash_comments').document(commentId);
-  batch.update(rootRef, { isCreatorHearted });
+  let reindexedCount = 0;
 
-  const flashRef = adminDb.collection('flash_videos').document(videoId).collection('comments').document(commentId);
-  batch.update(flashRef, { isCreatorHearted });
-
-  const commRef = adminDb.collection('community_works').document(videoId).collection('comments').document(commentId);
-  batch.update(commRef, { isCreatorHearted });
+  for (const userDoc of usersSnap.docs) {
+    const uid = userDoc.id;
+    const username = userDoc.data()?.username?.toLowerCase().trim();
+    if (username) {
+      batch.set(adminDb.collection('usernames').doc(username), {
+        uid,
+        claimedAt: Date.now(),
+        verifiedByReindex: true,
+      });
+      reindexedCount++;
+    }
+  }
 
   await batch.commit();
-
-  await logAdminAction(adminEmail, isCreatorHearted ? 'HEART_COMMENT' : 'UNHEART_COMMENT', commentId, { videoId });
-  return { success: true };
+  await logAdminAction(adminEmail, 'REINDEX_USERNAMES', 'GLOBAL', { reindexedCount }, 'diagnostics');
+  return { success: true, reindexedCount };
 }
 ```
 

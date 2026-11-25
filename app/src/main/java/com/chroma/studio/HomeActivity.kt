@@ -472,6 +472,29 @@ private fun AuthenticatedRoute(
                                 val roomId = action.removePrefix("deeplink_chat:").trim()
                                 if (roomId.isNotBlank()) navController.navigate("chat/$roomId")
                             }
+                            action.startsWith("deeplink_story:") -> {
+                                val storyId = action.removePrefix("deeplink_story:").trim()
+                                if (storyId.isNotBlank()) {
+                                    discoverVm.viewModelScope.launch {
+                                        val authorId = try {
+                                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                                .collection("stories").document(storyId).get().await()
+                                                .getString("userId")
+                                        } catch (_: Exception) { null }
+                                        if (!authorId.isNullOrBlank()) {
+                                            navController.navigate("userProfile/$authorId")
+                                        } else {
+                                            navigateToTab(0)
+                                        }
+                                    }
+                                }
+                            }
+                            action == "deeplink_notifications" -> {
+                                navController.navigate("notifications_feed")
+                            }
+                            action == "deeplink_home" -> {
+                                navigateToTab(0)
+                            }
                         }
                     }
                     onDispose {
@@ -2782,17 +2805,32 @@ private fun AuthenticatedRoute(
             return
         }
 
-        // Deep links: https://oscellion.vercel.app/u/{username}, /post/{id}, /flash/{id}, /story/{id}
-        // and custom schemes: oscellion://create_post, etc.
+        // Deep links: https://oscellion.vercel.app/u/{username}, /post/{id}, /flash/{id}, /story/{id}, /chat/{id}
+        // and custom schemes: oscellion://u/{username}, oscellion://post/{id}, oscellion://create_post, etc.
         intent.data?.let { uri ->
-            val host = uri.host ?: ""
+            val host = (uri.host ?: "").lowercase()
             val segments = uri.pathSegments ?: emptyList()
-            if (host.equals("oscellion.vercel.app", ignoreCase = true) && segments.isNotEmpty()) {
-                val routeAction = when (segments[0].lowercase()) {
+            val firstPath = segments.firstOrNull()?.lowercase()
+            val customRouteAction = when (host) {
+                "u", "user", "profile" -> segments.firstOrNull()?.let { "deeplink_user:$it" }
+                "post", "work" -> segments.firstOrNull()?.let { "deeplink_post:$it" }
+                "flash", "reel" -> "deeplink_flash:${segments.firstOrNull().orEmpty()}"
+                "chat" -> segments.firstOrNull()?.let { "deeplink_chat:$it" }
+                "story" -> segments.firstOrNull()?.let { "deeplink_story:$it" }
+                "notifications" -> "deeplink_notifications"
+                "home" -> "deeplink_home"
+                else -> null
+            }
+            if (!customRouteAction.isNullOrBlank()) {
+                com.chroma.studio.AppIntentManager.onWidgetAction?.invoke(customRouteAction)
+            } else if (host == "oscellion.vercel.app" && !firstPath.isNullOrBlank()) {
+                val routeAction = when (firstPath) {
                     "u", "user", "profile" -> segments.getOrNull(1)?.let { "deeplink_user:$it" }
                     "post", "work" -> segments.getOrNull(1)?.let { "deeplink_post:$it" }
                     "flash", "reel" -> "deeplink_flash:${segments.getOrNull(1).orEmpty()}"
                     "chat" -> segments.getOrNull(1)?.let { "deeplink_chat:$it" }
+                    "story" -> segments.getOrNull(1)?.let { "deeplink_story:$it" }
+                    "notifications" -> "deeplink_notifications"
                     else -> null
                 }
                 if (!routeAction.isNullOrBlank()) {
