@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,13 +21,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,6 +47,8 @@ fun ChatInputBar(
     onInputTextChange: (String) -> Unit,
     replyQuote: ReplyQuote?,
     onCancelReply: () -> Unit,
+    editingPreviewText: String? = null,
+    onCancelEdit: () -> Unit = {},
     isBlocked: Boolean,
     onCameraClick: () -> Unit,
     onPhotoClick: () -> Unit,
@@ -58,8 +65,20 @@ fun ChatInputBar(
 ) {
     val colors = LocalChatColors.current
     val haptic = LocalHapticFeedback.current
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
     var showEmojiPicker by remember { mutableStateOf(false) }
     var showAttachmentMenu by remember { mutableStateOf(false) }
+
+    // Focus input immediately when entering Reply or Edit mode
+    LaunchedEffect(replyQuote?.messageId, editingPreviewText) {
+        if (replyQuote != null || editingPreviewText != null) {
+            try {
+                focusRequester.requestFocus()
+                keyboardController?.show()
+            } catch (_: Exception) {}
+        }
+    }
 
     androidx.activity.compose.BackHandler(enabled = showAttachmentMenu) {
         showAttachmentMenu = false
@@ -141,15 +160,68 @@ fun ChatInputBar(
                     )
             ) {
 
-                // ── Reply Preview Banner ──────────────────────────
+                // ── Reply / Edit Preview Banner ───────────────────
                 AnimatedVisibility(
-                    visible = replyQuote != null,
+                    visible = replyQuote != null || editingPreviewText != null,
                     enter = expandVertically(
                         animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
                     ) + fadeIn(animationSpec = tween(180)),
                     exit = shrinkVertically(animationSpec = tween(150)) + fadeOut(animationSpec = tween(150))
                 ) {
-                    if (replyQuote != null) {
+                    if (editingPreviewText != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(colors.surfaceSecondary)
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(3.dp)
+                                        .height(30.dp)
+                                        .background(Color(0xFFF59E0B), RoundedCornerShape(2.dp))
+                                )
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Text(
+                                        text = "Editing message",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFFF59E0B),
+                                        lineHeight = 14.sp
+                                    )
+                                    Text(
+                                        text = editingPreviewText,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = colors.textDark,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        lineHeight = 17.sp
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clickable { onCancelEdit() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                PhosphorCloseX(tint = colors.textMuted, size = 13.dp)
+                            }
+                        }
+                    } else if (replyQuote != null) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -298,9 +370,15 @@ fun ChatInputBar(
                                     onInputTextChange(newText.take(MAX_MESSAGE_CHARACTERS))
                                 }
                             },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(focusRequester),
                             enabled = !isBlocked,
                             maxLines = 5,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Sentences,
+                                autoCorrect = true
+                            ),
                             cursorBrush = SolidColor(colors.iosBlue),
                             textStyle = TextStyle(
                                 fontSize = 16.sp,
@@ -447,7 +525,11 @@ fun ChatInputBar(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (hasText) {
-                                    PhosphorPaperPlaneTilt(tint = Color.White, size = 19.dp)
+                                    if (editingPreviewText != null) {
+                                        PhosphorSingleCheck(tint = Color.White, size = 19.dp)
+                                    } else {
+                                        PhosphorPaperPlaneTilt(tint = Color.White, size = 19.dp)
+                                    }
                                 } else {
                                     PhosphorVoiceMicIcon(tint = if (colors.isLight) colors.textDark else Color.White, size = 20.dp)
                                 }

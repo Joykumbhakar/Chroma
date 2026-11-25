@@ -88,6 +88,7 @@ class FlashRepository {
         val displayName = userDoc.getString("displayName") ?: ""
         val avatarUrl = userDoc.getString("avatarUrl") ?: ""
         val verified = userDoc.getBoolean("verified") ?: false
+        val verifiedTone = userDoc.getString("verifiedTone")
 
         val docRef = collection.document()
         val flash = FlashVideo(
@@ -97,6 +98,7 @@ class FlashRepository {
             authorDisplayName = displayName,
             authorAvatarUrl = avatarUrl,
             authorVerified = verified,
+            authorVerifiedTone = verifiedTone,
             videoUrl = videoUrl,
             thumbnailUrl = thumbnailUrl,
             caption = caption,
@@ -122,6 +124,7 @@ class FlashRepository {
                 authorDisplayName = displayName,
                 authorAvatarUrl = avatarUrl,
                 authorVerified = verified,
+                authorVerifiedTone = verifiedTone,
                 title = caption.ifBlank { "Flash Video" },
                 description = caption,
                 aspectRatio = "9:16",
@@ -444,6 +447,7 @@ class FlashRepository {
         val rawDisplayName = userDoc.getString("displayName")
         val avatarUrl = userDoc.getString("avatarUrl") ?: user.photoUrl?.toString() ?: ""
         val verified = userDoc.getBoolean("verified") ?: false
+        val verifiedTone = userDoc.getString("verifiedTone")
 
         val username = if (!rawUsername.isNullOrBlank()) rawUsername else (user.displayName?.replace(" ", "")?.lowercase() ?: "user_${user.uid.take(5)}")
         val displayName = if (!rawDisplayName.isNullOrBlank()) rawDisplayName else (user.displayName ?: username)
@@ -458,6 +462,7 @@ class FlashRepository {
             displayName = displayName,
             avatarUrl = avatarUrl,
             verified = verified,
+            verifiedTone = verifiedTone,
             text = text.trim(),
             timestamp = System.currentTimeMillis(),
             replyToCommentId = replyToCommentId,

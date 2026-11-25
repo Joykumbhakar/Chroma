@@ -1,8 +1,10 @@
 package com.chroma.studio.security.applock
 
 import android.app.AppOpsManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -36,6 +38,15 @@ object AppLockerManager {
     private const val KEY_ENABLED = "app_locker_master_enabled"
     private const val KEY_LOCKED_PACKAGES = "app_locker_locked_packages"
     private const val KEY_RELOCK_MODE = "app_locker_relock_mode" // IMMEDIATELY or SCREEN_OFF
+
+    const val RELOCK_IMMEDIATELY = "IMMEDIATELY"
+    const val RELOCK_SCREEN_OFF = "SCREEN_OFF"
+
+    // Persistent background scope for the usage watcher (survives navigation away from AppLockerScreen)
+    private val lockerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @Volatile
+    private var screenOffReceiverRegistered = false
 
     // Session cache of currently unlocked packages (cleared on screen off or app switch)
     private val unlockedSessions = ConcurrentHashMap<String, Long>()
@@ -96,6 +107,23 @@ object AppLockerManager {
         _lockedCountFlow.value = current.size
     }
 
+    /** Removes all apps from the lock list */
+    fun clearAllLockedPackages(context: Context) {
+        getPrefs(context).edit().putStringSet(KEY_LOCKED_PACKAGES, emptySet()).apply()
+        unlockedSessions.clear()
+        _lockedCountFlow.value = 0
+    }
+
+    /** Returns re-lock policy (IMMEDIATELY or SCREEN_OFF) */
+    fun getRelockMode(context: Context): String {
+        return getPrefs(context).getString(KEY_RELOCK_MODE, RELOCK_IMMEDIATELY) ?: RELOCK_IMMEDIATELY
+    }
+
+    /** Sets re-lock policy (IMMEDIATELY or SCREEN_OFF) */
+    fun setRelockMode(context: Context, mode: String) {
+        getPrefs(context).edit().putString(KEY_RELOCK_MODE, mode).apply()
+    }
+
     /** Returns count of locked packages */
     fun getLockedCount(context: Context): Int {
         return getLockedPackages(context).size
@@ -126,13 +154,37 @@ object AppLockerManager {
     }
 
     /** Called when the foreground package changes */
-    fun onForegroundPackageChanged(newPackage: String) {
+    fun onForegroundPackageChanged(newPackage: String, relockImmediately: Boolean = true) {
         val old = currentForegroundPackage
         currentForegroundPackage = newPackage
-        if (old != null && old != newPackage) {
-            // User navigated away from the previous app -> revoke its session if desired
-            // Instant relock ensures when they return, they must unlock again
+        if (relockImmediately && old != null && old != newPackage) {
+            // Instant relock when switching away from the previous app
             unlockedSessions.remove(old)
+        }
+    }
+
+    private fun ensureScreenOffReceiver(context: Context) {
+        if (screenOffReceiverRegistered) return
+        synchronized(this) {
+            if (screenOffReceiverRegistered) return
+            try {
+                val appCtx = context.applicationContext
+                val receiver = object : BroadcastReceiver() {
+                    override fun onReceive(ctx: Context?, intent: Intent?) {
+                        if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                            lockAllSessions()
+                        }
+                    }
+                }
+                val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    appCtx.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                } else {
+                    @Suppress("UnspecifiedRegisterReceiverFlag")
+                    appCtx.registerReceiver(receiver, filter)
+                }
+                screenOffReceiverRegistered = true
+            } catch (_: Exception) {}
         }
     }
 
@@ -160,6 +212,16 @@ object AppLockerManager {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             context.startActivity(fallback)
+        }
+    }
+
+    /** Returns true only if this build actually declares an AccessibilityService in its manifest */
+    fun hasAccessibilityServiceDeclared(context: Context): Boolean {
+        return try {
+            val intent = Intent("android.accessibilityservice.AccessibilityService").setPackage(context.packageName)
+            context.packageManager.queryIntentServices(intent, 0).isNotEmpty()
+        } catch (_: Exception) {
+            false
         }
     }
 
@@ -246,30 +308,35 @@ object AppLockerManager {
 
     private var usageWatcherJob: kotlinx.coroutines.Job? = null
 
-    /** Starts foreground app monitoring using UsageStatsManager if Accessibility is restricted */
-    fun startUsageWatcherIfNeeded(context: Context, scope: kotlinx.coroutines.CoroutineScope) {
-        if (!isEnabled(context)) {
+    /** Starts foreground app monitoring using UsageStatsManager */
+    fun startUsageWatcherIfNeeded(
+        context: Context,
+        @Suppress("UNUSED_PARAMETER") scope: kotlinx.coroutines.CoroutineScope? = null
+    ) {
+        val appCtx = context.applicationContext
+        ensureScreenOffReceiver(appCtx)
+        if (!isEnabled(appCtx)) {
             stopUsageWatcher()
             return
         }
-        if (isAccessibilityServiceEnabled(context)) {
+        if (isAccessibilityServiceEnabled(appCtx)) {
             // Accessibility service is active; zero latency interception running
             stopUsageWatcher()
             return
         }
-        if (!hasUsageStatsPermission(context)) {
+        if (!hasUsageStatsPermission(appCtx)) {
             stopUsageWatcher()
             return
         }
 
         if (usageWatcherJob?.isActive == true) return
 
-        usageWatcherJob = scope.launch(kotlinx.coroutines.Dispatchers.Default) {
-            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager ?: return@launch
+        usageWatcherJob = lockerScope.launch {
+            val usm = appCtx.getSystemService(Context.USAGE_STATS_SERVICE) as? android.app.usage.UsageStatsManager ?: return@launch
             var lastPkg: String? = null
             var lastLaunchTime = 0L
 
-            while (isActive && isEnabled(context) && !isAccessibilityServiceEnabled(context)) {
+            while (isActive && isEnabled(appCtx) && !isAccessibilityServiceEnabled(appCtx)) {
                 try {
                     val now = System.currentTimeMillis()
                     val events = usm.queryEvents(now - 3500, now)
@@ -284,18 +351,26 @@ object AppLockerManager {
                         }
                     }
 
-                    if (foregroundPkg != null &&
-                        foregroundPkg != context.packageName &&
-                        foregroundPkg != "com.android.systemui" &&
-                        !foregroundPkg.contains("launcher") &&
-                        !foregroundPkg.contains("home")
-                    ) {
-                        currentForegroundPackage = foregroundPkg
-                        if (isPackageLocked(context, foregroundPkg) && !isPackageSessionUnlocked(foregroundPkg)) {
-                            if (foregroundPkg != lastPkg || now - lastLaunchTime > 500L) {
+                    if (foregroundPkg != null && foregroundPkg != appCtx.packageName) {
+                        val relockImmediate = getRelockMode(appCtx) == RELOCK_IMMEDIATELY
+                        onForegroundPackageChanged(foregroundPkg, relockImmediate)
+
+                        val isSystemChrome = foregroundPkg == "com.android.systemui" ||
+                            foregroundPkg.contains("launcher", ignoreCase = true) ||
+                            foregroundPkg.contains("home", ignoreCase = true)
+
+                        if (isSystemChrome) {
+                            shieldPackage = null
+                        } else if (isPackageLocked(appCtx, foregroundPkg) &&
+                            !isPackageSessionUnlocked(foregroundPkg) &&
+                            shieldPackage != foregroundPkg
+                        ) {
+                            if (foregroundPkg != lastPkg || now - lastLaunchTime > 650L) {
                                 lastPkg = foregroundPkg
                                 lastLaunchTime = now
-                                AppLockActivity.launch(context, foregroundPkg)
+                                withContext(Dispatchers.Main) {
+                                    AppLockActivity.launch(appCtx, foregroundPkg)
+                                }
                             }
                         }
                     }
@@ -324,13 +399,16 @@ object AppLockerManager {
         val lockedSet = getLockedPackages(context)
         val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
 
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val homePkg = pm.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+
         val resolveInfos = pm.queryIntentActivities(launcherIntent, 0)
         val targets = mutableListOf<AppLockTarget>()
         val seenPackages = mutableSetOf<String>()
 
         for (info in resolveInfos) {
             val pkg = info.activityInfo.packageName
-            if (pkg == context.packageName || seenPackages.contains(pkg)) continue
+            if (pkg == context.packageName || pkg == homePkg || seenPackages.contains(pkg)) continue
             seenPackages.add(pkg)
 
             try {

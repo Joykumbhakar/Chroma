@@ -108,6 +108,7 @@ fun ConversationsScreen(
     onStartCall: (ChatConversation, String) -> Unit = { _, _ -> },
     pinnedChatIds: Set<String> = emptySet(),
     lockedChatIds: Set<String> = emptySet(),
+    draftsByRoom: Map<String, String> = emptyMap(),
     onPinChatToggle: (ChatConversation) -> Unit = {},
     onMuteChatToggle: (ChatConversation) -> Unit = {},
     onReadChatToggle: (ChatConversation) -> Unit = {},
@@ -1111,6 +1112,7 @@ fun ConversationsScreen(
                             currentUserId = currentUser.id,
                             isPinned = chat.id in pinnedChatIds,
                             isLocked = chat.id in lockedChatIds,
+                            draftText = draftsByRoom[chat.id],
                             isSelectionMode = isSelectionMode,
                             isSelected = selectedChatIds.contains(chat.id),
                             onToggleSelect = {
@@ -1614,6 +1616,7 @@ private fun IosConversationListRow(
     currentUserId: String,
     isPinned: Boolean = false,
     isLocked: Boolean = false,
+    draftText: String? = null,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onToggleSelect: () -> Unit = {},
@@ -1890,7 +1893,10 @@ private fun IosConversationListRow(
                             modifier = Modifier.weight(1f, fill = false)
                         )
                         if (chat.isVerified) {
-                            VerifiedBadge(size = 15.dp)
+                            VerifiedBadge(
+                                size = 15.dp,
+                                tone = chat.verifiedTone
+                            )
                         }
                         if (isLocked) {
                             LucideLock(tint = colors.iosBlue, size = 13.dp)
@@ -1949,6 +1955,23 @@ private fun IosConversationListRow(
                                     fontSize = 14.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = colors.success,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    lineHeight = 19.sp
+                                )
+                            } else if (!draftText.isNullOrBlank()) {
+                                Text(
+                                    text = "Draft:",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFF59E0B),
+                                    lineHeight = 19.sp
+                                )
+                                Text(
+                                    text = draftText.trim(),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = colors.textMuted,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     lineHeight = 19.sp

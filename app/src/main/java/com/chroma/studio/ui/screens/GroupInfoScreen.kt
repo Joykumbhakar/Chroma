@@ -439,7 +439,10 @@ fun GroupInfoScreen(
                                         )
                                         if (profile?.verified == true) {
                                             Spacer(Modifier.width(4.dp))
-                                            VerifiedBadge(size = 13.dp)
+                                            VerifiedBadge(
+                                                size = 13.dp,
+                                                tone = profile.verifiedTone
+                                            )
                                         }
                                     }
                                     if (profile?.username?.isNotBlank() == true) {

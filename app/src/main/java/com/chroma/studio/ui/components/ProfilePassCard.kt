@@ -511,7 +511,11 @@ fun ProfilePassCardView(
                                 overflow = TextOverflow.Ellipsis
                             )
                             if (profile.verified) {
-                                VerifiedBadge(size = 16.dp, showGlow = true)
+                                VerifiedBadge(
+                                    size = 16.dp,
+                                    tone = profile.verifiedTone,
+                                    showGlow = true
+                                )
                             }
                         }
 

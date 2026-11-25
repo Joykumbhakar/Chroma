@@ -25,6 +25,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -34,7 +35,9 @@ import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.chroma.studio.ui.components.ChromaHeaderActionButton
 import com.chroma.studio.ui.components.ChromaScreenHeader
+import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.components.ToastManager
+import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.utils.compressImageToUnder50KB
 import com.composables.icons.lucide.*
@@ -586,22 +589,32 @@ fun PostDetailsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            AsyncImage(
-                                model = user.avatarUrl,
-                                contentDescription = user.displayName,
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(colors.glassBg),
-                                contentScale = ContentScale.Crop
+                            IosAvatarView(
+                                name = user.displayName.ifBlank { user.username },
+                                avatarUrl = user.avatarUrl,
+                                size = 28.dp
                             )
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = user.displayName.ifBlank { user.username },
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = colors.textMain
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = user.displayName.ifBlank { user.username },
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = colors.textMain,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    if (user.verified) {
+                                        VerifiedBadge(
+                                            size = 13.dp,
+                                            tone = user.verifiedTone
+                                        )
+                                    }
+                                }
                                 Text(
                                     text = "@${user.username}",
                                     fontSize = 11.5.sp,

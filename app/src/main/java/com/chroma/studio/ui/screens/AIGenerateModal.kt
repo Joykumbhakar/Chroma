@@ -7,7 +7,7 @@ import com.chroma.studio.ui.components.GlassButton
 import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import com.chroma.studio.ui.components.LiquidGlassBottomSheet
-import com.chroma.studio.ui.components.AiWaveSphereIcon
+import com.chroma.studio.ui.components.FluentDiamondGemIcon
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -233,7 +233,7 @@ fun AIGenerateModal(
                     if (isGenerating) {
                         OscellionLoadingSpinner(modifier = Modifier.size(22.dp), color = Color.White)
                     } else {
-                        AiWaveSphereIcon(modifier = Modifier.size(20.dp))
+                        FluentDiamondGemIcon(modifier = Modifier.size(20.dp), includeSoftShadow = true)
                         Spacer(Modifier.width(8.dp))
                         Text("Generate Smart Gradient", color = Color.White, fontWeight = FontWeight.Bold)
                     }

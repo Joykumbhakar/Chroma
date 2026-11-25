@@ -177,7 +177,10 @@ fun UserListScreen(
                                     )
                                     if (user.verified) {
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        VerifiedBadge(size = 15.dp)
+                                        VerifiedBadge(
+                                            size = 15.dp,
+                                            tone = user.verifiedTone
+                                        )
                                     }
                                 }
                                 Row(

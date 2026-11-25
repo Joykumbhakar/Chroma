@@ -125,7 +125,7 @@ open class ChromaMessagingService : FirebaseMessagingService() {
             (senderId.isNotBlank() && (senderId in lockedIds || senderId in hiddenIds))
 
         if (quietMode || !masterPushEnabled || !dmPushEnabled) {
-            if (roomId.isNotBlank()) runBounded { SupabaseChatRepository().markAsDelivered(roomId) }
+            if (roomId.isNotBlank()) runBounded { SupabaseChatRepository().markAsDelivered(roomId, messageId.ifBlank { null }) }
             return
         }
 
@@ -141,7 +141,7 @@ open class ChromaMessagingService : FirebaseMessagingService() {
                 )
             )
             com.chroma.studio.chat.sound.SoundManager.playNotification(this)
-            if (roomId.isNotBlank()) runBounded { SupabaseChatRepository().markAsDelivered(roomId) }
+            if (roomId.isNotBlank()) runBounded { SupabaseChatRepository().markAsDelivered(roomId, messageId.ifBlank { null }) }
             return
         }
 
@@ -157,6 +157,6 @@ open class ChromaMessagingService : FirebaseMessagingService() {
             groupName = groupName,
             messageType = messageType
         )
-        if (roomId.isNotBlank()) runBounded { SupabaseChatRepository().markAsDelivered(roomId) }
+        if (roomId.isNotBlank()) runBounded { SupabaseChatRepository().markAsDelivered(roomId, messageId.ifBlank { null }) }
     }
 }

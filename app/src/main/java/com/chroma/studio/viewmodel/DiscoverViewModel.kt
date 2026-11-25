@@ -26,6 +26,9 @@ class DiscoverViewModel : ViewModel() {
     private val _trendingWorks = MutableStateFlow<List<DiscoverPost>>(emptyList())
     val trendingWorks: StateFlow<List<DiscoverPost>> = _trendingWorks.asStateFlow()
 
+    private val _trendingConfig = MutableStateFlow(com.chroma.studio.model.TrendingConfig())
+    val trendingConfig: StateFlow<com.chroma.studio.model.TrendingConfig> = _trendingConfig.asStateFlow()
+
     private val _archivedWorks = MutableStateFlow<List<DiscoverPost>>(emptyList())
     val archivedWorks: StateFlow<List<DiscoverPost>> = _archivedWorks.asStateFlow()
 
@@ -203,17 +206,16 @@ class DiscoverViewModel : ViewModel() {
         _works.value = _works.value.filter { it.id != postId }
     }
 
+    private var loadWorksJob: kotlinx.coroutines.Job? = null
+
     fun loadWorks(isRefresh: Boolean = false) {
-        viewModelScope.launch {
+        if (isRefresh && _isRefreshing.value) return
+        if (!isRefresh && _isLoading.value) return
+        loadWorksJob?.cancel()
+        loadWorksJob = viewModelScope.launch {
             if (isRefresh) {
                 _isRefreshing.value = true
-                val now = System.currentTimeMillis()
-                _lastRefreshedTime.value = now
-                try {
-                    val ctx = com.chroma.studio.ChromaApp.instance
-                    val prefs = ctx.getSharedPreferences("chroma_community_prefs", android.content.Context.MODE_PRIVATE)
-                    prefs.edit().putLong("community_last_refresh_time", now).apply()
-                } catch (_: Exception) {}
+                repository.clearProfileCache()
                 loadTrending()
             } else if (_works.value.isEmpty()) {
                 _isLoading.value = true
@@ -234,10 +236,21 @@ class DiscoverViewModel : ViewModel() {
                     }
                 } else recentWorks
                 val pendingOptimistic = _works.value.filter { it.id.startsWith("temp_") }
-                // Pull refresh presents refreshed creations in a randomized/shuffled order
-                val refreshedList = if (isRefresh) reconciledRecent.shuffled() else reconciledRecent
-                val combined = (pendingOptimistic + refreshedList).distinctBy { it.id }
+                // Keep newly refreshed feed ordered by latest timestamp so newest creations remain at the top
+                val combined = (pendingOptimistic + reconciledRecent)
+                    .distinctBy { it.id }
+                    .sortedByDescending { it.timestamp }
                 _works.value = combined
+
+                if (isRefresh) {
+                    val now = System.currentTimeMillis()
+                    _lastRefreshedTime.value = now
+                    try {
+                        val ctx = com.chroma.studio.ChromaApp.instance
+                        val prefs = ctx.getSharedPreferences("chroma_community_prefs", android.content.Context.MODE_PRIVATE)
+                        prefs.edit().putLong("community_last_refresh_time", now).apply()
+                    } catch (_: Exception) {}
+                }
 
                 if (!currentUid.isNullOrBlank()) {
                     val instantLiked = reconciledRecent.filter { it.likedBy.contains(currentUid) }.map { it.id }.toSet()
@@ -271,15 +284,29 @@ class DiscoverViewModel : ViewModel() {
         }
     }
 
+    private fun sortAndFilterTrending(
+        candidates: List<DiscoverPost>,
+        cfg: com.chroma.studio.model.TrendingConfig
+    ): List<DiscoverPost> {
+        return candidates
+            .distinctBy { it.id }
+            .filter { !it.isArchived && !it.isTakedown && !it.trendingExcluded }
+            .filter { cfg.mode != "curated_only" || it.isTrending }
+            .sortedWith(
+                compareByDescending<DiscoverPost> { it.isTrending }
+                    .thenBy { if (it.isTrending) (it.trendingOrder ?: 9999) else Int.MAX_VALUE }
+                    .thenByDescending { it.likesCount + it.effectiveCommentsCount * 2 + it.remixCount * 3 }
+            )
+    }
+
     fun loadTrending() {
         viewModelScope.launch {
             _isTrendingLoading.value = true
             try {
-                val remoteTrending = repository.getTrendingWorks(30)
-                val localQualifying = _works.value.filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
-                val combined = (localQualifying + remoteTrending).distinctBy { it.id }
-                    .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
-                    .sortedByDescending { it.likesCount }
+                val cfg = repository.getTrendingConfig()
+                _trendingConfig.value = cfg
+                val remoteTrending = repository.getTrendingWorks(30, cfg)
+                val combined = sortAndFilterTrending(remoteTrending + _works.value, cfg)
                 _trendingWorks.value = combined
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -358,11 +385,12 @@ class DiscoverViewModel : ViewModel() {
                 _archivedWorks.value = _archivedWorks.value.map {
                     if (it.id == workId) applyLikeStateToPost(it, uid, nextLiked) else it
                 }
-                val updatedTrending = (_trendingWorks.value.map {
-                    if (it.id == workId) applyLikeStateToPost(it, uid, nextLiked) else it
-                } + _works.value).distinctBy { it.id }
-                    .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
-                    .sortedByDescending { it.likesCount }
+                val updatedTrending = sortAndFilterTrending(
+                    _trendingWorks.value.map {
+                        if (it.id == workId) applyLikeStateToPost(it, uid, nextLiked) else it
+                    } + _works.value,
+                    _trendingConfig.value
+                )
                 _trendingWorks.value = updatedTrending
                 _likedWorks.value = if (!nextLiked) {
                     _likedWorks.value.filter { it.id != workId }
@@ -388,11 +416,12 @@ class DiscoverViewModel : ViewModel() {
                 _archivedWorks.value = _archivedWorks.value.map {
                     if (it.id == workId) applyLikeStateToPost(it, uid, restoredLiked) else it
                 }
-                val updatedTrending = (_trendingWorks.value.map {
-                    if (it.id == workId) applyLikeStateToPost(it, uid, restoredLiked) else it
-                } + _works.value).distinctBy { it.id }
-                    .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
-                    .sortedByDescending { it.likesCount }
+                val updatedTrending = sortAndFilterTrending(
+                    _trendingWorks.value.map {
+                        if (it.id == workId) applyLikeStateToPost(it, uid, restoredLiked) else it
+                    } + _works.value,
+                    _trendingConfig.value
+                )
                 _trendingWorks.value = updatedTrending
             },
             onError = {

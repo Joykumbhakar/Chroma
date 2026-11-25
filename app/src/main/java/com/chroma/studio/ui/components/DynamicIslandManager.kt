@@ -17,9 +17,11 @@ sealed class DynamicIslandEvent {
         val messageText: String,
         val avatarUrl: String = "",
         val timeText: String = "now",
+        val isVerified: Boolean = false,
         val onReply: ((String) -> Unit)? = null,
         val onMarkAsRead: (() -> Unit)? = null,
         val onQuickReact: ((String) -> Unit)? = null,
+        val onMute: (() -> Unit)? = null,
         val onClick: (() -> Unit)? = null
     ) : DynamicIslandEvent()
 
@@ -28,6 +30,9 @@ sealed class DynamicIslandEvent {
         val userAvatar: String = "",
         val targetTitle: String = "your post",
         val targetThumbnail: String = "",
+        val isVerified: Boolean = false,
+        val onViewProfile: (() -> Unit)? = null,
+        val onMarkAsRead: (() -> Unit)? = null,
         val onClick: (() -> Unit)? = null
     ) : DynamicIslandEvent()
 
@@ -35,7 +40,12 @@ sealed class DynamicIslandEvent {
         val userId: String,
         val userName: String,
         val userAvatar: String = "",
+        val isVerified: Boolean = false,
+        val isFollowRequest: Boolean = false,
+        val onAccept: (() -> Unit)? = null,
+        val onDecline: (() -> Unit)? = null,
         val onFollowBack: (() -> Unit)? = null,
+        val onMarkAsRead: (() -> Unit)? = null,
         val onClick: (() -> Unit)? = null
     ) : DynamicIslandEvent()
 
@@ -44,6 +54,10 @@ sealed class DynamicIslandEvent {
         val userAvatar: String = "",
         val workTitle: String = "Artwork",
         val isRemix: Boolean = true,
+        val isVerified: Boolean = false,
+        val workThumbnail: String = "",
+        val onViewProfile: (() -> Unit)? = null,
+        val onMarkAsRead: (() -> Unit)? = null,
         val onClick: (() -> Unit)? = null
     ) : DynamicIslandEvent()
 
@@ -53,6 +67,11 @@ sealed class DynamicIslandEvent {
         val commentText: String = "",
         val targetTitle: String = "your post",
         val targetThumbnail: String = "",
+        val isVerified: Boolean = false,
+        val isMention: Boolean = false,
+        val onReply: ((String) -> Unit)? = null,
+        val onViewProfile: (() -> Unit)? = null,
+        val onMarkAsRead: (() -> Unit)? = null,
         val onClick: (() -> Unit)? = null
     ) : DynamicIslandEvent()
 
@@ -61,6 +80,11 @@ sealed class DynamicIslandEvent {
         val userAvatar: String = "",
         val reactionEmoji: String = "❤️",
         val storyThumbnail: String = "",
+        val isVerified: Boolean = false,
+        val replyText: String = "",
+        val onReply: ((String) -> Unit)? = null,
+        val onViewProfile: (() -> Unit)? = null,
+        val onMarkAsRead: (() -> Unit)? = null,
         val onClick: (() -> Unit)? = null
     ) : DynamicIslandEvent()
 
@@ -70,7 +94,10 @@ sealed class DynamicIslandEvent {
         val icon: ImageVector? = null,
         val actionLabel: String? = null,
         val onAction: (() -> Unit)? = null,
-        val durationMs: Long = 4000L
+        val durationMs: Long = 4000L,
+        val secondaryActionLabel: String? = null,
+        val onSecondaryAction: (() -> Unit)? = null,
+        val onDismiss: (() -> Unit)? = null
     ) : DynamicIslandEvent()
 }
 
@@ -97,9 +124,11 @@ object DynamicIslandManager {
         messageText: String,
         avatarUrl: String = "",
         timeText: String = "now",
+        isVerified: Boolean = false,
         onReply: ((String) -> Unit)? = null,
         onMarkAsRead: (() -> Unit)? = null,
         onQuickReact: ((String) -> Unit)? = null,
+        onMute: (() -> Unit)? = null,
         onClick: (() -> Unit)? = null
     ) {
         // Strict requirement: DO NOT show Dynamic Island if user is already inside this specific chat!
@@ -114,9 +143,11 @@ object DynamicIslandManager {
                 messageText = messageText,
                 avatarUrl = avatarUrl,
                 timeText = timeText,
+                isVerified = isVerified,
                 onReply = onReply,
                 onMarkAsRead = onMarkAsRead,
                 onQuickReact = onQuickReact,
+                onMute = onMute,
                 onClick = onClick
             )
         )
@@ -127,6 +158,9 @@ object DynamicIslandManager {
         userAvatar: String = "",
         targetTitle: String = "your post",
         targetThumbnail: String = "",
+        isVerified: Boolean = false,
+        onViewProfile: (() -> Unit)? = null,
+        onMarkAsRead: (() -> Unit)? = null,
         onClick: (() -> Unit)? = null
     ) {
         post(
@@ -135,6 +169,9 @@ object DynamicIslandManager {
                 userAvatar = userAvatar,
                 targetTitle = targetTitle,
                 targetThumbnail = targetThumbnail,
+                isVerified = isVerified,
+                onViewProfile = onViewProfile,
+                onMarkAsRead = onMarkAsRead,
                 onClick = onClick
             )
         )
@@ -144,7 +181,12 @@ object DynamicIslandManager {
         userId: String,
         userName: String,
         userAvatar: String = "",
+        isVerified: Boolean = false,
+        isFollowRequest: Boolean = false,
+        onAccept: (() -> Unit)? = null,
+        onDecline: (() -> Unit)? = null,
         onFollowBack: (() -> Unit)? = null,
+        onMarkAsRead: (() -> Unit)? = null,
         onClick: (() -> Unit)? = null
     ) {
         post(
@@ -152,7 +194,12 @@ object DynamicIslandManager {
                 userId = userId,
                 userName = userName,
                 userAvatar = userAvatar,
+                isVerified = isVerified,
+                isFollowRequest = isFollowRequest,
+                onAccept = onAccept,
+                onDecline = onDecline,
                 onFollowBack = onFollowBack,
+                onMarkAsRead = onMarkAsRead,
                 onClick = onClick
             )
         )
@@ -162,6 +209,11 @@ object DynamicIslandManager {
         userName: String,
         userAvatar: String = "",
         workTitle: String = "Artwork",
+        isRemix: Boolean = true,
+        isVerified: Boolean = false,
+        workThumbnail: String = "",
+        onViewProfile: (() -> Unit)? = null,
+        onMarkAsRead: (() -> Unit)? = null,
         onClick: (() -> Unit)? = null
     ) {
         post(
@@ -169,7 +221,11 @@ object DynamicIslandManager {
                 userName = userName,
                 userAvatar = userAvatar,
                 workTitle = workTitle,
-                isRemix = true,
+                isRemix = isRemix,
+                isVerified = isVerified,
+                workThumbnail = workThumbnail,
+                onViewProfile = onViewProfile,
+                onMarkAsRead = onMarkAsRead,
                 onClick = onClick
             )
         )
@@ -181,6 +237,11 @@ object DynamicIslandManager {
         commentText: String = "",
         targetTitle: String = "your post",
         targetThumbnail: String = "",
+        isVerified: Boolean = false,
+        isMention: Boolean = false,
+        onReply: ((String) -> Unit)? = null,
+        onViewProfile: (() -> Unit)? = null,
+        onMarkAsRead: (() -> Unit)? = null,
         onClick: (() -> Unit)? = null
     ) {
         post(
@@ -190,6 +251,11 @@ object DynamicIslandManager {
                 commentText = commentText,
                 targetTitle = targetTitle,
                 targetThumbnail = targetThumbnail,
+                isVerified = isVerified,
+                isMention = isMention,
+                onReply = onReply,
+                onViewProfile = onViewProfile,
+                onMarkAsRead = onMarkAsRead,
                 onClick = onClick
             )
         )
@@ -200,6 +266,11 @@ object DynamicIslandManager {
         userAvatar: String = "",
         reactionEmoji: String = "❤️",
         storyThumbnail: String = "",
+        isVerified: Boolean = false,
+        replyText: String = "",
+        onReply: ((String) -> Unit)? = null,
+        onViewProfile: (() -> Unit)? = null,
+        onMarkAsRead: (() -> Unit)? = null,
         onClick: (() -> Unit)? = null
     ) {
         post(
@@ -208,6 +279,11 @@ object DynamicIslandManager {
                 userAvatar = userAvatar,
                 reactionEmoji = reactionEmoji,
                 storyThumbnail = storyThumbnail,
+                isVerified = isVerified,
+                replyText = replyText,
+                onReply = onReply,
+                onViewProfile = onViewProfile,
+                onMarkAsRead = onMarkAsRead,
                 onClick = onClick
             )
         )
@@ -219,6 +295,9 @@ object DynamicIslandManager {
         icon: ImageVector? = null,
         actionLabel: String? = null,
         durationMs: Long = 4000L,
+        secondaryActionLabel: String? = null,
+        onSecondaryAction: (() -> Unit)? = null,
+        onDismiss: (() -> Unit)? = null,
         onAction: (() -> Unit)? = null
     ) {
         post(
@@ -228,6 +307,9 @@ object DynamicIslandManager {
                 icon = icon,
                 actionLabel = actionLabel,
                 durationMs = durationMs,
+                secondaryActionLabel = secondaryActionLabel,
+                onSecondaryAction = onSecondaryAction,
+                onDismiss = onDismiss,
                 onAction = onAction
             )
         )

@@ -526,7 +526,7 @@ fun PostVideoSlideView(
             )
         }
 
-        // Floating "Watch Reel" pill in bottom-left corner
+        // Floating "Watch Flash" pill in bottom-left corner
         if (onVideoClick != null) {
             Row(
                 modifier = Modifier
@@ -545,12 +545,12 @@ fun PostVideoSlideView(
             ) {
                 Icon(
                     imageVector = Lucide.Play,
-                    contentDescription = "Watch Reel",
+                    contentDescription = "Watch Flash",
                     tint = Color.White,
                     modifier = Modifier.size(11.dp)
                 )
                 Text(
-                    text = "Watch Reel",
+                    text = "Watch Flash",
                     color = Color.White,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium

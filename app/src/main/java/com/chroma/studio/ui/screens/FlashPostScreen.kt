@@ -203,6 +203,14 @@ fun FlashPostScreen(
 
     val discoverRepo = remember { DiscoverRepository() }
 
+    var myUserProfile by remember { mutableStateOf<UserProfile?>(null) }
+    LaunchedEffect(Unit) {
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (!uid.isNullOrBlank()) {
+            myUserProfile = discoverRepo.getUserProfile(uid)
+        }
+    }
+
 
 
     LaunchedEffect(caption) {
@@ -336,11 +344,19 @@ fun FlashPostScreen(
 
         val uid = currentUser?.uid ?: "local_user"
 
-        val rawName = currentUser?.displayName?.ifBlank { null } ?: "Creator"
+        val rawName = myUserProfile?.displayName?.takeIf { it.isNotBlank() }
+            ?: currentUser?.displayName?.ifBlank { null }
+            ?: "Creator"
 
-        val authorUsername = rawName.lowercase().replace(" ", ".")
+        val authorUsername = myUserProfile?.username?.takeIf { it.isNotBlank() }
+            ?: rawName.lowercase().replace(" ", ".")
 
-        val avatarUrl = currentUser?.photoUrl?.toString() ?: ""
+        val avatarUrl = myUserProfile?.avatarUrl?.takeIf { it.isNotBlank() }
+            ?: currentUser?.photoUrl?.toString()
+            ?: ""
+
+        val isVerified = myUserProfile?.verified == true
+        val verifiedTone = myUserProfile?.verifiedTone
 
         val tempPostId = "temp_post_${System.currentTimeMillis()}"
 
@@ -360,7 +376,9 @@ fun FlashPostScreen(
 
             authorAvatarUrl = avatarUrl,
 
-            authorVerified = false,
+            authorVerified = isVerified,
+
+            authorVerifiedTone = verifiedTone,
 
             title = if (caption.isNotBlank()) caption.take(40) else "New Flash Video",
 
@@ -397,6 +415,10 @@ fun FlashPostScreen(
             authorDisplayName = rawName,
 
             authorAvatarUrl = avatarUrl,
+
+            authorVerified = isVerified,
+
+            authorVerifiedTone = verifiedTone,
 
             caption = caption,
 
@@ -819,7 +841,10 @@ fun FlashPostScreen(
                             }
                             Text("@${user.username}", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             if (user.verified) {
-                                VerifiedBadge(size = 12.dp)
+                                VerifiedBadge(
+                                    size = 12.dp,
+                                    tone = user.verifiedTone
+                                )
                             }
                         }
                     }

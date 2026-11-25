@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
@@ -26,6 +27,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,12 +38,14 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
@@ -1174,7 +1179,9 @@ fun IosDynamicIslandHost(
 
     var currentEvent by remember { mutableStateOf<DynamicIslandEvent?>(null) }
     var isExpanded by remember { mutableStateOf(false) }
+    var isComposingReply by remember { mutableStateOf(false) }
     var replyText by remember { mutableStateOf("") }
+    var didFollowBack by remember { mutableStateOf(false) }
     var offsetY by remember { mutableFloatStateOf(0f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     val animatedOffsetY by animateFloatAsState(
@@ -1202,6 +1209,9 @@ fun IosDynamicIslandHost(
         delay(170L)
         currentEvent = null
         isExpanded = false
+        isComposingReply = false
+        replyText = ""
+        didFollowBack = false
         offsetY = 0f
         offsetX = 0f
         jumpOffsetY.snapTo(0f)
@@ -1209,7 +1219,10 @@ fun IosDynamicIslandHost(
         jellyScaleY.snapTo(1f)
     }
 
-    fun dismissIsland() {
+    fun dismissIsland(invokeEventDismiss: Boolean = false) {
+        if (invokeEventDismiss) {
+            (currentEvent as? DynamicIslandEvent.Status)?.onDismiss?.invoke()
+        }
         coroutineScope.launch {
             performDismiss()
         }
@@ -1218,8 +1231,10 @@ fun IosDynamicIslandHost(
     LaunchedEffect(Unit) {
         DynamicIslandManager.events.collect { event ->
             currentEvent = event
-            isExpanded = false // Never aggressively auto-expand by default
+            isExpanded = false
+            isComposingReply = false
             replyText = ""
+            didFollowBack = false
             offsetY = 0f
             offsetX = 0f
 
@@ -1274,6 +1289,7 @@ fun IosDynamicIslandHost(
                 }
             }
         } else {
+            isComposingReply = false
             // COMPRESS: Recoil up into notch with jelly squash
             coroutineScope.launch {
                 launch {
@@ -1294,30 +1310,28 @@ fun IosDynamicIslandHost(
         }
     }
 
-    LaunchedEffect(currentEvent, isExpanded, replyText.isEmpty()) {
+    LaunchedEffect(currentEvent, isExpanded, isComposingReply, replyText.isEmpty(), didFollowBack) {
         val event = currentEvent ?: return@LaunchedEffect
         if (isExpanded) {
-            // Expanded mode: do NOT dismiss if user is actively composing a reply
-            if (replyText.isNotEmpty()) {
+            // Do NOT auto-dismiss while user is composing a reply
+            if (isComposingReply || replyText.isNotEmpty()) {
                 return@LaunchedEffect
             }
-            // Polite timeout for expanded card if untouched (avoids blocking screen)
-            delay(4500L)
+            delay(8000L)
             isExpanded = false
             delay(240L)
             if (currentEvent == event && !isExpanded) {
                 performDismiss()
             }
         } else {
-            // Compact pill mode: perfectly tuned glance timer (snappy & non-intrusive)
             val duration = when (event) {
-                is DynamicIslandEvent.Status -> (event.durationMs).coerceIn(1800L, 2400L)
-                is DynamicIslandEvent.ChatMessage -> 3200L
-                is DynamicIslandEvent.Like -> 2000L
-                is DynamicIslandEvent.Follow -> 2200L
-                is DynamicIslandEvent.RemixOrDownload -> 2000L
-                is DynamicIslandEvent.Comment -> 3000L
-                is DynamicIslandEvent.StoryReaction -> 2400L
+                is DynamicIslandEvent.Status -> (event.durationMs).coerceIn(2400L, 4800L)
+                is DynamicIslandEvent.ChatMessage -> 4600L
+                is DynamicIslandEvent.Follow -> if (event.isFollowRequest) 5500L else 4200L
+                is DynamicIslandEvent.Comment -> 4600L
+                is DynamicIslandEvent.StoryReaction -> 4400L
+                is DynamicIslandEvent.Like -> 3600L
+                is DynamicIslandEvent.RemixOrDownload -> 3800L
             }
             delay(duration)
             if (currentEvent == event && !isExpanded) {
@@ -1330,56 +1344,26 @@ fun IosDynamicIslandHost(
         val islandWidth by animateDpAsState(
             targetValue = if (isExpanded) {
                 when (event) {
-                    is DynamicIslandEvent.ChatMessage -> 360.dp
-                    is DynamicIslandEvent.Follow -> 348.dp
-                    is DynamicIslandEvent.Like -> 340.dp
-                    is DynamicIslandEvent.RemixOrDownload -> 340.dp
-                    is DynamicIslandEvent.Comment -> 350.dp
-                    is DynamicIslandEvent.StoryReaction -> 340.dp
-                    is DynamicIslandEvent.Status -> if (event.actionLabel != null || event.message.isNotBlank()) 348.dp else 300.dp
+                    is DynamicIslandEvent.Status -> if (event.actionLabel != null || event.secondaryActionLabel != null || event.message.isNotBlank()) 366.dp else 320.dp
+                    else -> 366.dp
                 }
             } else {
                 when (event) {
-                    is DynamicIslandEvent.ChatMessage -> 270.dp
-                    is DynamicIslandEvent.Follow -> 250.dp
-                    is DynamicIslandEvent.Like -> 240.dp
-                    is DynamicIslandEvent.RemixOrDownload -> 250.dp
-                    is DynamicIslandEvent.Comment -> 270.dp
-                    is DynamicIslandEvent.StoryReaction -> 250.dp
-                    is DynamicIslandEvent.Status -> if (event.actionLabel != null) 250.dp else if (event.title.length > 20) 260.dp else 220.dp
+                    is DynamicIslandEvent.ChatMessage -> 340.dp
+                    is DynamicIslandEvent.Follow -> 336.dp
+                    is DynamicIslandEvent.Comment -> 336.dp
+                    is DynamicIslandEvent.StoryReaction -> 330.dp
+                    is DynamicIslandEvent.Like -> 320.dp
+                    is DynamicIslandEvent.RemixOrDownload -> 326.dp
+                    is DynamicIslandEvent.Status -> if (event.actionLabel != null) 316.dp else if (event.title.length > 22) 292.dp else 252.dp
                 }
             },
-            animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow),
+            animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow),
             label = "islandWidth"
         )
-        val islandHeight by animateDpAsState(
-            targetValue = if (isExpanded) {
-                when (event) {
-                    is DynamicIslandEvent.ChatMessage -> 180.dp
-                    is DynamicIslandEvent.Follow -> 72.dp
-                    is DynamicIslandEvent.Like -> 68.dp
-                    is DynamicIslandEvent.RemixOrDownload -> 68.dp
-                    is DynamicIslandEvent.Comment -> 84.dp
-                    is DynamicIslandEvent.StoryReaction -> 72.dp
-                    is DynamicIslandEvent.Status -> if (event.message.isNotBlank()) 72.dp else 56.dp
-                }
-            } else 44.dp,
-            animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow),
-            label = "islandHeight"
-        )
         val islandCorner by animateDpAsState(
-            targetValue = if (isExpanded) {
-                when (event) {
-                    is DynamicIslandEvent.ChatMessage -> 32.dp
-                    is DynamicIslandEvent.Follow -> 28.dp
-                    is DynamicIslandEvent.Like -> 28.dp
-                    is DynamicIslandEvent.RemixOrDownload -> 28.dp
-                    is DynamicIslandEvent.Comment -> 28.dp
-                    is DynamicIslandEvent.StoryReaction -> 28.dp
-                    is DynamicIslandEvent.Status -> 26.dp
-                }
-            } else 22.dp,
-            animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow),
+            targetValue = if (isExpanded) 28.dp else 24.dp,
+            animationSpec = spring(dampingRatio = 0.60f, stiffness = Spring.StiffnessMediumLow),
             label = "islandCorner"
         )
 
@@ -1389,7 +1373,7 @@ fun IosDynamicIslandHost(
             modifier = modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(top = 8.dp)
+                .padding(top = 8.dp, start = 12.dp, end = 12.dp)
                 .offset { IntOffset(offsetX.roundToInt(), animatedOffsetY.roundToInt()) }
                 .zIndex(999f),
             contentAlignment = Alignment.TopCenter
@@ -1402,33 +1386,39 @@ fun IosDynamicIslandHost(
                         translationY = jumpOffsetY.value
                         transformOrigin = TransformOrigin(0.5f, 0f)
                     }
-                    .size(width = islandWidth, height = islandHeight)
+                    .widthIn(max = islandWidth)
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+                    .defaultMinSize(minHeight = if (isExpanded) 78.dp else 46.dp)
+                    .animateContentSize(
+                        animationSpec = spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow)
+                    )
                     .shadow(
-                        elevation = if (isExpanded) 14.dp else 8.dp,
+                        elevation = if (isExpanded) 16.dp else 8.dp,
                         shape = shape,
                         clip = false,
                         spotColor = Color.Black.copy(alpha = 0.50f),
                         ambientColor = Color.Black.copy(alpha = 0.25f)
                     )
                     .clip(shape)
-                    .background(Color(0xFF000000)) // 100% opaque base ensures nothing behind bleeds through
+                    .background(Color(0xFF000000))
                     .background(
-                        Brush.horizontalGradient(
+                        Brush.verticalGradient(
                             listOf(
-                                Color(0xFF161616), // Solid deep charcoal black (100% opaque)
-                                Color(0xFF000000)  // Pure darkest pitch black
+                                Color(0xFF1A1A1D),
+                                Color(0xFF0A0A0C),
+                                Color(0xFF000000)
                             )
                         )
                     )
                     .border(
-                        width = 1.25.dp,
+                        width = 1.dp,
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = 0.65f), // Crisp top specular glass gleam
-                                Color.White.copy(alpha = 0.35f), // Upper curve glass refraction
-                                Color.White.copy(alpha = 0.20f), // Side glass bezel (clearly visible)
-                                Color.White.copy(alpha = 0.28f), // Lower bezel transition
-                                Color.White.copy(alpha = 0.45f)  // Bottom upward bounce reflection
+                                Color.White.copy(alpha = 0.58f),
+                                Color.White.copy(alpha = 0.26f),
+                                Color.White.copy(alpha = 0.16f),
+                                Color.White.copy(alpha = 0.32f)
                             )
                         ),
                         shape = shape
@@ -1443,8 +1433,8 @@ fun IosDynamicIslandHost(
                                 offsetX = (offsetX + dragAmount.x).coerceIn(-180f, 180f)
                             },
                             onDragEnd = {
-                                if (offsetY < -10f || kotlin.math.abs(offsetX) > 35f) {
-                                    dismissIsland()
+                                if (offsetY < -10f || abs(offsetX) > 35f) {
+                                    dismissIsland(invokeEventDismiss = true)
                                 } else {
                                     offsetY = 0f
                                     offsetX = 0f
@@ -1460,27 +1450,26 @@ fun IosDynamicIslandHost(
                         try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
                         isExpanded = true
                     }
-                    .padding(if (isExpanded) 12.dp else 6.dp)
+                    .padding(horizontal = if (isExpanded) 13.dp else 8.dp, vertical = if (isExpanded) 12.dp else 6.dp)
             ) {
                 if (!isExpanded) {
-                    // COMPACT NOTCH PRESENTATION (Clean icons without pill/capsule/circle backgrounds)
+                    // COMPACT PILL ALERT WITH QUICK ACTION & DISMISS BUTTONS
                     when (event) {
                         is DynamicIslandEvent.ChatMessage -> {
                             Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                IosAvatarView(
+                                    name = event.senderName,
+                                    avatarUrl = event.avatarUrl,
+                                    size = 28.dp
+                                )
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f, fill = false)
+                                    modifier = Modifier.weight(1f)
                                 ) {
-                                    IosAvatarView(
-                                        name = event.senderName,
-                                        avatarUrl = event.avatarUrl,
-                                        size = 24.dp
-                                    )
-                                    Spacer(Modifier.width(8.dp))
                                     Text(
                                         text = "${event.senderName}: ${event.messageText}",
                                         color = Color.White,
@@ -1488,311 +1477,349 @@ fun IosDynamicIslandHost(
                                         fontWeight = FontWeight.Medium,
                                         fontFamily = InterFontFamily,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
                                 }
-                                Spacer(Modifier.width(6.dp))
-                                AppleDynamicWaveform(tint = Color(0xFF34C759))
+                                IslandActionPill(
+                                    label = "Reply",
+                                    containerColor = LiquidGlassTokens.AppleSystemBlue,
+                                    textColor = Color.White,
+                                    height = 26.dp,
+                                    horizontalPadding = 10.dp,
+                                    onClick = {
+                                        try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
+                                        isExpanded = true
+                                        isComposingReply = true
+                                    }
+                                )
+                                IslandCloseButton(
+                                    size = 24.dp,
+                                    onClick = { dismissIsland() }
+                                )
                             }
                         }
 
                         is DynamicIslandEvent.Status -> {
+                            val iconTint = statusIconTint(event.title)
                             Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f, fill = false)
+                                Box(
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .clip(CircleShape)
+                                        .background(iconTint.copy(alpha = 0.18f)),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    val iconTint = when {
-                                        event.title.contains("copied", ignoreCase = true) || event.title.contains("saved", ignoreCase = true) || event.title.contains("success", ignoreCase = true) || event.title.contains("updated", ignoreCase = true) -> Color(0xFF34C759)
-                                        event.title.contains("delete", ignoreCase = true) || event.title.contains("remove", ignoreCase = true) || event.title.contains("error", ignoreCase = true) || event.title.contains("failed", ignoreCase = true) -> Color(0xFFFF3B30)
-                                        event.title.contains("like", ignoreCase = true) -> Color(0xFFFF2D55)
-                                        event.title.contains("follow", ignoreCase = true) -> Color(0xFF0381FE)
-                                        else -> Color(0xFF5856D6)
-                                    }
-                                    Icon(event.icon ?: Lucide.Check, null, tint = iconTint, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        text = event.title,
-                                        color = Color.White,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = InterFontFamily,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Icon(event.icon ?: Lucide.Check, null, tint = iconTint, modifier = Modifier.size(15.dp))
                                 }
+                                Text(
+                                    text = event.title,
+                                    color = Color.White,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
                                 if (event.actionLabel != null) {
-                                    Spacer(Modifier.width(6.dp))
-                                    val islandActionShape = RoundedCornerShape(9999.dp)
-                                    Box(
-                                        modifier = Modifier
-                                            .height(24.dp)
-                                            .clip(islandActionShape)
-                                            .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
-                                            .border(0.5.dp, Color(0x8C0051D5), islandActionShape)
-                                            .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, islandActionShape)
-                                            .clickable {
-                                                event.onAction?.invoke()
-                                                dismissIsland()
-                                            }
-                                            .padding(horizontal = 10.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(event.actionLabel, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)
-                                    }
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF2C2C2E))
-                                            .border(0.5.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+                                    IslandActionPill(
+                                        label = event.actionLabel,
+                                        containerColor = LiquidGlassTokens.AppleSystemBlue,
+                                        textColor = Color.White,
+                                        height = 26.dp,
+                                        horizontalPadding = 10.dp,
+                                        onClick = {
+                                            event.onAction?.invoke()
+                                            dismissIsland()
+                                        }
                                     )
                                 }
+                                IslandCloseButton(
+                                    size = 24.dp,
+                                    onClick = { dismissIsland(invokeEventDismiss = true) }
+                                )
                             }
                         }
 
                         is DynamicIslandEvent.Like -> {
                             Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                ) {
-                                    Icon(ChromaIcons.HeartFilled, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        text = "${event.userName} liked your post",
-                                        color = Color.White,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = InterFontFamily,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                Spacer(Modifier.width(6.dp))
-                                Icon(ChromaIcons.HeartFilled, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(13.dp))
+                                IslandBadgeAvatar(
+                                    name = event.userName,
+                                    avatarUrl = event.userAvatar,
+                                    size = 28.dp,
+                                    badgeBg = Color(0xFFFF2D55),
+                                    badgeIcon = ChromaIcons.HeartFilled
+                                )
+                                Text(
+                                    text = "${event.userName} liked ${event.targetTitle}",
+                                    color = Color.White,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IslandActionPill(
+                                    label = "View",
+                                    containerColor = Color(0x38FF2D55),
+                                    borderColor = Color(0xFFFF2D55).copy(alpha = 0.55f),
+                                    textColor = Color(0xFFFF4F70),
+                                    height = 26.dp,
+                                    horizontalPadding = 10.dp,
+                                    onClick = {
+                                        event.onClick?.invoke()
+                                        dismissIsland()
+                                    }
+                                )
+                                IslandCloseButton(size = 24.dp, onClick = { dismissIsland() })
                             }
                         }
 
                         is DynamicIslandEvent.Follow -> {
                             Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                ) {
-                                    Icon(Lucide.UserPlus, null, tint = Color(0xFF0381FE), modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        text = "${event.userName} followed you",
-                                        color = Color.White,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = InterFontFamily,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                IslandBadgeAvatar(
+                                    name = event.userName,
+                                    avatarUrl = event.userAvatar,
+                                    size = 28.dp,
+                                    badgeBg = Color(0xFF0381FE),
+                                    badgeIcon = Lucide.UserPlus
+                                )
+                                Text(
+                                    text = if (event.isFollowRequest) "${event.userName} wants to follow" else "${event.userName} followed you",
+                                    color = Color.White,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                when {
+                                    event.isFollowRequest && event.onAccept != null -> {
+                                        IslandActionPill(
+                                            label = "Accept",
+                                            containerColor = LiquidGlassTokens.AppleSystemBlue,
+                                            textColor = Color.White,
+                                            height = 26.dp,
+                                            horizontalPadding = 10.dp,
+                                            onClick = {
+                                                event.onAccept.invoke()
+                                                dismissIsland()
+                                            }
+                                        )
+                                    }
+                                    event.onFollowBack != null -> {
+                                        IslandActionPill(
+                                            label = if (didFollowBack) "Following" else "Follow",
+                                            containerColor = if (didFollowBack) Color(0xFF2C2C2E) else LiquidGlassTokens.AppleSystemBlue,
+                                            textColor = if (didFollowBack) Color(0xFF34C759) else Color.White,
+                                            height = 26.dp,
+                                            horizontalPadding = 10.dp,
+                                            onClick = {
+                                                if (!didFollowBack) {
+                                                    event.onFollowBack.invoke()
+                                                    didFollowBack = true
+                                                }
+                                                dismissIsland()
+                                            }
+                                        )
+                                    }
+                                    else -> {
+                                        IslandActionPill(
+                                            label = "View",
+                                            containerColor = Color(0xFF2C2C2E),
+                                            textColor = Color.White,
+                                            height = 26.dp,
+                                            horizontalPadding = 10.dp,
+                                            onClick = {
+                                                event.onClick?.invoke()
+                                                dismissIsland()
+                                            }
+                                        )
+                                    }
                                 }
-                                Spacer(Modifier.width(6.dp))
-                                Icon(Lucide.UserPlus, null, tint = Color(0xFF0381FE), modifier = Modifier.size(13.dp))
+                                IslandCloseButton(size = 24.dp, onClick = { dismissIsland() })
                             }
                         }
 
                         is DynamicIslandEvent.RemixOrDownload -> {
                             Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                ) {
-                                    if (event.isRemix) {
-                                        AiWaveSphereIcon(modifier = Modifier.size(18.dp))
-                                    } else {
-                                        Icon(Lucide.Download, null, tint = Color(0xFFFF9500), modifier = Modifier.size(18.dp))
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        text = if (event.isRemix) "${event.userName} remixed" else "${event.userName} downloaded",
-                                        color = Color.White,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = InterFontFamily,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                if (event.userAvatar.isNotBlank()) {
+                                    IslandBadgeAvatar(
+                                        name = event.userName,
+                                        avatarUrl = event.userAvatar,
+                                        size = 28.dp,
+                                        badgeBg = Color(0xFFFF9500),
+                                        badgeIcon = if (event.isRemix) Lucide.Sparkles else Lucide.Download
                                     )
+                                } else if (event.isRemix) {
+                                    AiWaveSphereIcon(modifier = Modifier.size(22.dp))
+                                } else {
+                                    Icon(Lucide.Download, null, tint = Color(0xFFFF9500), modifier = Modifier.size(20.dp))
                                 }
-                                Spacer(Modifier.width(6.dp))
-                                Icon(Lucide.Download, null, tint = Color(0xFFFF9500), modifier = Modifier.size(13.dp))
+                                Text(
+                                    text = if (event.isRemix) "${event.userName} remixed ${event.workTitle}" else "${event.userName} downloaded ${event.workTitle}",
+                                    color = Color.White,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IslandActionPill(
+                                    label = "View",
+                                    containerColor = Color(0x38FF9500),
+                                    borderColor = Color(0xFFFF9500).copy(alpha = 0.55f),
+                                    textColor = Color(0xFFFF9F0A),
+                                    height = 26.dp,
+                                    horizontalPadding = 10.dp,
+                                    onClick = {
+                                        event.onClick?.invoke()
+                                        dismissIsland()
+                                    }
+                                )
+                                IslandCloseButton(size = 24.dp, onClick = { dismissIsland() })
                             }
                         }
 
                         is DynamicIslandEvent.Comment -> {
                             Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                ) {
-                                    if (event.userAvatar.isNotBlank()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context).data(event.userAvatar).crossfade(true).build(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(22.dp).clip(CircleShape)
-                                        )
-                                    } else {
-                                        Icon(Lucide.MessageCircle, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
+                                IslandBadgeAvatar(
+                                    name = event.userName,
+                                    avatarUrl = event.userAvatar,
+                                    size = 28.dp,
+                                    badgeBg = Color(0xFF0EA5E9),
+                                    badgeIcon = Lucide.MessageCircle
+                                )
+                                Text(
+                                    text = "${event.userName}: ${event.commentText.ifBlank { "commented on ${event.targetTitle}" }}",
+                                    color = Color.White,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IslandActionPill(
+                                    label = if (event.onReply != null) "Reply" else "View",
+                                    containerColor = Color(0x3838BDF8),
+                                    borderColor = Color(0xFF38BDF8).copy(alpha = 0.55f),
+                                    textColor = Color(0xFF38BDF8),
+                                    height = 26.dp,
+                                    horizontalPadding = 10.dp,
+                                    onClick = {
+                                        if (event.onReply != null) {
+                                            isExpanded = true
+                                            isComposingReply = true
+                                        } else {
+                                            event.onClick?.invoke()
+                                            dismissIsland()
+                                        }
                                     }
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        text = "${event.userName}: ${event.commentText.ifBlank { "commented" }}",
-                                        color = Color.White,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = InterFontFamily,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                Spacer(Modifier.width(6.dp))
-                                Icon(Lucide.MessageCircle, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(13.dp))
+                                )
+                                IslandCloseButton(size = 24.dp, onClick = { dismissIsland() })
                             }
                         }
 
                         is DynamicIslandEvent.StoryReaction -> {
                             Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                ) {
-                                    if (event.userAvatar.isNotBlank()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context).data(event.userAvatar).crossfade(true).build(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(22.dp).clip(CircleShape)
-                                        )
-                                    } else {
-                                        Text(text = event.reactionEmoji, fontSize = 16.sp)
+                                IosAvatarView(
+                                    name = event.userName,
+                                    avatarUrl = event.avatarUrlOrFallback(),
+                                    size = 28.dp
+                                )
+                                Text(
+                                    text = if (event.replyText.isNotBlank()) "${event.userName}: ${event.replyText}" else "${event.userName} reacted ${event.reactionEmoji}",
+                                    color = Color.White,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IslandActionPill(
+                                    label = if (event.onReply != null) "Reply" else "View",
+                                    containerColor = Color(0x38FF2D55),
+                                    borderColor = Color(0xFFFF2D55).copy(alpha = 0.55f),
+                                    textColor = Color(0xFFFF4F70),
+                                    height = 26.dp,
+                                    horizontalPadding = 10.dp,
+                                    onClick = {
+                                        if (event.onReply != null) {
+                                            isExpanded = true
+                                            isComposingReply = true
+                                        } else {
+                                            event.onClick?.invoke()
+                                            dismissIsland()
+                                        }
                                     }
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        text = "${event.userName} reacted to story",
-                                        color = Color.White,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = InterFontFamily,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                Spacer(Modifier.width(6.dp))
-                                Text(text = event.reactionEmoji, fontSize = 14.sp)
+                                )
+                                IslandCloseButton(size = 24.dp, onClick = { dismissIsland() })
                             }
                         }
                     }
                 } else {
-                    // EXPANDED INTERACTIVE NOTCH VIEW (Zero pill/capsule/circle backgrounds on icons)
+                    // EXPANDED INTERACTIVE ALERT WITH FULL ACTION BUTTONS
                     when (event) {
                         is DynamicIslandEvent.ChatMessage -> {
                             Column(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.SpaceBetween
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                // 1. Header: Avatar + Sender Name + Time + Dismiss X
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    IosAvatarView(
-                                        name = event.senderName,
-                                        avatarUrl = event.avatarUrl,
-                                        size = 34.dp
-                                    )
+                                IslandAlertHeader(
+                                    name = event.senderName,
+                                    avatarUrl = event.avatarUrl,
+                                    isVerified = event.isVerified,
+                                    subtitle = event.messageText,
+                                    metaLabel = event.timeText,
+                                    badgeBg = Color(0xFF34C759),
+                                    badgeIcon = Lucide.MessageCircle,
+                                    onClose = { dismissIsland() }
+                                )
 
-                                    Spacer(Modifier.width(9.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = event.senderName,
-                                                color = Color.White,
-                                                fontSize = 14.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                fontFamily = InterFontFamily,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                text = event.timeText,
-                                                color = Color(0xFF8E8E93),
-                                                fontSize = 11.5.sp,
-                                                fontFamily = InterFontFamily
-                                            )
-                                        }
-                                        Text(
-                                            text = event.messageText,
-                                            color = Color(0xFFE2E8F0),
-                                            fontSize = 12.5.sp,
-                                            fontFamily = InterFontFamily,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-
-                                    Spacer(Modifier.width(8.dp))
-
-                                    // Close button
-                                    Icon(
-                                        Lucide.X,
-                                        contentDescription = "Dismiss",
-                                        tint = Color.White.copy(alpha = 0.70f),
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clickable { dismissIsland() }
-                                    )
-                                }
-
-                                // 2. Quick Emoji Reactions (Instant reply without leaving current screen)
+                                // Quick Emoji Reactions
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     listOf("👍", "❤️", "😂", "🔥", "🙌").forEach { emoji ->
-                                        val emojiPillShape = RoundedCornerShape(9999.dp)
                                         Box(
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(28.dp)
-                                                .clip(emojiPillShape)
-                                                .background(Color(0xFF2C2C2E).copy(alpha = 0.85f))
+                                                .height(30.dp)
+                                                .clip(RoundedCornerShape(9999.dp))
+                                                .background(Color(0xFF232326))
+                                                .border(0.75.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(9999.dp))
                                                 .clickable {
                                                     try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
                                                     if (event.onQuickReact != null) {
@@ -1809,536 +1836,520 @@ fun IosDynamicIslandHost(
                                     }
                                 }
 
-                                // 3. Quick Action Row: Inline Reply TextField + Actions
+                                // Inline Reply Composer
+                                IslandInlineReplyRow(
+                                    value = replyText,
+                                    onValueChange = { replyText = it },
+                                    placeholder = "Reply to ${event.senderName}...",
+                                    onSubmit = {
+                                        if (replyText.isNotBlank()) {
+                                            event.onReply?.invoke(replyText.trim())
+                                            replyText = ""
+                                            dismissIsland()
+                                        }
+                                    }
+                                )
+
+                                // Required Chat Action Buttons
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    val replyPillShape = RoundedCornerShape(9999.dp)
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(34.dp)
-                                            .clip(replyPillShape)
-                                            .background(Color(0xFF242426))
-                                            .padding(horizontal = 12.dp),
-                                        contentAlignment = Alignment.CenterStart
-                                    ) {
-                                        BasicTextField(
-                                            value = replyText,
-                                            onValueChange = { replyText = it },
-                                            textStyle = TextStyle(
-                                                color = Color.White,
-                                                fontSize = 12.5.sp,
-                                                fontFamily = InterFontFamily
-                                            ),
-                                            singleLine = true,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            decorationBox = { innerTextField ->
-                                                if (replyText.isEmpty()) {
-                                                    Text(
-                                                        text = "Reply to ${event.senderName}...",
-                                                        color = Color(0xFF8E8E93),
-                                                        fontSize = 12.sp,
-                                                        fontFamily = InterFontFamily,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                }
-                                                innerTextField()
+                                    if (event.onMarkAsRead != null) {
+                                        IslandActionPill(
+                                            label = "Mark Read",
+                                            icon = Lucide.Check,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color(0xFFE5E5EA),
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
+                                                event.onMarkAsRead.invoke()
+                                                dismissIsland()
                                             }
                                         )
                                     }
-
-                                    if (replyText.isNotBlank()) {
-                                        // Send button with AppleSpecularGlassBorder
-                                        val sendPillShape = RoundedCornerShape(9999.dp)
-                                        Box(
-                                            modifier = Modifier
-                                                .height(34.dp)
-                                                .clip(sendPillShape)
-                                                .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
-                                                .clickable {
-                                                    event.onReply?.invoke(replyText)
-                                                    replyText = ""
-                                                    dismissIsland()
-                                                }
-                                                .padding(horizontal = 14.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = "Send",
-                                                color = Color.White,
-                                                fontSize = 12.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                fontFamily = InterFontFamily
-                                            )
-                                        }
-                                    } else {
-                                        // "Mark Read" pill
-                                        if (event.onMarkAsRead != null) {
-                                            val markReadShape = RoundedCornerShape(9999.dp)
-                                            Box(
-                                                modifier = Modifier
-                                                    .height(34.dp)
-                                                    .clip(markReadShape)
-                                                    .background(Color(0xFF2C2C2E))
-                                                    .clickable {
-                                                        try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
-                                                        event.onMarkAsRead.invoke()
-                                                        dismissIsland()
-                                                    }
-                                                    .padding(horizontal = 10.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = "Read",
-                                                    color = Color(0xFFD1D1D6),
-                                                    fontSize = 11.5.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    fontFamily = InterFontFamily
-                                                )
+                                    if (event.onMute != null) {
+                                        IslandActionPill(
+                                            label = "Mute",
+                                            icon = Lucide.BellOff,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color(0xFFD1D1D6),
+                                            onClick = {
+                                                event.onMute.invoke()
+                                                ToastManager.showToast("Muted ${event.senderName}")
+                                                dismissIsland()
                                             }
-                                        }
-
-                                        // "Open" chat button
-                                        val openPillShape = RoundedCornerShape(9999.dp)
-                                        Box(
-                                            modifier = Modifier
-                                                .height(34.dp)
-                                                .clip(openPillShape)
-                                                .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
-                                                .clickable {
-                                                    event.onClick?.invoke()
-                                                    dismissIsland()
-                                                }
-                                                .padding(horizontal = 12.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = "Open",
-                                                color = Color.White,
-                                                fontSize = 12.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                fontFamily = InterFontFamily
-                                            )
-                                        }
+                                        )
                                     }
+                                    IslandActionPill(
+                                        label = "Open Chat",
+                                        icon = Lucide.ArrowUpRight,
+                                        containerColor = LiquidGlassTokens.AppleSystemBlue,
+                                        textColor = Color.White,
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            event.onClick?.invoke()
+                                            dismissIsland()
+                                        }
+                                    )
                                 }
                             }
                         }
 
                         is DynamicIslandEvent.Like -> {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(ChromaIcons.HeartFilled, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(26.dp))
-
-                                    Spacer(Modifier.width(10.dp))
-
-                                    Column {
-                                        Text(
-                                            text = event.userName,
-                                            color = Color.White,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = InterFontFamily,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "liked ${event.targetTitle}",
-                                            color = Color(0xFFD1D1D6),
-                                            fontSize = 12.sp,
-                                            fontFamily = InterFontFamily,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
+                                IslandAlertHeader(
+                                    name = event.userName,
+                                    avatarUrl = event.userAvatar,
+                                    isVerified = event.isVerified,
+                                    subtitle = "liked ${event.targetTitle}",
+                                    thumbnailUrl = event.targetThumbnail,
+                                    badgeBg = Color(0xFFFF2D55),
+                                    badgeIcon = ChromaIcons.HeartFilled,
+                                    onClose = { dismissIsland() }
+                                )
 
                                 Row(
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .height(30.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0x33FF2D55))
-                                            .border(1.dp, Color(0xFFFF2D55).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                event.onClick?.invoke()
+                                    IslandActionPill(
+                                        label = "View Post",
+                                        icon = Lucide.ExternalLink,
+                                        containerColor = Color(0x33FF2D55),
+                                        borderColor = Color(0xFFFF2D55).copy(alpha = 0.55f),
+                                        textColor = Color(0xFFFF4F70),
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            event.onClick?.invoke()
+                                            dismissIsland()
+                                        }
+                                    )
+                                    if (event.onViewProfile != null) {
+                                        IslandActionPill(
+                                            label = "Profile",
+                                            icon = Lucide.User,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color.White,
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                event.onViewProfile.invoke()
                                                 dismissIsland()
                                             }
-                                            .padding(horizontal = 12.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "View",
-                                            color = Color(0xFFFF375F),
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = InterFontFamily
                                         )
                                     }
-                                    Icon(
-                                        Lucide.X,
-                                        contentDescription = "Close",
-                                        tint = Color.White.copy(alpha = 0.70f),
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clickable { dismissIsland() }
-                                    )
+                                    if (event.onMarkAsRead != null) {
+                                        IslandActionPill(
+                                            label = "Read",
+                                            icon = Lucide.Check,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color(0xFFD1D1D6),
+                                            onClick = {
+                                                event.onMarkAsRead.invoke()
+                                                dismissIsland()
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
 
                         is DynamicIslandEvent.Follow -> {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (event.userAvatar.isNotBlank()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context).data(event.userAvatar).crossfade(true).build(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(34.dp).clip(CircleShape)
-                                        )
-                                    } else {
-                                        Icon(Lucide.UserPlus, null, tint = Color(0xFF0381FE), modifier = Modifier.size(26.dp))
-                                    }
-
-                                    Spacer(Modifier.width(10.dp))
-
-                                    Column {
-                                        Text(
-                                            text = event.userName,
-                                            color = Color.White,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = InterFontFamily,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "started following you",
-                                            color = Color(0xFFD1D1D6),
-                                            fontSize = 12.sp,
-                                            fontFamily = InterFontFamily,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
+                                IslandAlertHeader(
+                                    name = event.userName,
+                                    avatarUrl = event.userAvatar,
+                                    isVerified = event.isVerified,
+                                    subtitle = if (event.isFollowRequest) "requested to follow you" else "started following you",
+                                    badgeBg = Color(0xFF0381FE),
+                                    badgeIcon = Lucide.UserPlus,
+                                    onClose = { dismissIsland() }
+                                )
 
                                 Row(
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    if (event.onFollowBack != null) {
-                                        Box(
-                                            modifier = Modifier
-                                                .height(30.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(Color(0xFF0381FE))
-                                                .clickable {
-                                                    event.onFollowBack.invoke()
+                                    if (event.isFollowRequest) {
+                                        if (event.onAccept != null) {
+                                            IslandActionPill(
+                                                label = "Accept",
+                                                icon = Lucide.Check,
+                                                containerColor = LiquidGlassTokens.AppleSystemBlue,
+                                                textColor = Color.White,
+                                                modifier = Modifier.weight(1f),
+                                                onClick = {
+                                                    event.onAccept.invoke()
                                                     dismissIsland()
                                                 }
-                                                .padding(horizontal = 12.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text("Follow", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)
+                                            )
                                         }
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .height(30.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF2C2C2E))
-                                            .clickable {
+                                        if (event.onDecline != null) {
+                                            IslandActionPill(
+                                                label = "Decline",
+                                                icon = Lucide.X,
+                                                containerColor = Color(0x33FF3B30),
+                                                borderColor = Color(0xFFFF3B30).copy(alpha = 0.50f),
+                                                textColor = Color(0xFFFF6961),
+                                                modifier = Modifier.weight(1f),
+                                                onClick = {
+                                                    event.onDecline.invoke()
+                                                    dismissIsland()
+                                                }
+                                            )
+                                        }
+                                        IslandActionPill(
+                                            label = "Profile",
+                                            icon = Lucide.User,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color.White,
+                                            onClick = {
                                                 event.onClick?.invoke()
                                                 dismissIsland()
                                             }
-                                            .padding(horizontal = 10.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("View", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = InterFontFamily)
+                                        )
+                                    } else {
+                                        if (event.onFollowBack != null) {
+                                            IslandActionPill(
+                                                label = if (didFollowBack) "Following" else "Follow Back",
+                                                icon = if (didFollowBack) Lucide.UserCheck else Lucide.UserPlus,
+                                                containerColor = if (didFollowBack) Color(0x2834C759) else LiquidGlassTokens.AppleSystemBlue,
+                                                borderColor = if (didFollowBack) Color(0xFF34C759).copy(alpha = 0.5f) else Color.Transparent,
+                                                textColor = if (didFollowBack) Color(0xFF34C759) else Color.White,
+                                                modifier = Modifier.weight(1f),
+                                                onClick = {
+                                                    if (!didFollowBack) {
+                                                        event.onFollowBack.invoke()
+                                                        didFollowBack = true
+                                                    } else {
+                                                        dismissIsland()
+                                                    }
+                                                }
+                                            )
+                                        }
+                                        IslandActionPill(
+                                            label = "View Profile",
+                                            icon = Lucide.User,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color.White,
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                event.onClick?.invoke()
+                                                dismissIsland()
+                                            }
+                                        )
+                                        if (event.onMarkAsRead != null) {
+                                            IslandActionPill(
+                                                label = "Read",
+                                                icon = Lucide.Check,
+                                                containerColor = Color(0xFF252529),
+                                                borderColor = Color.White.copy(alpha = 0.12f),
+                                                textColor = Color(0xFFD1D1D6),
+                                                onClick = {
+                                                    event.onMarkAsRead.invoke()
+                                                    dismissIsland()
+                                                }
+                                            )
+                                        }
                                     }
-                                    Icon(
-                                        Lucide.X,
-                                        contentDescription = "Close",
-                                        tint = Color.White.copy(alpha = 0.70f),
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clickable { dismissIsland() }
-                                    )
                                 }
                             }
                         }
 
                         is DynamicIslandEvent.RemixOrDownload -> {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (event.isRemix) {
-                                        AiWaveSphereIcon(modifier = Modifier.size(26.dp))
-                                    } else {
-                                        Icon(Lucide.Download, null, tint = Color(0xFFFF9500), modifier = Modifier.size(26.dp))
-                                    }
-
-                                    Spacer(Modifier.width(10.dp))
-
-                                    Column {
-                                        Text(
-                                            text = event.userName,
-                                            color = Color.White,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = InterFontFamily,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = if (event.isRemix) "remixed ${event.workTitle}" else "downloaded ${event.workTitle}",
-                                            color = Color(0xFFD1D1D6),
-                                            fontSize = 12.sp,
-                                            fontFamily = InterFontFamily,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
+                                IslandAlertHeader(
+                                    name = event.userName,
+                                    avatarUrl = event.userAvatar,
+                                    isVerified = event.isVerified,
+                                    subtitle = if (event.isRemix) "remixed ${event.workTitle}" else "downloaded ${event.workTitle}",
+                                    thumbnailUrl = event.workThumbnail,
+                                    badgeBg = Color(0xFFFF9500),
+                                    badgeIcon = if (event.isRemix) Lucide.Sparkles else Lucide.Download,
+                                    onClose = { dismissIsland() }
+                                )
 
                                 Row(
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .height(30.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0x33FF9500))
-                                            .border(1.dp, Color(0xFFFF9500).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                event.onClick?.invoke()
+                                    IslandActionPill(
+                                        label = if (event.isRemix) "View Remix" else "View Work",
+                                        icon = Lucide.ExternalLink,
+                                        containerColor = Color(0x33FF9500),
+                                        borderColor = Color(0xFFFF9500).copy(alpha = 0.55f),
+                                        textColor = Color(0xFFFF9F0A),
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            event.onClick?.invoke()
+                                            dismissIsland()
+                                        }
+                                    )
+                                    if (event.onViewProfile != null) {
+                                        IslandActionPill(
+                                            label = "Creator",
+                                            icon = Lucide.User,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color.White,
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                event.onViewProfile.invoke()
                                                 dismissIsland()
                                             }
-                                            .padding(horizontal = 12.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("View", color = Color(0xFFFF9F0A), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)
+                                        )
                                     }
-                                    Icon(
-                                        Lucide.X,
-                                        contentDescription = "Close",
-                                        tint = Color.White.copy(alpha = 0.70f),
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clickable { dismissIsland() }
-                                    )
+                                    if (event.onMarkAsRead != null) {
+                                        IslandActionPill(
+                                            label = "Read",
+                                            icon = Lucide.Check,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color(0xFFD1D1D6),
+                                            onClick = {
+                                                event.onMarkAsRead.invoke()
+                                                dismissIsland()
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
 
                         is DynamicIslandEvent.Comment -> {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (event.userAvatar.isNotBlank()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context).data(event.userAvatar).crossfade(true).build(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(34.dp).clip(CircleShape)
-                                        )
-                                    } else {
-                                        Icon(Lucide.MessageCircle, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(26.dp))
-                                    }
+                                IslandAlertHeader(
+                                    name = event.userName,
+                                    avatarUrl = event.userAvatar,
+                                    isVerified = event.isVerified,
+                                    subtitle = event.commentText.ifBlank { "commented on ${event.targetTitle}" },
+                                    metaLabel = if (event.isMention) "Mention" else "Comment",
+                                    thumbnailUrl = event.targetThumbnail,
+                                    badgeBg = Color(0xFF0EA5E9),
+                                    badgeIcon = Lucide.MessageCircle,
+                                    onClose = { dismissIsland() }
+                                )
 
-                                    Spacer(Modifier.width(10.dp))
-
-                                    Column {
-                                        Text(
-                                            text = event.userName,
-                                            color = Color.White,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = InterFontFamily,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = event.commentText.ifBlank { "commented on: ${event.targetTitle}" },
-                                            color = Color(0xFFD1D1D6),
-                                            fontSize = 12.sp,
-                                            fontFamily = InterFontFamily,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
+                                if (isComposingReply && event.onReply != null) {
+                                    IslandInlineReplyRow(
+                                        value = replyText,
+                                        onValueChange = { replyText = it },
+                                        placeholder = "Reply to ${event.userName}...",
+                                        onSubmit = {
+                                            if (replyText.isNotBlank()) {
+                                                event.onReply.invoke(replyText.trim())
+                                                replyText = ""
+                                                isComposingReply = false
+                                                dismissIsland()
+                                            }
+                                        },
+                                        onCancel = {
+                                            isComposingReply = false
+                                            replyText = ""
+                                        }
+                                    )
                                 }
 
                                 Row(
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .height(30.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0x3338BDF8))
-                                            .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                event.onClick?.invoke()
+                                    if (event.onReply != null && !isComposingReply) {
+                                        IslandActionPill(
+                                            label = "Reply",
+                                            icon = Lucide.CornerUpLeft,
+                                            containerColor = LiquidGlassTokens.AppleSystemBlue,
+                                            textColor = Color.White,
+                                            modifier = Modifier.weight(1f),
+                                            onClick = { isComposingReply = true }
+                                        )
+                                    }
+                                    IslandActionPill(
+                                        label = "View Post",
+                                        icon = Lucide.ExternalLink,
+                                        containerColor = Color(0x3338BDF8),
+                                        borderColor = Color(0xFF38BDF8).copy(alpha = 0.55f),
+                                        textColor = Color(0xFF38BDF8),
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            event.onClick?.invoke()
+                                            dismissIsland()
+                                        }
+                                    )
+                                    if (event.onViewProfile != null) {
+                                        IslandActionPill(
+                                            label = "Profile",
+                                            icon = Lucide.User,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color.White,
+                                            onClick = {
+                                                event.onViewProfile.invoke()
                                                 dismissIsland()
                                             }
-                                            .padding(horizontal = 12.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("View", color = Color(0xFF38BDF8), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)
+                                        )
                                     }
-                                    Icon(
-                                        Lucide.X,
-                                        contentDescription = "Close",
-                                        tint = Color.White.copy(alpha = 0.70f),
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clickable { dismissIsland() }
-                                    )
+                                    if (event.onMarkAsRead != null) {
+                                        IslandActionPill(
+                                            label = "Read",
+                                            icon = Lucide.Check,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color(0xFFD1D1D6),
+                                            onClick = {
+                                                event.onMarkAsRead.invoke()
+                                                dismissIsland()
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
 
                         is DynamicIslandEvent.StoryReaction -> {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (event.userAvatar.isNotBlank()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context).data(event.userAvatar).crossfade(true).build(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(34.dp).clip(CircleShape)
-                                        )
-                                    } else {
-                                        Text(text = event.reactionEmoji, fontSize = 24.sp)
-                                    }
+                                IslandAlertHeader(
+                                    name = event.userName,
+                                    avatarUrl = event.avatarUrlOrFallback(),
+                                    isVerified = event.isVerified,
+                                    subtitle = if (event.replyText.isNotBlank()) "replied: ${event.replyText}" else "reacted ${event.reactionEmoji} to your story",
+                                    thumbnailUrl = event.storyThumbnail,
+                                    badgeBg = Color(0xFFFF2D55),
+                                    badgeIcon = ChromaIcons.HeartFilled,
+                                    onClose = { dismissIsland() }
+                                )
 
-                                    Spacer(Modifier.width(10.dp))
-
-                                    Column {
-                                        Text(
-                                            text = event.userName,
-                                            color = Color.White,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = InterFontFamily,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "reacted ${event.reactionEmoji} to your story",
-                                            color = Color(0xFFD1D1D6),
-                                            fontSize = 12.sp,
-                                            fontFamily = InterFontFamily,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
+                                if (isComposingReply && event.onReply != null) {
+                                    IslandInlineReplyRow(
+                                        value = replyText,
+                                        onValueChange = { replyText = it },
+                                        placeholder = "Message ${event.userName}...",
+                                        onSubmit = {
+                                            if (replyText.isNotBlank()) {
+                                                event.onReply.invoke(replyText.trim())
+                                                replyText = ""
+                                                isComposingReply = false
+                                                dismissIsland()
+                                            }
+                                        },
+                                        onCancel = {
+                                            isComposingReply = false
+                                            replyText = ""
+                                        }
+                                    )
                                 }
 
                                 Row(
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .height(30.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0x33FF2D55))
-                                            .border(1.dp, Color(0xFFFF2D55).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                event.onClick?.invoke()
+                                    if (event.onReply != null && !isComposingReply) {
+                                        IslandActionPill(
+                                            label = "Reply",
+                                            icon = Lucide.MessageCircle,
+                                            containerColor = LiquidGlassTokens.AppleSystemBlue,
+                                            textColor = Color.White,
+                                            modifier = Modifier.weight(1f),
+                                            onClick = { isComposingReply = true }
+                                        )
+                                    }
+                                    IslandActionPill(
+                                        label = "View Story",
+                                        icon = Lucide.ExternalLink,
+                                        containerColor = Color(0x33FF2D55),
+                                        borderColor = Color(0xFFFF2D55).copy(alpha = 0.55f),
+                                        textColor = Color(0xFFFF4F70),
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            event.onClick?.invoke()
+                                            dismissIsland()
+                                        }
+                                    )
+                                    if (event.onViewProfile != null) {
+                                        IslandActionPill(
+                                            label = "Profile",
+                                            icon = Lucide.User,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color.White,
+                                            onClick = {
+                                                event.onViewProfile.invoke()
                                                 dismissIsland()
                                             }
-                                            .padding(horizontal = 12.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("View", color = Color(0xFFFF375F), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)
+                                        )
                                     }
-                                    Icon(
-                                        Lucide.X,
-                                        contentDescription = "Close",
-                                        tint = Color.White.copy(alpha = 0.70f),
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clickable { dismissIsland() }
-                                    )
+                                    if (event.onMarkAsRead != null) {
+                                        IslandActionPill(
+                                            label = "Read",
+                                            icon = Lucide.Check,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color(0xFFD1D1D6),
+                                            onClick = {
+                                                event.onMarkAsRead.invoke()
+                                                dismissIsland()
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
 
                         is DynamicIslandEvent.Status -> {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                            val iconTint = statusIconTint(event.title)
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.weight(1f, fill = false),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    val iconBg = when {
-                                        event.title.contains("copied", ignoreCase = true) || event.title.contains("saved", ignoreCase = true) || event.title.contains("success", ignoreCase = true) || event.title.contains("updated", ignoreCase = true) -> Color(0xFF34C759)
-                                        event.title.contains("delete", ignoreCase = true) || event.title.contains("remove", ignoreCase = true) || event.title.contains("error", ignoreCase = true) || event.title.contains("failed", ignoreCase = true) -> Color(0xFFFF3B30)
-                                        event.title.contains("like", ignoreCase = true) -> Color(0xFFFF2D55)
-                                        event.title.contains("follow", ignoreCase = true) -> Color(0xFF0381FE)
-                                        else -> Color(0xFF5856D6)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(iconTint.copy(alpha = 0.18f))
+                                            .border(0.8.dp, iconTint.copy(alpha = 0.35f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(event.icon ?: Lucide.Check, null, tint = iconTint, modifier = Modifier.size(18.dp))
                                     }
-
-                                    Icon(event.icon ?: Lucide.Check, null, tint = iconBg, modifier = Modifier.size(26.dp))
-
-                                    Spacer(Modifier.width(10.dp))
-
-                                    Column(verticalArrangement = Arrangement.Center) {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = event.title,
                                             color = Color.White,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
                                             fontFamily = InterFontFamily,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
@@ -2346,43 +2357,59 @@ fun IosDynamicIslandHost(
                                         if (event.message.isNotBlank()) {
                                             Text(
                                                 text = event.message,
-                                                color = Color(0xFFA1A1AA),
-                                                fontSize = 11.5.sp,
+                                                color = Color(0xFFD1D1D6),
+                                                fontSize = 12.sp,
                                                 fontFamily = InterFontFamily,
-                                                maxLines = 1,
+                                                maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                         }
                                     }
+                                    IslandCloseButton(
+                                        size = 28.dp,
+                                        onClick = { dismissIsland(invokeEventDismiss = true) }
+                                    )
                                 }
 
                                 Row(
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     if (event.actionLabel != null) {
-                                        Box(
-                                            modifier = Modifier
-                                                .height(28.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(Color(0xFF0381FE))
-                                                .clickable {
-                                                    event.onAction?.invoke()
-                                                    dismissIsland()
-                                                }
-                                                .padding(horizontal = 10.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(event.actionLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)
-                                        }
+                                        IslandActionPill(
+                                            label = event.actionLabel,
+                                            icon = Lucide.ExternalLink,
+                                            containerColor = LiquidGlassTokens.AppleSystemBlue,
+                                            textColor = Color.White,
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                event.onAction?.invoke()
+                                                dismissIsland()
+                                            }
+                                        )
                                     }
-                                    Icon(
-                                        Lucide.X,
-                                        contentDescription = "Close",
-                                        tint = Color.White.copy(alpha = 0.70f),
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .clickable { dismissIsland() }
+                                    if (event.secondaryActionLabel != null) {
+                                        IslandActionPill(
+                                            label = event.secondaryActionLabel,
+                                            icon = Lucide.Check,
+                                            containerColor = Color(0xFF252529),
+                                            borderColor = Color.White.copy(alpha = 0.12f),
+                                            textColor = Color(0xFFE5E5EA),
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                event.onSecondaryAction?.invoke()
+                                                dismissIsland()
+                                            }
+                                        )
+                                    }
+                                    IslandActionPill(
+                                        label = "Dismiss",
+                                        containerColor = Color(0xFF242426),
+                                        borderColor = Color.White.copy(alpha = 0.10f),
+                                        textColor = Color(0xFFA1A1AA),
+                                        modifier = if (event.actionLabel == null && event.secondaryActionLabel == null) Modifier.weight(1f) else Modifier,
+                                        onClick = { dismissIsland(invokeEventDismiss = true) }
                                     )
                                 }
                             }
@@ -2390,6 +2417,290 @@ fun IosDynamicIslandHost(
                     }
                 }
             }
+        }
+    }
+}
+
+private fun statusIconTint(title: String): Color = when {
+    title.contains("copied", ignoreCase = true) ||
+        title.contains("saved", ignoreCase = true) ||
+        title.contains("success", ignoreCase = true) ||
+        title.contains("updated", ignoreCase = true) ||
+        title.contains("posted", ignoreCase = true) ||
+        title.contains("approved", ignoreCase = true) -> Color(0xFF34C759)
+    title.contains("delete", ignoreCase = true) ||
+        title.contains("remove", ignoreCase = true) ||
+        title.contains("error", ignoreCase = true) ||
+        title.contains("failed", ignoreCase = true) -> Color(0xFFFF3B30)
+    title.contains("like", ignoreCase = true) -> Color(0xFFFF2D55)
+    title.contains("follow", ignoreCase = true) -> Color(0xFF0381FE)
+    else -> Color(0xFF5856D6)
+}
+
+private fun DynamicIslandEvent.StoryReaction.avatarUrlOrFallback(): String = userAvatar
+
+@Composable
+private fun IslandCloseButton(
+    size: Dp = 26.dp,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.12f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Lucide.X,
+            contentDescription = "Dismiss",
+            tint = Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.size((size.value * 0.54f).dp)
+        )
+    }
+}
+
+@Composable
+private fun IslandBadgeAvatar(
+    name: String,
+    avatarUrl: String,
+    size: Dp,
+    badgeBg: Color,
+    badgeIcon: ImageVector
+) {
+    Box(modifier = Modifier.size(size)) {
+        IosAvatarView(
+            name = name,
+            avatarUrl = avatarUrl,
+            size = size
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .size((size.value * 0.45f).coerceAtLeast(12f).dp)
+                .clip(CircleShape)
+                .background(badgeBg)
+                .border(1.dp, Color.Black, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = badgeIcon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size((size.value * 0.25f).coerceAtLeast(7f).dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun IslandAlertHeader(
+    name: String,
+    avatarUrl: String,
+    isVerified: Boolean,
+    subtitle: String,
+    badgeBg: Color,
+    badgeIcon: ImageVector,
+    metaLabel: String? = null,
+    thumbnailUrl: String = "",
+    onClose: () -> Unit
+) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        IslandBadgeAvatar(
+            name = name,
+            avatarUrl = avatarUrl,
+            size = 38.dp,
+            badgeBg = badgeBg,
+            badgeIcon = badgeIcon
+        )
+
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Text(
+                    text = name,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = InterFontFamily,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (isVerified) {
+                    VerifiedBadge(size = 13.dp)
+                }
+                if (!metaLabel.isNullOrBlank()) {
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = metaLabel,
+                        color = Color(0xFF8E8E93),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = InterFontFamily,
+                        maxLines = 1
+                    )
+                }
+            }
+            Text(
+                text = subtitle,
+                color = Color(0xFFD1D1D6),
+                fontSize = 12.5.sp,
+                fontFamily = InterFontFamily,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        if (thumbnailUrl.isNotBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(context).data(thumbnailUrl).crossfade(true).build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+            )
+        }
+
+        IslandCloseButton(size = 28.dp, onClick = onClose)
+    }
+}
+
+@Composable
+private fun IslandActionPill(
+    label: String,
+    containerColor: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    borderColor: Color = Color.Transparent,
+    height: Dp = 32.dp,
+    horizontalPadding: Dp = 10.dp,
+    onClick: () -> Unit
+) {
+    val pillShape = RoundedCornerShape(9999.dp)
+    Row(
+        modifier = modifier
+            .height(height)
+            .clip(pillShape)
+            .background(containerColor)
+            .then(
+                if (borderColor != Color.Transparent) {
+                    Modifier.border(0.8.dp, borderColor, pillShape)
+                } else {
+                    Modifier
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = horizontalPadding),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = textColor,
+                modifier = Modifier.size(13.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(
+            text = label,
+            color = textColor,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = InterFontFamily,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun IslandInlineReplyRow(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    onSubmit: () -> Unit,
+    onCancel: (() -> Unit)? = null
+) {
+    val pillShape = RoundedCornerShape(9999.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(34.dp)
+                .clip(pillShape)
+                .background(Color(0xFF232326))
+                .border(0.8.dp, Color.White.copy(alpha = 0.14f), pillShape)
+                .padding(horizontal = 12.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                textStyle = TextStyle(
+                    color = Color.White,
+                    fontSize = 12.5.sp,
+                    fontFamily = InterFontFamily
+                ),
+                singleLine = true,
+                cursorBrush = SolidColor(LiquidGlassTokens.AppleSystemBlue),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { onSubmit() }),
+                modifier = Modifier.fillMaxWidth(),
+                decorationBox = { innerTextField ->
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            color = Color(0xFF8E8E93),
+                            fontSize = 12.sp,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    innerTextField()
+                }
+            )
+        }
+
+        if (value.isNotBlank()) {
+            IslandActionPill(
+                label = "Send",
+                icon = Lucide.Send,
+                containerColor = LiquidGlassTokens.AppleSystemBlue,
+                textColor = Color.White,
+                height = 34.dp,
+                horizontalPadding = 12.dp,
+                onClick = onSubmit
+            )
+        } else if (onCancel != null) {
+            IslandActionPill(
+                label = "Cancel",
+                containerColor = Color(0xFF252529),
+                borderColor = Color.White.copy(alpha = 0.12f),
+                textColor = Color(0xFFD1D1D6),
+                height = 34.dp,
+                horizontalPadding = 10.dp,
+                onClick = onCancel
+            )
         }
     }
 }

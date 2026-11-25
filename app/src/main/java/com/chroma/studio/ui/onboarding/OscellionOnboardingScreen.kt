@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,8 +18,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,10 +34,15 @@ import com.chroma.studio.data.SupabaseMediaStorage
 import com.chroma.studio.model.UserProfile
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.EmailAuthProvider
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.OAuthProvider
+import com.google.firebase.auth.UserProfileChangeRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -95,7 +103,9 @@ fun OscellionOnboardingScreen(
 
     var detectedProfile by remember { mutableStateOf<UserProfile?>(null) }
     var activeGoogleUserData by remember { mutableStateOf<GoogleUserData?>(null) }
-    var activeFirebaseUser by remember { mutableStateOf<com.google.firebase.auth.FirebaseUser?>(null) }
+    var activeFirebaseUser by remember { mutableStateOf<FirebaseUser?>(null) }
+    var wizardError by remember { mutableStateOf<String?>(null) }
+    var wizardErrorKey by remember { mutableIntStateOf(0) }
 
     // Helper to purge Google & Firebase credentials cleanly
     fun purgeClientSession(onComplete: () -> Unit = {}) {
@@ -113,79 +123,170 @@ fun OscellionOnboardingScreen(
             detectedProfile = null
             activeGoogleUserData = null
             activeFirebaseUser = null
+            wizardError = null
             onComplete()
         }
     }
 
-    // Google Sign-In Launcher
-    val googleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+    suspend fun routeSignedInOAuthUser(
+        user: FirebaseUser,
+        verifiedEmail: String,
+        googleId: String,
+        displayName: String,
+        photoUrl: String
+    ) {
+        activeFirebaseUser = user
+        wizardError = null
+        val gData = GoogleUserData(
+            email = verifiedEmail,
+            googleId = googleId,
+            displayName = displayName,
+            photoUrl = photoUrl
+        )
+        activeGoogleUserData = gData
+
+        val existing = discoverRepo.getUserProfile(user.uid)
+            ?: discoverRepo.getUserByEmail(verifiedEmail)
+            ?: discoverRepo.getUserByGoogleId(googleId)
+
+        if (authIntentMode == AuthIntentMode.LOGIN) {
+            if (existing != null) {
+                detectedProfile = existing
+                currentScreenState = AuthScreenState.ACCOUNT_CONFIRMATION
+            } else {
+                currentScreenState = AuthScreenState.ONBOARDING_WIZARD
+            }
+        } else {
+            if (existing != null) {
+                detectedProfile = existing
+                currentScreenState = AuthScreenState.WELCOME
+                showDuplicateDialog = true
+            } else {
+                currentScreenState = AuthScreenState.ONBOARDING_WIZARD
+            }
+        }
+    }
+
+    fun launchWebGoogleOAuthFallback() {
+        val activity = context as? Activity
+        if (activity == null) {
+            isGoogleLoading = false
+            currentScreenState = AuthScreenState.WELCOME
+            Toast.makeText(context, "Google Sign-In window unavailable", Toast.LENGTH_SHORT).show()
+            return
+        }
+        isGoogleLoading = true
+        val provider = OAuthProvider.newBuilder("google.com")
+            .addCustomParameter("prompt", "select_account")
+            .build()
+        auth.startActivityForSignInWithProvider(activity, provider)
+            .addOnSuccessListener { authResult ->
+                scope.launch {
+                    currentScreenState = AuthScreenState.CHECKING_DATABASE
+                    try {
+                        val user = authResult.user
+                        if (user != null) {
+                            routeSignedInOAuthUser(
+                                user = user,
+                                verifiedEmail = user.email ?: "",
+                                googleId = user.uid,
+                                displayName = user.displayName ?: "",
+                                photoUrl = user.photoUrl?.toString() ?: ""
+                            )
+                        } else {
+                            Toast.makeText(context, "Google authentication failed", Toast.LENGTH_SHORT).show()
+                            currentScreenState = AuthScreenState.WELCOME
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, e.localizedMessage ?: "Google Sign-In failed", Toast.LENGTH_LONG).show()
+                        currentScreenState = AuthScreenState.WELCOME
+                    } finally {
+                        isGoogleLoading = false
+                    }
+                }
+            }
+            .addOnFailureListener { e ->
+                isGoogleLoading = false
+                currentScreenState = AuthScreenState.WELCOME
+                Toast.makeText(context, e.localizedMessage ?: "Google Sign-In cancelled or failed", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    // Recover interrupted OAuth browser flow if Activity restarted mid-sign-in
+    LaunchedEffect(Unit) {
+        auth.pendingAuthResult?.addOnSuccessListener { authResult ->
+            val user = authResult.user ?: return@addOnSuccessListener
             scope.launch {
                 isGoogleLoading = true
                 currentScreenState = AuthScreenState.CHECKING_DATABASE
                 try {
-                    val account = task.await()
-                    val credential = GoogleAuthProvider.getCredential(account.idToken, null)
-                    val authResult = auth.signInWithCredential(credential).await()
-                    val user = authResult.user
-                    if (user != null) {
-                        activeFirebaseUser = user
-                        val verifiedEmail = account.email ?: user.email ?: ""
-                        val googleId = account.id ?: user.uid
-                        val displayName = account.displayName ?: user.displayName ?: ""
-                        val photoUrl = account.photoUrl?.toString() ?: user.photoUrl?.toString() ?: ""
-
-                        val gData = GoogleUserData(
-                            email = verifiedEmail,
-                            googleId = googleId,
-                            displayName = displayName,
-                            photoUrl = photoUrl
-                        )
-                        activeGoogleUserData = gData
-
-                        // Query Firestore database: does this account exist?
-                        val existing = discoverRepo.getUserProfile(user.uid)
-                            ?: discoverRepo.getUserByEmail(verifiedEmail)
-                            ?: discoverRepo.getUserByGoogleId(googleId)
-
-                        if (authIntentMode == AuthIntentMode.LOGIN) {
-                            // Flow A: "Continue with Google"
-                            if (existing != null) {
-                                // Case A2: Returning user -> Confirmation Screen
-                                detectedProfile = existing
-                                currentScreenState = AuthScreenState.ACCOUNT_CONFIRMATION
-                            } else {
-                                // Case A1: Brand new user -> Onboarding Wizard
-                                currentScreenState = AuthScreenState.ONBOARDING_WIZARD
-                            }
-                        } else {
-                            // Flow B: "Create a new account"
-                            if (existing != null) {
-                                // Validation Failure: Email already registered
-                                detectedProfile = existing
-                                currentScreenState = AuthScreenState.WELCOME
-                                showDuplicateDialog = true
-                            } else {
-                                // Validation Success: Email does not exist
-                                currentScreenState = AuthScreenState.ONBOARDING_WIZARD
-                            }
-                        }
-                    } else {
-                        Toast.makeText(context, "Google authentication failed", Toast.LENGTH_SHORT).show()
-                        currentScreenState = AuthScreenState.WELCOME
-                    }
-                } catch (e: Exception) {
-                    val msg = e.localizedMessage ?: e.message ?: "Google Sign-In failed"
-                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                    currentScreenState = AuthScreenState.WELCOME
+                    routeSignedInOAuthUser(
+                        user = user,
+                        verifiedEmail = user.email ?: "",
+                        googleId = user.uid,
+                        displayName = user.displayName ?: "",
+                        photoUrl = user.photoUrl?.toString() ?: ""
+                    )
                 } finally {
                     isGoogleLoading = false
                 }
             }
-        } else {
-            isGoogleLoading = false
-            currentScreenState = AuthScreenState.WELCOME
+        }
+    }
+
+    // Google Sign-In Launcher (always inspects ApiException status codes so DEVELOPER_ERROR falls back cleanly)
+    val googleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        scope.launch {
+            isGoogleLoading = true
+            currentScreenState = AuthScreenState.CHECKING_DATABASE
+            try {
+                val account = task.await()
+                val credential = GoogleAuthProvider.getCredential(account.idToken, null)
+                val authResult = auth.signInWithCredential(credential).await()
+                val user = authResult.user
+                if (user != null) {
+                    routeSignedInOAuthUser(
+                        user = user,
+                        verifiedEmail = account.email ?: user.email ?: "",
+                        googleId = account.id ?: user.uid,
+                        displayName = account.displayName ?: user.displayName ?: "",
+                        photoUrl = account.photoUrl?.toString() ?: user.photoUrl?.toString() ?: ""
+                    )
+                } else {
+                    Toast.makeText(context, "Google authentication failed", Toast.LENGTH_SHORT).show()
+                    currentScreenState = AuthScreenState.WELCOME
+                }
+                isGoogleLoading = false
+            } catch (e: ApiException) {
+                when (e.statusCode) {
+                    GoogleSignInStatusCodes.SIGN_IN_CANCELLED,
+                    CommonStatusCodes.CANCELED -> {
+                        isGoogleLoading = false
+                        currentScreenState = AuthScreenState.WELCOME
+                    }
+                    CommonStatusCodes.DEVELOPER_ERROR,
+                    GoogleSignInStatusCodes.SIGN_IN_FAILED,
+                    GoogleSignInStatusCodes.SIGN_IN_CURRENTLY_IN_PROGRESS -> {
+                        // Play Services OAuth client mismatch or unavailable -> seamlessly use Firebase Web OAuth
+                        currentScreenState = AuthScreenState.WELCOME
+                        launchWebGoogleOAuthFallback()
+                    }
+                    else -> {
+                        isGoogleLoading = false
+                        Toast.makeText(
+                            context,
+                            "Google Sign-In error (${e.statusCode}): ${e.localizedMessage ?: "Please try again"}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        currentScreenState = AuthScreenState.WELCOME
+                    }
+                }
+            } catch (e: Exception) {
+                isGoogleLoading = false
+                Toast.makeText(context, e.localizedMessage ?: "Google Sign-In failed", Toast.LENGTH_LONG).show()
+                currentScreenState = AuthScreenState.WELCOME
+            }
         }
     }
 
@@ -201,9 +302,8 @@ fun OscellionOnboardingScreen(
             client.signOut().addOnCompleteListener {
                 googleLauncher.launch(client.signInIntent)
             }
-        } catch (e: Exception) {
-            isGoogleLoading = false
-            Toast.makeText(context, "Google Sign-In error: ${e.message}", Toast.LENGTH_LONG).show()
+        } catch (_: Exception) {
+            launchWebGoogleOAuthFallback()
         }
     }
 
@@ -260,7 +360,7 @@ fun OscellionOnboardingScreen(
             username = "guest",
             displayName = "Guest Creator",
             avatarUrl = "",
-            email = "guest@chromastudio.app",
+            email = "guest@oscellion.app",
             lastLoginMillis = System.currentTimeMillis(),
             gender = "UNSPECIFIED"
         )
@@ -318,22 +418,38 @@ fun OscellionOnboardingScreen(
                         onExploreGuest = { enterAsGuest() },
                         onTerms = { showTermsModal = true },
                         onSignUpWithCredentials = { uname, pwd ->
-                            initialSignupUsername = uname
+                            initialSignupUsername = uname.trim().removePrefix("@").lowercase()
                             initialSignupPassword = pwd
                             activeGoogleUserData = null
                             activeFirebaseUser = null
+                            wizardError = null
                             currentScreenState = AuthScreenState.ONBOARDING_WIZARD
                         },
                         onSignInWithCredentials = { uname, pwd ->
                             scope.launch {
                                 isConfirmingLoading = true
                                 try {
-                                    val clean = uname.trim().lowercase()
-                                    val resolvedEmail = if (clean.contains("@")) clean else "$clean@oscellion.com"
-                                    val authResult = auth.signInWithEmailAndPassword(resolvedEmail, pwd).await()
+                                    val clean = uname.trim().removePrefix("@").lowercase()
+                                    val isEmailFormat = clean.contains("@")
+                                    val defaultCustomEmail = "$clean@oscellion.com"
+                                    val resolvedProfile = if (!isEmailFormat) discoverRepo.getUserByUsername(clean) else null
+                                    val resolvedEmail = when {
+                                        isEmailFormat -> clean
+                                        resolvedProfile != null && resolvedProfile.customEmail.isNotBlank() -> resolvedProfile.customEmail.lowercase()
+                                        else -> defaultCustomEmail
+                                    }
+                                    val authResult = try {
+                                        auth.signInWithEmailAndPassword(resolvedEmail, pwd).await()
+                                    } catch (e: Exception) {
+                                        if (!isEmailFormat && resolvedProfile != null && resolvedProfile.email.isNotBlank() && !resolvedProfile.email.equals(resolvedEmail, ignoreCase = true)) {
+                                            auth.signInWithEmailAndPassword(resolvedProfile.email.lowercase(), pwd).await()
+                                        } else {
+                                            throw e
+                                        }
+                                    }
                                     val user = authResult.user
                                     if (user != null) {
-                                        val prof = discoverRepo.getUserProfile(user.uid)
+                                        val prof = discoverRepo.getUserProfile(user.uid) ?: resolvedProfile
                                         val savedAcc = SavedAccount(
                                             uid = user.uid,
                                             username = prof?.username ?: clean.substringBefore("@"),
@@ -341,7 +457,7 @@ fun OscellionOnboardingScreen(
                                             avatarUrl = prof?.avatarUrl ?: "",
                                             email = user.email ?: resolvedEmail,
                                             lastLoginMillis = System.currentTimeMillis(),
-                                            gender = "UNSPECIFIED"
+                                            gender = prof?.gender ?: "UNSPECIFIED"
                                         )
                                         SavedAccountManager.saveAccount(context, savedAcc)
                                         com.chroma.studio.ChatStateManager.setCurrentUserId(user.uid)
@@ -383,18 +499,56 @@ fun OscellionOnboardingScreen(
 
                 AuthScreenState.CHECKING_DATABASE -> {
                     val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
-                    val screenBg = if (colors.isDark) Color(0xFF080808) else Color(0xFFFAFAFA)
+                    val isDark = colors.isDark
+                    val screenBg = if (isDark) Color(0xFF09090B) else Color(0xFFFAFAFA)
+                    val surfaceBg = if (isDark) Color(0xFF13131A) else Color(0xFFFFFFFF)
+                    val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF09090B)
+                    val textMuted = if (isDark) Color(0xFFA1A1AA) else Color(0xFF71717A)
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(screenBg),
+                            .background(screenBg)
+                            .padding(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(38.dp),
-                            color = Color(0xFF0381FE),
-                            strokeWidth = 3.dp
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(24.dp),
+                            color = surfaceBg,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.07f)
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 28.dp, vertical = 26.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Image(
+                                    painter = painterResource(R.drawable.ic_oscellion_app_icon),
+                                    contentDescription = "Oscellion",
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                )
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(28.dp),
+                                    color = Color(0xFF0381FE),
+                                    strokeWidth = 2.6.dp
+                                )
+                                Text(
+                                    text = "Verifying Oscellion account…",
+                                    color = textPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Checking directory & workspace profile",
+                                    color = textMuted,
+                                    fontSize = 12.5.sp
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -436,11 +590,15 @@ fun OscellionOnboardingScreen(
                         displayName = activeFirebaseUser?.displayName ?: initialSignupUsername,
                         photoUrl = activeFirebaseUser?.photoUrl?.toString() ?: ""
                     )
+                    val isOAuthFlow = activeFirebaseUser != null || gData.googleId.isNotBlank()
 
                     OnboardingWizard(
                         googleData = gData,
                         initialUsername = initialSignupUsername,
                         initialPassword = initialSignupPassword,
+                        isOAuthUser = isOAuthFlow,
+                        externalError = wizardError,
+                        errorResetKey = wizardErrorKey,
                         discoverRepo = discoverRepo,
                         onBackToWelcome = {
                             purgeClientSession {
@@ -449,19 +607,25 @@ fun OscellionOnboardingScreen(
                         },
                         onComplete = { output ->
                             scope.launch {
+                                wizardError = null
                                 try {
-                                    var uid = activeFirebaseUser?.uid ?: auth.currentUser?.uid
-                                    val customEmail = if (output.customEmail.isNotBlank()) output.customEmail.trim().lowercase() else "${output.username.trim().lowercase()}@oscellion.com"
+                                    val cleanUsername = output.username.trim().removePrefix("@").lowercase()
+                                    val customEmail = if (output.customEmail.isNotBlank()) output.customEmail.trim().lowercase() else "$cleanUsername@oscellion.com"
 
-                                    // Direct signup case: user did not sign in via Google/Apple
+                                    // Verify username availability before creating Firebase Auth account so no orphan auth record is created
+                                    val existingOwner = discoverRepo.getUserByUsername(cleanUsername)
+                                    val currentExistingUid = activeFirebaseUser?.uid ?: auth.currentUser?.uid
+                                    if (existingOwner != null && existingOwner.uid != currentExistingUid) {
+                                        wizardError = "Username @$cleanUsername is already taken. Choose another handle."
+                                        wizardErrorKey++
+                                        return@launch
+                                    }
+
+                                    var uid = currentExistingUid
                                     if (uid.isNullOrBlank()) {
                                         if (output.password.isBlank()) {
-                                            Toast.makeText(context, "Please set a password for your studio account", Toast.LENGTH_LONG).show()
-                                            return@launch
-                                        }
-                                        val isAvailable = discoverRepo.checkUsernameAvailable(output.username)
-                                        if (!isAvailable) {
-                                            Toast.makeText(context, "Username @${output.username} is already taken. Please choose another.", Toast.LENGTH_LONG).show()
+                                            wizardError = "Please set a password for your studio account."
+                                            wizardErrorKey++
                                             return@launch
                                         }
                                         val authResult = auth.createUserWithEmailAndPassword(customEmail, output.password).await()
@@ -469,19 +633,27 @@ fun OscellionOnboardingScreen(
                                         uid = newUser.uid
                                         activeFirebaseUser = newUser
                                     } else {
-                                        // Link Custom Email (username@oscellion.com) and Password to the Google account
+                                        // Optional credential linking when Google/Apple user also set a studio password
                                         val currentUser = auth.currentUser
                                         if (currentUser != null && output.password.isNotBlank()) {
                                             try {
                                                 val emailCred = EmailAuthProvider.getCredential(customEmail, output.password)
                                                 currentUser.linkWithCredential(emailCred).await()
-                                            } catch (e: Exception) {
+                                            } catch (_: Exception) {
                                                 try {
                                                     currentUser.updatePassword(output.password).await()
                                                 } catch (_: Exception) {}
                                             }
                                         }
                                     }
+
+                                    try {
+                                        auth.currentUser?.updateProfile(
+                                            UserProfileChangeRequest.Builder()
+                                                .setDisplayName(output.displayName)
+                                                .build()
+                                        )?.await()
+                                    } catch (_: Exception) {}
 
                                     // Upload custom avatar to Supabase Storage if user selected an image
                                     var finalAvatar = output.avatarUrl
@@ -498,7 +670,7 @@ fun OscellionOnboardingScreen(
                                     val success = discoverRepo.registerDetailedUser(
                                         uid = uid,
                                         displayName = output.displayName,
-                                        username = output.username,
+                                        username = cleanUsername,
                                         dob = output.dobMillis,
                                         avatarUrl = finalAvatar,
                                         interests = output.interests,
@@ -517,7 +689,7 @@ fun OscellionOnboardingScreen(
                                         } else {
                                             val savedAcc = SavedAccount(
                                                 uid = uid,
-                                                username = output.username,
+                                                username = cleanUsername,
                                                 displayName = output.displayName,
                                                 avatarUrl = finalAvatar,
                                                 email = customEmail,
@@ -528,15 +700,15 @@ fun OscellionOnboardingScreen(
                                         }
                                         com.chroma.studio.ChatStateManager.setCurrentUserId(uid)
                                         com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
-                                        Toast.makeText(context, "Welcome to Chroma Studio, ${output.displayName}!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Welcome to Oscellion, ${output.displayName}!", Toast.LENGTH_SHORT).show()
                                         onLoginSuccess()
                                     } else {
-                                        Toast.makeText(context, "Failed to complete registration. Please try again.", Toast.LENGTH_LONG).show()
-                                        currentScreenState = AuthScreenState.WELCOME
+                                        wizardError = "Could not save your profile to Oscellion. Tap Continue to retry."
+                                        wizardErrorKey++
                                     }
                                 } catch (e: Exception) {
-                                    Toast.makeText(context, "Registration error: ${e.localizedMessage ?: e.message}", Toast.LENGTH_LONG).show()
-                                    currentScreenState = AuthScreenState.WELCOME
+                                    wizardError = e.localizedMessage ?: e.message ?: "Registration failed. Please check your connection."
+                                    wizardErrorKey++
                                 }
                             }
                         }

@@ -1493,8 +1493,8 @@ fun ChromaPhotoEditorScreen(
                     .editorChromeFadeOnScrub()
                     .background(chipsBg)
                     .border(0.5.dp, chipsBorder)
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .horizontalScroll(rememberScrollState()),
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1514,7 +1514,9 @@ fun ChromaPhotoEditorScreen(
                             text = ratio.label,
                             color = pillText,
                             fontSize = 12.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -4425,9 +4427,9 @@ private fun PhotoLayerManagerPanel(
     onAddTrack: (Int) -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = colors.isDark
-    val rowBg = if (isDark) Color(0xFF1E222A) else Color(0xFFF9FAFB)
-    val rowBorder = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
+    val rowBg = colors.cardSurfaceElevated
+    val rowBorder = colors.cardBorderSubtle
+    val controlBg = colors.cardSurface
 
     val trackNames = mapOf(
         1 to "Track 1 • Main Photo",
@@ -4447,48 +4449,53 @@ private fun PhotoLayerManagerPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = 18.dp, vertical = 12.dp)
             .navigationBarsPadding(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text("Layer Manager", color = colors.textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(2.dp))
 
         (1..5).forEach { trackId ->
             val count = clips.count { it.trackId == trackId }
             val visible = trackVisibility[trackId] ?: true
             val locked = trackLock[trackId] ?: false
+            val rowShape = RoundedCornerShape(16.dp)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(rowShape)
                     .background(rowBg)
-                    .border(1.dp, rowBorder, RoundedCornerShape(14.dp))
+                    .border(0.5.dp, rowBorder, rowShape)
                     .clickable {
                         if (count > 0) onSelectTrack(trackId)
                         else if (trackId != 1) onAddTrack(trackId)
                     }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.weight(1f, fill = false)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 ) {
                     AppleSettingsSquircleVectorIcon(
                         icon = trackIcons[trackId] ?: Lucide.Layers,
                         size = 28.dp,
-                        iconTint = Color(0xFF0381FE)
+                        iconTint = colors.primary
                     )
                     Column {
                         Text(
                             text = trackNames[trackId] ?: "Track $trackId",
                             color = colors.textMain,
-                            fontSize = 14.sp,
+                            fontSize = 13.5.sp,
                             fontWeight = FontWeight.SemiBold,
-                            fontFamily = InterFontFamily
+                            fontFamily = InterFontFamily,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "$count ${if (count == 1) "item" else "items"}",
@@ -4506,41 +4513,56 @@ private fun PhotoLayerManagerPanel(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(999.dp))
-                                .background(Color(0xFF0381FE).copy(alpha = 0.12f))
+                                .background(colors.primary.copy(alpha = 0.12f))
                                 .clickable { onAddTrack(trackId) }
-                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(Lucide.Plus, contentDescription = null, tint = Color(0xFF0381FE), modifier = Modifier.size(12.dp))
-                                Text("Add", color = Color(0xFF0381FE), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Icon(Lucide.Plus, contentDescription = null, tint = colors.primary, modifier = Modifier.size(12.dp))
+                                Text("Add", color = colors.primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
 
-                    GlassIconButton(
-                        onClick = { onToggleVisibility(trackId) },
-                        modifier = Modifier.size(32.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(controlBg)
+                            .border(0.5.dp, rowBorder, CircleShape)
+                            .clickable { onToggleVisibility(trackId) },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (visible) Lucide.Eye else Lucide.EyeOff,
                             contentDescription = "Toggle Visibility",
-                            tint = colors.textMain,
-                            modifier = Modifier.size(16.dp)
+                            tint = if (visible) colors.textMain else colors.textMuted,
+                            modifier = Modifier.size(15.dp)
                         )
                     }
-                    GlassIconButton(
-                        onClick = { onToggleLock(trackId) },
-                        modifier = Modifier.size(32.dp)
+
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(if (locked) colors.primary.copy(alpha = 0.12f) else controlBg)
+                            .border(
+                                width = 0.5.dp,
+                                color = if (locked) colors.primary.copy(alpha = 0.35f) else rowBorder,
+                                shape = CircleShape
+                            )
+                            .clickable { onToggleLock(trackId) },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (locked) Lucide.Lock else Lucide.LockOpen,
                             contentDescription = "Toggle Lock",
-                            tint = colors.textMain,
-                            modifier = Modifier.size(16.dp)
+                            tint = if (locked) colors.primary else colors.textMain,
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                 }

@@ -136,6 +136,8 @@ import androidx.compose.foundation.text.BasicTextField
 
 import androidx.compose.material3.*
 
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+
 import androidx.compose.runtime.*
 
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -526,6 +528,8 @@ fun DiscoverScreen(
 
     val trendingWorks by (discoverViewModel?.trendingWorks ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
 
+    val trendingConfig by (discoverViewModel?.trendingConfig ?: kotlinx.coroutines.flow.MutableStateFlow(com.chroma.studio.model.TrendingConfig())).collectAsState()
+
     val context = LocalContext.current
 
 
@@ -767,153 +771,80 @@ fun DiscoverScreen(
         )
     }
 
-    // Pull-to-refresh stretch and spring physics state
-    val refreshThresholdPx = with(density) { 72.dp.toPx() }
-    val maxStretchPx = with(density) { 130.dp.toPx() }
-    val refreshingHeightPx = with(density) { 68.dp.toPx() }
-    val pullDistanceAnim = remember { Animatable(0f) }
-    var pullOffsetY by remember { mutableFloatStateOf(0f) }
+    // Material3 Pull-to-Refresh state driving custom One UI stretch header
+    val pullToRefreshState = rememberPullToRefreshState(positionalThreshold = 72.dp)
     var hasHapticTriggeredForCurrentPull by remember { mutableStateOf(false) }
 
-    // Random order seed and slide-in from top animation state
-    var refreshRandomSeed by remember { mutableLongStateOf(0L) }
+    // Slide-in from top animation state after refresh completes
     val slideInOffsetAnim = remember { Animatable(0f) }
     val slideInAlphaAnim = remember { Animatable(1f) }
     var wasRefreshing by remember { mutableStateOf(false) }
+    var refreshInitiatedByUser by remember { mutableStateOf(false) }
 
     fun triggerFeedRefresh() {
         if (isRefreshing) return
+        showCreateMenu = false
+        hasHapticTriggeredForCurrentPull = false
+        hasPendingNewDrops = false
+        refreshInitiatedByUser = true
+        onRefresh()
+        storyViewModel?.loadStories()
+        storyViewModel?.loadMyStories()
         coroutineScope.launch {
-            showCreateMenu = false
-            hasHapticTriggeredForCurrentPull = false
-            refreshRandomSeed = System.currentTimeMillis()
-            pullDistanceAnim.animateTo(
-                refreshingHeightPx,
-                spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
-            )
-            pullOffsetY = refreshingHeightPx
             refreshProgressAnim.snapTo(0f)
             refreshProgressAnim.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
             )
-            hasPendingNewDrops = false
-            onRefresh()
-            listState.animateScrollToItem(0)
-            kotlinx.coroutines.delay(120)
             refreshProgressAnim.snapTo(0f)
-            com.chroma.studio.chat.sound.SoundManager.playRefresh(context)
-            showToast("Feed refreshed • Synced latest creations")
         }
     }
 
-    fun handlePullRelease() {
-        if (pullOffsetY >= refreshThresholdPx && !isRefreshing) {
+    LaunchedEffect(pullToRefreshState.progress) {
+        if (pullToRefreshState.progress >= 1f && !hasHapticTriggeredForCurrentPull && !isRefreshing) {
+            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+            hasHapticTriggeredForCurrentPull = true
+        } else if (pullToRefreshState.progress < 0.85f) {
+            hasHapticTriggeredForCurrentPull = false
+        }
+    }
+
+    if (pullToRefreshState.isRefreshing) {
+        LaunchedEffect(Unit) {
             triggerFeedRefresh()
-            coroutineScope.launch {
-                pullDistanceAnim.animateTo(
-                    refreshingHeightPx,
-                    spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
-                )
-                pullOffsetY = refreshingHeightPx
-            }
-        } else if (!isRefreshing) {
-            coroutineScope.launch {
-                pullDistanceAnim.animateTo(0f, tween(260, easing = FastOutSlowInEasing))
-                pullOffsetY = 0f
-                hasHapticTriggeredForCurrentPull = false
-            }
-        }
-    }
-
-    val nestedScrollConnection = remember(listState, isRefreshing) {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y < 0 && pullOffsetY > 0f) {
-                    val consumed = available.y.coerceAtLeast(-pullOffsetY)
-                    pullOffsetY += consumed
-                    coroutineScope.launch { pullDistanceAnim.snapTo(pullOffsetY) }
-                    return Offset(0f, consumed)
-                }
-                return Offset.Zero
-            }
-
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource
-            ): Offset {
-                val isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-                if (available.y > 0 && isAtTop && !isRefreshing) {
-                    val damping = (1f - (pullOffsetY / maxStretchPx).coerceIn(0f, 0.85f)) * 0.45f
-                    val delta = available.y * damping
-                    pullOffsetY = (pullOffsetY + delta).coerceIn(0f, maxStretchPx)
-                    coroutineScope.launch { pullDistanceAnim.snapTo(pullOffsetY) }
-                    if (pullOffsetY >= refreshThresholdPx && !hasHapticTriggeredForCurrentPull) {
-                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        hasHapticTriggeredForCurrentPull = true
-                    } else if (pullOffsetY < refreshThresholdPx) {
-                        hasHapticTriggeredForCurrentPull = false
-                    }
-                    return Offset(0f, available.y)
-                }
-                return Offset.Zero
-            }
-
-            override suspend fun onPreFling(available: Velocity): Velocity {
-                if (pullOffsetY > 0f) {
-                    handlePullRelease()
-                    return Velocity.Zero
-                }
-                return Velocity.Zero
-            }
-
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                if (pullOffsetY > 0f) {
-                    handlePullRelease()
-                    return Velocity.Zero
-                }
-                return Velocity.Zero
-            }
-        }
-    }
-
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress && pullOffsetY > 0f && !isRefreshing) {
-            handlePullRelease()
         }
     }
 
     LaunchedEffect(isRefreshing) {
         if (wasRefreshing && !isRefreshing) {
+            pullToRefreshState.endRefresh()
             val now = System.currentTimeMillis()
             lastRefreshedTimestamp = now
             prefs.edit().putLong("community_last_refresh_time", now).apply()
+            hasHapticTriggeredForCurrentPull = false
 
-            coroutineScope.launch {
-                pullDistanceAnim.animateTo(0f, tween(320, easing = FastOutSlowInEasing))
-                pullOffsetY = 0f
-                hasHapticTriggeredForCurrentPull = false
+            if (refreshInitiatedByUser) {
+                refreshInitiatedByUser = false
+                if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
+                    listState.animateScrollToItem(0)
+                }
+                com.chroma.studio.chat.sound.SoundManager.playRefresh(context)
+                showToast("Feed refreshed • Synced latest creations")
             }
 
-            slideInOffsetAnim.snapTo(-140f)
-            slideInAlphaAnim.snapTo(0.15f)
+            slideInOffsetAnim.snapTo(-90f)
+            slideInAlphaAnim.snapTo(0.25f)
             coroutineScope.launch {
-                slideInAlphaAnim.animateTo(1f, tween(durationMillis = 380, easing = LinearOutSlowInEasing))
+                slideInAlphaAnim.animateTo(1f, tween(durationMillis = 320, easing = LinearOutSlowInEasing))
             }
             coroutineScope.launch {
                 slideInOffsetAnim.animateTo(
                     targetValue = 0f,
                     animationSpec = spring(
-                        dampingRatio = 0.74f,
+                        dampingRatio = 0.78f,
                         stiffness = Spring.StiffnessMediumLow
                     )
                 )
-            }
-        } else if (isRefreshing) {
-            if (pullDistanceAnim.value < refreshingHeightPx) {
-                pullDistanceAnim.animateTo(refreshingHeightPx, spring(stiffness = Spring.StiffnessMediumLow))
-                pullOffsetY = refreshingHeightPx
             }
         }
         wasRefreshing = isRefreshing
@@ -931,53 +862,39 @@ fun DiscoverScreen(
 
 
 
-    // FIX 1: Ensure Trending Masterworks reel still populates with top creations when early-stage posts have < 100 likes
-
-    val qualifyingMasterworks = remember(trendingWorks, works) {
-
-        val strictMasterworks = (trendingWorks + works)
-
+    // Trending Masterworks respects Admin Trending Curation (curated_first / curated_only, trendingOrder, trendingExcluded)
+    val qualifyingMasterworks = remember(trendingWorks, works, trendingConfig) {
+        val pool = (trendingWorks + works)
             .distinctBy { it.id }
+            .filter { !it.isArchived && !it.isTakedown && !it.trendingExcluded }
+            .filter { trendingConfig.mode != "curated_only" || it.isTrending }
 
-            .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
+        pool.sortedWith(
+            compareByDescending<DiscoverPost> { it.isTrending }
+                .thenBy { if (it.isTrending) (it.trendingOrder ?: 9999) else Int.MAX_VALUE }
+                .thenByDescending { it.likesCount + it.effectiveCommentsCount * 2 + it.remixCount * 3 }
+        )
+    }
 
-            .sortedByDescending { it.likesCount }
-
-
-
-        if (strictMasterworks.isNotEmpty()) {
-
-            strictMasterworks
-
-        } else {
-
-            (trendingWorks + works)
-
-                .distinctBy { it.id }
-
-                .sortedByDescending { it.likesCount }
-
-                .take(8)
-
-        }
-
+    val spotlightMasterworks = remember(qualifyingMasterworks, trendingConfig) {
+        qualifyingMasterworks.take(trendingConfig.maxSpotlight.coerceIn(3, 20))
     }
 
 
 
-    val filteredWorks = remember(works, searchQuery, selectedFeedTab, selectedSortOrder, qualifyingMasterworks, followingUserIds, savedWorkIds, refreshRandomSeed) {
+    val filteredWorks = remember(works, searchQuery, selectedFeedTab, selectedSortOrder, qualifyingMasterworks, followingUserIds, savedWorkIds) {
 
         val baseList = when (selectedFeedTab) {
 
-            CommunityFeedTab.ALL -> works
+            CommunityFeedTab.ALL -> works.filter { !it.isArchived && !it.isTakedown }
 
             CommunityFeedTab.TRENDING -> qualifyingMasterworks
 
-            CommunityFeedTab.FLASH -> works.filter { isVideoPost(it) || it.postType == "video" || it.aspectRatio.trim() == "9:16" }
+            CommunityFeedTab.FLASH -> works.filter { !it.isArchived && !it.isTakedown && (isVideoPost(it) || it.postType == "video" || it.aspectRatio.trim() == "9:16") }
 
-            CommunityFeedTab.FOLLOWING -> works.filter { followingUserIds.contains(it.creatorId) }
+            CommunityFeedTab.FOLLOWING -> works.filter { !it.isArchived && !it.isTakedown && followingUserIds.contains(it.creatorId) }
 
-            CommunityFeedTab.SAVED -> works.filter { savedWorkIds.contains(it.id) }
+            CommunityFeedTab.SAVED -> works.filter { !it.isArchived && !it.isTakedown && savedWorkIds.contains(it.id) }
 
         }
 
@@ -1012,9 +929,9 @@ fun DiscoverScreen(
         when (selectedSortOrder) {
 
             CommunitySortOrder.LATEST -> {
-                if (refreshRandomSeed != 0L && selectedFeedTab != CommunityFeedTab.SAVED) {
-                    val rng = java.util.Random(refreshRandomSeed)
-                    searchFiltered.shuffled(rng)
+                if (selectedFeedTab == CommunityFeedTab.TRENDING) {
+                    // Preserve Trending rank order (#1..#N pinned first, then top engagement)
+                    searchFiltered
                 } else {
                     searchFiltered.sortedByDescending { it.timestamp }
                 }
@@ -1278,19 +1195,38 @@ fun DiscoverScreen(
 
 
 
-            // Pull to Refresh / Top Stretch Area with Spinner and Last Refreshed Time
-            val stretchHeightDp = with(density) { pullDistanceAnim.value.toDp() }
-            if (stretchHeightDp > 0.dp) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(stretchHeightDp)
-                        .clipToBounds(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (stretchHeightDp > 6.dp) {
-                        val pullProgress = (pullDistanceAnim.value / refreshThresholdPx).coerceIn(0f, 1f)
-                        val isPulledPast = pullDistanceAnim.value >= refreshThresholdPx
+            // Pull to Refresh / Top Stretch Area + Feed Column
+            val effectivePullFraction = if (isRefreshing || pullToRefreshState.isRefreshing) {
+                maxOf(pullToRefreshState.progress, 1f)
+            } else {
+                pullToRefreshState.progress.coerceIn(0f, 1.45f)
+            }
+            val animatedPullFraction by animateFloatAsState(
+                targetValue = effectivePullFraction,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessHigh
+                ),
+                label = "pullStretch"
+            )
+            val stretchHeightDp = (72.dp * animatedPullFraction).coerceAtLeast(0.dp)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clipToBounds()
+                    .nestedScroll(pullToRefreshState.nestedScrollConnection)
+            ) {
+                if (stretchHeightDp > 6.dp) {
+                    val pullProgress = effectivePullFraction.coerceIn(0f, 1f)
+                    val isPulledPast = effectivePullFraction >= 1f
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(stretchHeightDp)
+                            .align(Alignment.TopCenter),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
@@ -1298,8 +1234,7 @@ fun DiscoverScreen(
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
                                 .graphicsLayer {
-                                    val alphaProgress = (pullDistanceAnim.value / (refreshThresholdPx * 0.4f)).coerceIn(0f, 1f)
-                                    alpha = alphaProgress
+                                    alpha = (pullProgress / 0.35f).coerceIn(0f, 1f)
                                     val s = 0.85f + (0.15f * pullProgress)
                                     scaleX = s
                                     scaleY = s
@@ -1327,7 +1262,6 @@ fun DiscoverScreen(
                         }
                     }
                 }
-            }
 
             LazyColumn(
 
@@ -1335,7 +1269,11 @@ fun DiscoverScreen(
 
                 contentPadding = PaddingValues(top = 2.dp, bottom = 110.dp),
 
-                modifier = Modifier.fillMaxSize().clipToBounds().nestedScroll(nestedScrollConnection)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationY = with(density) { stretchHeightDp.toPx() }
+                    }
 
             ) {
 
@@ -1459,9 +1397,9 @@ fun DiscoverScreen(
 
                 if (!isLoading &&
 
-                    (selectedFeedTab == CommunityFeedTab.ALL || selectedFeedTab == CommunityFeedTab.TRENDING) &&
+                    selectedFeedTab == CommunityFeedTab.ALL &&
 
-                    qualifyingMasterworks.isNotEmpty() &&
+                    spotlightMasterworks.isNotEmpty() &&
 
                     searchQuery.isBlank()
 
@@ -1487,7 +1425,7 @@ fun DiscoverScreen(
 
                             CommunityTrendingSpotlightReel(
 
-                                trendingWorks = qualifyingMasterworks,
+                                trendingWorks = spotlightMasterworks,
 
                                 repository = repository,
 
@@ -1850,6 +1788,8 @@ fun DiscoverScreen(
                     }
 
                 }
+
+            }
 
             }
 
@@ -2269,6 +2209,12 @@ fun TrendingCard(
 
     var layers by remember(work.jsonUrl) { mutableStateOf<List<GradientLayer>?>(LayerCache.get(work.jsonUrl)) }
 
+    val cachedAuthor = postAuthorProfileCache[work.creatorId]
+    val authorAvatar = cachedAuthor?.avatarUrl?.takeIf { it.isNotBlank() } ?: work.authorAvatarUrl
+    val authorUsername = cachedAuthor?.username?.takeIf { it.isNotBlank() } ?: work.authorUsername.ifBlank { "creator" }
+    val authorDisplayName = cachedAuthor?.displayName?.takeIf { it.isNotBlank() } ?: work.authorDisplayName.ifBlank { authorUsername }
+    val authorVerified = cachedAuthor?.verified ?: work.authorVerified
+
 
 
     LaunchedEffect(work.jsonUrl) {
@@ -2559,9 +2505,37 @@ fun TrendingCard(
 
                 .padding(horizontal = 6.dp, vertical = 5.dp),
 
-            verticalArrangement = Arrangement.spacedBy(1.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp)
 
         ) {
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.5.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                IosAvatarView(
+                    name = authorDisplayName,
+                    avatarUrl = authorAvatar,
+                    size = 15.dp
+                )
+                Text(
+                    text = "@$authorUsername",
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 8.5.sp,
+                    lineHeight = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (authorVerified) {
+                    ScallopedVerifiedBadge(
+                        size = 9.5.dp,
+                        tone = work.authorVerifiedTone
+                    )
+                }
+            }
 
             Text(
 
@@ -5435,7 +5409,9 @@ fun ScallopedVerifiedBadge(
 
     size: Dp = 15.dp,
 
-    badgeColor: Color = Color(0xFF0381FE)
+    tone: String? = null,
+
+    badgeColor: Color? = null
 
 ) {
 
@@ -5444,6 +5420,8 @@ fun ScallopedVerifiedBadge(
         modifier = modifier,
 
         size = size,
+
+        tone = tone,
 
         badgeColor = badgeColor
 
@@ -7592,94 +7570,57 @@ fun FeedPostCard(
 
     var localCommentCountDelta by remember(work.id) { mutableIntStateOf(0) }
 
-    // FIX 5: Resolve missing displayName OR username OR avatarUrl from Firestore/FirebaseAuth so posts never show "@ • 1h ago"
-
-    LaunchedEffect(work.creatorId) {
-
-        if ((work.authorAvatarUrl.isBlank() || work.authorDisplayName.isBlank() || work.authorUsername.isBlank()) && work.creatorId.isNotBlank()) {
-
+    // Always sync latest original profile avatar, name, username & verified badge from users/{creatorId}
+    LaunchedEffect(work.creatorId, work.authorAvatarUrl, work.authorVerified) {
+        if (work.creatorId.isNotBlank()) {
             val cached = postAuthorProfileCache[work.creatorId]
-
             if (cached != null) {
-
-                if (resolvedAvatarUrl.isBlank()) resolvedAvatarUrl = cached.avatarUrl
-
-                if (resolvedUsername.isBlank()) resolvedUsername = cached.username
-
-                if (resolvedDisplayName.isBlank()) resolvedDisplayName = cached.displayName
-
+                if (cached.avatarUrl.isNotBlank()) resolvedAvatarUrl = cached.avatarUrl
+                if (cached.username.isNotBlank()) resolvedUsername = cached.username
+                if (cached.displayName.isNotBlank()) resolvedDisplayName = cached.displayName
                 resolvedVerified = cached.verified
-
                 return@LaunchedEffect
-
             }
-
             try {
-
                 val doc = FirebaseFirestore.getInstance().collection("users").document(work.creatorId).get().await()
-
                 val authUser = FirebaseAuth.getInstance().currentUser
-
                 val isCurrentAuthUser = authUser != null && authUser.uid == work.creatorId
 
-
-
                 val fetchedAvatar = doc.getString("avatarUrl")
-
                     ?.takeIf { it.isNotBlank() }
-
                     ?: if (isCurrentAuthUser) authUser?.photoUrl?.toString().orEmpty() else ""
 
-
-
                 val emailPrefix = if (isCurrentAuthUser) authUser?.email?.substringBefore("@").orEmpty() else ""
-
                 val fetchedUsername = doc.getString("username")
-
                     ?.takeIf { it.isNotBlank() }
-
                     ?: emailPrefix
 
-
-
                 val fetchedDisplay = doc.getString("displayName")
-
                     ?.takeIf { it.isNotBlank() }
-
                     ?: if (isCurrentAuthUser) authUser?.displayName.orEmpty() else ""
-
-
 
                 val isVerified = doc.getBoolean("verified") ?: resolvedVerified
 
-
-
-                if (resolvedAvatarUrl.isBlank() && fetchedAvatar.isNotBlank()) {
-
+                if (fetchedAvatar.isNotBlank()) {
                     resolvedAvatarUrl = fetchedAvatar
-
                 }
-
-                if (resolvedUsername.isBlank() && fetchedUsername.isNotBlank()) {
-
+                if (fetchedUsername.isNotBlank()) {
                     resolvedUsername = fetchedUsername
-
                 }
-
-                if (resolvedDisplayName.isBlank()) {
-
-                    resolvedDisplayName = fetchedDisplay.ifBlank { fetchedUsername.ifBlank { "Chroma Creator" } }
-
+                if (fetchedDisplay.isNotBlank()) {
+                    resolvedDisplayName = fetchedDisplay
+                } else if (resolvedDisplayName.isBlank()) {
+                    resolvedDisplayName = fetchedUsername.ifBlank { "Chroma Creator" }
                 }
-
                 resolvedVerified = isVerified
-
-                postAuthorProfileCache[work.creatorId] = CachedAuthorProfile(resolvedAvatarUrl, resolvedUsername, resolvedDisplayName, resolvedVerified)
-
+                postAuthorProfileCache[work.creatorId] = CachedAuthorProfile(
+                    resolvedAvatarUrl,
+                    resolvedUsername,
+                    resolvedDisplayName,
+                    resolvedVerified
+                )
             } catch (_: Exception) {}
-
         }
-
     }
 
 
@@ -7987,6 +7928,12 @@ fun FeedPostCard(
 
     if (showCommentsSheet) {
 
+        val previewThumb = work.thumbnailUrl?.takeIf { it.isNotBlank() }
+
+            ?: work.imageUrl?.takeIf { it.isNotBlank() }
+
+            ?: work.imageUrls.firstOrNull().orEmpty()
+
         com.chroma.studio.ui.components.YouTubeCommentsSheet(
 
             targetId = work.id,
@@ -7998,6 +7945,12 @@ fun FeedPostCard(
             creatorUsername = resolvedUsername,
 
             creatorAvatarUrl = resolvedAvatarUrl,
+
+            creatorVerified = resolvedVerified,
+
+            postCaption = work.description.ifBlank { work.title },
+
+            postThumbnailUrl = previewThumb,
 
             turnOffComments = work.turnOffComments,
 
@@ -9059,38 +9012,49 @@ fun PostOptionsDrawerSheet(
 
             ) {
 
-                Column(modifier = Modifier.weight(1f)) {
-
-                    Text(
-
-                        text = if (isOwner) "Manage Post" else if (work.authorDisplayName.isNotBlank()) "${work.authorDisplayName} (@${work.authorUsername})" else "@${work.authorUsername.ifBlank { "creator" }}",
-
-                        fontSize = 15.5.sp,
-
-                        fontWeight = FontWeight.Bold,
-
-                        color = colors.textMain,
-
-                        maxLines = 1,
-
-                        overflow = TextOverflow.Ellipsis
-
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    IosAvatarView(
+                        name = work.authorDisplayName.ifBlank { work.authorUsername.ifBlank { "Creator" } },
+                        avatarUrl = work.authorAvatarUrl,
+                        size = 36.dp
                     )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = if (isOwner) "Manage Post" else work.authorDisplayName.ifBlank { work.authorUsername.ifBlank { "Creator" } },
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.textMain,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            if (work.authorVerified) {
+                                ScallopedVerifiedBadge(
+                                    size = 14.dp,
+                                    tone = work.authorVerifiedTone
+                                )
+                            }
+                        }
 
-                    Spacer(Modifier.height(2.dp))
+                        Spacer(Modifier.height(1.dp))
 
-                    Text(
-
-                        text = if (isOwner) "Your post" else "Post options",
-
-                        fontSize = 11.5.sp,
-
-                        color = if (isOwner) Color(0xFF0381FE) else Color(0xFF8E8E93),
-
-                        fontWeight = if (isOwner) FontWeight.SemiBold else FontWeight.Normal
-
-                    )
-
+                        Text(
+                            text = if (isOwner) "@${work.authorUsername.ifBlank { "creator" }} · Your post" else "@${work.authorUsername.ifBlank { "creator" }}",
+                            fontSize = 11.5.sp,
+                            color = if (isOwner) Color(0xFF0381FE) else Color(0xFF8E8E93),
+                            fontWeight = if (isOwner) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
 

@@ -51,7 +51,8 @@ data class GroupContact(
     val role: String,
     val avatar: String,
     val status: String = "Online",
-    val isVerified: Boolean = false
+    val isVerified: Boolean = false,
+    val verifiedTone: String? = null
 )
 
 enum class GroupCreationStep {
@@ -515,7 +516,10 @@ private fun StepSelectParticipants(
                             overflow = TextOverflow.Ellipsis
                         )
                         if (contact.isVerified) {
-                            VerifiedBadge(size = 14.dp)
+                            VerifiedBadge(
+                                size = 14.dp,
+                                tone = contact.verifiedTone
+                            )
                         }
                     }
                     Text(
@@ -959,7 +963,10 @@ private fun StepGroupDetails(
                             color = colors.textDark
                         )
                         if (contact.isVerified) {
-                            VerifiedBadge(size = 13.dp)
+                            VerifiedBadge(
+                                size = 13.dp,
+                                tone = contact.verifiedTone
+                            )
                         }
                     }
                     Text(

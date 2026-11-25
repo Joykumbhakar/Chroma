@@ -21,8 +21,69 @@ object NotificationDispatcher {
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
 
+    private data class CachedSenderProfile(val displayName: String, val avatarUrl: String, val cachedAtMs: Long)
+    private data class CachedPushTarget(
+        val fcmToken: String,
+        val isBlocked: Boolean,
+        val isMuted: Boolean,
+        val cachedAtMs: Long
+    )
+
+    private const val PUSH_CACHE_TTL_MS = 60_000L
+    private val senderProfileCache = java.util.concurrent.ConcurrentHashMap<String, CachedSenderProfile>()
+    private val pushTargetCache = java.util.concurrent.ConcurrentHashMap<String, CachedPushTarget>()
+
+    fun clearPushCaches() {
+        senderProfileCache.clear()
+        pushTargetCache.clear()
+    }
+
+    private suspend fun getCachedSenderProfile(uid: String, fallbackName: String?): Pair<String, String> {
+        val now = System.currentTimeMillis()
+        senderProfileCache[uid]?.let { cached ->
+            if (now - cached.cachedAtMs < PUSH_CACHE_TTL_MS) {
+                return cached.displayName to cached.avatarUrl
+            }
+        }
+        val actor = try { db.collection("users").document(uid).get().await() } catch (_: Exception) { null }
+        val actorName = actor?.getString("displayName")?.ifBlank { null } ?: fallbackName ?: "New message"
+        val avatar = actor?.getString("avatarUrl") ?: ""
+        senderProfileCache[uid] = CachedSenderProfile(actorName, avatar, now)
+        return actorName to avatar
+    }
+
+    private suspend fun getCachedPushTarget(meUid: String, targetUid: String, roomId: String): CachedPushTarget {
+        val cacheKey = "${meUid}_${targetUid}_$roomId"
+        val now = System.currentTimeMillis()
+        pushTargetCache[cacheKey]?.let { cached ->
+            if (now - cached.cachedAtMs < PUSH_CACHE_TTL_MS) return cached
+        }
+        val userDoc = try { db.collection("users").document(targetUid).get().await() } catch (_: Exception) { null }
+        val token = userDoc?.getString("fcmToken").orEmpty()
+        val blocked = (userDoc?.get("blockedUsers") as? List<*>)?.contains(meUid) == true
+        val muted = try {
+            db.collection("user_chat_prefs").document("${targetUid}_$roomId").get().await()
+                .getBoolean("muted") == true
+        } catch (_: Exception) { false }
+        val resolved = CachedPushTarget(token, blocked, muted, now)
+        pushTargetCache[cacheKey] = resolved
+        return resolved
+    }
+
+    suspend fun preloadChatPushContext(recipientIds: List<String>, roomId: String) = withContext(Dispatchers.IO) {
+        val me = auth.currentUser ?: return@withContext
+        try {
+            val senderJob = async { getCachedSenderProfile(me.uid, me.displayName) }
+            val recipientJobs = recipientIds.filter { it.isNotBlank() && it != me.uid }.map { uid ->
+                async { getCachedPushTarget(me.uid, uid, roomId) }
+            }
+            senderJob.await()
+            recipientJobs.awaitAll()
+        } catch (_: Exception) {}
+    }
+
     /**
-     * Dedicated CHAT PUSH: Fetches sender profile once, then pushes to all recipients in parallel.
+     * Dedicated CHAT PUSH: Uses warm in-memory profile/token cache + parallel FCM HTTP v1 dispatch.
      * Automatically skips users who muted the chat or blocked the sender, and purges dead FCM tokens.
      */
     suspend fun sendChatPush(
@@ -34,29 +95,17 @@ object NotificationDispatcher {
         messageId: String = ""
     ) = withContext(Dispatchers.IO) {
         val me = auth.currentUser ?: return@withContext
-        val actor = try { db.collection("users").document(me.uid).get().await() } catch (e: Exception) { null }
-        val actorName = actor?.getString("displayName")?.ifBlank { null } ?: me.displayName ?: "New message"
-        val avatar = actor?.getString("avatarUrl") ?: ""
+        val (actorName, avatar) = getCachedSenderProfile(me.uid, me.displayName)
 
         recipientIds.filter { it.isNotBlank() && it != me.uid }.map { uid ->
             async {
                 try {
-                    val userDoc = db.collection("users").document(uid).get().await()
-                    val token = userDoc.getString("fcmToken")
-                    if (token.isNullOrBlank()) return@async
-
-                    val blocked = (userDoc.get("blockedUsers") as? List<*>)?.contains(me.uid) == true
-                    if (blocked) return@async
-
-                    val muted = try {
-                        db.collection("user_chat_prefs").document("${uid}_$roomId").get().await()
-                            .getBoolean("muted") == true
-                    } catch (_: Exception) { false }
-                    if (muted) return@async
+                    val target = getCachedPushTarget(me.uid, uid, roomId)
+                    if (target.fcmToken.isBlank() || target.isBlocked || target.isMuted) return@async
 
                     val result = FcmPushSender.sendPushNotification(
                         context = com.chroma.studio.ChromaApp.instance,
-                        targetFcmToken = token,
+                        targetFcmToken = target.fcmToken,
                         roomId = roomId,
                         senderId = me.uid,
                         senderName = actorName,
@@ -67,6 +116,7 @@ object NotificationDispatcher {
                         messageId = messageId
                     )
                     if (result == FcmResult.UNREGISTERED) {
+                        pushTargetCache.remove("${me.uid}_${uid}_$roomId")
                         db.collection("users").document(uid).update("fcmToken", FieldValue.delete())
                     }
                 } catch (e: Exception) {

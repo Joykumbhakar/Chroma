@@ -18,6 +18,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -29,6 +31,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +71,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -311,13 +315,15 @@ fun GalaxyAiAuroraSearchBar(
     focusRequester: FocusRequester? = null,
     onFocusChange: ((Boolean) -> Unit)? = null
 ) {
+    val colors = LocalOscellionColors.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     var isFocused by remember { mutableStateOf(false) }
 
-    val shellGradient = if (isDark) {
+    val shellGradient = remember(colors.isDark, isFocused, colors.primary) {
         if (isFocused) {
             Brush.linearGradient(
                 listOf(
-                    Color(0xFF60A5FA),
+                    colors.primary,
                     Color(0xFF38BDF8),
                     Color(0xFF22D3EE),
                     Color(0xFF4ADE80)
@@ -326,84 +332,34 @@ fun GalaxyAiAuroraSearchBar(
         } else {
             Brush.linearGradient(
                 listOf(
-                    Color(0xFF3871E0),
-                    Color(0xFF0381FE),
-                    Color(0xFF06B6D4),
-                    Color(0xFF22C55E)
-                )
-            )
-        }
-    } else {
-        if (isFocused) {
-            Brush.linearGradient(
-                listOf(
-                    Color(0xFF0381FE),
-                    Color(0xFF0284C7),
-                    Color(0xFF0891B2),
-                    Color(0xFF059669)
-                )
-            )
-        } else {
-            Brush.linearGradient(
-                listOf(
-                    Color(0xFF3871E0),
-                    Color(0xFF0381FE),
-                    Color(0xFF06B6D4),
-                    Color(0xFF10B981)
+                    colors.primary.copy(alpha = 0.55f),
+                    Color(0xFF06B6D4).copy(alpha = 0.45f),
+                    Color(0xFF22C55E).copy(alpha = 0.45f)
                 )
             )
         }
     }
 
-    val innerBgGradient = if (isDark) {
-        Brush.linearGradient(
-            listOf(
-                Color(0xFF151A26),
-                Color(0xFF10141D)
-            )
-        )
-    } else {
-        Brush.linearGradient(
-            listOf(
-                Color(0xFFFFFFFF),
-                Color(0xFFF8FAFF)
-            )
-        )
-    }
-
-    val innerRimBrush = if (isDark) {
-        Brush.linearGradient(
-            listOf(
-                Color.White.copy(alpha = 0.24f),
-                Color(0xFF0381FE).copy(alpha = 0.18f)
-            )
-        )
-    } else {
-        Brush.linearGradient(
-            listOf(
-                Color.White,
-                Color(0xFFE0ECFF).copy(alpha = 0.85f)
-            )
-        )
-    }
-
-    val textColor = if (isDark) Color(0xFFF1F5F9) else Color(0xFF1E293B)
-    val placeholderColor = if (isDark) Color(0xFF64748B) else Color(0xFF7C8EA6)
+    val containerBg = if (isFocused || query.isNotEmpty()) colors.cardSurface else colors.inputBg
+    val textColor = colors.textMain
+    val placeholderColor = colors.textMuted.copy(alpha = 0.78f)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(4.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.08f))
+            .height(46.dp)
             .clip(CircleShape)
-            .background(innerBgGradient)
+            .background(containerBg)
+            .border(
+                width = if (isFocused || query.isNotEmpty()) 1.2.dp else 0.6.dp,
+                brush = shellGradient,
+                shape = CircleShape
+            )
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(46.dp)
-                .clip(CircleShape)
-                .background(innerBgGradient)
-                .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                .fillMaxSize()
+                .padding(start = 14.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             GalaxyAiSparkleIcon(
@@ -421,7 +377,7 @@ fun GalaxyAiAuroraSearchBar(
                     Text(
                         text = placeholder,
                         color = placeholderColor,
-                        fontSize = 15.sp,
+                        fontSize = 14.5.sp,
                         fontWeight = FontWeight.Normal,
                         fontFamily = InterFontFamily,
                         maxLines = 1,
@@ -435,13 +391,16 @@ fun GalaxyAiAuroraSearchBar(
                     singleLine = true,
                     textStyle = TextStyle(
                         color = textColor,
-                        fontSize = 15.sp,
+                        fontSize = 14.5.sp,
                         fontFamily = InterFontFamily,
                         fontWeight = FontWeight.Medium
                     ),
-                    cursorBrush = SolidColor(if (isDark) OneUiBlueDark else OneUiBlueLight),
+                    cursorBrush = SolidColor(colors.primary),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { onSearchAction() }),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        keyboardController?.hide()
+                        onSearchAction()
+                    }),
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
@@ -457,7 +416,7 @@ fun GalaxyAiAuroraSearchBar(
                     modifier = Modifier
                         .size(28.dp)
                         .clip(CircleShape)
-                        .background(if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f))
+                        .background(colors.textMain.copy(alpha = 0.09f))
                         .clickable { onQueryChange("") },
                     contentAlignment = Alignment.Center
                 ) {
@@ -472,19 +431,22 @@ fun GalaxyAiAuroraSearchBar(
             }
 
             GalaxyAiSearchButton(
-                onClick = onSearchAction,
-                isDark = isDark
+                onClick = {
+                    keyboardController?.hide()
+                    onSearchAction()
+                },
+                isDark = colors.isDark
             )
         }
     }
 }
 
 /**
- * Standard One UI Search Bar Pill Component with Apple-Style Specular Glass Rim.
+ * Standard One UI Search Bar Pill Component using theme tokens.
  * Features:
- * - 48.dp tactile pill container with subtle spring focus scale (1.012x)
+ * - 46.dp One UI capsule search bar with subtle border only when focused/active
  * - Leading back arrow when in focused search mode, or magnifying glass icon
- * - Instant clear ('X') button when query is non-empty, or quick '✦ AI' mode chip
+ * - Instant clear ('X') button when query is non-empty, or quick '✦' AI mode chip
  */
 @Composable
 fun OneUiSearchBarPill(
@@ -501,59 +463,64 @@ fun OneUiSearchBarPill(
     onQuickAiToggle: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalOscellionColors.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     var hasFocus by remember { mutableStateOf(false) }
 
     val pillScale by animateFloatAsState(
-        targetValue = if (hasFocus) 1.012f else 1f,
-        animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
+        targetValue = if (hasFocus) 1.008f else 1f,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
         label = "pillScale"
     )
 
     val pillBgColor by animateColorAsState(
-        targetValue = when {
-            hasFocus || isFocusedMode -> if (isDark) Color(0xFF222226) else OneUiCardLight
-            else -> if (isDark) Color(0xFF1E1E22) else Color(0xFFEBEBF0)
-        },
-        animationSpec = tween(200),
+        targetValue = if (hasFocus || isFocusedMode) colors.cardSurface else colors.inputBg,
+        animationSpec = tween(180),
         label = "pillBg"
     )
 
-    val applePillBorderBrush = rememberAppleStyleBorderBrush(
-        isDark = isDark,
-        isFocused = hasFocus,
-        accentColor = accentColor
+    val borderColor by animateColorAsState(
+        targetValue = when {
+            hasFocus -> accentColor.copy(alpha = 0.45f)
+            isFocusedMode -> colors.cardBorder
+            else -> colors.cardBorderSubtle
+        },
+        animationSpec = tween(180),
+        label = "pillBorder"
     )
 
-    val textColor = if (isDark) Color(0xFFF2F2F7) else Color(0xFF1C1C1E)
-    val hintColor = if (isDark) Color(0xFF98989D) else Color(0xFF6C6C70)
+    val textColor = colors.textMain
+    val hintColor = colors.textMuted.copy(alpha = 0.82f)
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(46.dp)
             .graphicsLayer {
                 scaleX = pillScale
                 scaleY = pillScale
             }
-            .shadow(
-                elevation = if (hasFocus) 12.dp else 4.dp,
-                shape = CircleShape,
-                ambientColor = if (hasFocus) accentColor.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.08f),
-                spotColor = if (hasFocus) accentColor.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.12f)
-            )
             .clip(CircleShape)
             .background(pillBgColor)
-            .padding(start = 14.dp, end = 8.dp),
+            .border(
+                width = if (hasFocus) 1.dp else 0.5.dp,
+                color = borderColor,
+                shape = CircleShape
+            )
+            .padding(start = 12.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (isFocusedMode) {
             Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(30.dp)
                     .clip(CircleShape)
-                    .background(if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
-                    .clickable { onExitFocusMode() },
+                    .background(colors.textMain.copy(alpha = 0.06f))
+                    .clickable {
+                        keyboardController?.hide()
+                        onExitFocusMode()
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -568,7 +535,9 @@ fun OneUiSearchBarPill(
                 imageVector = Lucide.Search,
                 contentDescription = "Search",
                 tint = if (hasFocus) accentColor else hintColor,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier
+                    .padding(start = 4.dp)
+                    .size(18.dp)
             )
         }
 
@@ -582,7 +551,7 @@ fun OneUiSearchBarPill(
                 Text(
                     text = placeholder,
                     color = hintColor,
-                    fontSize = 15.sp,
+                    fontSize = 14.5.sp,
                     fontWeight = FontWeight.Normal,
                     fontFamily = InterFontFamily,
                     maxLines = 1,
@@ -596,13 +565,16 @@ fun OneUiSearchBarPill(
                 singleLine = true,
                 textStyle = TextStyle(
                     color = textColor,
-                    fontSize = 15.sp,
+                    fontSize = 14.5.sp,
                     fontWeight = FontWeight.Medium,
                     fontFamily = InterFontFamily
                 ),
                 cursorBrush = SolidColor(accentColor),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearchAction() }),
+                keyboardActions = KeyboardActions(onSearch = {
+                    keyboardController?.hide()
+                    onSearchAction()
+                }),
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
@@ -616,9 +588,9 @@ fun OneUiSearchBarPill(
         if (query.isNotEmpty()) {
             Box(
                 modifier = Modifier
-                    .size(26.dp)
+                    .size(28.dp)
                     .clip(CircleShape)
-                    .background(if (isDark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.10f))
+                    .background(colors.textMain.copy(alpha = 0.10f))
                     .clickable { onQueryChange("") },
                 contentAlignment = Alignment.Center
             ) {
@@ -630,27 +602,19 @@ fun OneUiSearchBarPill(
                 )
             }
         } else if (onQuickAiToggle != null) {
-            // Subtle Apple/One UI AI Mode Switch Pill inside Search Bar
             Row(
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            listOf(
-                                accentColor.copy(alpha = 0.16f),
-                                Color(0xFF0072DE).copy(alpha = 0.16f)
-                            )
-                        )
-                    )
-                                        .clickable { onQuickAiToggle() }
+                    .background(accentColor.copy(alpha = 0.12f))
+                    .clickable { onQuickAiToggle() }
                     .padding(horizontal = 10.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 GalaxyAiSparkleIcon(size = 13.dp)
                 Text(
-                    text = "✦",
-                    color = textColor,
+                    text = "AI",
+                    color = accentColor,
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = InterFontFamily
@@ -1186,20 +1150,32 @@ fun SearchScreen(
         }
     }
 
-    // Community Tab / One UI Colors
-    val headerBgColor = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
-    val screenBgColor = headerBgColor
-    val textPrimary = if (isDark) Color.White else Color(0xFF0F172A)
-    val textDark = textPrimary
-    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val cardBgColor = if (isDark) Color(0xFF16161A) else Color.White
-    val appleBorderBrush = rememberAppleStyleBorderBrush(isDark = isDark)
-    val dividerColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
-    val activeAccent = if (gradientStyle == OneUiGradientStyle.SOLID) {
-        if (isDark) OneUiBlueDark else OneUiBlueLight
-    } else {
-        gradientStyle.primaryColor
+    // Theme & One UI Palette Tokens (from LocalOscellionColors)
+    val headerBgColor = colors.bg
+    val screenBgColor = colors.bg
+    val textPrimary = colors.textMain
+    val textDark = colors.textMain
+    val textMuted = colors.textMuted
+    val cardBgColor = colors.cardSurface
+    val dividerColor = colors.cardBorderSubtle
+    val activeAccent = if (gradientStyle == OneUiGradientStyle.SOLID) colors.primary else gradientStyle.primaryColor
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val hasScrolledGrid by remember {
+        derivedStateOf {
+            gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 8
+        }
     }
+    val targetHeaderDividerAlpha = when {
+        isSearchActive -> 1f
+        hasScrolledGrid -> 1f
+        collapseProgress > 0.80f -> ((collapseProgress - 0.80f) / 0.20f).coerceIn(0f, 1f)
+        else -> 0f
+    }
+    val animatedHeaderDividerAlpha by animateFloatAsState(
+        targetValue = targetHeaderDividerAlpha,
+        animationSpec = tween(durationMillis = 180),
+        label = "headerHrAlpha"
+    )
 
     // Dynamic Title text & auto-resize handling per One UI guidelines
     val resolvedHeaderTitle = remember(isSearchActive, searchQuery, useDynamicTitle, filteredArtworks.size, selectedCategory) {
@@ -1300,12 +1276,12 @@ fun SearchScreen(
                     }
                 }
 
-                // 2. COMPACT ACTION BAR (Pinned 52dp height)
+                // 2. COMPACT ACTION BAR (Pinned 52dp height, One UI 16dp keyline)
                 BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp)
-                        .padding(horizontal = 14.dp),
+                        .padding(horizontal = 16.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     // LEFT: Compact title (fades in when collapsing, matching One UI)
@@ -1320,6 +1296,7 @@ fun SearchScreen(
                                 onClick = {
                                     searchQuery = ""
                                     isSearchFieldFocused = false
+                                    keyboardController?.hide()
                                     focusManager.clearFocus()
                                 },
                                 modifier = Modifier.size(36.dp)
@@ -1355,7 +1332,7 @@ fun SearchScreen(
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(if (showMoreOptionsMenu) (if (isDark) Color(0xFF2C2C2E) else Color(0xFFE2E8F0)) else Color.Transparent)
+                                    .background(if (showMoreOptionsMenu) colors.inputBg else Color.Transparent)
                                     .clickable { showMoreOptionsMenu = true },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1374,21 +1351,21 @@ fun SearchScreen(
                                 modifier = Modifier
                                     .width(240.dp)
                                     .background(
-                                        color = if (isDark) Color(0xFF16161A) else Color.White,
-                                        shape = RoundedCornerShape(12.dp)
+                                        color = colors.cardSurface,
+                                        shape = RoundedCornerShape(16.dp)
                                     )
                                     .border(
                                         width = 0.5.dp,
-                                        color = if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
-                                        shape = RoundedCornerShape(12.dp)
+                                        color = colors.cardBorderSubtle,
+                                        shape = RoundedCornerShape(16.dp)
                                     )
                             ) {
                                 Text(
-                                    text = "EXPLORE SETTINGS",
+                                    text = "Explore options",
                                     color = textMuted,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.6.sp,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = InterFontFamily,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                                 )
 
@@ -1404,6 +1381,7 @@ fun SearchScreen(
                                 )
 
                                 HorizontalDivider(
+                                    thickness = 0.5.dp,
                                     color = dividerColor,
                                     modifier = Modifier.padding(vertical = 4.dp)
                                 )
@@ -1441,7 +1419,7 @@ fun SearchScreen(
                                                 .size(12.dp)
                                                 .clip(CircleShape)
                                                 .background(
-                                                    if (gradientStyle == OneUiGradientStyle.SOLID) OneUiBlueLight
+                                                    if (gradientStyle == OneUiGradientStyle.SOLID) colors.primary
                                                     else gradientStyle.orbColor
                                                 )
                                         )
@@ -1456,13 +1434,13 @@ fun SearchScreen(
                                         text = {
                                             Text(
                                                 text = "Clear Search History",
-                                                color = Color(0xFFFF3B30),
+                                                color = colors.error,
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.Medium
                                             )
                                         },
                                         leadingIcon = {
-                                            Icon(Lucide.Trash2, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(16.dp))
+                                            Icon(Lucide.Trash2, null, tint = colors.error, modifier = Modifier.size(16.dp))
                                         },
                                         onClick = {
                                             showMoreOptionsMenu = false
@@ -1476,17 +1454,20 @@ fun SearchScreen(
                     }
                 }
 
-                // 3. PINNED SEARCH BAR (Docks cleanly under compact bar)
+                // 3. PINNED SEARCH BAR (One UI Interaction Dock under compact bar)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 10.dp)
                 ) {
                     if (useGalaxyAiSearchBar) {
                         GalaxyAiAuroraSearchBar(
                             query = searchQuery,
                             onQueryChange = { searchQuery = it },
-                            onSearchAction = { focusManager.clearFocus() },
+                            onSearchAction = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            },
                             isDark = isDark,
                             placeholder = "Search creations, styles, creators...",
                             focusRequester = searchFocusRequester,
@@ -1498,11 +1479,15 @@ fun SearchScreen(
                         OneUiSearchBarPill(
                             query = searchQuery,
                             onQueryChange = { searchQuery = it },
-                            onSearchAction = { focusManager.clearFocus() },
+                            onSearchAction = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            },
                             isFocusedMode = isSearchFieldFocused || searchQuery.isNotBlank(),
                             onExitFocusMode = {
                                 searchQuery = ""
                                 isSearchFieldFocused = false
+                                keyboardController?.hide()
                                 focusManager.clearFocus()
                             },
                             isDark = isDark,
@@ -1520,14 +1505,13 @@ fun SearchScreen(
                     }
                 }
 
-                // 4. SAMSUNG ONE UI / COMMUNITY TAB HEADER DIVIDER
-                if (collapseProgress > 0.80f || isSearchActive) {
-                    val dividerAlpha = if (isSearchActive) 1f else ((collapseProgress - 0.80f) / 0.20f).coerceIn(0f, 1f)
-                    HorizontalDivider(
-                        thickness = 0.5.dp,
-                        color = (if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)).copy(alpha = dividerAlpha)
+                // 4. SAMSUNG ONE UI HEADER HAIRLINE DIVIDER (Fixed alpha scaling — crisp 0.5dp hr line)
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = colors.textMain.copy(
+                        alpha = (if (isDark) 0.12f else 0.08f) * animatedHeaderDividerAlpha
                     )
-                }
+                )
             }
 
             // Pull to Refresh / Active Refreshing Indicator
@@ -1546,11 +1530,11 @@ fun SearchScreen(
                 }
             }
 
-            // ── 5. Main Staggered Grid Content (One UI 26.dp Squircle Containers) ──
+            // ── 5. Main Staggered Grid Content (One UI 26.dp Focus Blocks & 22.dp Cards) ──
             LazyVerticalStaggeredGrid(
                 state = gridState,
                 columns = StaggeredGridCells.Fixed(2),
-                contentPadding = PaddingValues(top = 6.dp, bottom = 120.dp, start = 14.dp, end = 14.dp),
+                contentPadding = PaddingValues(top = 10.dp, bottom = 120.dp, start = 16.dp, end = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalItemSpacing = 12.dp,
                 modifier = Modifier
@@ -1558,7 +1542,7 @@ fun SearchScreen(
                     .weight(1f)
             ) {
                 if (isSearchActive) {
-                    // ── 5A. In Search Mode: One UI Scope Filter Pills ────────
+                    // ── 5A. In Search Mode: One UI Scope Filter Subtabs ────
                     item(span = StaggeredGridItemSpan.FullLine) {
                         Row(
                             modifier = Modifier
@@ -1573,16 +1557,18 @@ fun SearchScreen(
                                         .weight(1f)
                                         .height(36.dp)
                                         .clip(CircleShape)
-                                        .background(
-                                            if (isSelected) activeAccent
-                                            else cardBgColor
+                                        .background(if (isSelected) activeAccent else cardBgColor)
+                                        .border(
+                                            width = 0.5.dp,
+                                            color = if (isSelected) Color.Transparent else dividerColor,
+                                            shape = CircleShape
                                         )
-                                                                                .clickable { selectedScope = scope },
+                                        .clickable { selectedScope = scope },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = scope.label,
-                                        color = if (isSelected) Color.White else textDark,
+                                        color = if (isSelected) colors.onPrimary else textDark,
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                                         fontFamily = InterFontFamily
@@ -1592,15 +1578,16 @@ fun SearchScreen(
                         }
                     }
 
-                    // ── Search Mode: Recent Searches & Suggested Prompts (One UI 26.dp Squircle Card) ──
+                    // ── Search Mode: Recent Searches & Suggested Prompts (One UI 26.dp Focus Block) ──
                     if (searchQuery.isBlank()) {
                         item(span = StaggeredGridItemSpan.FullLine) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(26.dp))
+                                    .clip(RoundedCornerShape(colors.sheetCornerRadius))
                                     .background(cardBgColor)
-                                                                        .padding(16.dp)
+                                    .border(0.5.dp, dividerColor, RoundedCornerShape(colors.sheetCornerRadius))
+                                    .padding(16.dp)
                             ) {
                                 if (searchHistory.isNotEmpty()) {
                                     Row(
@@ -1633,7 +1620,7 @@ fun SearchScreen(
                                             Row(
                                                 modifier = Modifier
                                                     .clip(CircleShape)
-                                                    .background(if (!isDark) OneUiSurfaceLight else OneUiPillDark)
+                                                    .background(colors.inputBg)
                                                     .clickable { handleUserClick(recentUser) }
                                                     .padding(start = 5.dp, end = 10.dp, top = 5.dp, bottom = 5.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
@@ -1651,6 +1638,13 @@ fun SearchScreen(
                                                     color = textDark,
                                                     fontFamily = InterFontFamily
                                                 )
+                                                if (recentUser.verified) {
+                                                    VerifiedBadge(
+                                                        size = 12.dp,
+                                                        tone = recentUser.verifiedTone,
+                                                        userId = recentUser.uid
+                                                    )
+                                                }
                                                 Icon(
                                                     imageVector = Lucide.X,
                                                     contentDescription = "Remove",
@@ -1780,15 +1774,16 @@ fun SearchScreen(
                         }
                     }
 
-                    // ── Search Mode: Matching Tags (One UI Squircle Card) ────
+                    // ── Search Mode: Matching Tags (One UI 26.dp Focus Block) ────
                     if ((selectedScope == SearchScope.ALL || selectedScope == SearchScope.TAGS) && matchingTags.isNotEmpty()) {
                         item(span = StaggeredGridItemSpan.FullLine) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(26.dp))
+                                    .clip(RoundedCornerShape(colors.sheetCornerRadius))
                                     .background(cardBgColor)
-                                                                        .padding(16.dp)
+                                    .border(0.5.dp, dividerColor, RoundedCornerShape(colors.sheetCornerRadius))
+                                    .padding(16.dp)
                             ) {
                                 Text(
                                     text = "Tags & Topics",
@@ -1899,38 +1894,30 @@ fun SearchScreen(
                         }
                     }
                 } else {
-                    // ── 5B. In Explore Mode: One UI Category Filter Pills ────
+                    // ── 5B. In Explore Mode: One UI Category Subtabs ────
                     item(span = StaggeredGridItemSpan.FullLine) {
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(bottom = 6.dp)
+                            modifier = Modifier.padding(bottom = 4.dp)
                         ) {
                             items(EXPLORE_CATEGORIES) { filter ->
                                 val isSelected = filter == selectedCategory
                                 Box(
                                     modifier = Modifier
-                                        .shadow(
-                                            elevation = if (isSelected) 3.dp else 0.dp,
-                                            shape = CircleShape,
-                                            spotColor = activeAccent.copy(alpha = 0.35f)
-                                        )
+                                        .height(36.dp)
                                         .clip(CircleShape)
-                                        .background(
-                                            if (isSelected) activeAccent
-                                            else cardBgColor
-                                        )
+                                        .background(if (isSelected) activeAccent else cardBgColor)
                                         .border(
                                             width = 0.5.dp,
-                                            color = if (isSelected) Color.Transparent
-                                                    else if (isDark) Color.White.copy(alpha = 0.12f)
-                                                    else Color.Black.copy(alpha = 0.08f),
+                                            color = if (isSelected) Color.Transparent else dividerColor,
                                             shape = CircleShape
                                         )
                                         .clickable {
                                             selectedCategory = filter
                                             SoundManager.playTap(context)
                                         }
-                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                        .padding(horizontal = 16.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -1943,7 +1930,7 @@ fun SearchScreen(
                                         }
                                         Text(
                                             text = filter,
-                                            color = if (isSelected) Color.White else textDark,
+                                            color = if (isSelected) colors.onPrimary else textDark,
                                             fontSize = 13.5.sp,
                                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                                             fontFamily = InterFontFamily
@@ -1977,15 +1964,16 @@ fun SearchScreen(
                         }
                     }
 
-                    // ── Explore Mode: Community Trending Tags (One UI 26.dp Card) ──
+                    // ── Explore Mode: Community Trending Tags (One UI 26.dp Focus Block) ──
                     if (matchingTags.isNotEmpty()) {
                         item(span = StaggeredGridItemSpan.FullLine) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(26.dp))
+                                    .clip(RoundedCornerShape(colors.sheetCornerRadius))
                                     .background(cardBgColor)
-                                                                        .padding(16.dp)
+                                    .border(0.5.dp, dividerColor, RoundedCornerShape(colors.sheetCornerRadius))
+                                    .padding(16.dp)
                             ) {
                                 Text(
                                     text = "Trending Tags",
@@ -2001,7 +1989,7 @@ fun SearchScreen(
                                         Row(
                                             modifier = Modifier
                                                 .clip(CircleShape)
-                                                .background(if (!isDark) OneUiSurfaceLight else OneUiPillDark)
+                                                .background(colors.inputBg)
                                                 .clickable { searchQuery = cleanTag }
                                                 .padding(horizontal = 13.dp, vertical = 7.dp),
                                             verticalAlignment = Alignment.CenterVertically
@@ -2016,12 +2004,12 @@ fun SearchScreen(
                         }
                     }
 
-                    // ── Explore Mode: Creations Header with Inline Sort Pill ──
+                    // ── Explore Mode: Creations Subheader with Inline Sort Control ──
                     item(span = StaggeredGridItemSpan.FullLine) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -2030,11 +2018,11 @@ fun SearchScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 if (selectedCategory == "Trending") {
-                                    AppleTrendingFireIcon(modifier = Modifier.size(18.dp))
+                                    AppleTrendingFireIcon(modifier = Modifier.size(17.dp))
                                 }
                                 Text(
                                     text = if (selectedCategory == "All") "Explore Creations" else "$selectedCategory Creations",
-                                    fontSize = 15.sp,
+                                    fontSize = 14.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = textMuted,
                                     fontFamily = InterFontFamily
@@ -2044,19 +2032,27 @@ fun SearchScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Box(
+                                Row(
                                     modifier = Modifier
                                         .clip(CircleShape)
                                         .background(cardBgColor)
-                                                                                .clickable {
+                                        .border(0.5.dp, dividerColor, CircleShape)
+                                        .clickable {
                                             val orders = OneUiSortOrder.entries
                                             val nextSort = orders[(orders.indexOf(sortOrder) + 1) % orders.size]
                                             sortOrder = nextSort
                                             prefs.edit().putString("oneui_search_sort_order", nextSort.name).apply()
                                         }
-                                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                                    contentAlignment = Alignment.Center
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
+                                    Icon(
+                                        imageVector = Lucide.ArrowUpDown,
+                                        contentDescription = "Sort order",
+                                        tint = activeAccent,
+                                        modifier = Modifier.size(12.dp)
+                                    )
                                     Text(
                                         text = sortOrder.label,
                                         fontSize = 11.5.sp,
@@ -2066,8 +2062,8 @@ fun SearchScreen(
                                     )
                                 }
                                 Text(
-                                    text = "${filteredArtworks.size} items",
-                                    fontSize = 12.5.sp,
+                                    text = "${filteredArtworks.size} ${if (filteredArtworks.size == 1) "item" else "items"}",
+                                    fontSize = 12.sp,
                                     color = textMuted,
                                     fontFamily = InterFontFamily
                                 )
@@ -2203,7 +2199,7 @@ fun SearchScreen(
     }
 }
 
-// ── Creator Search Result Card (One UI 26.dp Squircle Card + Live Highlighting) ──
+// ── Creator Search Result Card (One UI 26.dp Focus Block + Live Highlighting) ──
 @Composable
 private fun CreatorSearchResultCard(
     user: UserProfile,
@@ -2212,15 +2208,15 @@ private fun CreatorSearchResultCard(
     accentColor: Color = OneUiBlueLight,
     onClick: () -> Unit
 ) {
-    val isDark = colors.isDark
-    val appleBorderBrush = rememberAppleStyleBorderBrush(isDark = isDark)
     val displayName = user.displayName.ifBlank { user.username }
+    val cardShape = RoundedCornerShape(colors.sheetCornerRadius)
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp))
-            .background(if (isDark) OneUiCardDark else OneUiCardLight)
-                        .clickable { onClick() }
+            .clip(cardShape)
+            .background(colors.cardSurface)
+            .border(0.5.dp, colors.cardBorderSubtle, cardShape)
+            .clickable { onClick() }
             .padding(15.dp)
     ) {
         Row(
@@ -2249,12 +2245,16 @@ private fun CreatorSearchResultCard(
                         )
                         if (user.verified) {
                             Spacer(Modifier.width(4.dp))
-                            VerifiedBadge(size = 14.dp)
+                            VerifiedBadge(
+                                size = 14.dp,
+                                tone = user.verifiedTone,
+                                userId = user.uid
+                            )
                         }
                     }
                     Text(
                         text = rememberHighlightedText("@${user.username}", searchQuery, accentColor),
-                        color = Color(0xFF8E8E93),
+                        color = colors.textMuted,
                         fontSize = 13.sp,
                         lineHeight = 15.sp,
                         fontFamily = InterFontFamily
@@ -2263,7 +2263,7 @@ private fun CreatorSearchResultCard(
                         Spacer(Modifier.height(2.dp))
                         Text(
                             text = rememberHighlightedText(user.bio, searchQuery, accentColor),
-                            color = colors.textMain.copy(alpha = 0.7f),
+                            color = colors.textMain.copy(alpha = 0.72f),
                             fontSize = 11.5.sp,
                             fontFamily = InterFontFamily,
                             maxLines = 1,
@@ -2282,7 +2282,7 @@ private fun CreatorSearchResultCard(
             ) {
                 Text(
                     text = "View",
-                    color = Color.White,
+                    color = colors.onPrimary,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 12.5.sp,
                     fontFamily = InterFontFamily
@@ -2292,7 +2292,7 @@ private fun CreatorSearchResultCard(
     }
 }
 
-// ── Spotlight Creator Banner (One UI 26.dp Squircle Container) ────────────────
+// ── Spotlight Creator Banner (One UI 26.dp Focus Block) ────────────────
 @Composable
 private fun SpotlightCreatorBanner(
     post: DiscoverPost,
@@ -2300,44 +2300,26 @@ private fun SpotlightCreatorBanner(
     accentColor: Color = OneUiBlueLight,
     onClick: () -> Unit
 ) {
-    val isDark = colors.isDark
-    val appleBorderBrush = rememberAppleStyleBorderBrush(isDark = isDark)
-    val bannerBgBrush = remember(isDark, accentColor) {
-        if (isDark) {
-            Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFF1F222B),
-                    Color(0xFF181920),
-                    accentColor.copy(alpha = 0.14f)
-                ),
-                start = Offset(0f, 0f),
-                end = Offset(900f, 350f)
-            )
-        } else {
-            Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFFFFFFFF),
-                    Color(0xFFF6F9FF),
-                    accentColor.copy(alpha = 0.08f)
-                ),
-                start = Offset(0f, 0f),
-                end = Offset(900f, 350f)
-            )
-        }
+    val bannerShape = RoundedCornerShape(colors.sheetCornerRadius)
+    val bannerBgBrush = remember(colors.cardSurface, accentColor, colors.isDark) {
+        Brush.linearGradient(
+            colors = listOf(
+                colors.cardSurface,
+                colors.cardSurface,
+                accentColor.copy(alpha = if (colors.isDark) 0.14f else 0.08f)
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(900f, 350f)
+        )
     }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(26.dp),
-                ambientColor = accentColor.copy(alpha = 0.12f),
-                spotColor = accentColor.copy(alpha = 0.16f)
-            )
-            .clip(RoundedCornerShape(26.dp))
+            .clip(bannerShape)
             .background(bannerBgBrush)
-                        .clickable { onClick() }
+            .border(0.5.dp, colors.cardBorderSubtle, bannerShape)
+            .clickable { onClick() }
             .padding(16.dp)
     ) {
         Row(
@@ -2377,15 +2359,14 @@ private fun SpotlightCreatorBanner(
                         Box(
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .background(Color(0xFFFF9500).copy(alpha = 0.16f))
-                                                                .padding(horizontal = 8.dp, vertical = 2.5.dp)
+                                .background(Color(0xFFFF9500).copy(alpha = 0.14f))
+                                .padding(horizontal = 8.dp, vertical = 2.5.dp)
                         ) {
                             Text(
-                                text = "✦ FEATURED CREATOR",
+                                text = "✦ Featured Creator",
                                 color = Color(0xFFFF9500),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.4.sp,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
                                 fontFamily = InterFontFamily
                             )
                         }
@@ -2403,12 +2384,16 @@ private fun SpotlightCreatorBanner(
                         )
                         if (post.authorVerified) {
                             Spacer(Modifier.width(4.dp))
-                            VerifiedBadge(size = 14.dp)
+                            VerifiedBadge(
+                                size = 14.dp,
+                                tone = post.authorVerifiedTone,
+                                userId = post.creatorId
+                            )
                         }
                     }
                     Text(
                         text = "@${post.authorUsername} • ${post.title.ifBlank { "Studio Masterwork" }}",
-                        color = Color(0xFF8E8E93),
+                        color = colors.textMuted,
                         fontSize = 12.sp,
                         fontFamily = InterFontFamily,
                         maxLines = 1,
@@ -2421,13 +2406,13 @@ private fun SpotlightCreatorBanner(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(accentColor)
-                                        .clickable { onClick() }
+                    .clickable { onClick() }
                     .padding(horizontal = 15.dp, vertical = 7.5.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "Studio",
-                    color = Color.White,
+                    color = colors.onPrimary,
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = InterFontFamily
@@ -2458,11 +2443,34 @@ fun ExploreQuickLookSheet(
     LaunchedEffect(post.id, isLiked) {
         localIsLiked = isLiked
     }
+
     val effectiveJson = remember(post.jsonUrl, post.workUrls) {
         post.jsonUrl.ifBlank { post.workUrls.firstOrNull().orEmpty() }
     }
     var layers by remember(effectiveJson) { mutableStateOf<List<GradientLayer>?>(LayerCache.get(effectiveJson)) }
     val doubleTapLikeState = rememberDoubleTapLikeState()
+
+    val mediaSlides = remember(post) { resolvePostMediaSlides(post) }
+    val isVideo = remember(post) { isVideoPost(post) }
+    val hasMultiSlides = mediaSlides.size > 1
+    var isFeedMuted by remember { mutableStateOf(false) }
+
+    var showOverlayChrome by remember { mutableStateOf(true) }
+    var showDetailsDrawer by remember { mutableStateOf(false) }
+    var isFitContent by remember { mutableStateOf(true) }
+    var zoomScale by remember { mutableFloatStateOf(1f) }
+    var panOffset by remember { mutableStateOf(Offset.Zero) }
+    var dismissDragOffsetY by remember { mutableFloatStateOf(0f) }
+
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        val nextScale = (zoomScale * zoomChange).coerceIn(1f, 4f)
+        zoomScale = nextScale
+        panOffset = if (nextScale > 1.02f) {
+            panOffset + panChange
+        } else {
+            Offset.Zero
+        }
+    }
 
     var isVisible by remember { mutableStateOf(false) }
     var isClosing by remember { mutableStateOf(false) }
@@ -2476,76 +2484,33 @@ fun ExploreQuickLookSheet(
             isClosing = true
             isVisible = false
             scope.launch {
-                delay(200)
+                delay(180)
                 onDismiss()
                 action?.invoke()
             }
         }
     }
 
+    BackHandler {
+        if (showDetailsDrawer) {
+            showDetailsDrawer = false
+        } else if (zoomScale > 1.05f) {
+            zoomScale = 1f
+            panOffset = Offset.Zero
+        } else {
+            closeWithAnimation(null)
+        }
+    }
+
     val contentAlpha by animateFloatAsState(
         targetValue = if (isVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 200, easing = LinearEasing),
-        label = "contentAlpha"
+        animationSpec = tween(durationMillis = 190, easing = FastOutSlowInEasing),
+        label = "fullScreenAlpha"
     )
-
-    val sheetSlideY by animateFloatAsState(
-        targetValue = if (isVisible) 0f else 350f,
-        animationSpec = spring(
-            dampingRatio = 0.82f,
-            stiffness = 380f
-        ),
-        label = "sheetSlideY"
-    )
-
-    val topPillSlideY by animateFloatAsState(
-        targetValue = if (isVisible) 0f else -60f,
-        animationSpec = spring(
-            dampingRatio = 0.8f,
-            stiffness = 400f
-        ),
-        label = "topPillSlideY"
-    )
-
-    val topButtonsScale by animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0.4f,
-        animationSpec = spring(
-            dampingRatio = 0.72f,
-            stiffness = 420f
-        ),
-        label = "topButtonsScale"
-    )
-
-    val backButtonInteractionSource = remember { MutableInteractionSource() }
-    val isBackButtonPressed by backButtonInteractionSource.collectIsPressedAsState()
-    val backButtonPressScale by animateFloatAsState(
-        targetValue = if (isBackButtonPressed) 0.92f else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
-        label = "backPressScale"
-    )
-
-    val shareButtonInteractionSource = remember { MutableInteractionSource() }
-    val isShareButtonPressed by shareButtonInteractionSource.collectIsPressedAsState()
-    val shareButtonPressScale by animateFloatAsState(
-        targetValue = if (isShareButtonPressed) 0.92f else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
-        label = "sharePressScale"
-    )
-
-    val remixButtonInteractionSource = remember { MutableInteractionSource() }
-    val isRemixButtonPressed by remixButtonInteractionSource.collectIsPressedAsState()
-    val remixButtonPressScale by animateFloatAsState(
-        targetValue = if (isRemixButtonPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
-        label = "remixPressScale"
-    )
-
-    val viewPostButtonInteractionSource = remember { MutableInteractionSource() }
-    val isViewPostButtonPressed by viewPostButtonInteractionSource.collectIsPressedAsState()
-    val viewPostButtonPressScale by animateFloatAsState(
-        targetValue = if (isViewPostButtonPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 600f),
-        label = "viewPostPressScale"
+    val contentScale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0.94f,
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+        label = "fullScreenScale"
     )
 
     var likeBounced by remember { mutableStateOf(false) }
@@ -2573,15 +2538,15 @@ fun ExploreQuickLookSheet(
 
     val isRemixPost = remember(post.title, post.remixedFromAuthorUsername, post.remixedFromAuthorDisplayName) {
         !post.remixedFromAuthorUsername.isNullOrBlank() ||
-        !post.remixedFromAuthorDisplayName.isNullOrBlank() ||
-        post.title.startsWith("Remix", ignoreCase = true)
+            !post.remixedFromAuthorDisplayName.isNullOrBlank() ||
+            post.title.startsWith("Remix", ignoreCase = true)
     }
 
-    val displaySubtitle = remember(post.trendingTag, post.postType, isRemixPost) {
+    val displaySubtitle = remember(post.trendingTag, post.postType, isRemixPost, isVideo) {
         when {
             !post.trendingTag.isNullOrBlank() -> post.trendingTag
             isRemixPost -> "Community Studio Remix"
-            post.postType == "video" -> "Trending Flash Video"
+            isVideo -> "Flash Video"
             post.postType == "image" -> "Community Photography"
             else -> "Original Studio Masterwork"
         }
@@ -2603,6 +2568,27 @@ fun ExploreQuickLookSheet(
         maxOf(0, post.likesCount + delta)
     }
 
+    val resolvedImageUrl = remember(post) {
+        post.imageUrl?.takeIf { it.isNotBlank() }
+            ?: post.imageUrls.firstOrNull()?.takeIf { it.isNotBlank() }
+            ?: post.thumbnailUrl?.takeIf { it.isNotBlank() }
+            ?: post.workUrls.firstOrNull { it.startsWith("http") && !it.endsWith(".json") }
+    }
+
+    val triggerDoubleTapLike: (Offset) -> Unit = { offset ->
+        if (!localIsLiked) {
+            localIsLiked = true
+            likeBounced = true
+            if (onForceLike != null) {
+                onForceLike()
+            } else {
+                onToggleLike?.invoke()
+            }
+        }
+        doubleTapLikeState.trigger(offset)
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+    }
+
     Dialog(
         onDismissRequest = { closeWithAnimation(null) },
         properties = DialogProperties(
@@ -2610,198 +2596,204 @@ fun ExploreQuickLookSheet(
             decorFitsSystemWindows = false
         )
     ) {
+        // Pure One UI Dark Gallery Viewer Stage (#000000 edge-to-edge)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f * contentAlpha))
-                .graphicsLayer { alpha = contentAlpha }
+                .background(Color.Black.copy(alpha = contentAlpha))
+                .graphicsLayer {
+                    alpha = contentAlpha
+                    scaleX = contentScale
+                    scaleY = contentScale
+                    translationY = dismissDragOffsetY
+                }
         ) {
-            Column(
+            // ── 1. TRUE FULL-SCREEN MEDIA VIEWPORT ────────────────────────────
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
+                    .then(
+                        if (!isVideo && !hasMultiSlides && !resolvedImageUrl.isNullOrBlank()) {
+                            Modifier.transformable(state = transformState)
+                        } else Modifier
+                    )
+                    .pointerInput(post.id, zoomScale, showDetailsDrawer) {
+                        detectVerticalDragGestures(
+                            onDragEnd = {
+                                if (dismissDragOffsetY > 140f && zoomScale <= 1.02f) {
+                                    closeWithAnimation(null)
+                                } else {
+                                    dismissDragOffsetY = 0f
+                                }
+                            },
+                            onDragCancel = { dismissDragOffsetY = 0f },
+                            onVerticalDrag = { _, dragAmount ->
+                                if (zoomScale <= 1.02f && !showDetailsDrawer && (dragAmount > 0f || dismissDragOffsetY > 0f)) {
+                                    dismissDragOffsetY = (dismissDragOffsetY + dragAmount).coerceAtLeast(0f)
+                                }
+                            }
+                        )
+                    }
+                    .pointerInput(post.id, isVideo, hasMultiSlides) {
+                        detectTapGestures(
+                            onTap = {
+                                if (showDetailsDrawer) {
+                                    showDetailsDrawer = false
+                                } else {
+                                    showOverlayChrome = !showOverlayChrome
+                                }
+                            },
+                            onDoubleTap = { offset ->
+                                if (zoomScale > 1.05f && !isVideo && !hasMultiSlides && !resolvedImageUrl.isNullOrBlank()) {
+                                    zoomScale = 1f
+                                    panOffset = Offset.Zero
+                                } else {
+                                    triggerDoubleTapLike(offset)
+                                }
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                // ── UPPER HALF: HERO MEDIA PREVIEW ──────────────────────────
+                if ((isVideo || hasMultiSlides) && repository != null && mediaSlides.isNotEmpty()) {
+                    val pagerState = rememberPagerState(pageCount = { mediaSlides.size })
+                    PostMediaCarousel(
+                        work = post,
+                        slides = mediaSlides,
+                        pagerState = pagerState,
+                        repository = repository,
+                        colors = colors,
+                        doubleTapLikeState = doubleTapLikeState,
+                        onDoubleTap = triggerDoubleTapLike,
+                        onVideoClick = {
+                            if (showDetailsDrawer) showDetailsDrawer = false
+                            else showOverlayChrome = !showOverlayChrome
+                        },
+                        isInViewport = true,
+                        isFeedMuted = isFeedMuted,
+                        onToggleFeedMute = { isFeedMuted = !isFeedMuted },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else if (!resolvedImageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(resolvedImageUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = cleanTitle,
+                        contentScale = if (isFitContent) ContentScale.Fit else ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = zoomScale
+                                scaleY = zoomScale
+                                translationX = panOffset.x
+                                translationY = panOffset.y
+                            }
+                    )
+                } else if (layers != null && layers!!.isNotEmpty()) {
+                    CanvasPreview(
+                        layers = layers!!,
+                        shape = "full",
+                        borderColor = Color.Transparent,
+                        isStatic = false,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(Color(0xFF090D16), Color(0xFF111827), colors.primary.copy(alpha = 0.45f))
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        OscellionLoadingSpinner(color = colors.primary, modifier = Modifier.size(34.dp))
+                    }
+                }
+
+                FlatDoubleTapHeartOverlay(
+                    state = doubleTapLikeState,
+                    modifier = Modifier.fillMaxSize(),
+                    heartSize = 104.dp
+                )
+            }
+
+            // ── 2. FLOATING TOP ONE UI BAR (Auto-hides on canvas tap) ────────
+            AnimatedVisibility(
+                visible = showOverlayChrome && !showDetailsDrawer,
+                enter = fadeIn(tween(180)) + slideInVertically { -it / 2 },
+                exit = fadeOut(tween(150)) + slideOutVertically { -it / 2 },
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(390.dp)
-                        .background(Color(0xFF0F172A))
-                        .pointerInput(post.id) {
-                            detectTapGestures(
-                                onDoubleTap = { offset ->
-                                    if (!localIsLiked) {
-                                        localIsLiked = true
-                                        likeBounced = true
-                                        if (onForceLike != null) {
-                                            onForceLike()
-                                        } else {
-                                            onToggleLike?.invoke()
-                                        }
-                                    }
-                                    doubleTapLikeState.trigger(offset)
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Black.copy(alpha = 0.65f), Color.Transparent)
                             )
-                        }
+                        )
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    val resolvedImageUrl = remember(post) {
-                        post.imageUrl?.takeIf { it.isNotBlank() }
-                            ?: post.imageUrls.firstOrNull()?.takeIf { it.isNotBlank() }
-                            ?: post.thumbnailUrl?.takeIf { it.isNotBlank() }
-                            ?: post.workUrls.firstOrNull { it.startsWith("http") && !it.endsWith(".json") }
-                    }
-
-                    if (!resolvedImageUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(resolvedImageUrl)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = post.title,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else if (layers != null && layers!!.isNotEmpty()) {
-                        CanvasPreview(
-                            layers = layers!!,
-                            shape = "full",
-                            borderColor = Color.Transparent,
-                            isStatic = true,
-                            timeMillisOverride = 5000L,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(Color(0xFF0D1B2A), Color(0xFF1B263B), Color(0xFF1E3A8A))
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(80.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.08f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Sparkles,
-                                    contentDescription = null,
-                                    tint = Color(0xFF38BDF8),
-                                    modifier = Modifier.size(38.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    FlatDoubleTapHeartOverlay(
-                        state = doubleTapLikeState,
-                        modifier = Modifier.fillMaxSize(),
-                        heartSize = 100.dp
-                    )
-
-                    // Top-Left Floating Circular Back Button
+                    // Back / Close Pill
                     Box(
                         modifier = Modifier
-                            .statusBarsPadding()
-                            .padding(start = 18.dp, top = 14.dp)
-                            .size(42.dp)
-                            .graphicsLayer {
-                                scaleX = topButtonsScale * backButtonPressScale
-                                scaleY = topButtonsScale * backButtonPressScale
-                            }
-                            .shadow(8.dp, CircleShape)
+                            .align(Alignment.CenterStart)
+                            .size(40.dp)
                             .clip(CircleShape)
-                            .background(Color.White)
-                            .clickable(
-                                interactionSource = backButtonInteractionSource,
-                                indication = null
-                            ) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            .background(Color.Black.copy(alpha = 0.48f))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 closeWithAnimation(null)
                             },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Lucide.ArrowLeft,
-                            contentDescription = "Back",
-                            tint = Color(0xFF1E293B),
-                            modifier = Modifier.size(19.dp)
+                            contentDescription = "Close full screen",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
-                    // Top-Right Floating Circular Share Button
-                    Box(
+                    // Center Status Pill
+                    Row(
                         modifier = Modifier
-                            .statusBarsPadding()
-                            .padding(end = 18.dp, top = 14.dp)
-                            .size(42.dp)
-                            .align(Alignment.TopEnd)
-                            .graphicsLayer {
-                                scaleX = topButtonsScale * shareButtonPressScale
-                                scaleY = topButtonsScale * shareButtonPressScale
-                            }
-                            .shadow(8.dp, CircleShape)
+                            .align(Alignment.Center)
                             .clip(CircleShape)
-                            .background(Color.White)
-                            .clickable(
-                                interactionSource = shareButtonInteractionSource,
-                                indication = null
-                            ) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(
-                                        android.content.Intent.EXTRA_TEXT,
-                                        "Check out '${post.title}' by @${post.authorUsername} on Oscellion: https://oscellion.vercel.app/post/${post.id}"
-                                    )
-                                }
-                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Masterwork"))
-                            },
-                        contentAlignment = Alignment.Center
+                            .background(Color.Black.copy(alpha = 0.48f))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.16f), CircleShape)
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            imageVector = Lucide.Share2,
-                            contentDescription = "Share",
-                            tint = Color(0xFF1E293B),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Top-Center Dynamic Status Pill
-                    Box(
-                        modifier = Modifier
-                            .statusBarsPadding()
-                            .padding(top = 16.dp)
-                            .align(Alignment.TopCenter)
-                            .graphicsLayer {
-                                translationY = topPillSlideY
-                            }
-                            .shadow(12.dp, CircleShape)
-                            .clip(CircleShape)
-                            .background(Color(0xEE161A26))
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(7.dp)
-                        ) {
-                            if (post.isTrendingMasterwork || post.likesCount > 50) {
-                                AppleTrendingFireIcon(modifier = Modifier.size(15.dp))
+                        when {
+                            post.isTrendingMasterwork || post.likesCount > 50 -> {
+                                AppleTrendingFireIcon(modifier = Modifier.size(14.dp))
                                 Text(
-                                    text = "Trending Masterwork • $effectiveLikes ${if (effectiveLikes == 1) "Like" else "Likes"}",
+                                    text = "Trending",
                                     color = Color.White,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.2.sp
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = InterFontFamily
                                 )
-                            } else if (!post.remixedFromAuthorUsername.isNullOrBlank() || !post.remixedFromAuthorDisplayName.isNullOrBlank()) {
-                                val originalOwner = post.remixedFromAuthorDisplayName?.takeIf { it.isNotBlank() } ?: "@${post.remixedFromAuthorUsername.orEmpty()}"
+                            }
+                            isVideo -> {
+                                Icon(Lucide.Play, null, tint = Color.White, modifier = Modifier.size(13.dp))
+                                Text(
+                                    text = "Flash Video",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = InterFontFamily
+                                )
+                            }
+                            isRemixPost -> {
                                 Icon(
                                     imageVector = rememberLucideHeartHandshakeIcon(
                                         isRemixed = false,
@@ -2812,57 +2804,384 @@ fun ExploreQuickLookSheet(
                                     tint = Color.Unspecified,
                                     modifier = Modifier.size(14.dp)
                                 )
-                                val isSelfRemix = originalOwner == post.authorDisplayName || originalOwner == "@${post.authorUsername}"
                                 Text(
-                                    text = if (isSelfRemix) "Community Remix • $effectiveLikes ${if (effectiveLikes == 1) "Like" else "Likes"}"
-                                           else "Remix of $originalOwner",
+                                    text = "Remix",
                                     color = Color.White,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.2.sp
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = InterFontFamily
                                 )
-                            } else {
+                            }
+                            else -> {
+                                Icon(Lucide.Sparkles, null, tint = colors.primary, modifier = Modifier.size(14.dp))
+                                Text(
+                                    text = "Explore",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = InterFontFamily
+                                )
+                            }
+                        }
+                    }
+
+                    // Right Controls: Fit/Fill Toggle (for single images) + Share
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (!isVideo && !hasMultiSlides && !resolvedImageUrl.isNullOrBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.48f))
+                                    .border(0.5.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                                    .clickable {
+                                        if (zoomScale > 1.05f) {
+                                            zoomScale = 1f
+                                            panOffset = Offset.Zero
+                                        } else {
+                                            isFitContent = !isFitContent
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Icon(
-                                    imageVector = Lucide.Sparkles,
+                                    imageVector = if (isFitContent && zoomScale <= 1.05f) Lucide.Maximize2 else Lucide.Minimize2,
+                                    contentDescription = if (isFitContent) "Fill screen" else "Fit screen",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.48f))
+                                .border(0.5.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(
+                                            android.content.Intent.EXTRA_TEXT,
+                                            "Check out '${post.title}' by @${post.authorUsername} on Oscellion: https://oscellion.vercel.app/post/${post.id}"
+                                        )
+                                    }
+                                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Masterwork"))
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Share2,
+                                contentDescription = "Share",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── 3. BOTTOM FLOATING INTERACTION DOCK (Thumb-Reachable One UI Controls) ──
+            AnimatedVisibility(
+                visible = showOverlayChrome && !showDetailsDrawer,
+                enter = fadeIn(tween(180)) + slideInVertically { it / 2 },
+                exit = fadeOut(tween(150)) + slideOutVertically { it / 2 },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f), Color.Black.copy(alpha = 0.92f))
+                            )
+                        )
+                        .navigationBarsPadding()
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Creator Attribution Row (Avatar + Name + @username + VerifiedBadge + Details toggle)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    closeWithAnimation { onNavigateToProfile() }
+                                }
+                                .padding(vertical = 2.dp)
+                        ) {
+                            IosAvatarView(
+                                name = post.authorDisplayName.ifBlank { post.authorUsername },
+                                avatarUrl = post.authorAvatarUrl,
+                                size = 40.dp
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy((-1).dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = post.authorDisplayName.ifBlank { post.authorUsername.ifBlank { "Creator" } },
+                                        color = Color.White,
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = InterFontFamily,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    if (post.authorVerified) {
+                                        Spacer(Modifier.width(4.dp))
+                                        VerifiedBadge(
+                                            size = 13.5.dp,
+                                            tone = post.authorVerifiedTone,
+                                            userId = post.creatorId
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = "@${post.authorUsername.ifBlank { "creator" }}",
+                                    color = Color.White.copy(alpha = 0.68f),
+                                    fontSize = 12.sp,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.14f))
+                                .border(0.5.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                                .clickable { showDetailsDrawer = true }
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(Lucide.Info, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            Text(
+                                text = "Details",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = InterFontFamily
+                            )
+                        }
+                    }
+
+                    // Title & Subtle Caption
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showDetailsDrawer = true },
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = cleanTitle,
+                            color = Color.White,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "$displaySubtitle • ${post.effectiveCommentsCount} comments • ${post.remixCount} remixes",
+                            color = Color.White.copy(alpha = 0.68f),
+                            fontSize = 12.sp,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Primary Thumb-Zone Action Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Like Pill
+                        Row(
+                            modifier = Modifier
+                                .height(46.dp)
+                                .graphicsLayer {
+                                    scaleX = likeScale
+                                    scaleY = likeScale
+                                }
+                                .clip(CircleShape)
+                                .background(
+                                    if (localIsLiked) Color(0xFFFF2D55).copy(alpha = 0.22f)
+                                    else Color.White.copy(alpha = 0.14f)
+                                )
+                                .border(
+                                    width = 0.5.dp,
+                                    color = if (localIsLiked) Color(0xFFFF2D55).copy(alpha = 0.45f)
+                                    else Color.White.copy(alpha = 0.20f),
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    localIsLiked = !localIsLiked
+                                    likeBounced = true
+                                    onToggleLike?.invoke()
+                                }
+                                .padding(horizontal = 15.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = ChromaIcons.HeartFilled,
+                                contentDescription = "Like",
+                                tint = if (localIsLiked) Color(0xFFFF2D55) else Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = effectiveLikes.toString(),
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = InterFontFamily
+                            )
+                        }
+
+                        // Primary Remix Action
+                        Box(
+                            modifier = Modifier
+                                .weight(1.1f)
+                                .height(46.dp)
+                                .clip(CircleShape)
+                                .background(colors.primary)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    closeWithAnimation { onRemix() }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = rememberLucideHeartHandshakeIcon(
+                                        isRemixed = false,
+                                        strokeColor = colors.onPrimary,
+                                        heartFillColor = null
+                                    ),
                                     contentDescription = null,
-                                    tint = Color(0xFFF5882E),
-                                    modifier = Modifier.size(14.dp)
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(17.dp)
                                 )
                                 Text(
-                                    text = "Featured Creation • $effectiveLikes ${if (effectiveLikes == 1) "Like" else "Likes"}",
-                                    color = Color.White,
-                                    fontSize = 12.sp,
+                                    text = "Remix Creation",
+                                    color = colors.onPrimary,
+                                    fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.2.sp
+                                    fontFamily = InterFontFamily
+                                )
+                            }
+                        }
+
+                        // View Post / Comments Action
+                        Box(
+                            modifier = Modifier
+                                .weight(0.9f)
+                                .height(46.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.14f))
+                                .border(0.5.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    closeWithAnimation { onNavigateToPost() }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.MessageCircle,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "View Post",
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = InterFontFamily
                                 )
                             }
                         }
                     }
                 }
+            }
 
-                // ── LOWER HALF: ROUNDED SHEET CARD ──
+            // ── 4. EXPANDABLE ONE UI DETAILS SHEET OVERLAY ────────────────────
+            AnimatedVisibility(
+                visible = showDetailsDrawer,
+                enter = slideInVertically { it } + fadeIn(tween(180)),
+                exit = slideOutVertically { it } + fadeOut(tween(150)),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
                 Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 520.dp)
-                        .offset(y = (-32).dp)
-                        .graphicsLayer {
-                            translationY = sheetSlideY
-                        },
-                    shape = RoundedCornerShape(topStart = 38.dp, topEnd = 38.dp),
-                    color = if (colors.isDark) Color(0xFF141721) else Color.White,
-                    shadowElevation = 20.dp
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(
+                        topStart = colors.sheetCornerRadius,
+                        topEnd = colors.sheetCornerRadius
+                    ),
+                    color = colors.cardSurface
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 22.dp, vertical = 22.dp),
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp, vertical = 14.dp)
+                            .navigationBarsPadding(),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
+                        // One UI Sheet Drag Handle + Close
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .width(36.dp)
+                                    .height(4.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.textMuted.copy(alpha = 0.35f))
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .size(30.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.inputBg)
+                                    .clickable { showDetailsDrawer = false },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Lucide.X, "Close details", tint = colors.textMain, modifier = Modifier.size(15.dp))
+                            }
+                        }
+
+                        // Creator Profile Row
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(14.dp))
                                 .clickable {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     closeWithAnimation { onNavigateToProfile() }
@@ -2879,29 +3198,31 @@ fun ExploreQuickLookSheet(
                                 IosAvatarView(
                                     name = post.authorDisplayName.ifBlank { post.authorUsername },
                                     avatarUrl = post.authorAvatarUrl,
-                                    size = 46.dp
+                                    size = 44.dp
                                 )
-
                                 Column(verticalArrangement = Arrangement.spacedBy((-2).dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             text = post.authorDisplayName.ifBlank { post.authorUsername.ifBlank { "Creator" } },
-                                            color = if (colors.isDark) Color.White else Color(0xFF0F172A),
+                                            color = colors.textMain,
                                             fontSize = 15.sp,
-                                            lineHeight = 17.sp,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = InterFontFamily
                                         )
-                                        if (post.authorVerified || post.likesCount > 50) {
+                                        if (post.authorVerified) {
                                             Spacer(Modifier.width(4.dp))
-                                            VerifiedBadge(size = 14.dp, userId = post.creatorId)
+                                            VerifiedBadge(
+                                                size = 14.dp,
+                                                tone = post.authorVerifiedTone,
+                                                userId = post.creatorId
+                                            )
                                         }
                                     }
                                     Text(
                                         text = "@${post.authorUsername.ifBlank { "creator" }}",
-                                        color = Color(0xFF64748B),
+                                        color = colors.textMuted,
                                         fontSize = 12.5.sp,
-                                        lineHeight = 14.5.sp,
-                                        fontWeight = FontWeight.Medium
+                                        fontFamily = InterFontFamily
                                     )
                                 }
                             }
@@ -2909,121 +3230,90 @@ fun ExploreQuickLookSheet(
                             Box(
                                 modifier = Modifier
                                     .clip(CircleShape)
-                                    .background(OneUiBlueLight.copy(alpha = 0.12f))
-                                    .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        closeWithAnimation { onNavigateToProfile() }
-                                    }
-                                    .padding(horizontal = 14.dp, vertical = 7.dp),
-                                contentAlignment = Alignment.Center
+                                    .background(colors.primary.copy(alpha = 0.12f))
+                                    .padding(horizontal = 13.dp, vertical = 7.dp)
                             ) {
                                 Text(
                                     text = "View Profile",
-                                    color = OneUiBlueLight,
+                                    color = colors.primary,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFamily = InterFontFamily
                                 )
                             }
                         }
 
+                        // Title & Subtitle
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(
                                 text = cleanTitle,
-                                color = if (colors.isDark) Color.White else Color(0xFF0F172A),
-                                fontSize = 21.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = (-0.3).sp
+                                color = colors.textMain,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = InterFontFamily
                             )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (!post.trendingTag.isNullOrBlank()) Lucide.Flame else Lucide.Sparkles,
-                                    contentDescription = null,
-                                    tint = Color(0xFFF5882E),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = displaySubtitle,
-                                    color = Color(0xFF94A3B8),
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
+                            Text(
+                                text = displaySubtitle,
+                                color = colors.textMuted,
+                                fontSize = 12.5.sp,
+                                fontFamily = InterFontFamily
+                            )
                         }
 
+                        // Engagement Focus Blocks
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            val statPillShape = RoundedCornerShape(14.dp)
-
+                            val statShape = RoundedCornerShape(14.dp)
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(statPillShape)
-                                    .background(if (colors.isDark) Color(0xFF1E2330) else Color(0xFFF8FAFC))
-                                                                        .padding(vertical = 8.dp),
+                                    .clip(statShape)
+                                    .background(colors.inputBg)
+                                    .padding(vertical = 9.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = ChromaIcons.HeartFilled,
-                                        contentDescription = null,
-                                        tint = Color(0xFFFF2D55),
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    val likeLabel = if (effectiveLikes == 1) "Like" else "Likes"
+                                    Icon(ChromaIcons.HeartFilled, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(14.dp))
                                     Text(
-                                        text = "$effectiveLikes $likeLabel",
-                                        color = if (colors.isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
+                                        text = "$effectiveLikes ${if (effectiveLikes == 1) "Like" else "Likes"}",
+                                        color = colors.textMain,
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }
-
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(statPillShape)
-                                    .background(if (colors.isDark) Color(0xFF1E2330) else Color(0xFFF8FAFC))
-                                                                        .padding(vertical = 8.dp),
+                                    .clip(statShape)
+                                    .background(colors.inputBg)
+                                    .padding(vertical = 9.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Lucide.MessageCircle,
-                                        contentDescription = null,
-                                        tint = OneUiBlueLight,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    val commentLabel = if (post.effectiveCommentsCount == 1) "Comment" else "Comments"
+                                    Icon(Lucide.MessageCircle, null, tint = colors.primary, modifier = Modifier.size(14.dp))
                                     Text(
-                                        text = "${post.effectiveCommentsCount} $commentLabel",
-                                        color = if (colors.isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
+                                        text = "${post.effectiveCommentsCount} ${if (post.effectiveCommentsCount == 1) "Comment" else "Comments"}",
+                                        color = colors.textMain,
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }
-
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(statPillShape)
-                                    .background(if (colors.isDark) Color(0xFF1E2330) else Color(0xFFF8FAFC))
-                                                                        .padding(vertical = 8.dp),
+                                    .clip(statShape)
+                                    .background(colors.inputBg)
+                                    .padding(vertical = 9.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
@@ -3033,17 +3323,16 @@ fun ExploreQuickLookSheet(
                                     Icon(
                                         imageVector = rememberLucideHeartHandshakeIcon(
                                             isRemixed = false,
-                                            strokeColor = Color(0xFF0381FE),
+                                            strokeColor = colors.primary,
                                             heartFillColor = null
                                         ),
                                         contentDescription = null,
                                         tint = Color.Unspecified,
-                                        modifier = Modifier.size(15.dp)
+                                        modifier = Modifier.size(14.dp)
                                     )
-                                    val remixLabel = if (post.remixCount == 1) "Remix" else "Remixes"
                                     Text(
-                                        text = "${post.remixCount} $remixLabel",
-                                        color = if (colors.isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
+                                        text = "${post.remixCount} ${if (post.remixCount == 1) "Remix" else "Remixes"}",
+                                        color = colors.textMain,
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
@@ -3053,166 +3342,33 @@ fun ExploreQuickLookSheet(
 
                         Text(
                             text = displayDesc,
-                            color = if (colors.isDark) Color(0xFFCBD5E1) else Color(0xFF475569),
-                            fontSize = 13.sp,
-                            lineHeight = 20.sp
+                            color = colors.textMain.copy(alpha = 0.85f),
+                            fontSize = 13.5.sp,
+                            lineHeight = 20.sp,
+                            fontFamily = InterFontFamily
                         )
 
                         if (post.tags.isNotEmpty()) {
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(post.tags) { tag ->
                                     val cleanTag = tag.removePrefix("#")
                                     Box(
                                         modifier = Modifier
                                             .clip(CircleShape)
-                                            .background(OneUiBlueLight.copy(alpha = 0.10f))
+                                            .background(colors.primary.copy(alpha = 0.12f))
                                             .padding(horizontal = 12.dp, vertical = 6.dp)
                                     ) {
                                         Text(
                                             text = "#$cleanTag",
-                                            color = OneUiBlueLight,
+                                            color = colors.primary,
                                             fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = InterFontFamily
                                         )
                                     }
                                 }
                             }
                         }
-
-                        Spacer(Modifier.height(4.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(50.dp)
-                                    .graphicsLayer {
-                                        scaleX = likeScale
-                                        scaleY = likeScale
-                                    }
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (localIsLiked) Color(0xFFFF2D55).copy(alpha = 0.12f)
-                                        else (if (colors.isDark) Color(0xFF1E2330) else Color(0xFFF1F5F9))
-                                    )
-                                    .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        localIsLiked = !localIsLiked
-                                        likeBounced = true
-                                        onToggleLike?.invoke()
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = ChromaIcons.HeartFilled,
-                                    contentDescription = "Like",
-                                    tint = if (localIsLiked) Color(0xFFFF2D55) else (if (colors.isDark) Color.White.copy(alpha = 0.8f) else Color(0xFF334155)),
-                                    modifier = Modifier.size(21.dp)
-                                )
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1.15f)
-                                    .height(50.dp)
-                                    .graphicsLayer {
-                                        scaleX = remixButtonPressScale
-                                        scaleY = remixButtonPressScale
-                                    }
-                                    .shadow(
-                                        8.dp,
-                                        CircleShape,
-                                        ambientColor = Color(0xFFF5882E).copy(alpha = 0.25f),
-                                        spotColor = Color(0xFFF5882E).copy(alpha = 0.40f)
-                                    )
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            listOf(Color(0xFFFA9848), Color(0xFFF5882E))
-                                        )
-                                    )
-                                    .clickable(
-                                        interactionSource = remixButtonInteractionSource,
-                                        indication = null
-                                    ) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        closeWithAnimation { onRemix() }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = rememberLucideHeartHandshakeIcon(
-                                            isRemixed = false,
-                                            strokeColor = Color.White,
-                                            heartFillColor = null
-                                        ),
-                                        contentDescription = null,
-                                        tint = Color.Unspecified,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Text(
-                                        text = "Remix Creation",
-                                        color = Color.White,
-                                        fontSize = 13.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.2.sp
-                                    )
-                                }
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(0.95f)
-                                    .height(50.dp)
-                                    .graphicsLayer {
-                                        scaleX = viewPostButtonPressScale
-                                        scaleY = viewPostButtonPressScale
-                                    }
-                                    .clip(CircleShape)
-                                    .background(if (colors.isDark) Color(0xFF1E2330) else Color(0xFFF1F5F9))
-                                    .clickable(
-                                        interactionSource = viewPostButtonInteractionSource,
-                                        indication = null
-                                    ) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        closeWithAnimation { onNavigateToPost() }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.MessageCircle,
-                                        contentDescription = null,
-                                        tint = colors.textMain,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = "View Post",
-                                        color = colors.textMain,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.navigationBarsPadding())
-                        Spacer(Modifier.height(12.dp))
                     }
                 }
             }
@@ -3271,12 +3427,16 @@ fun ExploreWorkGridCard(
     onDoubleTapLike: (() -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = colors.isDark
-    val appleBorderBrush = rememberAppleStyleBorderBrush(isDark = isDark)
     val haptic = LocalHapticFeedback.current
     val doubleTapLikeState = rememberDoubleTapLikeState()
     var localIsLiked by remember(work.id, isLiked) { mutableStateOf(isLiked) }
     var layers by remember(work.jsonUrl) { mutableStateOf<List<GradientLayer>?>(LayerCache.get(work.jsonUrl)) }
+    val isVideo = remember(work) { isVideoPost(work) }
+    val thumbUrl = remember(work) {
+        work.thumbnailUrl?.takeIf { it.isNotBlank() }
+            ?: work.imageUrl?.takeIf { it.isNotBlank() }
+            ?: work.imageUrls.firstOrNull()?.takeIf { it.isNotBlank() }
+    }
     LaunchedEffect(work.id, isLiked) {
         localIsLiked = isLiked
     }
@@ -3291,26 +3451,24 @@ fun ExploreWorkGridCard(
         }
     }
 
+    val outerShape = RoundedCornerShape(22.dp)
+    val mediaShape = RoundedCornerShape(16.dp)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 6.dp,
-                shape = RoundedCornerShape(24.dp),
-                ambientColor = Color.Black.copy(alpha = if (isDark) 0.35f else 0.06f),
-                spotColor = Color.Black.copy(alpha = if (isDark) 0.45f else 0.09f)
-            )
-            .clip(RoundedCornerShape(24.dp))
-            .background(if (isDark) OneUiCardDark else OneUiCardLight)
-                        .padding(7.dp)
+            .clip(outerShape)
+            .background(colors.cardSurface)
+            .border(0.5.dp, colors.cardBorderSubtle, outerShape)
+            .padding(7.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(aspectRatio)
-                .clip(RoundedCornerShape(18.dp))
-                .background(if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
-                                .pointerInput(work.id) {
+                .clip(mediaShape)
+                .background(colors.inputBg)
+                .pointerInput(work.id) {
                     detectTapGestures(
                         onTap = { onClick() },
                         onDoubleTap = { offset ->
@@ -3324,10 +3482,20 @@ fun ExploreWorkGridCard(
                     )
                 }
         ) {
-            if (work.postType == "image" && !work.imageUrl.isNullOrBlank()) {
+            if (isVideo && !thumbUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(work.imageUrl)
+                        .data(thumbUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = work.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (work.postType == "image" && !thumbUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(thumbUrl)
                         .crossfade(true)
                         .build(),
                     contentDescription = work.title,
@@ -3343,13 +3511,23 @@ fun ExploreWorkGridCard(
                     timeMillisOverride = 5000L,
                     modifier = Modifier.fillMaxSize()
                 )
+            } else if (!thumbUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(thumbUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = work.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
             } else {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
                             Brush.linearGradient(
-                                listOf(OneUiBlueLight.copy(alpha = 0.6f), Color(0xFF5856D6).copy(alpha = 0.6f))
+                                listOf(colors.primary.copy(alpha = 0.55f), Color(0xFF5856D6).copy(alpha = 0.55f))
                             )
                         ),
                     contentAlignment = Alignment.Center
@@ -3362,7 +3540,7 @@ fun ExploreWorkGridCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .height(44.dp)
                     .align(Alignment.BottomCenter)
                     .background(
                         Brush.verticalGradient(
@@ -3371,7 +3549,7 @@ fun ExploreWorkGridCard(
                     )
             )
 
-            // Top-Left Floating Glassmorphic Category / Trending Badge
+            // Top-Left Floating Category / Trending Badge
             val badgeLabel = remember(work.isTrendingMasterwork, work.likesCount, work.tags) {
                 when {
                     work.isTrendingMasterwork || work.likesCount > 120 -> "Trending"
@@ -3385,8 +3563,8 @@ fun ExploreWorkGridCard(
                         .align(Alignment.TopStart)
                         .padding(8.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.48f))
-                                                .padding(horizontal = 8.dp, vertical = 3.5.dp)
+                        .background(Color.Black.copy(alpha = 0.52f))
+                        .padding(horizontal = 8.dp, vertical = 3.5.dp)
                 ) {
                     Text(
                         text = badgeLabel,
@@ -3394,6 +3572,43 @@ fun ExploreWorkGridCard(
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = InterFontFamily
+                    )
+                }
+            }
+
+            // Top-Right Media Type Indicator (Video Play / Multi-Slide / Expand Hint)
+            if (isVideo) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.54f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Play,
+                        contentDescription = "Flash Video",
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            } else if (work.imageUrls.size > 1 || work.workUrls.size > 1) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.54f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Layers,
+                        contentDescription = "Carousel",
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
                     )
                 }
             }
@@ -3421,19 +3636,37 @@ fun ExploreWorkGridCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 5.dp, vertical = 3.dp),
+                .padding(horizontal = 5.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = rememberHighlightedText("@${work.authorUsername.ifBlank { "creator" }}", searchQuery, accentColor),
-                color = Color(0xFF8E8E93),
-                fontSize = 11.5.sp,
-                fontFamily = InterFontFamily,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 modifier = Modifier.weight(1f)
-            )
+            ) {
+                IosAvatarView(
+                    name = work.authorDisplayName.ifBlank { work.authorUsername },
+                    avatarUrl = work.authorAvatarUrl,
+                    size = 18.dp
+                )
+                Text(
+                    text = rememberHighlightedText("@${work.authorUsername.ifBlank { "creator" }}", searchQuery, accentColor),
+                    color = colors.textMuted,
+                    fontSize = 11.sp,
+                    fontFamily = InterFontFamily,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (work.authorVerified) {
+                    VerifiedBadge(
+                        size = 11.dp,
+                        tone = work.authorVerifiedTone,
+                        userId = work.creatorId
+                    )
+                }
+            }
 
             val currentUserId = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }
             val effectiveLikes = remember(work.likesCount, work.likedBy, localIsLiked, currentUserId) {
@@ -3448,11 +3681,11 @@ fun ExploreWorkGridCard(
             if (effectiveLikes > 0 || localIsLiked) {
                 Row(
                     modifier = Modifier
+                        .padding(start = 4.dp)
                         .clip(CircleShape)
                         .background(
                             if (localIsLiked) Color(0xFFFF2D55).copy(alpha = 0.14f)
-                            else if (isDark) Color.White.copy(alpha = 0.06f)
-                            else Color.Black.copy(alpha = 0.04f)
+                            else colors.inputBg
                         )
                         .padding(horizontal = 7.dp, vertical = 2.5.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -3461,12 +3694,12 @@ fun ExploreWorkGridCard(
                     Icon(
                         imageVector = ChromaIcons.HeartFilled,
                         contentDescription = null,
-                        tint = if (localIsLiked) Color(0xFFFF2D55) else Color(0xFF8E8E93),
+                        tint = if (localIsLiked) Color(0xFFFF2D55) else colors.textMuted,
                         modifier = Modifier.size(10.5.dp)
                     )
                     Text(
                         text = effectiveLikes.toString(),
-                        color = if (localIsLiked) Color(0xFFFF2D55) else Color(0xFF8E8E93),
+                        color = if (localIsLiked) Color(0xFFFF2D55) else colors.textMuted,
                         fontSize = 10.5.sp,
                         fontFamily = InterFontFamily,
                         fontWeight = FontWeight.SemiBold

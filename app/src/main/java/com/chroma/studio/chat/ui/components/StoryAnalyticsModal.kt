@@ -654,7 +654,10 @@ fun StoryAnalyticsModal(
                                         )
                                         if (viewer.verified) {
                                             Spacer(Modifier.width(4.dp))
-                                            VerifiedBadge(size = 11.dp)
+                                            VerifiedBadge(
+                                                size = 11.dp,
+                                                tone = viewer.verifiedTone
+                                            )
                                         }
                                     }
                                     Text(

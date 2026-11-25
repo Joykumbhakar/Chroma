@@ -847,7 +847,10 @@ private fun SwipeableNotificationCard(
 
                         if (notification.isVerified) {
 
-                            VerifiedBadge(size = 12.dp)
+                            VerifiedBadge(
+                                size = 12.dp,
+                                tone = notification.actorVerifiedTone
+                            )
 
                         }
 
@@ -1743,6 +1746,8 @@ fun NotificationsFeedScreen(
 
                                 isVerified = doc.getBoolean("isVerified") ?: false,
 
+                                actorVerifiedTone = doc.getString("actorVerifiedTone"),
+
                                 actionText = doc.getString("actionText") ?: "",
 
                                 detailText = doc.getString("detailText"),
@@ -2371,6 +2376,8 @@ fun NotificationsFeedScreen(
                                     actorGender = doc.getString("actorGender"),
 
                                     isVerified = doc.getBoolean("isVerified") ?: false,
+
+                                    actorVerifiedTone = doc.getString("actorVerifiedTone"),
 
                                     actionText = doc.getString("actionText") ?: "",
 

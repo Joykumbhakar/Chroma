@@ -147,6 +147,7 @@ private fun AuthenticatedRoute(
         askNotificationPermission()
         startChatNotificationListener()
         com.chroma.studio.ChromaMessagingService.syncTokenForCurrentUser()
+        com.chroma.studio.security.applock.AppLockerManager.startUsageWatcherIfNeeded(applicationContext)
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
@@ -254,6 +255,7 @@ private fun AuthenticatedRoute(
                     }
                 }
                 var isInsideChatTab by remember { mutableStateOf(false) }
+                var isHomeDrawerOpen by remember { mutableStateOf(false) }
                 var isDiscoverStoryViewerActive by remember { mutableStateOf(false) }
                 var isProfileStoryViewerActive by remember { mutableStateOf(false) }
                 val hideBottomNavRoutes = setOf(
@@ -261,10 +263,10 @@ private fun AuthenticatedRoute(
                     "story_editor", "create_text_status", "story_viewer", "story",
                     "settings", "profile_identity", "security", "privacy",
                     "notifications", "notifications_settings", "notifications_feed", "archives",
-                    "activity_history", "trash", "appearance_settings",
+                    "activity_history", "trash", "appearance_settings", "switch_lab", "upgrade_to_pro",
                     "backgrounds",
                     "flash_feed", "flash_picker", "flash_video_editor", "flash_photo_editor", "flash_post",
-                    "create_post", "publish_work", "post_details", "creator_studio",
+                    "create_post", "publish_work", "post_detail", "post_details", "creator_studio",
                     "drafts_list", "image_editor",
                     "terms_agreement", "privacy_terms", "login", "post_onboarding", "tutorial_onboarding"
                 )
@@ -310,17 +312,19 @@ private fun AuthenticatedRoute(
                     fullRoute.startsWith("create_") ||
                     currentRoute.startsWith("publish_work") ||
                     fullRoute.startsWith("publish_work") ||
-                    currentRoute.startsWith("post_details") ||
-                    fullRoute.startsWith("post_details") ||
+                    currentRoute.startsWith("post_detail") ||
+                    fullRoute.startsWith("post_detail") ||
                     currentRoute.startsWith("login") ||
                     fullRoute.startsWith("login") ||
                     currentRoute.startsWith("terms") ||
-                    fullRoute.startsWith("terms")
+                    fullRoute.startsWith("terms") ||
+                    currentRoute.startsWith("upgrade_to_pro") ||
+                    fullRoute.startsWith("upgrade_to_pro")
 
                 val isBottomOptionsVisible by com.chroma.studio.ChatStateManager.isBottomOptionsVisible.collectAsState()
 
                 val showBottomNav = (
-                    (isMain && !shouldHideOnChatTab && !isDiscoverStoryViewerActive && !isProfileStoryViewerActive) ||
+                    (isMain && !shouldHideOnChatTab && !isHomeDrawerOpen && !isDiscoverStoryViewerActive && !isProfileStoryViewerActive) ||
                     (currentRoute == "userProfile" && !isRouteHidingBottomNav && !isProfileStoryViewerActive) ||
                     (currentRoute == "user_list" && !isRouteHidingBottomNav)
                 ) && !isRouteHidingBottomNav && !isBottomOptionsVisible
@@ -444,29 +448,31 @@ private fun AuthenticatedRoute(
                                                 .getString("uid")
                                             byUsername?.takeIf { it.isNotBlank() } ?: handleOrUid
                                         } catch (_: Exception) { handleOrUid }
-                                        navController.navigate("userProfile/$resolvedUid")
+                                        navController.navigate("userProfile/$resolvedUid") {
+                                            launchSingleTop = true
+                                        }
                                     }
                                 }
                             }
                             action.startsWith("deeplink_post:") -> {
                                 val postId = action.removePrefix("deeplink_post:").trim()
                                 if (postId.isNotBlank()) {
-                                    discoverVm.viewModelScope.launch {
-                                        val creatorId = try {
-                                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                                .collection("community_works").document(postId).get().await()
-                                                .getString("creatorId")
-                                        } catch (_: Exception) { null }
-                                        if (!creatorId.isNullOrBlank()) {
-                                            navController.navigate("userProfile/$creatorId?postId=$postId")
-                                        } else {
-                                            navigateToTab(0)
-                                        }
+                                    navController.navigate("post_detail/${android.net.Uri.encode(postId)}") {
+                                        launchSingleTop = true
                                     }
+                                } else {
+                                    navigateToTab(0)
                                 }
                             }
                             action.startsWith("deeplink_flash:") -> {
-                                navigateToTab(2)
+                                val flashId = action.removePrefix("deeplink_flash:").trim()
+                                if (flashId.isNotBlank()) {
+                                    navController.navigate("flash_feed?videoId=${android.net.Uri.encode(flashId)}") {
+                                        launchSingleTop = true
+                                    }
+                                } else {
+                                    navigateToTab(2)
+                                }
                             }
                             action.startsWith("deeplink_chat:") -> {
                                 val roomId = action.removePrefix("deeplink_chat:").trim()
@@ -477,12 +483,15 @@ private fun AuthenticatedRoute(
                                 if (storyId.isNotBlank()) {
                                     discoverVm.viewModelScope.launch {
                                         val authorId = try {
-                                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                            val doc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
                                                 .collection("stories").document(storyId).get().await()
-                                                .getString("userId")
+                                            doc.getString("userId")?.takeIf { it.isNotBlank() }
+                                                ?: doc.getString("creatorId")
                                         } catch (_: Exception) { null }
                                         if (!authorId.isNullOrBlank()) {
-                                            navController.navigate("userProfile/$authorId")
+                                            navController.navigate("userProfile/$authorId") {
+                                                launchSingleTop = true
+                                            }
                                         } else {
                                             navigateToTab(0)
                                         }
@@ -497,6 +506,14 @@ private fun AuthenticatedRoute(
                             }
                         }
                     }
+
+                    com.chroma.studio.AppIntentManager.consumePendingIncomingShare()?.let { pending ->
+                        com.chroma.studio.AppIntentManager.onIncomingShare?.invoke(pending)
+                    }
+                    com.chroma.studio.AppIntentManager.consumePendingWidgetAction()?.let { pending ->
+                        com.chroma.studio.AppIntentManager.onWidgetAction?.invoke(pending)
+                    }
+
                     onDispose {
                         com.chroma.studio.AppIntentManager.onIncomingShare = null
                         com.chroma.studio.AppIntentManager.onWidgetAction = null
@@ -593,6 +610,7 @@ private fun AuthenticatedRoute(
                                 putExtra(MainActivity.EXTRA_LAYERS_JSON, work.jsonUrl)
                                 putExtra(MainActivity.EXTRA_CANVAS_SHAPE, "rounded")
                             }
+                            com.chroma.studio.security.SecurityPinManager.markInternalNavigation()
                             startActivity(intent)
                         }
                     }
@@ -697,7 +715,8 @@ private fun AuthenticatedRoute(
                                                         senderId = senderId ?: "",
                                                         senderName = senderName,
                                                         messageText = room.lastMessage,
-                                                        avatarUrl = senderProfile?.avatarUrl ?: ""
+                                                        avatarUrl = senderProfile?.avatarUrl ?: "",
+                                                        isVerified = senderProfile?.verified == true
                                                     )
                                                 } else {
                                                     com.chroma.studio.ChatNotificationBuilder.showHeadsUpNotification(
@@ -751,6 +770,7 @@ private fun AuthenticatedRoute(
 
                                     val actorName = doc.getString("actorName")?.ifBlank { null } ?: "Someone"
                                     val actorAvatar = doc.getString("actorAvatarUrl") ?: ""
+                                    val actorVerified = doc.getBoolean("isVerified") ?: false
                                     val actionText = doc.getString("actionText") ?: ""
                                     val detailText = doc.getString("detailText") ?: ""
                                     val targetId = doc.getString("targetId") ?: ""
@@ -768,6 +788,51 @@ private fun AuthenticatedRoute(
                                         }
                                     }
 
+                                    val viewActorProfile: (() -> Unit)? = if (actorUid.isNotBlank()) ({
+                                        markRead()
+                                        navController.navigate("userProfile/$actorUid")
+                                    }) else null
+
+                                    fun sendDmReply(text: String) {
+                                        if (actorUid.isBlank()) return
+                                        markRead()
+                                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                            try {
+                                                val repo = com.chroma.studio.data.SupabaseChatRepository()
+                                                val room = repo.getOrCreateChatRoom(actorUid)
+                                                if (room != null) {
+                                                    repo.sendMessage(room.id, text)
+                                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                        com.chroma.studio.ui.components.ToastManager.showToast("Reply sent to $actorName")
+                                                    }
+                                                }
+                                            } catch (_: Throwable) {}
+                                        }
+                                    }
+
+                                    fun sendCommentReply(text: String) {
+                                        if (targetId.isBlank()) {
+                                            sendDmReply(text)
+                                            return
+                                        }
+                                        markRead()
+                                        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                            try {
+                                                com.chroma.studio.data.FlashRepository().addComment(
+                                                    videoId = targetId,
+                                                    text = text
+                                                )
+                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                    com.chroma.studio.ui.components.ToastManager.showToast("Reply posted")
+                                                }
+                                            } catch (_: Throwable) {
+                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                    com.chroma.studio.ui.components.ToastManager.showToast("Failed to post reply")
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     when (type) {
                                         com.chroma.studio.model.NotificationActionType.LIKE,
                                         com.chroma.studio.model.NotificationActionType.LIKE_COMMENT -> {
@@ -776,6 +841,9 @@ private fun AuthenticatedRoute(
                                                 userAvatar = actorAvatar,
                                                 targetTitle = if (actionText.isNotBlank()) actionText else "your post",
                                                 targetThumbnail = targetPreviewUrl,
+                                                isVerified = actorVerified,
+                                                onViewProfile = viewActorProfile,
+                                                onMarkAsRead = { markRead() },
                                                 onClick = {
                                                     markRead()
                                                     if (targetId.isNotBlank()) {
@@ -795,6 +863,11 @@ private fun AuthenticatedRoute(
                                                 commentText = detailText.ifBlank { actionText },
                                                 targetTitle = "your post",
                                                 targetThumbnail = targetPreviewUrl,
+                                                isVerified = actorVerified,
+                                                isMention = false,
+                                                onReply = if (targetId.isNotBlank() || actorUid.isNotBlank()) ({ text -> sendCommentReply(text) }) else null,
+                                                onViewProfile = viewActorProfile,
+                                                onMarkAsRead = { markRead() },
                                                 onClick = {
                                                     markRead()
                                                     if (targetId.isNotBlank()) {
@@ -808,18 +881,52 @@ private fun AuthenticatedRoute(
 
                                         com.chroma.studio.model.NotificationActionType.FOLLOW,
                                         com.chroma.studio.model.NotificationActionType.FOLLOW_REQUEST -> {
+                                            val isReq = (type == com.chroma.studio.model.NotificationActionType.FOLLOW_REQUEST)
                                             com.chroma.studio.ui.components.DynamicIslandManager.showFollow(
                                                 userId = actorUid,
                                                 userName = actorName,
                                                 userAvatar = actorAvatar,
-                                                onFollowBack = {
+                                                isVerified = actorVerified,
+                                                isFollowRequest = isReq,
+                                                onAccept = if (isReq && actorUid.isNotBlank()) ({
                                                     markRead()
                                                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                                         try {
-                                                            com.chroma.studio.data.DiscoverRepository.getInstance().setFollow(uidToListen, actorUid, true)
+                                                            val ok = com.chroma.studio.data.DiscoverRepository.getInstance().approveFollowRequest(actorUid, uidToListen)
+                                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                                com.chroma.studio.ui.components.ToastManager.showToast(
+                                                                    if (ok) "Approved $actorName" else "Could not approve request"
+                                                                )
+                                                            }
                                                         } catch (_: Throwable) {}
                                                     }
-                                                },
+                                                }) else null,
+                                                onDecline = if (isReq && actorUid.isNotBlank()) ({
+                                                    markRead()
+                                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                                        try {
+                                                            com.chroma.studio.data.DiscoverRepository.getInstance().rejectFollowRequest(actorUid, uidToListen)
+                                                            com.chroma.studio.data.NotificationDispatcher.deleteNotification(uidToListen, notifId)
+                                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                                com.chroma.studio.ui.components.ToastManager.showToast("Request declined")
+                                                            }
+                                                        } catch (_: Throwable) {}
+                                                    }
+                                                }) else null,
+                                                onFollowBack = if (!isReq && actorUid.isNotBlank()) ({
+                                                    markRead()
+                                                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                                        try {
+                                                            val ok = com.chroma.studio.data.DiscoverRepository.getInstance().setFollow(uidToListen, actorUid, true)
+                                                            if (ok) {
+                                                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                                    com.chroma.studio.ui.components.ToastManager.showToast("Following $actorName")
+                                                                }
+                                                            }
+                                                        } catch (_: Throwable) {}
+                                                    }
+                                                }) else null,
+                                                onMarkAsRead = { markRead() },
                                                 onClick = {
                                                     markRead()
                                                     if (actorUid.isNotBlank()) {
@@ -836,6 +943,11 @@ private fun AuthenticatedRoute(
                                                 userName = actorName,
                                                 userAvatar = actorAvatar,
                                                 workTitle = actionText.ifBlank { "Artwork" },
+                                                isRemix = true,
+                                                isVerified = actorVerified,
+                                                workThumbnail = targetPreviewUrl,
+                                                onViewProfile = viewActorProfile,
+                                                onMarkAsRead = { markRead() },
                                                 onClick = {
                                                     markRead()
                                                     if (targetId.isNotBlank()) {
@@ -850,12 +962,18 @@ private fun AuthenticatedRoute(
                                         com.chroma.studio.model.NotificationActionType.STORY_LIKE,
                                         com.chroma.studio.model.NotificationActionType.STORY_REACTION,
                                         com.chroma.studio.model.NotificationActionType.STORY_REPLY -> {
-                                            val emoji = if (detailText.isNotBlank()) detailText else if (type == com.chroma.studio.model.NotificationActionType.STORY_LIKE) "❤️" else "🔥"
+                                            val isStoryReply = (type == com.chroma.studio.model.NotificationActionType.STORY_REPLY)
+                                            val emoji = if (!isStoryReply && detailText.isNotBlank()) detailText else if (type == com.chroma.studio.model.NotificationActionType.STORY_LIKE) "❤️" else "🔥"
                                             com.chroma.studio.ui.components.DynamicIslandManager.showStoryReaction(
                                                 userName = actorName,
                                                 userAvatar = actorAvatar,
                                                 reactionEmoji = emoji,
                                                 storyThumbnail = targetPreviewUrl,
+                                                isVerified = actorVerified,
+                                                replyText = if (isStoryReply) detailText else "",
+                                                onReply = if (actorUid.isNotBlank()) ({ text -> sendDmReply(text) }) else null,
+                                                onViewProfile = viewActorProfile,
+                                                onMarkAsRead = { markRead() },
                                                 onClick = {
                                                     markRead()
                                                     navController.navigate("notifications_feed")
@@ -870,6 +988,11 @@ private fun AuthenticatedRoute(
                                                 commentText = "mentioned you: $detailText",
                                                 targetTitle = "in a post",
                                                 targetThumbnail = targetPreviewUrl,
+                                                isVerified = actorVerified,
+                                                isMention = true,
+                                                onReply = if (targetId.isNotBlank() || actorUid.isNotBlank()) ({ text -> sendCommentReply(text) }) else null,
+                                                onViewProfile = viewActorProfile,
+                                                onMarkAsRead = { markRead() },
                                                 onClick = {
                                                     markRead()
                                                     if (targetId.isNotBlank()) {
@@ -889,6 +1012,8 @@ private fun AuthenticatedRoute(
                                                 message = actionText.ifBlank { detailText },
                                                 icon = com.composables.icons.lucide.Lucide.Info,
                                                 actionLabel = "View",
+                                                secondaryActionLabel = "Mark Read",
+                                                onSecondaryAction = { markRead() },
                                                 onAction = {
                                                     markRead()
                                                     navController.navigate("notifications_feed")
@@ -1347,6 +1472,7 @@ private fun AuthenticatedRoute(
                             }
                         androidx.compose.foundation.pager.HorizontalPager(
                             state = pagerState,
+                            userScrollEnabled = !isHomeDrawerOpen,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .graphicsLayer {
@@ -1379,6 +1505,7 @@ private fun AuthenticatedRoute(
                                             prefs.edit().putString("view_mode", newMode.name).apply()
                                         },
                                         onNewWork = {
+                                            com.chroma.studio.security.SecurityPinManager.markInternalNavigation()
                                             startActivity(Intent(this@HomeActivity, MainActivity::class.java))
                                         },
                                         onNavigateToCreatePost = {
@@ -1405,6 +1532,7 @@ private fun AuthenticatedRoute(
                                                 putExtra(MainActivity.EXTRA_LAYERS_JSON, work.layersJson)
                                                 putExtra(MainActivity.EXTRA_CANVAS_SHAPE, work.canvasShape)
                                             }
+                                            com.chroma.studio.security.SecurityPinManager.markInternalNavigation()
                                             startActivity(intent)
                                         },
                                         onRenameWork = { id, name, desc -> vm.rename(id, name, desc) },
@@ -1442,6 +1570,7 @@ private fun AuthenticatedRoute(
                                                     putExtra(MainActivity.EXTRA_CANVAS_SHAPE, vm.customHomeBgShape)
                                                 }
                                             }
+                                            com.chroma.studio.security.SecurityPinManager.markInternalNavigation()
                                             startActivity(intent)
                                         },
                                         customHomeBgLayersJson = vm.customHomeBgLayersJson,
@@ -1449,7 +1578,12 @@ private fun AuthenticatedRoute(
                                         onNavigateToSettings = { navController.navigate("settings") },
                                         onNavigateToBackgrounds = { navController.navigate("backgrounds") },
                                         onNavigateToDrafts = { navController.navigate("drafts_list") },
+                                        onNavigateToImageStory = { navController.navigate("story_editor") },
+                                        onNavigateToFlashDrafts = { navController.navigate("flash_projects_hub") },
+                                        onNavigateToProfile = { navigateToTab(4) },
+                                        onNavigateToUpgradeToPro = { navController.navigate("upgrade_to_pro") },
                                         onNavigateToDiscover = { navigateToTab(2) },
+                                        onDrawerOpenChange = { isOpen -> isHomeDrawerOpen = isOpen },
                                         onNavigateToTrash = { navController.navigate("trash") },
                                         onRequireLogin = { navController.navigate("login") },
                                         onSetAsBackground = { work ->
@@ -1639,6 +1773,7 @@ private fun AuthenticatedRoute(
                                             },
                                             onNavigateToEditProfile = { navController.navigate("profile_identity") },
                                             onNavigateToSettings = { navController.navigate("settings") },
+                                            onNavigateToUpgradeToPro = { navController.navigate("upgrade_to_pro") },
                                             onDownloadWork = onDownloadCommunityPost,
                                             onNavigateToUserList = { targetUserId, type ->
                                                 navController.navigate("user_list/$targetUserId/$type")
@@ -2045,8 +2180,21 @@ private fun AuthenticatedRoute(
                                 onNavigateToAppearance = { navController.navigate("appearance_settings") },
                                 onNavigateToPrivacyTerms = { navController.navigate("privacy_terms") },
                                 onNavigateToSwitchLab = { navController.navigate("switch_lab") },
+                                onNavigateToUpgradeToPro = { navController.navigate("upgrade_to_pro") },
                                 onBack = { navController.popBackStack() },
                                 onLogout = handleLogout
+                            )
+                        }
+                    }
+
+                    composable("upgrade_to_pro") {
+                        AuthenticatedRoute(navController, "Oscellion Pro") {
+                            com.chroma.studio.ui.screens.UpgradeToProScreen(
+                                onBack = { navController.popBackStack() },
+                                onNavigateToProfile = {
+                                    navController.popBackStack()
+                                    navigateToTab(4)
+                                }
                             )
                         }
                     }
@@ -2449,6 +2597,7 @@ private fun AuthenticatedRoute(
                             },
                             onNavigateToEditProfile = { navController.navigate("profile_identity") },
                             onNavigateToSettings = { navController.navigate("settings") },
+                            onNavigateToUpgradeToPro = { navController.navigate("upgrade_to_pro") },
                             onDownloadWork = onDownloadCommunityPost,
                             onNavigateToUserList = { targetUserId, type ->
                                 navController.navigate("user_list/$targetUserId/$type")
@@ -2467,6 +2616,45 @@ private fun AuthenticatedRoute(
                             },
                             onStoryViewerChange = { isProfileStoryViewerActive = it },
                             onBack = { navController.popBackStack() }
+                        )
+                    }
+                    composable(
+                        route = "post_detail/{postId}",
+                        arguments = listOf(
+                            androidx.navigation.navArgument("postId") {
+                                type = androidx.navigation.NavType.StringType
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val rawPostId = backStackEntry.arguments?.getString("postId") ?: return@composable
+                        val postId = android.net.Uri.decode(rawPostId)
+                        com.chroma.studio.ui.screens.PostDetailDeepLinkScreen(
+                            postId = postId,
+                            repository = vm.repository,
+                            discoverViewModel = this@HomeActivity.discoverVm,
+                            onBack = {
+                                if (!navController.popBackStack()) {
+                                    navigateToTab(0)
+                                }
+                            },
+                            onAuthorClick = { uid ->
+                                navController.navigate("userProfile/$uid")
+                            },
+                            onDownloadWork = onDownloadCommunityPost,
+                            onRemixWork = onRemixCommunityPost,
+                            onNavigateToOriginal = { authorId, origPostId ->
+                                if (origPostId.isNotBlank()) {
+                                    navController.navigate("post_detail/${android.net.Uri.encode(origPostId)}")
+                                } else {
+                                    navController.navigate("userProfile/$authorId")
+                                }
+                            },
+                            onOpenFlashReel = { flashId ->
+                                navController.navigate("flash_feed?videoId=${android.net.Uri.encode(flashId)}") {
+                                    launchSingleTop = true
+                                }
+                            },
+                            onRequireLogin = { navController.navigate("login") }
                         )
                     }
                     composable(
@@ -2718,7 +2906,7 @@ private fun AuthenticatedRoute(
                     if (key == "biometric_passkey_lock") {
                         val enabled = sp.getBoolean("biometric_passkey_lock", false)
                         isAppBiometricLockEnabled = enabled
-                        // User already verified biometrics to toggle in SecurityScreen; keep current session unlocked
+                        // User verified identity to toggle in SecurityScreen; keep current session unlocked
                         isAppBiometricUnlocked = true
                     }
                 }
@@ -2726,15 +2914,48 @@ private fun AuthenticatedRoute(
                 onDispose { appSecurityPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
             }
 
+            // Support immediate manual lock ("Lock App Now" button)
+            LaunchedEffect(Unit) {
+                com.chroma.studio.security.SecurityPinManager.lockTrigger.collect {
+                    if (isAppBiometricLockEnabled) {
+                        isAppBiometricUnlocked = false
+                        appBiometricLockGeneration++
+                    }
+                }
+            }
+
+            // Hide private in-app notification banners whenever lock overlay is active
+            androidx.compose.runtime.DisposableEffect(isAppBiometricLockEnabled, isAppBiometricUnlocked) {
+                com.chroma.studio.ui.components.DynamicIslandManager.isSuppressed =
+                    isAppBiometricLockEnabled && !isAppBiometricUnlocked
+                onDispose {
+                    com.chroma.studio.ui.components.DynamicIslandManager.isSuppressed = false
+                }
+            }
+
             val homeLifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
             androidx.compose.runtime.DisposableEffect(homeLifecycleOwner) {
                 val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-                    if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP &&
-                        isAppBiometricLockEnabled &&
-                        !com.chroma.studio.chat.util.BiometricHelper.isPromptShowing
-                    ) {
-                        isAppBiometricUnlocked = false
-                        appBiometricLockGeneration++
+                    when (event) {
+                        androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
+                            if (isAppBiometricLockEnabled &&
+                                isAppBiometricUnlocked &&
+                                !com.chroma.studio.chat.util.BiometricHelper.isPromptShowing
+                            ) {
+                                com.chroma.studio.security.SecurityPinManager.markAppBackgrounded()
+                            }
+                        }
+                        androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                            if (isAppBiometricLockEnabled &&
+                                isAppBiometricUnlocked &&
+                                !com.chroma.studio.chat.util.BiometricHelper.isPromptShowing &&
+                                com.chroma.studio.security.SecurityPinManager.shouldLockOnForegroundReturn(this@HomeActivity)
+                            ) {
+                                isAppBiometricUnlocked = false
+                                appBiometricLockGeneration++
+                            }
+                        }
+                        else -> {}
                     }
                 }
                 homeLifecycleOwner.lifecycle.addObserver(observer)
@@ -2742,12 +2963,14 @@ private fun AuthenticatedRoute(
             }
 
             if (isAppBiometricLockEnabled && !isAppBiometricUnlocked) {
-                com.chroma.studio.ui.components.OscellionLockScreen(
-                    titleText = "Unlock the app",
-                    onUnlockSuccess = {
-                        isAppBiometricUnlocked = true
-                    }
-                )
+                androidx.compose.runtime.key(appBiometricLockGeneration) {
+                    com.chroma.studio.ui.components.OscellionLockScreen(
+                        titleText = "Unlock the app",
+                        onUnlockSuccess = {
+                            isAppBiometricUnlocked = true
+                        }
+                    )
+                }
             }
 
             androidx.compose.animation.AnimatedVisibility(
@@ -2768,6 +2991,7 @@ private fun AuthenticatedRoute(
         super.onResume()
         // Refresh when returning from editor (user may have saved a new/updated work)
         vm.refresh()
+        com.chroma.studio.security.applock.AppLockerManager.startUsageWatcherIfNeeded(applicationContext)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -2787,6 +3011,49 @@ private fun AuthenticatedRoute(
         com.chroma.studio.AppIntentManager.onWidgetAction = null
     }
 
+    private fun parseUriToDeepLinkAction(uri: android.net.Uri): String? {
+        val host = (uri.host ?: "").lowercase()
+        val segments = (uri.pathSegments ?: emptyList()).map { it.trim() }.filter { it.isNotEmpty() }
+        val firstPath = segments.firstOrNull()?.lowercase()
+        val queryId = uri.getQueryParameter("postId")
+            ?: uri.getQueryParameter("id")
+            ?: uri.getQueryParameter("v")
+
+        val customRouteAction = when (host) {
+            "u", "user", "profile" -> (segments.firstOrNull() ?: queryId)?.let { "deeplink_user:$it" }
+            "post", "work" -> (segments.firstOrNull() ?: queryId)?.let { "deeplink_post:$it" }
+            "flash", "reel" -> "deeplink_flash:${(segments.firstOrNull() ?: queryId).orEmpty()}"
+            "chat" -> (segments.firstOrNull() ?: queryId)?.let { "deeplink_chat:$it" }
+            "story" -> (segments.firstOrNull() ?: queryId)?.let { "deeplink_story:$it" }
+            "notifications" -> "deeplink_notifications"
+            "home" -> "deeplink_home"
+            else -> null
+        }
+        if (!customRouteAction.isNullOrBlank()) return customRouteAction
+
+        val isWebHost = host == "oscellion.vercel.app" ||
+            host == "www.oscellion.vercel.app" ||
+            host == "chromamelt.web.app" ||
+            host == "chromamelt.firebaseapp.com"
+        if (isWebHost) {
+            if (!firstPath.isNullOrBlank()) {
+                return when (firstPath) {
+                    "u", "user", "profile" -> (segments.getOrNull(1) ?: queryId)?.let { "deeplink_user:$it" }
+                    "post", "work" -> (segments.getOrNull(1) ?: queryId)?.let { "deeplink_post:$it" }
+                    "flash", "reel" -> "deeplink_flash:${(segments.getOrNull(1) ?: queryId).orEmpty()}"
+                    "chat" -> (segments.getOrNull(1) ?: queryId)?.let { "deeplink_chat:$it" }
+                    "story" -> (segments.getOrNull(1) ?: queryId)?.let { "deeplink_story:$it" }
+                    "notifications" -> "deeplink_notifications"
+                    else -> "deeplink_home"
+                }
+            }
+            if (!queryId.isNullOrBlank()) {
+                return "deeplink_post:$queryId"
+            }
+        }
+        return null
+    }
+
     private fun handleIncomingIntent(intent: Intent?) {
         if (intent == null) return
 
@@ -2794,52 +3061,39 @@ private fun AuthenticatedRoute(
         if (action == Intent.ACTION_SEND || action == Intent.ACTION_SEND_MULTIPLE) {
             val shared = parseShareIntent(intent)
             if (shared != null) {
-                com.chroma.studio.AppIntentManager.onIncomingShare?.invoke(shared)
+                if (shared.uris.isEmpty() && !shared.text.isNullOrBlank()) {
+                    val urlRegex = Regex("""(https?://[^\s]+|oscellion://[^\s]+|chromastudio://[^\s]+)""", RegexOption.IGNORE_CASE)
+                    val matchedUrl = urlRegex.find(shared.text)?.value
+                    val matchedAction = matchedUrl?.let { raw ->
+                        runCatching { parseUriToDeepLinkAction(android.net.Uri.parse(raw)) }.getOrNull()
+                    }
+                    if (!matchedAction.isNullOrBlank()) {
+                        com.chroma.studio.AppIntentManager.dispatchWidgetAction(matchedAction)
+                        return
+                    }
+                }
+                com.chroma.studio.AppIntentManager.dispatchIncomingShare(shared)
                 return
             }
         }
 
         val widgetAction = intent.getStringExtra(com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.EXTRA_WIDGET_ACTION)
         if (!widgetAction.isNullOrBlank()) {
-            com.chroma.studio.AppIntentManager.onWidgetAction?.invoke(widgetAction)
+            com.chroma.studio.AppIntentManager.dispatchWidgetAction(widgetAction)
             return
         }
 
-        // Deep links: https://oscellion.vercel.app/u/{username}, /post/{id}, /flash/{id}, /story/{id}, /chat/{id}
-        // and custom schemes: oscellion://u/{username}, oscellion://post/{id}, oscellion://create_post, etc.
+        // Deep links: https://oscellion.vercel.app/u/{username}, /post/{id}, /work/{id}, /flash/{id}, /reel/{id}, /story/{id}, /chat/{id}
+        // and custom schemes: oscellion://u/{username}, oscellion://post/{id}, etc.
         intent.data?.let { uri ->
-            val host = (uri.host ?: "").lowercase()
-            val segments = uri.pathSegments ?: emptyList()
-            val firstPath = segments.firstOrNull()?.lowercase()
-            val customRouteAction = when (host) {
-                "u", "user", "profile" -> segments.firstOrNull()?.let { "deeplink_user:$it" }
-                "post", "work" -> segments.firstOrNull()?.let { "deeplink_post:$it" }
-                "flash", "reel" -> "deeplink_flash:${segments.firstOrNull().orEmpty()}"
-                "chat" -> segments.firstOrNull()?.let { "deeplink_chat:$it" }
-                "story" -> segments.firstOrNull()?.let { "deeplink_story:$it" }
-                "notifications" -> "deeplink_notifications"
-                "home" -> "deeplink_home"
-                else -> null
-            }
-            if (!customRouteAction.isNullOrBlank()) {
-                com.chroma.studio.AppIntentManager.onWidgetAction?.invoke(customRouteAction)
-            } else if (host == "oscellion.vercel.app" && !firstPath.isNullOrBlank()) {
-                val routeAction = when (firstPath) {
-                    "u", "user", "profile" -> segments.getOrNull(1)?.let { "deeplink_user:$it" }
-                    "post", "work" -> segments.getOrNull(1)?.let { "deeplink_post:$it" }
-                    "flash", "reel" -> "deeplink_flash:${segments.getOrNull(1).orEmpty()}"
-                    "chat" -> segments.getOrNull(1)?.let { "deeplink_chat:$it" }
-                    "story" -> segments.getOrNull(1)?.let { "deeplink_story:$it" }
-                    "notifications" -> "deeplink_notifications"
-                    else -> null
-                }
-                if (!routeAction.isNullOrBlank()) {
-                    com.chroma.studio.AppIntentManager.onWidgetAction?.invoke(routeAction)
-                }
+            val resolved = parseUriToDeepLinkAction(uri)
+            if (!resolved.isNullOrBlank()) {
+                com.chroma.studio.AppIntentManager.dispatchWidgetAction(resolved)
             } else {
+                val host = (uri.host ?: "").lowercase()
                 val fallback = host.ifBlank { uri.path?.removePrefix("/") }
                 if (!fallback.isNullOrBlank()) {
-                    com.chroma.studio.AppIntentManager.onWidgetAction?.invoke(fallback)
+                    com.chroma.studio.AppIntentManager.dispatchWidgetAction(fallback)
                 }
             }
         }

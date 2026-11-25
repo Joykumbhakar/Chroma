@@ -55,6 +55,8 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1543,25 +1545,33 @@ private fun MessageBubbleInnerContent(
                                 .fillMaxSize()
                                 .background(Color.Black.copy(alpha = 0.28f))
                         )
-                        Box(
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.6f))
-                                .border(1.dp, Color.White.copy(alpha = 0.45f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LucidePlay(
-                                tint = Color.White,
-                                size = 24.dp
+                        val uploadPct = message.uploadProgress
+                        if (uploadPct != null) {
+                            UploadProgressWheelOverlay(
+                                progress = uploadPct,
+                                modifier = Modifier.align(Alignment.Center)
                             )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(50.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.6f))
+                                    .border(1.dp, Color.White.copy(alpha = 0.45f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                LucidePlay(
+                                    tint = Color.White,
+                                    size = 24.dp
+                                )
+                            }
                         }
                     }
                     if (!isMediaOnly) Spacer(Modifier.height(4.dp))
                 }
             }
             "image", "image_stack" -> {
-                val rawUrls = if (message.mediaUrls.isNotEmpty()) message.mediaUrls else listOfNotNull(message.mediaUrl)
+                val rawUrls = if (message.mediaUrls.isNotEmpty()) message.mediaUrls else listOfNotNull(message.localUri ?: message.mediaUrl)
                 val urls = remember(rawUrls) {
                     rawUrls.map { com.chroma.studio.chat.data.ChatLocalCacheManager.getOfflineSafeMediaUrl(context, it) }
                 }
@@ -1580,6 +1590,7 @@ private fun MessageBubbleInnerContent(
                     if (!isMediaOnly) Spacer(Modifier.height(4.dp))
                 } else if (urls.isNotEmpty()) {
                     val singleUrl = urls.first()
+                    val uploadPct = message.uploadProgress
                     Box(modifier = Modifier.fillMaxWidth()) {
                         AsyncImage(
                             model = singleUrl,
@@ -1589,12 +1600,23 @@ private fun MessageBubbleInnerContent(
                                 .heightIn(max = 260.dp)
                                 .clip(RoundedCornerShape(14.dp))
                                 .border(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.2f) else colors.borderSubtle, RoundedCornerShape(14.dp))
-                                .clickable {
+                                .clickable(enabled = uploadPct == null) {
                                     if (onImageStackClick != null) onImageStackClick(urls, 0)
                                     else onImageClick(singleUrl)
                                 },
                             contentScale = ContentScale.Crop
                         )
+                        if (uploadPct != null) {
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color.Black.copy(alpha = 0.42f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                UploadProgressWheelOverlay(progress = uploadPct)
+                            }
+                        }
                         if (isMediaOnly) {
                             Box(
                                 modifier = Modifier
@@ -4743,6 +4765,54 @@ fun openChatFileIntent(context: android.content.Context, uriString: String?, fil
         }
     } catch (e: Exception) {
         android.widget.Toast.makeText(context, "No app available to open this file", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
+
+@Composable
+private fun UploadProgressWheelOverlay(
+    progress: Int,
+    modifier: Modifier = Modifier
+) {
+    val clamped = progress.coerceIn(0, 100)
+    val animatedFraction by animateFloatAsState(
+        targetValue = (clamped / 100f).coerceIn(0.02f, 1f),
+        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
+        label = "chatUploadWheel"
+    )
+    Box(
+        modifier = modifier
+            .size(66.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.66f))
+            .border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize().padding(6.dp)) {
+            val strokePx = 3.6.dp.toPx()
+            drawArc(
+                color = Color.White.copy(alpha = 0.22f),
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                style = Stroke(width = strokePx, cap = StrokeCap.Round)
+            )
+            drawArc(
+                brush = Brush.sweepGradient(
+                    listOf(Color(0xFF38BDF8), Color(0xFF0381FE), Color(0xFF60A5FA))
+                ),
+                startAngle = -90f,
+                sweepAngle = 360f * animatedFraction,
+                useCenter = false,
+                style = Stroke(width = strokePx, cap = StrokeCap.Round)
+            )
+        }
+        Text(
+            text = "$clamped%",
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum")
+        )
     }
 }
 

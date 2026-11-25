@@ -87,7 +87,10 @@ fun OscellionLockScreen(
     val scope = rememberCoroutineScope()
     val activity = remember(context) { context.findActivity() }
 
-    val isBiometricEnabled = remember { SecurityPinManager.isBiometricEnabled(context) }
+    var hasPinConfigured by remember { mutableStateOf(SecurityPinManager.hasPin(context)) }
+    val isBiometricEnabled by remember(context) {
+        mutableStateOf(SecurityPinManager.isBiometricEnabled(context))
+    }
     val initialView = remember(isBiometricEnabled) {
         if (isBiometricEnabled) LockScreenView.BIOMETRIC_CHOICE else LockScreenView.PIN_ENTRY
     }
@@ -95,6 +98,7 @@ fun OscellionLockScreen(
     var enteredPin by remember { mutableStateOf("") }
     var isPinError by remember { mutableStateOf(false) }
     var showPinSetupDialog by remember { mutableStateOf(false) }
+    var lockBannerMessage by remember { mutableStateOf<String?>(null) }
     val shakeAnim = remember { Animatable(0f) }
 
     // Failed attempts counter and lockout timer
@@ -149,12 +153,11 @@ fun OscellionLockScreen(
                     withContext(Dispatchers.Main) {
                         customWallpapers = updatedList
                         pendingWallpaperUri = localUri
-                        android.widget.Toast.makeText(context, "Custom wallpaper added", android.widget.Toast.LENGTH_SHORT).show()
-                        ToastManager.showToast("Custom wallpaper added")
+                        lockBannerMessage = "Custom wallpaper added"
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        android.widget.Toast.makeText(context, "Failed to load photo: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                        lockBannerMessage = "Failed to load photo: ${e.message}"
                     }
                 }
             }
@@ -196,11 +199,12 @@ fun OscellionLockScreen(
     // Biometric authentication trigger
     fun triggerBiometricPrompt() {
         if (lockoutSecondsRemaining > 0) {
-            ToastManager.showToast("Too many attempts. Please wait.")
+            lockBannerMessage = "Too many attempts. Try again in ${lockoutSecondsRemaining}s."
             return
         }
         val act = activity ?: return
         if (BiometricHelper.isPromptShowing) return
+        lockBannerMessage = null
 
         BiometricHelper.authenticate(
             activity = act,
@@ -210,19 +214,24 @@ fun OscellionLockScreen(
                 SecurityPinManager.markUnlocked()
                 SoundManager.playLockSuccess(context)
                 failedAttempts = 0
+                lockBannerMessage = null
                 currentView = LockScreenView.UNLOCKED_CONFIRMATION
             },
             onCancel = {},
             onError = { err ->
-                ToastManager.showToast(err)
+                lockBannerMessage = err
             }
         )
     }
 
-    // Auto-prompt biometrics once on initial presentation
-    LaunchedEffect(Unit) {
-        delay(300)
-        triggerBiometricPrompt()
+    // Auto-prompt biometrics once on initial presentation when Biometric is enabled
+    LaunchedEffect(isBiometricEnabled) {
+        if (isBiometricEnabled) {
+            delay(280)
+            triggerBiometricPrompt()
+        } else if (!hasPinConfigured) {
+            showPinSetupDialog = true
+        }
     }
 
     // Delay during unlocked morph stage before navigating
@@ -279,12 +288,19 @@ fun OscellionLockScreen(
             val newPin = enteredPin + digit
             enteredPin = newPin
             if (newPin.length == 4) {
+                if (!SecurityPinManager.hasPin(context)) {
+                    lockBannerMessage = "No PIN configured yet. Set a 4-digit PIN first."
+                    enteredPin = ""
+                    showPinSetupDialog = true
+                    return
+                }
                 val isValid = SecurityPinManager.verifyPin(context, newPin)
                 if (isValid) {
                     SecurityPinManager.markUnlocked()
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     SoundManager.playLockSuccess(context)
                     failedAttempts = 0
+                    lockBannerMessage = null
                     currentView = LockScreenView.UNLOCKED_CONFIRMATION
                 } else {
                     triggerPinError()
@@ -417,23 +433,48 @@ fun OscellionLockScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Subtle Top Long-Press Discovery Hint
+                            // Top row: Back/Close button (when triggered via AppLockActivity) + Wallpaper hint
                             Box(
                                 modifier = Modifier
-                                    .padding(top = 16.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.35f))
-                                    .border(0.75.dp, Color.White.copy(alpha = 0.12f), CircleShape)
-                                    .padding(horizontal = 14.dp, vertical = 5.dp)
+                                    .fillMaxWidth()
+                                    .padding(top = 14.dp)
                             ) {
-                                Text(
-                                    text = "Hold wallpaper to customize",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color.White.copy(alpha = 0.75f),
-                                    fontFamily = InterFontFamily,
-                                    letterSpacing = 0.4.sp
-                                )
+                                if (onBack != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.CenterStart)
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.Black.copy(alpha = 0.40f))
+                                            .border(0.75.dp, Color.White.copy(alpha = 0.16f), CircleShape)
+                                            .clickable { onBack() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.X,
+                                            contentDescription = "Exit to Home",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.35f))
+                                        .border(0.75.dp, Color.White.copy(alpha = 0.12f), CircleShape)
+                                        .padding(horizontal = 14.dp, vertical = 5.dp)
+                                ) {
+                                    Text(
+                                        text = "Hold wallpaper to customize",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White.copy(alpha = 0.75f),
+                                        fontFamily = InterFontFamily,
+                                        letterSpacing = 0.4.sp
+                                    )
+                                }
                             }
 
                             // Centered Main Content Stack
@@ -496,7 +537,32 @@ fun OscellionLockScreen(
                                     )
                                 )
 
-                                Spacer(Modifier.height(44.dp))
+                                Spacer(Modifier.height(22.dp))
+
+                                if (!lockBannerMessage.isNullOrBlank()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .widthIn(max = 334.dp)
+                                            .padding(bottom = 16.dp)
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(Color(0x38FF3B30))
+                                            .border(0.8.dp, Color(0xFFFF453A).copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+                                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = lockBannerMessage ?: "",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color.White,
+                                            textAlign = TextAlign.Center,
+                                            fontFamily = InterFontFamily
+                                        )
+                                    }
+                                } else {
+                                    Spacer(Modifier.height(22.dp))
+                                }
 
                                 // Action Buttons Stack (Max width 334dp)
                                 Column(
@@ -661,14 +727,16 @@ fun OscellionLockScreen(
                                     title = "Enter PIN",
                                     subtitle = when {
                                         lockoutSecondsRemaining > 0 -> "Too many attempts. Try again in ${lockoutSecondsRemaining}s"
+                                        !lockBannerMessage.isNullOrBlank() -> lockBannerMessage!!
                                         isPinError -> if (failedAttempts >= 2) "Incorrect PIN (attempt $failedAttempts of 5). Try again." else "Incorrect PIN. Try again."
                                         failedAttempts > 0 -> "Incorrect PIN (attempt $failedAttempts of 5). Try again."
+                                        !hasPinConfigured -> "Tap Keypad after setup to set a 4-digit PIN"
                                         else -> "Enter your 4-digit PIN to unlock"
                                     },
                                     enteredPin = enteredPin,
                                     isError = isPinError,
                                     lockoutSecondsRemaining = lockoutSecondsRemaining,
-                                    hintText = "Enter any 4 digits to unlock",
+                                    hintText = if (hasPinConfigured) "Use Biometric or your 4-digit PIN" else "No PIN set yet",
                                     buttonSize = 76.dp,
                                     horizontalSpacing = 20.dp,
                                     onDigitClick = { onDigitEntered(it) },
@@ -805,11 +873,11 @@ fun OscellionLockScreen(
                                             kotlinx.coroutines.delay(700)
                                             isSettingWallpaper = false
                                             isWallpaperEditing = false
-                                            ToastManager.showToast("Wallpaper updated")
+                                            lockBannerMessage = null
                                         }
                                     } catch (e: Exception) {
                                         isSettingWallpaper = false
-                                        ToastManager.showToast("Failed to save wallpaper: ${e.message}")
+                                        lockBannerMessage = "Failed to save wallpaper: ${e.message}"
                                     }
                                 }
                                 .padding(horizontal = 18.dp, vertical = 7.dp)
@@ -898,6 +966,7 @@ fun OscellionLockScreen(
                                 shape = RoundedCornerShape(16.dp)
                             )
                             .clickable {
+                                SecurityPinManager.markInternalNavigation(30_000L)
                                 galleryLauncher.launch("image/*")
                             },
                         contentAlignment = Alignment.Center
@@ -1076,6 +1145,8 @@ fun OscellionLockScreen(
             onDismiss = { showPinSetupDialog = false },
             onSuccess = {
                 showPinSetupDialog = false
+                hasPinConfigured = true
+                lockBannerMessage = null
                 currentView = LockScreenView.PIN_ENTRY
                 enteredPin = ""
             }

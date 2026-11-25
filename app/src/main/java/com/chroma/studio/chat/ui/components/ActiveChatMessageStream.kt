@@ -149,12 +149,50 @@ fun ActiveChatMessageStream(
     onViewPollVotes: (PollData) -> Unit,
     onNavigateToProfile: ((String) -> Unit)?,
     onExpandVisibleCount: (Int) -> Unit,
+    onReachedBottom: () -> Unit = {},
     onStoryClick: ((storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null,
     onFlashVideoClick: ((String) -> Unit)? = null
 ) {
     val colors = LocalChatColors.current
     var quoteHighlightedMessageId by remember(activeChat.id) { mutableStateOf<String?>(null) }
     val effectiveHighlightedId = highlightedMessageId ?: quoteHighlightedMessageId
+
+    LaunchedEffect(listState.canScrollForward, listState.layoutInfo.totalItemsCount) {
+        if (!listState.canScrollForward && listState.layoutInfo.totalItemsCount > 0) {
+            onReachedBottom()
+        }
+    }
+
+    // Realtime Typing & Recording Activity Indicators (Remote users only)
+    // NOTE: isVoiceRecording is intentionally excluded here. The sender must NOT see own bubble.
+    val currentUids = remember(currentUid, currentUser.id) {
+        setOfNotNull(
+            currentUid.takeIf { it.isNotBlank() },
+            currentUser.id.takeIf { it.isNotBlank() },
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.takeIf { it.isNotBlank() }
+        )
+    }
+    val normalizedRoomId = remember(activeChat.id, currentUid) {
+        com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(activeChat.id, currentUid)
+    }
+    val activeRoomTyping = typingStatuses[activeChat.id] ?: typingStatuses[normalizedRoomId] ?: emptyMap()
+    val otherTypingUsers = activeRoomTyping.filterKeys { it !in currentUids }
+    val isRemoteRecording = otherTypingUsers.values.any { it == "recording" } && !isVoiceRecording
+    val isRemoteTyping = otherTypingUsers.values.any { it == "typing" }
+    val isRecordingActive = isRemoteRecording
+    val shouldShowActivityBubble = isRemoteTyping || isRemoteRecording
+
+    LaunchedEffect(shouldShowActivityBubble) {
+        if (shouldShowActivityBubble) {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val total = listState.layoutInfo.totalItemsCount
+            if (total > 0 && lastVisible >= (total - 3).coerceAtLeast(0)) {
+                try {
+                    listState.animateScrollToItem((total - 1).coerceAtLeast(0))
+                } catch (_: Exception) {}
+            }
+        }
+    }
 
     // Floating Glass Date Indicator calculation
     val currentVisibleDateHeader by remember(listState, activeChat.messages) {
@@ -565,23 +603,6 @@ fun ActiveChatMessageStream(
                 )
             }
 
-            // Realtime Typing & Recording Activity Indicators (Remote users only)
-            // NOTE: isVoiceRecording is intentionally excluded here. The sender must NOT see
-            // their own "Recording audio..." bubble. ChatActivityPresenceController broadcasts
-            // the signal to the remote peer where it correctly shows as an incoming indicator.
-            val currentUids = setOfNotNull(
-                currentUid.takeIf { it.isNotBlank() },
-                currentUser.id.takeIf { it.isNotBlank() },
-                com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.takeIf { it.isNotBlank() }
-            )
-            val normalizedRoomId = com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(activeChat.id, currentUid)
-            val activeRoomTyping = typingStatuses[activeChat.id] ?: typingStatuses[normalizedRoomId] ?: emptyMap()
-            val otherTypingUsers = activeRoomTyping.filterKeys { it !in currentUids }
-            val isRemoteRecording = otherTypingUsers.values.any { it == "recording" } && !isVoiceRecording
-            val isRemoteTyping = otherTypingUsers.values.any { it == "typing" }
-            val isRecordingActive = isRemoteRecording  // local recording strictly excluded: sender must NOT see own bubble
-            val shouldShowActivityBubble = isRemoteTyping || isRemoteRecording
-
             item {
                 AnimatedVisibility(
                     visible = shouldShowActivityBubble,
@@ -890,9 +911,13 @@ fun ActiveChatMessageStream(
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             coroutineScope.launch {
-                                val totalItemCount = (if (allMessages.size > visibleMessageCount) 1 else 0) + activeChat.messages.size
-                                val targetIndex = (totalItemCount - 1).coerceAtLeast(0)
+                                val targetIndex = ((if (allMessages.size > visibleMessageCount) 1 else 0) + activeChat.messages.size).coerceAtLeast(0)
+                                val firstVis = listState.firstVisibleItemIndex
+                                if (targetIndex - firstVis > 18) {
+                                    listState.scrollToItem((targetIndex - 8).coerceAtLeast(0))
+                                }
                                 listState.animateScrollToItem(targetIndex)
+                                onReachedBottom()
                             }
                         },
                     contentAlignment = Alignment.Center

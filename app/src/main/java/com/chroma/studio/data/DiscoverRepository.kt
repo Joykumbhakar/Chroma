@@ -48,6 +48,7 @@ class DiscoverRepository {
             authorDisplayName = fv.authorDisplayName,
             authorAvatarUrl = fv.authorAvatarUrl,
             authorVerified = fv.authorVerified,
+            authorVerifiedTone = fv.authorVerifiedTone,
             title = fv.caption.ifBlank { "Flash Video" },
             description = fv.caption,
             aspectRatio = "9:16",
@@ -71,8 +72,39 @@ class DiscoverRepository {
             timestamp = fv.timestamp,
             hideLikesCount = fv.hideLikesCount,
             turnOffComments = fv.turnOffComments,
-            turnOffRemix = fv.turnOffRemix
+            turnOffRemix = fv.turnOffRemix,
+            isArchived = fv.isArchived,
+            isTrending = fv.isTrending,
+            trendingExcluded = fv.trendingExcluded,
+            trendingOrder = fv.trendingOrder,
+            trendingTag = fv.trendingTag,
+            isFeatured = fv.isFeatured,
+            isTakedown = fv.isTakedown
         )
+    }
+
+    private suspend fun hydrateAuthorProfiles(posts: List<DiscoverPost>): List<DiscoverPost> {
+        if (posts.isEmpty()) return posts
+        val creatorIds = posts.map { it.creatorId }.filter { it.isNotBlank() }.distinct()
+        if (creatorIds.isEmpty()) return posts
+        return try {
+            val profilesMap = getProfilesByIds(creatorIds, limit = creatorIds.size).associateBy { it.uid }
+            posts.map { post ->
+                val profile = profilesMap[post.creatorId]
+                if (profile != null) {
+                    post.copy(
+                        authorUsername = profile.username.ifBlank { post.authorUsername },
+                        authorDisplayName = profile.displayName.ifBlank { post.authorDisplayName },
+                        authorAvatarUrl = profile.avatarUrl.ifBlank { post.authorAvatarUrl },
+                        authorVerified = profile.verified,
+                        authorVerifiedTone = profile.verifiedTone ?: post.authorVerifiedTone
+                    )
+                } else post
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            posts
+        }
     }
 
     suspend fun getRecentWorks(limit: Long = 10, lastTimestamp: Long? = null): List<DiscoverPost> {
@@ -83,10 +115,14 @@ class DiscoverRepository {
             }
             val snapshot = query.get().await()
             val posts = snapshot.documents.mapNotNull { doc ->
-                doc.toObject(DiscoverPost::class.java)?.copy(
-                    id = if (doc.id.isNotBlank()) doc.id else (doc.toObject(DiscoverPost::class.java)?.id ?: "")
+                val obj = doc.toObject(DiscoverPost::class.java)
+                val cCount = (doc.getLong("commentsCount") ?: doc.getLong("commentCount") ?: obj?.commentsCount?.toLong() ?: 0L).toInt()
+                obj?.copy(
+                    id = if (doc.id.isNotBlank()) doc.id else obj.id,
+                    commentsCount = cCount,
+                    commentCount = cCount
                 )
-            }.filter { !it.isArchived }
+            }.filter { !it.isArchived && !it.isTakedown }
 
             val flashes = try {
                 var flashQuery = db.collection("flash_videos").orderBy("timestamp", Query.Direction.DESCENDING).limit(limit)
@@ -96,16 +132,18 @@ class DiscoverRepository {
                 val fSnap = flashQuery.get().await()
                 fSnap.documents.mapNotNull { doc ->
                     val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
-                    if (fv != null && !fv.isArchived) mapFlashToDiscoverPost(fv, doc.id) else null
+                    if (fv != null && !fv.isArchived && !fv.isTakedown) mapFlashToDiscoverPost(fv, doc.id) else null
                 }
             } catch (_: Exception) {
                 emptyList()
             }
 
-            (posts + flashes)
+            val combined = (posts + flashes)
                 .distinctBy { it.id }
                 .sortedByDescending { it.timestamp }
                 .take(limit.toInt())
+
+            hydrateAuthorProfiles(combined)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error fetching community works", e)
@@ -131,6 +169,7 @@ class DiscoverRepository {
             authorDisplayName = userProfile.displayName,
             authorAvatarUrl = userProfile.avatarUrl,
             authorVerified = userProfile.verified,
+            authorVerifiedTone = userProfile.verifiedTone,
             aspectRatio = aspectRatio,
             timestamp = System.currentTimeMillis(),
             likesCount = 0,
@@ -179,6 +218,7 @@ class DiscoverRepository {
             authorDisplayName = userProfile.displayName,
             authorAvatarUrl = userProfile.avatarUrl,
             authorVerified = userProfile.verified,
+            authorVerifiedTone = userProfile.verifiedTone,
             timestamp = System.currentTimeMillis(),
             likesCount = 0,
             likedBy = emptyList(),
@@ -210,6 +250,7 @@ class DiscoverRepository {
                     authorDisplayName = userProfile.displayName,
                     authorAvatarUrl = userProfile.avatarUrl,
                     authorVerified = userProfile.verified,
+                    authorVerifiedTone = userProfile.verifiedTone,
                     videoUrl = originalPost.videoUrl ?: "",
                     thumbnailUrl = originalPost.thumbnailUrl ?: originalPost.imageUrl ?: "",
                     caption = "${remixTitle.ifBlank { "Remix" }}: $remixDescription".trim(),
@@ -285,6 +326,7 @@ class DiscoverRepository {
                 authorDisplayName = userProfile.displayName,
                 authorAvatarUrl = userProfile.avatarUrl,
                 authorVerified = userProfile.verified,
+                authorVerifiedTone = userProfile.verifiedTone,
                 aspectRatio = aspectRatio,
                 timestamp = System.currentTimeMillis(),
                 likesCount = 0
@@ -342,6 +384,7 @@ class DiscoverRepository {
                 authorDisplayName = userProfile.displayName,
                 authorAvatarUrl = userProfile.avatarUrl,
                 authorVerified = userProfile.verified,
+                authorVerifiedTone = userProfile.verifiedTone,
                 aspectRatio = aspectRatio,
                 trendingTag = categoryTag,
                 timestamp = System.currentTimeMillis(),
@@ -398,6 +441,7 @@ class DiscoverRepository {
                 authorDisplayName = userProfile.displayName,
                 authorAvatarUrl = userProfile.avatarUrl,
                 authorVerified = userProfile.verified,
+                authorVerifiedTone = userProfile.verifiedTone,
                 aspectRatio = aspectRatio,
                 trendingTag = categoryTag,
                 timestamp = System.currentTimeMillis(),
@@ -464,6 +508,7 @@ class DiscoverRepository {
                 authorDisplayName = userProfile.displayName,
                 authorAvatarUrl = userProfile.avatarUrl,
                 authorVerified = userProfile.verified,
+                authorVerifiedTone = userProfile.verifiedTone,
                 aspectRatio = aspectRatio,
                 trendingTag = categoryTag,
                 timestamp = System.currentTimeMillis(),
@@ -522,9 +567,22 @@ class DiscoverRepository {
     }
 
     suspend fun fetchPostById(postId: String): DiscoverPost? {
+        if (postId.isBlank()) return null
         return try {
             val doc = collection.document(postId).get().await()
-            doc.toObject(DiscoverPost::class.java)?.copy(id = doc.id)
+            val fromWork = if (doc.exists()) {
+                doc.toObject(DiscoverPost::class.java)?.copy(id = doc.id)
+            } else null
+
+            val resolved = fromWork ?: try {
+                val fDoc = db.collection("flash_videos").document(postId).get().await()
+                val fv = if (fDoc.exists()) fDoc.toObject(com.chroma.studio.model.FlashVideo::class.java) else null
+                if (fv != null) mapFlashToDiscoverPost(fv, fDoc.id) else null
+            } catch (_: Exception) {
+                null
+            } ?: return null
+
+            hydrateAuthorProfiles(listOf(resolved)).firstOrNull() ?: resolved
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error fetching post by ID", e)
@@ -1753,46 +1811,110 @@ class DiscoverRepository {
         }
     }
 
-    // ── Trending Posts ─────────────────────────────────────────────────────────
-    suspend fun getTrendingWorks(limit: Long = 30): List<DiscoverPost> {
+    // ── Trending Config & Posts ───────────────────────────────────────────────
+    suspend fun getTrendingConfig(): com.chroma.studio.model.TrendingConfig {
         return try {
-            val snapshot = collection
-                .orderBy("likesCount", Query.Direction.DESCENDING)
-                .limit(limit)
-                .get()
-                .await()
-            val posts = snapshot.documents.mapNotNull { doc ->
-                val p = doc.toObject(DiscoverPost::class.java)
-                val cCount = (doc.getLong("commentsCount") ?: doc.getLong("commentCount") ?: p?.commentsCount?.toLong() ?: 0L).toInt()
-                p?.copy(
-                    id = if (doc.id.isNotBlank()) doc.id else (p.id),
-                    commentsCount = cCount,
-                    commentCount = cCount
-                )
-            }.filter { !it.isArchived && it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
-
-            val flashes = try {
-                val fSnap = db.collection("flash_videos")
-                    .orderBy("likesCount", Query.Direction.DESCENDING)
-                    .limit(limit)
-                    .get()
-                    .await()
-                fSnap.documents.mapNotNull { doc ->
-                    val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
-                    if (fv != null && !fv.isArchived) {
-                        val mapped = mapFlashToDiscoverPost(fv, doc.id)
-                        if (mapped.likesCount > 100 && mapped.effectiveCommentsCount >= 5) mapped else null
-                    } else null
-                }
-            } catch (_: Exception) {
-                emptyList()
+            val snap = db.collection("app_config").document("trending").get().await()
+            if (snap.exists()) {
+                val modeRaw = snap.getString("mode")
+                val mode = if (modeRaw == "curated_only") "curated_only" else "curated_first"
+                val maxSpot = (snap.getLong("maxSpotlight") ?: 6L).toInt().coerceIn(3, 20)
+                com.chroma.studio.model.TrendingConfig(mode = mode, maxSpotlight = maxSpot)
+            } else {
+                com.chroma.studio.model.TrendingConfig()
             }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            com.chroma.studio.model.TrendingConfig()
+        }
+    }
 
-            (posts + flashes)
-                .distinctBy { it.id }
-                .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
-                .sortedByDescending { it.likesCount }
-                .take(limit.toInt())
+    suspend fun getTrendingWorks(
+        limit: Long = 30,
+        config: com.chroma.studio.model.TrendingConfig? = null
+    ): List<DiscoverPost> {
+        return try {
+            val resolvedConfig = config ?: getTrendingConfig()
+            coroutineScope {
+                val pinnedPostsDeferred = async {
+                    try {
+                        collection.whereEqualTo("isTrending", true).limit(20).get().await()
+                            .documents.mapNotNull { doc ->
+                                val p = doc.toObject(DiscoverPost::class.java)
+                                val cCount = (doc.getLong("commentsCount") ?: doc.getLong("commentCount") ?: p?.commentsCount?.toLong() ?: 0L).toInt()
+                                p?.copy(
+                                    id = if (doc.id.isNotBlank()) doc.id else p.id,
+                                    commentsCount = cCount,
+                                    commentCount = cCount
+                                )
+                            }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        emptyList()
+                    }
+                }
+                val pinnedFlashDeferred = async {
+                    try {
+                        db.collection("flash_videos").whereEqualTo("isTrending", true).limit(20).get().await()
+                            .documents.mapNotNull { doc ->
+                                val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
+                                if (fv != null) mapFlashToDiscoverPost(fv, doc.id) else null
+                            }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        emptyList()
+                    }
+                }
+                val organicPostsDeferred = async {
+                    if (resolvedConfig.mode == "curated_only") emptyList()
+                    else try {
+                        collection.orderBy("likesCount", Query.Direction.DESCENDING).limit(limit).get().await()
+                            .documents.mapNotNull { doc ->
+                                val p = doc.toObject(DiscoverPost::class.java)
+                                val cCount = (doc.getLong("commentsCount") ?: doc.getLong("commentCount") ?: p?.commentsCount?.toLong() ?: 0L).toInt()
+                                p?.copy(
+                                    id = if (doc.id.isNotBlank()) doc.id else p.id,
+                                    commentsCount = cCount,
+                                    commentCount = cCount
+                                )
+                            }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        emptyList()
+                    }
+                }
+                val organicFlashDeferred = async {
+                    if (resolvedConfig.mode == "curated_only") emptyList()
+                    else try {
+                        db.collection("flash_videos").orderBy("likesCount", Query.Direction.DESCENDING).limit(limit).get().await()
+                            .documents.mapNotNull { doc ->
+                                val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
+                                if (fv != null) mapFlashToDiscoverPost(fv, doc.id) else null
+                            }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        emptyList()
+                    }
+                }
+
+                val allFetched = (
+                    pinnedPostsDeferred.await() +
+                        pinnedFlashDeferred.await() +
+                        organicPostsDeferred.await() +
+                        organicFlashDeferred.await()
+                    )
+                    .distinctBy { it.id }
+                    .filter { !it.isArchived && !it.isTakedown && !it.trendingExcluded }
+                    .filter { resolvedConfig.mode != "curated_only" || it.isTrending }
+
+                val sorted = allFetched.sortedWith(
+                    compareByDescending<DiscoverPost> { it.isTrending }
+                        .thenBy { if (it.isTrending) (it.trendingOrder ?: 9999) else Int.MAX_VALUE }
+                        .thenByDescending { it.likesCount + it.effectiveCommentsCount * 2 + it.remixCount * 3 }
+                ).take(limit.toInt())
+
+                hydrateAuthorProfiles(sorted)
+            }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error fetching trending works", e)

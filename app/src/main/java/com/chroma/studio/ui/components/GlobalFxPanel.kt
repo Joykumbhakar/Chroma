@@ -204,7 +204,7 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary)
                             ) {
-                                AiWaveSphereIcon(modifier = Modifier.size(24.dp))
+                                FluentDiamondGemIcon(modifier = Modifier.size(24.dp), includeSoftShadow = true)
                             }
                         }
                     }

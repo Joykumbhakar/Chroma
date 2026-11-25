@@ -2633,13 +2633,17 @@ fun FinalCutProVideoEditorScreen(
             // ══════════════════════════════════════════════════════════════════
             // 3. CANVAS / VIDEO PREVIEW CARD (Matching CanvasPreview)
             // ══════════════════════════════════════════════════════════════════
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                    .padding(horizontal = 14.dp, vertical = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val targetRatio = aspectRatio.ratio.coerceAtLeast(0.25f)
+                val containerRatio = if (maxHeight > 0.dp) maxWidth / maxHeight else targetRatio
+                val fittedWidth = if (containerRatio > targetRatio) maxHeight * targetRatio else maxWidth
+                val fittedHeight = if (containerRatio > targetRatio) maxHeight else maxWidth / targetRatio
                 val previewShape = RoundedCornerShape(16.dp)
                 val activePlayingSpan = remember(currentTimeSec, timelineSpans) {
                     timelineSpans.firstOrNull { currentTimeSec >= it.timelineStartSec && currentTimeSec < it.timelineEndSec }
@@ -2680,8 +2684,7 @@ fun FinalCutProVideoEditorScreen(
                 val currentTogglePlayback by rememberUpdatedState<() -> Boolean>({ togglePlayback() })
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .aspectRatio(aspectRatio.ratio)
+                        .size(fittedWidth.coerceAtLeast(1.dp), fittedHeight.coerceAtLeast(1.dp))
                         .onSizeChanged { previewViewportSize = it }
                         .shadow(elevation = 8.dp, shape = previewShape, ambientColor = Color(0x0D1F2687), spotColor = Color(0x0D1F2687))
                         .clip(previewShape)
@@ -3308,8 +3311,14 @@ fun FinalCutProVideoEditorScreen(
             // ══════════════════════════════════════════════════════════════════
             // 4. CHROMA BOTTOM DRAWER (Inspector, Tools & Timeline)
             // ══════════════════════════════════════════════════════════════════
+            val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
+            val targetDrawerHeight = when (drawerLevel) {
+                VideoDrawerLevel.COLLAPSED -> 82.dp
+                VideoDrawerLevel.MID -> (screenHeightDp * 0.42f).coerceIn(296.dp, 368.dp)
+                VideoDrawerLevel.FULL -> (screenHeightDp * 0.62f).coerceIn(400.dp, 560.dp)
+            }
             val animatedDrawerHeight by animateDpAsState(
-                targetValue = drawerLevel.heightDp,
+                targetValue = targetDrawerHeight,
                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
                 label = "videoDrawerHeight"
             )
@@ -3418,6 +3427,7 @@ fun FinalCutProVideoEditorScreen(
                         )
                     }
                     // Drawer Tab Content
+                    if (drawerLevel != VideoDrawerLevel.COLLAPSED) {
                     Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                         when (activeTab) {
                             FcpWorkspaceTab.TIMELINE -> {
@@ -3845,6 +3855,7 @@ fun FinalCutProVideoEditorScreen(
                             }
                         }
                     }
+                    }
                 }
             }
         }
@@ -3976,23 +3987,30 @@ private fun VideoWorkspaceTabs(
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
     val allTabs = FcpWorkspaceTab.entries
-    val activeIndex = allTabs.indexOf(activeTab)
+    val activeIndex = allTabs.indexOf(activeTab).coerceAtLeast(0)
     val containerColor = if (isDarkMode) Color(0xFF0F1118) else Color(0xFFF1F5F9)
     val indicatorColor = if (isDarkMode) Color(0xFF222634) else Color.White
     val activeIconTint = colors.primary
     val inactiveIconTint = if (isDarkMode) Color(0xFFA0A0A0) else Color(0xFF6B7280)
-    val tabWidthDp = 52.dp
+    val tabWidthDp = 56.dp
     val totalWidthDp = tabWidthDp * allTabs.size + 8.dp
-    val indicatorOffsetAnim = remember { Animatable(activeIndex * 52f) }
+    val indicatorOffsetAnim = remember { Animatable(activeIndex * 56f) }
     LaunchedEffect(activeIndex) {
         indicatorOffsetAnim.animateTo(
-            targetValue = activeIndex * 52f,
+            targetValue = activeIndex * 56f,
             animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
         )
     }
     Box(
         modifier = Modifier
-            .size(width = totalWidthDp, height = 38.dp)
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        contentAlignment = Alignment.Center
+    ) {
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 8.dp)
+            .size(width = totalWidthDp, height = 46.dp)
             .clip(RoundedCornerShape(50))
             .border(
                 width = 1.dp,
@@ -4028,14 +4046,13 @@ private fun VideoWorkspaceTabs(
                 )
                 .background(indicatorColor)
         )
-        // Tab items — ICONS ONLY
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             allTabs.forEach { tab ->
                 val selected = tab == activeTab
-                Box(
+                Column(
                     modifier = Modifier
                         .width(tabWidthDp)
                         .fillMaxHeight()
@@ -4047,17 +4064,27 @@ private fun VideoWorkspaceTabs(
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onTabSelected(tab)
                         },
-                    contentAlignment = Alignment.Center
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
                     Icon(
                         imageVector = tab.icon,
                         contentDescription = tab.label,
                         tint = if (selected) activeIconTint else inactiveIconTint,
-                        modifier = Modifier.size(19.dp)
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = tab.label,
+                        color = if (selected) activeIconTint else inactiveIconTint,
+                        fontSize = 9.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
         }
+    }
     }
 }
 // ============================================================================
@@ -4255,19 +4282,32 @@ private fun TimelineTopBar(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Timecode display & Zoom Indicator
-        FcpTimecodeIndicator(
-            currentTimeSecProvider = currentTimeSecProvider,
-            totalDurationSec = state.totalDurationSec,
-            isUserScrubbing = state.isUserScrubbing
-        )
-        // Transport Action Buttons & Zoom Controls
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            TimelineMiniButton(
+                icon = if (state.isPlaying) Lucide.Pause else Lucide.Play,
+                contentDesc = if (state.isPlaying) "Pause" else "Play",
+                enabled = state.clips.isNotEmpty(),
+                onClick = actions.onPlayToggle
+            )
+            FcpTimecodeIndicator(
+                currentTimeSecProvider = currentTimeSecProvider,
+                totalDurationSec = state.totalDurationSec,
+                isUserScrubbing = state.isUserScrubbing
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        // Transport Action Buttons & Zoom Controls (scrolls smoothly on compact widths)
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.End)
         ) {
             TimelineMiniButton(Lucide.ZoomOut, "Zoom Out", onClick = { actions.onZoomChange((state.pixelsPerSec * 0.8f).coerceIn(FCP_MIN_PPS, FCP_MAX_PPS)) })
             TimelineMiniButton(Lucide.ZoomIn, "Zoom In", onClick = { actions.onZoomChange((state.pixelsPerSec * 1.25f).coerceIn(FCP_MIN_PPS, FCP_MAX_PPS)) })
@@ -14611,7 +14651,7 @@ private fun FcpTopHeaderBar(
             )
             Text(
                 text = "Remixing Flash from @$remixedFromAuthorUsername",
-                color = Color.White,
+                color = colors.primary,
                 fontSize = 12.5.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -14623,12 +14663,12 @@ private fun FcpAspectRatioSelector(
     aspectRatio: FcpAspectRatio,
     onSelectAspect: (FcpAspectRatio) -> Unit
 ) {
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 8.dp, horizontal = 12.dp),
+        contentAlignment = Alignment.Center
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),

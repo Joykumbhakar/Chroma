@@ -378,10 +378,10 @@ private fun OrbitalActionNode(
             )
         }
 
-        // 2. Crisp White Vector Glyph floating on the glass with subtle shadow
+        // 2. Crisp Vector Glyph floating on the glass with subtle shadow
         Canvas(
             modifier = Modifier
-                .size(nodeSize * 0.44f)
+                .size(if (actionType == ActionMenuType.AI_GENERATOR) nodeSize * 0.50f else nodeSize * 0.44f)
                 .graphicsLayer {
                     val e = transformProgress.coerceIn(0f, 1f)
                     val rise = (1f - ((1f - e) * (1f - e))) * 0.08f * nodeSize.toPx()
@@ -394,7 +394,7 @@ private fun OrbitalActionNode(
                 ActionMenuType.FLASH -> glyphFlashVideo(Color.White)
                 ActionMenuType.IMAGE_EDITOR -> glyphPhotos(Color.White)
                 ActionMenuType.STORY -> glyphStoryEditor(Color.White)
-                ActionMenuType.AI_GENERATOR -> glyphAiGenerator(Color.White)
+                ActionMenuType.AI_GENERATOR -> drawFluentDiamondGem(includeSoftShadow = true)
             }
         }
     }
@@ -439,32 +439,6 @@ private fun DrawScope.glyphStoryEditor(ink: Color) = withGlyphShadow(ink) { c ->
     drawArc(color = c, startAngle = 180f, sweepAngle = 80f, useCenter = false, topLeft = Offset(center.x - radius, center.y - radius), size = Size(radius * 2, radius * 2), style = st)
     drawLine(color = c, start = Offset(12f * k, 8.5f * k), end = Offset(12f * k, 15.5f * k), strokeWidth = st.width, cap = StrokeCap.Round)
     drawLine(color = c, start = Offset(8.5f * k, 12f * k), end = Offset(15.5f * k, 12f * k), strokeWidth = st.width, cap = StrokeCap.Round)
-}
-
-/**
- * 5. AI Generator Glyph: Dual 4-pointed intelligence sparkles.
- */
-private fun DrawScope.glyphAiGenerator(ink: Color) = withGlyphShadow(ink) { c ->
-    val k = size.width / 24f
-    val st = glyphStroke(k)
-    val heroSparkle = Path().apply {
-        moveTo(10.5f * k, 4f * k)
-        quadraticBezierTo(10.5f * k, 11f * k, 3.5f * k, 11f * k)
-        quadraticBezierTo(10.5f * k, 11f * k, 10.5f * k, 18f * k)
-        quadraticBezierTo(10.5f * k, 11f * k, 17.5f * k, 11f * k)
-        quadraticBezierTo(10.5f * k, 11f * k, 10.5f * k, 4f * k)
-        close()
-    }
-    drawPath(heroSparkle, color = c, style = st)
-    val accentSparkle = Path().apply {
-        moveTo(18f * k, 4f * k)
-        quadraticBezierTo(18f * k, 6.5f * k, 15.5f * k, 6.5f * k)
-        quadraticBezierTo(18f * k, 6.5f * k, 18f * k, 9f * k)
-        quadraticBezierTo(18f * k, 6.5f * k, 20.5f * k, 6.5f * k)
-        quadraticBezierTo(18f * k, 6.5f * k, 18f * k, 4f * k)
-        close()
-    }
-    drawPath(accentSparkle, color = c, style = st)
 }
 
 /**

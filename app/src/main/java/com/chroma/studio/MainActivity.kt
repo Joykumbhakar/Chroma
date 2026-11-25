@@ -844,7 +844,10 @@ private fun PassCardLiveOverlay(
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
                                 if (profile.verified) {
-                                    VerifiedBadge(size = 13.dp)
+                                    VerifiedBadge(
+                                        size = 13.dp,
+                                        tone = profile.verifiedTone
+                                    )
                                 }
                             }
                             Text(

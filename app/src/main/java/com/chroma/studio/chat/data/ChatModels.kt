@@ -12,7 +12,8 @@ data class User(
     val avatar: String,
     val banner: String = drawableUri(com.chroma.studio.R.drawable.banner_wave_banner_midnight_glow),
     val status: String,
-    val isVerified: Boolean = false
+    val isVerified: Boolean = false,
+    val verifiedTone: String? = null
 )
 
 @Immutable
@@ -23,7 +24,8 @@ data class StoryViewerInfo(
     val avatar: String,
     val timeAgo: String,
     val reactedEmoji: String? = null,
-    val verified: Boolean = false
+    val verified: Boolean = false,
+    val verifiedTone: String? = null
 )
 
 @Immutable
@@ -130,6 +132,7 @@ data class ChatMessage(
     val time: String,
     val timestamp: Long = System.currentTimeMillis(),
     val status: String = "sent", // "pending", "sent", "delivered", "read", "seen"
+    val uploadProgress: Int? = null,
     val reactions: Map<String, Int> = emptyMap(),
     val userReaction: String? = null,
     val replyTo: ReplyQuote? = null,
@@ -163,6 +166,7 @@ data class ChatConversation(
     val isMuted: Boolean = false,
     val isBlocked: Boolean = false,
     val isVerified: Boolean = false,
+    val verifiedTone: String? = null,
     val members: List<GroupMember>? = null,
     val messages: List<ChatMessage> = emptyList(),
     val otherUserId: String? = null,

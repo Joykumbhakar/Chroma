@@ -36,7 +36,43 @@ object CloudinaryClient {
         .writeTimeout(180, TimeUnit.SECONDS)
         .build()
 
-    suspend fun uploadImage(imageBytes: ByteArray, folder: String = ""): String? {
+    private fun progressByteArrayRequestBody(
+        bytes: ByteArray,
+        mediaType: okhttp3.MediaType?,
+        onProgress: ((Int) -> Unit)?
+    ): okhttp3.RequestBody {
+        if (onProgress == null) {
+            return bytes.toRequestBody(mediaType)
+        }
+        val totalBytes = bytes.size.toLong()
+        return object : okhttp3.RequestBody() {
+            override fun contentType() = mediaType
+            override fun contentLength() = totalBytes
+            override fun writeTo(sink: okio.BufferedSink) {
+                val chunkSize = 16384
+                var offset = 0
+                var lastPct = -1
+                while (offset < bytes.size) {
+                    val count = minOf(chunkSize, bytes.size - offset)
+                    sink.write(bytes, offset, count)
+                    offset += count
+                    if (totalBytes > 0L) {
+                        val pct = ((offset * 98L) / totalBytes).toInt().coerceIn(0, 98)
+                        if (pct != lastPct) {
+                            lastPct = pct
+                            onProgress.invoke(pct)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    suspend fun uploadImage(
+        imageBytes: ByteArray,
+        folder: String = "",
+        onProgress: ((Int) -> Unit)? = null
+    ): String? {
         return withContext(Dispatchers.IO) {
             // Circuit Breaker Check
             if (failureCount.get() >= MAX_FAILURES) {
@@ -76,7 +112,7 @@ object CloudinaryClient {
                     .addFormDataPart(
                         "file",
                         "post_${System.currentTimeMillis()}.$uploadExt",
-                        imageBytes.toRequestBody(uploadMime.toMediaTypeOrNull())
+                        progressByteArrayRequestBody(imageBytes, uploadMime.toMediaTypeOrNull(), onProgress)
                     )
                     .addFormDataPart("upload_preset", uploadPreset)
                     .addFormDataPart("folder", folderPath)
@@ -104,6 +140,7 @@ object CloudinaryClient {
                     null
                 } else {
                     Log.d("CloudinaryClient", "Upload success: $secureUrl")
+                    onProgress?.invoke(100)
                     recordSuccess()
                     secureUrl
                 }
@@ -376,7 +413,8 @@ object CloudinaryClient {
     suspend fun uploadVideo(
         videoBytes: ByteArray,
         extension: String = "mp4",
-        folder: String = "chat_videos"
+        folder: String = "chat_videos",
+        onProgress: ((Int) -> Unit)? = null
     ): String? {
         return withContext(Dispatchers.IO) {
             if (failureCount.get() >= MAX_FAILURES) {
@@ -403,7 +441,11 @@ object CloudinaryClient {
                 for (preset in presetsToTry) {
                     val requestBody = MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
-                        .addFormDataPart("file", fileName, videoBytes.toRequestBody(mediaType))
+                        .addFormDataPart(
+                            "file",
+                            fileName,
+                            progressByteArrayRequestBody(videoBytes, mediaType, onProgress)
+                        )
                         .addFormDataPart("upload_preset", preset)
                         .addFormDataPart("folder", folder)
                         .addFormDataPart("resource_type", "video")
@@ -421,6 +463,7 @@ object CloudinaryClient {
                         val json = JSONObject(responseBody)
                         val secureUrl = json.optString("secure_url", "")
                         if (secureUrl.isNotBlank()) {
+                            onProgress?.invoke(100)
                             recordSuccess()
                             return@withContext secureUrl
                         }

@@ -1036,7 +1036,10 @@ fun StoryViewerScreen(
                                 )
                                 if (group.userProfile.verified && !isOwner) {
                                     Spacer(Modifier.width(4.dp))
-                                    VerifiedBadge(size = 12.dp)
+                                    VerifiedBadge(
+                                        size = 12.dp,
+                                        tone = group.userProfile.verifiedTone
+                                    )
                                 }
                             }
                             currentStory?.let { story ->

@@ -48,6 +48,9 @@ fun SecurityScreen(
     var isBiometricUnlockEnabled by remember {
         mutableStateOf(com.chroma.studio.security.SecurityPinManager.isBiometricEnabled(context))
     }
+    var autoLockDelayMs by remember {
+        mutableLongStateOf(com.chroma.studio.security.SecurityPinManager.getAutoLockDelayMs(context))
+    }
     var showPinSetupDialog by remember { mutableStateOf(false) }
     var isSendingReset by remember { mutableStateOf(false) }
     var unrecognizedLogins by remember { mutableStateOf(profile.unrecognizedLoginsEnabled) }
@@ -223,10 +226,55 @@ fun SecurityScreen(
                     AppleSettingDivider()
 
                     AppleSettingNavRow(
-                        title = "App Locker",
-                        subtitle = if (appLockerMasterEnabled && appLockerCount > 0) "$appLockerCount apps locked with Oscellion Lock Screen" else "Lock other apps on your device with PIN & Biometrics",
+                        title = "Auto-Lock Delay",
+                        subtitle = "How soon Oscellion locks after leaving the app",
+                        icon = Lucide.Clock,
+                        iconGradient = listOf(Color(0xFF5856D6), Color(0xFF3B82F6)),
+                        valueText = com.chroma.studio.security.SecurityPinManager.getAutoLockDelayLabel(autoLockDelayMs),
+                        showChevron = false,
+                        onClick = {
+                            SoundManager.playReaction()
+                            val options = listOf(
+                                com.chroma.studio.security.SecurityPinManager.DELAY_IMMEDIATE_MS,
+                                com.chroma.studio.security.SecurityPinManager.DELAY_15S_MS,
+                                com.chroma.studio.security.SecurityPinManager.DELAY_1M_MS,
+                                com.chroma.studio.security.SecurityPinManager.DELAY_5M_MS
+                            )
+                            val idx = options.indexOf(autoLockDelayMs)
+                            val next = options[(idx + 1) % options.size]
+                            autoLockDelayMs = next
+                            com.chroma.studio.security.SecurityPinManager.setAutoLockDelayMs(context, next)
+                        }
+                    )
+
+                    if (biometricPasskeyEnabled) {
+                        AppleSettingDivider()
+
+                        AppleSettingNavRow(
+                            title = "Lock App Now",
+                            subtitle = "Immediately require Biometric or PIN unlock",
+                            icon = Lucide.ShieldAlert,
+                            iconGradient = listOf(Color(0xFFEF4444), Color(0xFFDC2626)),
+                            valueText = "Lock",
+                            showChevron = false,
+                            onClick = {
+                                SoundManager.playReaction()
+                                com.chroma.studio.security.SecurityPinManager.lockSession()
+                            }
+                        )
+                    }
+
+                    AppleSettingDivider()
+
+                    AppleSettingNavRow(
+                        title = "Device App Locker",
+                        subtitle = if (appLockerMasterEnabled && appLockerCount > 0) {
+                            "$appLockerCount apps locked with Oscellion shield"
+                        } else {
+                            "Lock other apps on your device with PIN & Biometrics"
+                        },
                         icon = Lucide.ShieldCheck,
-                        iconGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE)),
+                        iconGradient = listOf(Color(0xFF10B981), Color(0xFF059669)),
                         valueText = if (appLockerMasterEnabled) "$appLockerCount Locked" else "Configure",
                         onClick = {
                             SoundManager.playReaction()

@@ -75,7 +75,8 @@ fun NewDirectChatModal(
                     role = if (prof.bio.isNotBlank()) prof.bio else "@${prof.username}",
                     avatar = prof.avatarUrl,
                     status = if (prof.online) "Online" else "Active on Oscellion",
-                    isVerified = prof.verified
+                    isVerified = prof.verified,
+                    verifiedTone = prof.verifiedTone
                 )
             }
         } catch (_: Exception) {}
@@ -97,7 +98,8 @@ fun NewDirectChatModal(
                         role = if (prof.bio.isNotBlank()) prof.bio else "@${prof.username}",
                         avatar = prof.avatarUrl,
                         status = if (prof.online) "Online" else "Active on Oscellion",
-                        isVerified = prof.verified
+                        isVerified = prof.verified,
+                        verifiedTone = prof.verifiedTone
                     )
                 }
             } catch (_: Exception) {
@@ -379,7 +381,10 @@ fun NewDirectChatModal(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         if (contact.isVerified) {
-                                            VerifiedBadge(size = 14.dp)
+                                            VerifiedBadge(
+                                                size = 14.dp,
+                                                tone = contact.verifiedTone
+                                            )
                                         }
                                     }
 

@@ -24,14 +24,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Warning
 import com.chroma.studio.R
 import com.chroma.studio.ui.components.doubleEdgeGlassBorder
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.ArrowRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.ShieldAlert
 
 /**
  * DuplicateAccountDialog
@@ -65,10 +64,10 @@ fun DuplicateAccountDialog(
         ) {
             val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
             val isDark = colors.isDark
-            val dialogBg = if (isDark) Color(0xFF17171A) else Color(0xFFFFFFFF)
-            val fieldBg = if (isDark) Color(0xFF222226) else Color(0xFFF2F4F7)
-            val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000)
-            val textMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)
+            val dialogBg = if (isDark) Color(0xFF13131A) else Color(0xFFFFFFFF)
+            val fieldBg = if (isDark) Color(0xFF1C1C24) else Color(0xFFF2F4F7)
+            val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF09090B)
+            val textMuted = if (isDark) Color(0xFFA1A1AA) else Color(0xFF71717A)
 
             Box(
                 modifier = Modifier
@@ -92,10 +91,10 @@ fun DuplicateAccountDialog(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Warning,
+                        imageVector = Lucide.ShieldAlert,
                         contentDescription = "Alert",
                         tint = Color(0xFFF59E0B),
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                 }
 

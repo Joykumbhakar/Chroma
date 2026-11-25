@@ -790,7 +790,11 @@ private fun ChatScreenContent(
 
     }
 
-    val unreadMessageThreshold = remember(activeChatId) { activeChatBase.unreadCount }
+    val draftsByRoom by (chatViewModel?.draftsByRoom?.collectAsState() ?: remember { mutableStateOf(emptyMap()) })
+    var isUnreadBannerDismissed by remember(activeChatId) { mutableStateOf(false) }
+    val unreadMessageThreshold = remember(activeChatId, isUnreadBannerDismissed) {
+        if (isUnreadBannerDismissed) 0 else activeChatBase.unreadCount
+    }
 
 
 
@@ -1003,11 +1007,15 @@ private fun ChatScreenContent(
 
     // Input & Reply & Edit
 
-    var inputText by remember { mutableStateOf("") }
+    var inputText by remember(activeChatId) {
+        mutableStateOf(chatViewModel?.getDraft(activeChatId).orEmpty())
+    }
 
-    var activeReplyQuote by remember { mutableStateOf<ReplyQuote?>(null) }
+    var activeReplyQuote by remember(activeChatId) { mutableStateOf<ReplyQuote?>(null) }
 
-    var editingMessageId by remember { mutableStateOf<String?>(null) }
+    var editingMessageId by remember(activeChatId) { mutableStateOf<String?>(null) }
+
+    var editingOriginalText by remember(activeChatId) { mutableStateOf<String?>(null) }
 
 
 
@@ -1337,23 +1345,20 @@ private fun ChatScreenContent(
             status = "pending",
             replyTo = replyQuoteSnapshot
         )
+        activeReplyQuote = null
         if (chatViewModel == null || activeChatId.startsWith("mock_")) {
             chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + photoMsg) else it }
-        }
-        activeReplyQuote = null
-        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val bytes = com.chroma.studio.utils.ImageUtils.compressChatImage(context, uri)
-                    ?: context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
-                    chatViewModel.sendMediaMessage(bytes, "jpg", caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString(), explicitMessageType = "image")
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("ChatScreen", "Failed to upload camera photo", e)
-            }
+        } else {
+            chatViewModel.sendMediaUri(
+                context = context,
+                uri = uri,
+                caption = caption ?: "",
+                replyToMessageId = replyQuoteSnapshot?.messageId,
+                explicitMessageType = "image"
+            )
         }
         SoundManager.playSend()
-        showToast("Photo sent ✨")
+        showToast("Sending photo…")
     }
 
     fun sendStickerMessage(sticker: StickerItem) {
@@ -1403,22 +1408,20 @@ private fun ChatScreenContent(
             status = "pending",
             replyTo = replyQuoteSnapshot
         )
+        activeReplyQuote = null
         if (chatViewModel == null || activeChatId.startsWith("mock_")) {
             chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + videoMsg) else it }
-        }
-        activeReplyQuote = null
-        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
-                    chatViewModel.sendMediaMessage(bytes, "mp4", caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString(), explicitMessageType = "video")
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("ChatScreen", "Failed to upload camera video", e)
-            }
+        } else {
+            chatViewModel.sendMediaUri(
+                context = context,
+                uri = uri,
+                caption = caption ?: "",
+                replyToMessageId = replyQuoteSnapshot?.messageId,
+                explicitMessageType = "video"
+            )
         }
         SoundManager.playSend()
-        showToast("Video sent ✨")
+        showToast("Sending video…")
     }
 
 
@@ -1952,8 +1955,9 @@ private fun ChatScreenContent(
             }
 
             editingMessageId = null
+            editingOriginalText = null
 
-            inputText = ""
+            inputText = chatViewModel?.getDraft(activeChatId).orEmpty()
 
             activeReplyQuote = null
 
@@ -2022,6 +2026,9 @@ private fun ChatScreenContent(
 
 
         inputText = ""
+        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+            chatViewModel.saveDraft(activeChatId, "")
+        }
 
         activeReplyQuote = null
 
@@ -2032,11 +2039,10 @@ private fun ChatScreenContent(
 
 
         coroutineScope.launch {
-
-            val targetIndex = (if (allMessages.size > visibleMessageCount) 1 else 0) + 1 + activeChat.messages.size
-
-            listState.animateScrollToItem(targetIndex.coerceAtLeast(0))
-
+            kotlinx.coroutines.delay(24)
+            val totalItemCount = (if (allMessages.size > visibleMessageCount) 1 else 0) + 1 + activeChat.messages.size
+            val targetIndex = (totalItemCount - 1).coerceAtLeast(0)
+            listState.animateScrollToItem(targetIndex)
         }
 
     }
@@ -2453,6 +2459,8 @@ private fun ChatScreenContent(
             lockedChatIds = lockedChatIds,
 
             pinnedChatIds = pinnedChatIds,
+
+            draftsByRoom = draftsByRoom,
 
             onPinChatToggle = { chat ->
 
@@ -3253,6 +3261,7 @@ private fun ChatScreenContent(
                         },
                         onStartEdit = { msg ->
                             editingMessageId = msg.id
+                            editingOriginalText = msg.text ?: ""
                             inputText = msg.text ?: ""
                             activeReplyQuote = null
                         },
@@ -3285,6 +3294,7 @@ private fun ChatScreenContent(
                         onExpandVisibleCount = { count ->
                             visibleMessageCount = count
                         },
+                        onReachedBottom = { isUnreadBannerDismissed = true },
                         onStoryClick = { clickedStoryId, _ ->
                             if (clickedStoryId.isNullOrBlank()) {
                                 showToast("This story has expired or is no longer available")
@@ -3550,7 +3560,9 @@ private fun ChatScreenContent(
                                         inputText = it
 
                                         if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
-
+                                            if (editingMessageId == null) {
+                                                chatViewModel.saveDraft(activeChatId, it)
+                                            }
                                             chatViewModel.onTextInputChanged(it, roomIdOverride = activeChatId)
 
                                         }
@@ -3560,6 +3572,14 @@ private fun ChatScreenContent(
                                     replyQuote = activeReplyQuote,
 
                                     onCancelReply = { activeReplyQuote = null },
+
+                                    editingPreviewText = editingOriginalText,
+
+                                    onCancelEdit = {
+                                        editingMessageId = null
+                                        editingOriginalText = null
+                                        inputText = chatViewModel?.getDraft(activeChatId).orEmpty()
+                                    },
 
                                     isBlocked = activeChat.isBlocked,
 
@@ -4731,35 +4751,29 @@ private fun ChatScreenContent(
 
                 if (chatViewModel == null || activeChatId.startsWith("mock_")) {
                     chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newMediaMsg) else it }
-                }
-
-                coroutineScope.launch {
+                } else {
                     for (uri in uris) {
-                        try {
-                            val isVideo = ChatMediaLimiter.isVideoUri(context, uri)
-                            val bytes = if (isVideo) {
-                                ChatMediaLimiter.processAndCompressVideo(context, uri)
-                            } else {
-                                ChatMediaLimiter.processAndCompressPhoto(context, uri)
-                            }
-                            val ext = if (isVideo) "mp4" else (MediaStoreHelper.getFileExtension(context, uri) ?: "jpg")
-
-                            if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
-                                chatViewModel.sendMediaMessage(bytes, ext, caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
-                            }
-                        } catch (e: Exception) {}
+                        val isVideo = ChatMediaLimiter.isVideoUri(context, uri)
+                        chatViewModel.sendMediaUri(
+                            context = context,
+                            uri = uri,
+                            caption = caption ?: "",
+                            replyToMessageId = replyQuoteSnapshot?.messageId,
+                            explicitMessageType = if (isVideo) "video" else "image"
+                        )
                     }
                 }
 
                 SoundManager.playSend()
-                showToast("${uris.size} photos stacked and sent")
+                showToast("Sending ${uris.size} items…")
             } else if (uris.isNotEmpty()) {
                 val uri = uris.first()
+                val isVideo = ChatMediaLimiter.isVideoUri(context, uri)
                 val newMediaMsg = ChatMessage(
                     id = "m_${System.currentTimeMillis()}",
                     senderId = currentUser.id,
                     senderName = currentUser.name,
-                    mediaType = "image",
+                    mediaType = if (isVideo) "video" else "image",
                     localUri = uri.toString(),
                     mediaUrl = uri.toString(),
                     mediaUrls = listOf(uri.toString()),
@@ -4771,26 +4785,18 @@ private fun ChatScreenContent(
 
                 if (chatViewModel == null || activeChatId.startsWith("mock_")) {
                     chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newMediaMsg) else it }
-                }
-
-                coroutineScope.launch {
-                    try {
-                        val isVideo = ChatMediaLimiter.isVideoUri(context, uri)
-                        val bytes = if (isVideo) {
-                            ChatMediaLimiter.processAndCompressVideo(context, uri)
-                        } else {
-                            ChatMediaLimiter.processAndCompressPhoto(context, uri)
-                        }
-                        val ext = if (isVideo) "mp4" else (MediaStoreHelper.getFileExtension(context, uri) ?: "jpg")
-
-                        if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
-                            chatViewModel.sendMediaMessage(bytes, ext, caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
-                        }
-                    } catch (e: Exception) {}
+                } else {
+                    chatViewModel.sendMediaUri(
+                        context = context,
+                        uri = uri,
+                        caption = caption ?: "",
+                        replyToMessageId = replyQuoteSnapshot?.messageId,
+                        explicitMessageType = if (isVideo) "video" else "image"
+                    )
                 }
 
                 SoundManager.playSend()
-                showToast("Photo sent")
+                showToast(if (isVideo) "Sending video…" else "Sending photo…")
             }
 
             activeReplyQuote = null
@@ -5662,6 +5668,7 @@ private fun ChatScreenContent(
                 onEdit = {
 
                     editingMessageId = msg.id
+                    editingOriginalText = msg.text ?: ""
 
                     inputText = msg.text ?: ""
 

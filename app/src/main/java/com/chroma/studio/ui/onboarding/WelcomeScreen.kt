@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -121,7 +122,7 @@ fun WelcomeScreen(
     )
 
     fun handlePrimarySubmit() {
-        val cleanUser = username.trim()
+        val cleanUser = username.trim().removePrefix("@")
         val cleanPass = password.trim()
 
         if (cleanUser.isEmpty() && cleanPass.isEmpty()) {
@@ -137,8 +138,14 @@ fun WelcomeScreen(
             Toast.makeText(context, "Username must be at least 3 characters", Toast.LENGTH_SHORT).show()
             return
         }
-        if (cleanPass.length < 6) {
-            Toast.makeText(context, "Password must be at least 6 characters", Toast.LENGTH_SHORT).show()
+        val minLen = if (isSignUpMode) 8 else 6
+        if (cleanPass.length < minLen) {
+            Toast.makeText(
+                context,
+                if (isSignUpMode) "Password must be at least 8 characters with uppercase, number & symbol"
+                else "Password must be at least 6 characters",
+                Toast.LENGTH_SHORT
+            ).show()
             return
         }
 
@@ -168,7 +175,7 @@ fun WelcomeScreen(
                     fontFamily = InterFontFamily
                 )
             ) {
-                append("By continuing, you agree to our ")
+                append("By continuing, you agree to our\n")
             }
 
             pushStringAnnotation(tag = "TERMS", annotation = "terms")
@@ -240,67 +247,62 @@ fun WelcomeScreen(
                 .imePadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ─── 1. HERO 3D CHARACTER SECTION (DEVICE WIDTH = IMAGE WIDTH, NO STRETCHING) ──
+            // ─── 1. STUDIO OPTICAL HERO SECTION (CLEAN EDITORIAL HEADER, ZERO CARTOONS) ──
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(216.dp)
             ) {
                 Image(
-                    painter = painterResource(if (colors.isDark) R.drawable.hero_oscellion_auth else R.drawable.hero_oscellion_auth_light),
-                    contentDescription = "Oscellion Hero Character",
-                    contentScale = ContentScale.FillWidth,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(888f / 1024f)
+                    painter = painterResource(if (colors.isDark) R.drawable.onboard_art_prism else R.drawable.wallpaper_mac_big_screen),
+                    contentDescription = "Oscellion Studio Backdrop",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
                 )
 
-                // Smooth bottom gradient overlay fading into the canvas background
+                // Smooth vertical fade into canvas background
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(115.dp)
-                        .align(Alignment.BottomCenter)
+                        .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    colors.bg.copy(alpha = 0.45f),
-                                    colors.bg.copy(alpha = 0.85f),
-                                    colors.bg
-                                )
+                                0.0f to colors.bg.copy(alpha = 0.20f),
+                                0.55f to colors.bg.copy(alpha = 0.68f),
+                                1.0f to colors.bg
                             )
                         )
                 )
 
-                // ─── 2. HEADLINE & BRANDING (OFFICIAL OSCELLION BRAND LOCKUP OVERLAID ON SPHERE) ────
+                // ─── 2. HEADLINE & BRANDING (OFFICIAL OSCELLION BRAND LOCKUP) ────
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = "Welcome to",
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = colors.textMain,
+                        color = colors.textMain.copy(alpha = 0.85f),
                         letterSpacing = (-0.2).sp,
                         fontFamily = InterFontFamily
                     )
 
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(6.dp))
 
                     Image(
                         painter = painterResource(R.drawable.oscellion_brand_lockup),
                         contentDescription = "Oscellion",
                         contentScale = ContentScale.Fit,
+                        colorFilter = if (!colors.isDark) ColorFilter.tint(colors.textMain) else null,
                         modifier = Modifier
                             .height(34.dp)
                             .aspectRatio(455f / 95f)
                     )
 
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(6.dp))
 
                     Text(
                         text = "Create • Share • Explore",

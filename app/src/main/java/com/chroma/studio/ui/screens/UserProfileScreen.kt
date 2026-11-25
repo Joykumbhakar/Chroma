@@ -188,6 +188,7 @@ fun UserProfileScreen(
     onNavigateToChat: ((String) -> Unit)? = null,
     onNavigateToSettings: () -> Unit = {},
     onNavigateToEditProfile: () -> Unit = {},
+    onNavigateToUpgradeToPro: () -> Unit = {},
     onNavigateToCreateStory: ((android.net.Uri?) -> Unit)? = null,
     onStoryViewerChange: ((Boolean) -> Unit)? = null,
     onBack: () -> Unit
@@ -422,21 +423,40 @@ fun UserProfileScreen(
     var hasBioOverflow by remember { mutableStateOf(false) }
     var selectedPostIndex by remember { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(isWorksLoading) {
-        if (!isWorksLoading && initialPostId != null && works.isNotEmpty()) {
-            val idx = works.indexOfFirst { it.id == initialPostId }
-            if (idx >= 0) {
-                selectedPostIndex = idx
-            }
-        }
-    }
-
     val gridState = rememberLazyGridState()
 
     val normalWorks = remember(works) { works.filter { it.remixedFromPostId == null && it.postType == "work" } }
     val imagePosts = remember(works) { works.filter { it.postType == "image" } }
     val flashPosts = userFlashes
     val remixWorks = remember(works) { works.filter { it.remixedFromPostId != null } }
+
+    LaunchedEffect(isWorksLoading, initialPostId, works) {
+        if (!isWorksLoading && !initialPostId.isNullOrBlank() && works.isNotEmpty()) {
+            val nIdx = normalWorks.indexOfFirst { it.id == initialPostId }
+            if (nIdx >= 0) {
+                selectedTabIndex = 0
+                selectedPostIndex = nIdx
+            } else {
+                val pIdx = imagePosts.indexOfFirst { it.id == initialPostId }
+                if (pIdx >= 0) {
+                    selectedTabIndex = 1
+                    selectedPostIndex = pIdx
+                } else {
+                    val rIdx = remixWorks.indexOfFirst { it.id == initialPostId }
+                    if (rIdx >= 0) {
+                        selectedTabIndex = 3
+                        selectedPostIndex = rIdx
+                    } else {
+                        val allIdx = works.indexOfFirst { it.id == initialPostId }
+                        if (allIdx >= 0) {
+                            selectedTabIndex = 2
+                            selectedPostIndex = allIdx
+                        }
+                    }
+                }
+            }
+        }
+    }
     val profileTabIcons = if (isCurrentUser) listOf(Lucide.LayoutGrid, Lucide.Image, Lucide.Zap, Lucide.HeartHandshake, Lucide.Bookmark) else listOf(Lucide.LayoutGrid, Lucide.Image, Lucide.Zap, Lucide.HeartHandshake)
 
     val scrollProgress by remember {
@@ -1139,7 +1159,8 @@ fun UserProfileScreen(
                 }
             }
 
-            val feedListState = rememberLazyListState(initialFirstVisibleItemIndex = selectedPostIndex!!)
+            val safeIndex = (selectedPostIndex ?: 0).coerceIn(0, (activeList.size - 1).coerceAtLeast(0))
+            val feedListState = rememberLazyListState(initialFirstVisibleItemIndex = safeIndex)
             Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
                 LazyColumn(
                     state = feedListState,
@@ -1634,6 +1655,7 @@ fun UserProfileScreen(
         onDismissSettingsSheet = { showSettingsBottomSheet = false },
         onNavigateToSettings = onNavigateToSettings,
         onNavigateToEditProfile = onNavigateToEditProfile,
+        onNavigateToUpgradeToPro = onNavigateToUpgradeToPro,
         onShowShareCardModal = { showShareCardModal = true },
         onShowOnlyFriendsSheet = { showOnlyFriendsManagementSheet = true },
         onSelectSavedTab = { selectedTabIndex = 4 },
@@ -1709,6 +1731,7 @@ private fun UserProfileSettingsAndSignOutSheets(
     onDismissSettingsSheet: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToEditProfile: () -> Unit,
+    onNavigateToUpgradeToPro: () -> Unit,
     onShowShareCardModal: () -> Unit,
     onShowOnlyFriendsSheet: () -> Unit,
     onSelectSavedTab: () -> Unit,
@@ -1812,6 +1835,17 @@ private fun UserProfileSettingsAndSignOutSheets(
                         onClick = {
                             onDismissSettingsSheet()
                             onSelectSavedTab()
+                        }
+                    )
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    OneUiSettingsNavRow(
+                        title = if (profile?.verified == true) "Oscellion Pro & Verified Badge" else "Upgrade to Pro",
+                        subtitle = if (profile?.verified == true) "View Pro status or upgrade badge color" else "Get verified badge, Luxury colors & live status",
+                        icon = Lucide.Sparkles,
+                        iconColor = Color(0xFF8B5CF6),
+                        onClick = {
+                            onDismissSettingsSheet()
+                            onNavigateToUpgradeToPro()
                         }
                     )
                 }

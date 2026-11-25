@@ -61,9 +61,13 @@ import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.OAuthProvider
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -596,67 +600,121 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
         }
     }
 
-    // Google Auth Launcher
-    val googleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            scope.launch {
-                isLoading = true
-                errorMessage = null
-                try {
-                    val account = task.await()
-                    val credential = GoogleAuthProvider.getCredential(account.idToken, null)
-                    val authResult = FirebaseAuth.getInstance().signInWithCredential(credential).await()
-                    val user = authResult.user
-                    if (user != null) {
-                        val profile = discoverRepo.getUserProfile(user.uid)
-                        if (profile != null) {
-                            SavedAccountManager.saveFromProfile(context, profile, user.email)
-                            com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
-                            onLoginSuccess()
+    suspend fun handleSignedInFirebaseUser(user: FirebaseUser) {
+        val profile = discoverRepo.getUserProfile(user.uid)
+        if (profile != null) {
+            SavedAccountManager.saveFromProfile(context, profile, user.email)
+            com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+            onLoginSuccess()
+        } else {
+            val baseName = user.email?.substringBefore("@")?.filter { it.isLetterOrDigit() || it == '_' }?.lowercase()?.ifBlank { "creator" } ?: "creator"
+            var targetUsername = baseName
+            if (!discoverRepo.checkUsernameAvailable(targetUsername)) {
+                val suggestions = discoverRepo.suggestAvailableUsernames(baseName)
+                targetUsername = suggestions.firstOrNull() ?: "${baseName}${System.currentTimeMillis() % 1000}"
+            }
+            val displayName = user.displayName?.ifBlank { baseName } ?: baseName
+            val avatarUrl = user.photoUrl?.toString() ?: ""
+
+            val registered = discoverRepo.registerDetailedUser(
+                uid = user.uid,
+                displayName = displayName,
+                username = targetUsername,
+                dob = null,
+                avatarUrl = avatarUrl,
+                interests = listOf("Creative Studio", "Design Systems", "Photography"),
+                gender = "Private",
+                email = user.email ?: "",
+                googleId = user.uid,
+                agreedToTermsAt = System.currentTimeMillis()
+            )
+
+            if (registered) {
+                val newProfile = discoverRepo.getUserProfile(user.uid)
+                if (newProfile != null) {
+                    SavedAccountManager.saveFromProfile(context, newProfile, user.email)
+                }
+                com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+                onLoginSuccess()
+            } else {
+                errorMessage = "Could not initialize your studio profile. Please try again."
+            }
+        }
+    }
+
+    fun launchWebGoogleFallback() {
+        val activity = context as? Activity
+        if (activity == null) {
+            isLoading = false
+            errorMessage = "Google authentication window unavailable."
+            return
+        }
+        val provider = OAuthProvider.newBuilder("google.com")
+            .addCustomParameter("prompt", "select_account")
+            .build()
+        FirebaseAuth.getInstance().startActivityForSignInWithProvider(activity, provider)
+            .addOnSuccessListener { authResult ->
+                scope.launch {
+                    try {
+                        val user = authResult.user
+                        if (user != null) {
+                            handleSignedInFirebaseUser(user)
                         } else {
-                            val baseName = user.email?.substringBefore("@")?.filter { it.isLetterOrDigit() || it == '_' }?.lowercase()?.ifBlank { "creator" } ?: "creator"
-                            var targetUsername = baseName
-                            if (!discoverRepo.checkUsernameAvailable(targetUsername)) {
-                                val suggestions = discoverRepo.suggestAvailableUsernames(baseName)
-                                targetUsername = suggestions.firstOrNull() ?: "${baseName}${System.currentTimeMillis() % 1000}"
-                            }
-                            val displayName = user.displayName?.ifBlank { baseName } ?: baseName
-                            val avatarUrl = user.photoUrl?.toString() ?: ""
-
-                            val registered = discoverRepo.registerDetailedUser(
-                                uid = user.uid,
-                                displayName = displayName,
-                                username = targetUsername,
-                                dob = null,
-                                avatarUrl = avatarUrl,
-                                interests = listOf("Creative Studio", "Design", "Photography"),
-                                gender = "UNSPECIFIED",
-                                agreedToTermsAt = System.currentTimeMillis()
-                            )
-
-                            if (registered) {
-                                val newProfile = discoverRepo.getUserProfile(user.uid)
-                                if (newProfile != null) {
-                                    SavedAccountManager.saveFromProfile(context, newProfile, user.email)
-                                }
-                                com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
-                                onLoginSuccess()
-                            } else {
-                                errorMessage = "Could not initialize your studio profile. Please try again."
-                            }
+                            errorMessage = "Google Sign-In returned empty user."
                         }
-                    } else {
-                        errorMessage = "Login failed: No user found"
+                    } catch (e: Exception) {
+                        errorMessage = e.localizedMessage ?: "Google Sign-In failed."
+                    } finally {
+                        isLoading = false
                     }
-                } catch (e: Exception) {
-                    errorMessage = e.message ?: "Login failed"
-                } finally {
-                    isLoading = false
                 }
             }
-        } else {
-            isLoading = false
+            .addOnFailureListener { e ->
+                isLoading = false
+                errorMessage = e.localizedMessage ?: "Google Sign-In cancelled or failed."
+            }
+    }
+
+    // Google Auth Launcher
+    val googleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        scope.launch {
+            isLoading = true
+            errorMessage = null
+            try {
+                val account = task.await()
+                val credential = GoogleAuthProvider.getCredential(account.idToken, null)
+                val authResult = FirebaseAuth.getInstance().signInWithCredential(credential).await()
+                val user = authResult.user
+                if (user != null) {
+                    handleSignedInFirebaseUser(user)
+                    isLoading = false
+                } else {
+                    isLoading = false
+                    errorMessage = "Login failed: No user found"
+                }
+            } catch (e: ApiException) {
+                when (e.statusCode) {
+                    GoogleSignInStatusCodes.SIGN_IN_CANCELLED, CommonStatusCodes.CANCELED -> {
+                        isLoading = false
+                    }
+                    CommonStatusCodes.DEVELOPER_ERROR,
+                    GoogleSignInStatusCodes.SIGN_IN_FAILED,
+                    GoogleSignInStatusCodes.SIGN_IN_CURRENTLY_IN_PROGRESS -> {
+                        // Release SHA-1 mismatch or Play Services failure -> fallback cleanly to browser OAuth.
+                        launchWebGoogleFallback()
+                    }
+                    else -> {
+                        isLoading = false
+                        errorMessage = "Google Sign-In error (${e.statusCode}): ${e.localizedMessage ?: "Please retry"}"
+                    }
+                }
+            } catch (e: Exception) {
+                isLoading = false
+                if (result.resultCode != Activity.RESULT_CANCELED) {
+                    errorMessage = e.localizedMessage ?: "Google Sign-In failed"
+                }
+            }
         }
     }
 
@@ -670,8 +728,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
             val client = GoogleSignIn.getClient(context, gso)
             client.signOut().addOnCompleteListener { googleLauncher.launch(client.signInIntent) }
         } catch (e: Exception) {
-            isLoading = false
-            errorMessage = "Google Sign In initialization failed: ${e.message}"
+            launchWebGoogleFallback()
         }
     }
 

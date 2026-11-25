@@ -587,7 +587,11 @@ fun UserProfileBioDetailsSection(
                     )
                     if (profile?.verified == true) {
                         Spacer(Modifier.width(6.dp))
-                        VerifiedBadge(size = 18.dp, showGlow = true)
+                        VerifiedBadge(
+                            size = 18.dp,
+                            tone = profile.verifiedTone,
+                            showGlow = true
+                        )
                     }
                 }
 

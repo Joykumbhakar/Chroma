@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "ChromaStudio"
-include(":app")
+include(":app", ":lite")

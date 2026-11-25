@@ -4,7 +4,13 @@ import android.net.Uri
 
 import com.chroma.studio.ui.components.GlassIconButton
 
+import com.chroma.studio.ui.components.HomeNavigationDrawerContent
+
+import com.chroma.studio.ui.components.homeDrawerScrimColor
+
 import com.chroma.studio.ui.components.OscellionBrandLockup
+
+import androidx.compose.ui.graphics.RectangleShape
 
 import com.chroma.studio.ui.components.OscellionWebLogo
 
@@ -21,6 +27,7 @@ import com.chroma.studio.ui.components.SynchronizedRotatingActionMenu
 import com.chroma.studio.ui.components.ActionMenuType
 
 import com.chroma.studio.ui.components.AiWaveSphereIcon
+import com.chroma.studio.ui.components.FluentDiamondGemIcon
 
 import androidx.compose.foundation.text.BasicTextField
 
@@ -366,7 +373,17 @@ fun HomeScreen(
 
     onNavigateToCreateTextStatus: (() -> Unit)? = null,
 
-    onNavigateToDrafts: () -> Unit = {}
+    onNavigateToDrafts: () -> Unit = {},
+
+    onNavigateToImageStory: (() -> Unit)? = null,
+
+    onNavigateToFlashDrafts: (() -> Unit)? = null,
+
+    onNavigateToProfile: (() -> Unit)? = null,
+
+    onNavigateToUpgradeToPro: () -> Unit = {},
+
+    onDrawerOpenChange: ((Boolean) -> Unit)? = null
 
 ) {
 
@@ -638,306 +655,130 @@ fun HomeScreen(
 
 
 
-    ModalNavigationDrawer(
-
-        drawerState = drawerState,
-
-        drawerContent = {
-
-            ModalDrawerSheet(
-
-                drawerContainerColor = colors.bg,
-
-                windowInsets = WindowInsets(0.dp),
-
-                modifier = Modifier.width(300.dp)
-
-            ) {
-
-                Column(modifier = Modifier.padding(16.dp).fillMaxHeight()) {
-
-                    OscellionBrandLockup(
-
-                        iconSize = 32.dp,
-
-                        fontSize = 24.dp,
-
-                        modifier = Modifier.padding(bottom = 32.dp, top = 24.dp, start = 8.dp)
-
-                    )
-
-
-
-                    DrawerItem(
-
-                        icon = Lucide.House,
-
-                        label = "Home",
-
-                        selected = true
-
-                    ) { scope.launch { drawerState.close() } }
-
-
-
-                    Spacer(Modifier.height(4.dp))
-
-
-
-                    DrawerItem(
-
-                        icon = Lucide.Image,
-
-                        label = "Backgrounds",
-
-                        selected = false
-
-                    ) {
-
-                        scope.launch { drawerState.close() }
-
-                        onNavigateToBackgrounds()
-
-                    }
-
-
-
-                    if (customHomeBgLayersJson != null) {
-
-                        Spacer(Modifier.height(4.dp))
-
-                        DrawerItem(
-
-                            icon = Lucide.RotateCcw,
-
-                            label = "Reset Background to Default",
-
-                            selected = false
-
-                        ) {
-
-                            scope.launch { drawerState.close() }
-
-                            showResetBgConfirm = true
-
-                        }
-
-                    }
-
-
-
-                    Spacer(Modifier.height(4.dp))
-
-
-
-                    DrawerItem(
-
-                        icon = Lucide.FileText,
-
-                        label = "Drafts",
-
-                        selected = false
-
-                    ) {
-
-                        scope.launch { drawerState.close() }
-
-                        if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
-
-                            onRequireLogin()
-
-                        } else {
-
-                            onNavigateToDrafts()
-
-                        }
-
-                    }
-
-
-
-                    Spacer(Modifier.height(4.dp))
-
-
-
-                    DrawerItem(
-
-                        icon = Lucide.Settings,
-
-                        label = "Settings & Preferences",
-
-                        selected = false
-
-                    ) { 
-
-                        scope.launch { drawerState.close() }
-
-                        if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
-
-                            onRequireLogin()
-
-                        } else {
-
-                            onNavigateToSettings() 
-
-                        }
-
-                    }
-
-
-
-                    Spacer(Modifier.height(4.dp))
-
-
-
-                    DrawerItem(
-
-                        icon = Lucide.Trash2,
-
-                        label = "Trash",
-
-                        selected = false
-
-                    ) { 
-
-                        scope.launch { drawerState.close() }
-
-                        onNavigateToTrash() 
-
-                    }
-
-                    
-
-                    Spacer(Modifier.height(16.dp))
-
-
-
-                    HorizontalDivider(
-
-                        color = colors.glassBorder.copy(alpha = 0.6f),
-
-                        thickness = 0.8.dp,
-
-                        modifier = Modifier.padding(horizontal = 8.dp)
-
-                    )
-
-
-
-                    Spacer(Modifier.height(16.dp))
-
-
-
-                    Text(
-
-                        "PREFERENCES",
-
-                        color = colors.textMuted.copy(alpha = 0.7f),
-
-                        fontSize = 11.sp,
-
-                        fontWeight = FontWeight.Bold,
-
-                        letterSpacing = 0.8.sp,
-
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-
-                    )
-
-
-
-                    Spacer(Modifier.height(6.dp))
-
-                    
-
-                    // Dark mode toggle (Clean transparent row with Apple squircle vector icon & Apple HIG switch)
-
-                    Row(
-
-                        modifier = Modifier
-
-                            .fillMaxWidth()
-
-                            .clip(RoundedCornerShape(12.dp))
-
-                            .background(Color.Transparent)
-
-                            .clickable { onToggleDarkMode() }
-
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-
-                        verticalAlignment = Alignment.CenterVertically,
-
-                        horizontalArrangement = Arrangement.SpaceBetween
-
-                    ) {
-
-                        Row(
-
-                            verticalAlignment = Alignment.CenterVertically,
-
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
-
-                        ) {
-
-                            AppleSettingsSquircleVectorIcon(
-
-                                icon = if (isDarkMode) Lucide.Moon else Lucide.Sun,
-
-                                size = 24.dp,
-
-                                iconTint = Color(0xFF0381FE)
-
-                            )
-
-                            Column {
-
-                                Text(
-
-                                    text = if (isDarkMode) "Dark Mode" else "Light Mode",
-
-                                    color = colors.textMain,
-
-                                    fontWeight = FontWeight.Medium,
-
-                                    fontSize = 15.sp
-
-                                )
-
-                                Text(
-
-                                    text = if (isDarkMode) "Dark theme enabled" else "Light theme enabled",
-
-                                    color = colors.textMuted,
-
-                                    fontSize = 11.sp
-
-                                )
-
-                            }
-
-                        }
-
-                        AppleSwitch(
-
-                            checked = isDarkMode,
-
-                            onCheckedChange = { onToggleDarkMode() }
-
-                        )
-
-                    }
-
-
-
-                    Spacer(Modifier.height(100.dp))
-
-                }
-
-            }
-
+    var drawerActiveItem by remember { mutableStateOf<String?>(null) }
+    val draftRepo = remember { com.chroma.studio.data.DraftPostRepository(context) }
+    val savedDrafts by draftRepo.draftsFlow.collectAsState()
+
+    val savedAccount = remember { com.chroma.studio.data.SavedAccountManager.getActiveAccount(context) }
+    val firebaseUser = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser }
+    val isGuestUser = com.chroma.studio.data.SavedAccountManager.isGuest(context)
+    var drawerUserProfile by remember { mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
+
+    val isDrawerOpenOrOpening =
+        drawerState.targetValue == DrawerValue.Open || drawerState.currentValue == DrawerValue.Open
+
+    LaunchedEffect(isDrawerOpenOrOpening) {
+        onDrawerOpenChange?.invoke(isDrawerOpenOrOpening)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            onDrawerOpenChange?.invoke(false)
         }
+    }
 
+    LaunchedEffect(firebaseUser?.uid, drawerState.isOpen) {
+        val uid = firebaseUser?.uid ?: savedAccount?.uid
+        if (!uid.isNullOrBlank() && !com.chroma.studio.data.SavedAccountManager.isGuestUid(uid)) {
+            try {
+                val prof = com.chroma.studio.data.DiscoverRepository.getInstance().getUserProfile(uid)
+                if (prof != null) drawerUserProfile = prof
+            } catch (_: Exception) {}
+        }
+    }
+
+    val drawerDisplayName = drawerUserProfile?.displayName?.takeIf { it.isNotBlank() }
+        ?: savedAccount?.displayName?.takeIf { it.isNotBlank() }
+        ?: firebaseUser?.displayName?.takeIf { it.isNotBlank() }
+        ?: "Guest Creator"
+    val drawerUsername = drawerUserProfile?.username?.takeIf { it.isNotBlank() }
+        ?: savedAccount?.username?.takeIf { it.isNotBlank() }
+        ?: if (isGuestUser) "guest" else "creator"
+    val drawerAvatarUrl = drawerUserProfile?.avatarUrl?.takeIf { it.isNotBlank() }
+        ?: savedAccount?.avatarUrl
+        ?: ""
+    val drawerBannerUrl = drawerUserProfile?.bannerUrl.orEmpty()
+    val drawerVerified = drawerUserProfile?.verified ?: isVerified
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        scrimColor = homeDrawerScrimColor(isDarkMode),
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .widthIn(max = 308.dp)
+                    .fillMaxHeight(),
+                drawerShape = RectangleShape,
+                drawerContainerColor = Color.Transparent,
+                drawerTonalElevation = 0.dp,
+                windowInsets = WindowInsets(0, 0, 0, 0)
+            ) {
+                HomeNavigationDrawerContent(
+                    isDarkMode = isDarkMode,
+                    isDrawerVisible = drawerState.isOpen || drawerState.isAnimationRunning,
+                    activeItem = drawerActiveItem,
+                    displayName = drawerDisplayName,
+                    username = drawerUsername,
+                    avatarUrl = drawerAvatarUrl,
+                    bannerUrl = drawerBannerUrl,
+                    isVerified = drawerVerified,
+                    isOnline = !isGuestUser,
+                    draftsBadgeCount = if (savedDrafts.isNotEmpty()) savedDrafts.size.toString() else null,
+                    onCloseClick = { scope.launch { drawerState.close() } },
+                    onProfileClick = {
+                        scope.launch { drawerState.close() }
+                        if (isGuestUser) {
+                            onRequireLogin()
+                        } else {
+                            onNavigateToProfile?.invoke()
+                        }
+                    },
+                    onToggleDarkMode = onToggleDarkMode,
+                    onSelectItem = { label, markActive ->
+                        if (markActive) drawerActiveItem = label
+                        scope.launch { drawerState.close() }
+                        when (label) {
+                            "New Post" -> {
+                                if (isGuestUser) onRequireLogin()
+                                else onNavigateToCreatePost?.invoke()
+                            }
+                            "New Flash" -> {
+                                if (isGuestUser) onRequireLogin()
+                                else onNavigateToFlashPicker?.invoke()
+                            }
+                            "New Story → Image Story" -> {
+                                if (isGuestUser) onRequireLogin()
+                                else onNavigateToImageStory?.invoke()
+                            }
+                            "New Story → Text Story" -> {
+                                if (isGuestUser) onRequireLogin()
+                                else onNavigateToCreateTextStatus?.invoke()
+                            }
+                            "New Work" -> onNewWork()
+                            "Backgrounds" -> onNavigateToBackgrounds()
+                            "Drafts → Flash editor Draft" -> {
+                                if (isGuestUser) onRequireLogin()
+                                else (onNavigateToFlashDrafts ?: onNavigateToDrafts).invoke()
+                            }
+                            "Drafts → Photo editor Drafts" -> {
+                                if (isGuestUser) onRequireLogin()
+                                else onNavigateToDrafts()
+                            }
+                            "Upgrade to Pro" -> {
+                                if (isGuestUser) onRequireLogin()
+                                else onNavigateToUpgradeToPro()
+                            }
+                            "Settings" -> {
+                                if (isGuestUser) onRequireLogin()
+                                else onNavigateToSettings()
+                            }
+                            "Trash" -> onNavigateToTrash()
+                        }
+                    }
+                )
+            }
+        }
     ) {
 
         Box(modifier = Modifier.fillMaxSize()) {
@@ -1004,7 +845,7 @@ fun HomeScreen(
             val maxCollapseDp = expandedHeroHeight - collapsedHeroHeight
             val maxCollapsePx = remember(density, maxCollapseDp) { with(density) { maxCollapseDp.toPx() } }
 
-            var collapseOffsetPx by remember(maxCollapsePx) { mutableFloatStateOf(maxCollapsePx) }
+            var collapseOffsetPx by remember(maxCollapsePx) { mutableFloatStateOf(0f) }
             var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
             val nestedScrollConnection = remember(maxCollapsePx, gridState) {
@@ -1551,7 +1392,7 @@ fun HomeScreen(
 
                                     Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
 
-                                        AiWaveSphereIcon(modifier = Modifier.size(26.dp))
+                                        FluentDiamondGemIcon(modifier = Modifier.size(24.dp))
 
                                     }
 

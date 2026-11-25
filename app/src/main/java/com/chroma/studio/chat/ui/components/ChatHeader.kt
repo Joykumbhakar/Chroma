@@ -163,7 +163,10 @@ fun ChatHeader(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 if (activeChat.isVerified) {
-                                    VerifiedBadge(size = 16.dp)
+                                    VerifiedBadge(
+                                        size = 16.dp,
+                                        tone = activeChat.verifiedTone
+                                    )
                                 }
                                 if (activeChat.isMuted) {
                                     LucideBellOff(tint = colors.textMuted, size = 13.dp)

@@ -5,8 +5,11 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.util.Base64
 import com.chroma.studio.chat.util.BiometricHelper
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import java.io.File
@@ -29,12 +32,28 @@ object SecurityPinManager {
     private const val KEY_WALLPAPER_URI = "app_lock_wallpaper_uri"
     private const val KEY_WALLPAPER_DIMMING = "app_lock_wallpaper_dimming"
     private const val KEY_CUSTOM_WALLPAPERS = "app_lock_custom_wallpapers"
+    private const val KEY_AUTO_LOCK_DELAY_MS = "app_lock_auto_lock_delay_ms"
 
     const val DEFAULT_WALLPAPER = "file:///android_asset/wallpaper/wallpaper_2.jpg"
     const val DEFAULT_DIMMING = 0.45f
 
+    const val DELAY_IMMEDIATE_MS = 0L
+    const val DELAY_15S_MS = 15_000L
+    const val DELAY_1M_MS = 60_000L
+    const val DELAY_5M_MS = 300_000L
+
+    @Volatile
+    var lastBackgroundAtMs: Long = 0L
+        private set
+
+    @Volatile
+    private var suppressNextBackgroundLockUntilMs: Long = 0L
+
     private val _isSessionUnlocked = MutableStateFlow(false)
     val isSessionUnlocked: StateFlow<Boolean> = _isSessionUnlocked.asStateFlow()
+
+    private val _lockTrigger = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+    val lockTrigger: SharedFlow<Unit> = _lockTrigger.asSharedFlow()
 
     fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -137,12 +156,58 @@ object SecurityPinManager {
 
     /** Marks current app session as unlocked. */
     fun markUnlocked() {
+        lastBackgroundAtMs = 0L
+        suppressNextBackgroundLockUntilMs = 0L
         _isSessionUnlocked.value = true
     }
 
-    /** Locks the current session (e.g. when app goes to background). */
+    /** Temporarily exempts internal screen/picker transitions from triggering auto-lock. */
+    fun markInternalNavigation(graceMs: Long = 3_000L) {
+        suppressNextBackgroundLockUntilMs = System.currentTimeMillis() + graceMs
+    }
+
+    /** Records when the app entered the background. */
+    fun markAppBackgrounded() {
+        val now = System.currentTimeMillis()
+        if (now < suppressNextBackgroundLockUntilMs) {
+            return
+        }
+        lastBackgroundAtMs = now
+    }
+
+    /** Returns true if auto-lock timeout has elapsed since the app went to background. */
+    fun shouldLockOnForegroundReturn(context: Context): Boolean {
+        if (!isAppLockEnabled(context)) return false
+        val bgAt = lastBackgroundAtMs
+        if (bgAt <= 0L) return false
+        val delayMs = getAutoLockDelayMs(context)
+        return (System.currentTimeMillis() - bgAt) >= delayMs
+    }
+
+    /** Returns configured auto-lock timeout in milliseconds (0 = Immediately). */
+    fun getAutoLockDelayMs(context: Context): Long {
+        return getPrefs(context).getLong(KEY_AUTO_LOCK_DELAY_MS, DELAY_15S_MS)
+    }
+
+    /** Saves auto-lock timeout preference. */
+    fun setAutoLockDelayMs(context: Context, delayMs: Long) {
+        getPrefs(context).edit().putLong(KEY_AUTO_LOCK_DELAY_MS, delayMs).apply()
+    }
+
+    /** Human-readable label for configured auto-lock delay. */
+    fun getAutoLockDelayLabel(delayMs: Long): String = when (delayMs) {
+        DELAY_IMMEDIATE_MS -> "Immediately"
+        DELAY_15S_MS -> "After 15 sec"
+        DELAY_1M_MS -> "After 1 min"
+        DELAY_5M_MS -> "After 5 min"
+        else -> "After ${delayMs / 1000} sec"
+    }
+
+    /** Locks the current session immediately (e.g. Lock App Now). */
     fun lockSession() {
+        lastBackgroundAtMs = System.currentTimeMillis()
         _isSessionUnlocked.value = false
+        _lockTrigger.tryEmit(Unit)
     }
 
     /** Returns the active lock screen wallpaper URI. */

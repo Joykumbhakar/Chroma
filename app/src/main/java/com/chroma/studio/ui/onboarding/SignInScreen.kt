@@ -135,36 +135,28 @@ fun SignInScreen(
             isSigningIn = true
             loginError = null
             try {
-                val isEmailFormat = cleanIdentifier.contains("@")
-                val customEmail = "${cleanIdentifier.lowercase()}@oscellion.com"
-                val resolvedEmail = if (isEmailFormat) {
-                    cleanIdentifier.lowercase()
-                } else {
-                    val localMatch = savedAccounts.find { it.username.equals(cleanIdentifier, ignoreCase = true) }?.email
-                    if (!localMatch.isNullOrBlank() && localMatch.contains("@")) {
-                        localMatch
-                    } else {
-                        customEmail
-                    }
+                val normalized = cleanIdentifier.removePrefix("@").lowercase()
+                val isEmailFormat = normalized.contains("@")
+                val customEmail = "$normalized@oscellion.com"
+                val remoteProfile = if (!isEmailFormat) repo.getUserByUsername(normalized) else null
+                val resolvedEmail = when {
+                    isEmailFormat -> normalized
+                    remoteProfile != null && remoteProfile.customEmail.isNotBlank() -> remoteProfile.customEmail.lowercase()
+                    else -> savedAccounts.find { it.username.equals(normalized, ignoreCase = true) }?.email ?: customEmail
                 }
 
                 val authResult = try {
                     auth.signInWithEmailAndPassword(resolvedEmail, password).await()
                 } catch (e: Exception) {
-                    if (!isEmailFormat) {
-                        val profile = repo.getUserByUsername(cleanIdentifier)
-                        if (profile != null && profile.email.isNotBlank() && !profile.email.equals(resolvedEmail, ignoreCase = true)) {
-                            auth.signInWithEmailAndPassword(profile.email, password).await()
-                        } else {
-                            throw e
-                        }
+                    if (!isEmailFormat && remoteProfile != null && remoteProfile.email.isNotBlank() && !remoteProfile.email.equals(resolvedEmail, ignoreCase = true)) {
+                        auth.signInWithEmailAndPassword(remoteProfile.email.lowercase(), password).await()
                     } else {
                         throw e
                     }
                 }
                 val user = authResult.user ?: throw IllegalStateException("Authentication failed: No user returned")
 
-                val profile = repo.getUserProfile(user.uid)
+                val profile = repo.getUserProfile(user.uid) ?: remoteProfile
                 if (profile != null) {
                     SavedAccountManager.saveFromProfile(context, profile, resolvedEmail)
                 } else {
@@ -172,8 +164,8 @@ fun SignInScreen(
                         context,
                         SavedAccount(
                             uid = user.uid,
-                            username = cleanIdentifier.substringBefore("@").lowercase(),
-                            displayName = cleanIdentifier.substringBefore("@"),
+                            username = normalized.substringBefore("@"),
+                            displayName = normalized.substringBefore("@"),
                             email = resolvedEmail,
                             lastLoginMillis = System.currentTimeMillis()
                         )
@@ -859,18 +851,29 @@ fun SignInScreen(
                                 showForgotDialog = false
                                 return@OneUiPrimaryPillButton
                             }
-                            if (resetEmail.isBlank() || !resetEmail.contains("@")) {
-                                resetError = "Please enter a valid email address"
+                            val targetInput = resetEmail.trim().removePrefix("@").lowercase()
+                            if (targetInput.isBlank()) {
+                                resetError = "Enter your @username or email address"
                                 return@OneUiPrimaryPillButton
                             }
                             scope.launch {
                                 resetLoading = true
                                 resetError = null
                                 try {
-                                    auth.sendPasswordResetEmail(resetEmail).await()
+                                    val resolvedTarget = if (targetInput.contains("@")) {
+                                        targetInput
+                                    } else {
+                                        val prof = repo.getUserByUsername(targetInput)
+                                        val recoveryEmail = prof?.email?.takeIf {
+                                            it.contains("@") && !it.endsWith("@oscellion.com")
+                                        } ?: prof?.customEmail?.takeIf { it.contains("@") }
+                                        recoveryEmail ?: "$targetInput@oscellion.com"
+                                    }
+                                    auth.sendPasswordResetEmail(resolvedTarget).await()
+                                    resetEmail = resolvedTarget
                                     resetSent = true
                                 } catch (e: Exception) {
-                                    resetError = e.message ?: "Failed to send reset email"
+                                    resetError = e.localizedMessage ?: "Failed to send reset email"
                                 } finally {
                                     resetLoading = false
                                 }

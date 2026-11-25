@@ -400,7 +400,10 @@ private fun OnlyFriendUserRow(
                     )
                     if (user.verified) {
                         Spacer(Modifier.width(4.dp))
-                        VerifiedBadge(size = 12.dp)
+                        VerifiedBadge(
+                            size = 12.dp,
+                            tone = user.verifiedTone
+                        )
                     }
                 }
                 if (user.username.isNotBlank()) {

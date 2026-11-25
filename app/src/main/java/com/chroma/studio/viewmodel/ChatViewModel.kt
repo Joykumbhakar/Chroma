@@ -87,6 +87,23 @@ class ChatViewModel : ViewModel() {
     private val _typingStatuses = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
     val typingStatuses: StateFlow<Map<String, Map<String, String>>> = _typingStatuses.asStateFlow()
 
+    private val _draftsByRoom = MutableStateFlow<Map<String, String>>(emptyMap())
+    val draftsByRoom: StateFlow<Map<String, String>> = _draftsByRoom.asStateFlow()
+
+    fun getDraft(roomId: String): String = _draftsByRoom.value[roomId].orEmpty()
+
+    fun saveDraft(roomId: String, text: String) {
+        if (roomId.isBlank()) return
+        val current = _draftsByRoom.value
+        if (text.isBlank()) {
+            if (current.containsKey(roomId)) {
+                _draftsByRoom.value = current - roomId
+            }
+        } else if (current[roomId] != text) {
+            _draftsByRoom.value = current + (roomId to text)
+        }
+    }
+
     fun getUserProfile(userId: String): UserProfile? = _userProfiles.value[userId]
 
     fun fetchProfilesForUsers(userIds: List<String>) {
@@ -318,7 +335,7 @@ class ChatViewModel : ViewModel() {
                     launch(Dispatchers.IO) {
                         for (chat in chats) {
                             if (chat.lastSender != null && chat.lastSender != currentUid && !chat.lastMessageIsDelivered) {
-                                repository.markAsDelivered(chat.id)
+                                repository.markAsDelivered(chat.id, chat.lastMessageId)
                             }
                         }
                     }
@@ -431,6 +448,7 @@ class ChatViewModel : ViewModel() {
         _stories.value = emptyList()
         _userProfiles.value = emptyMap()
         _typingStatuses.value = emptyMap()
+        _draftsByRoom.value = emptyMap()
         _blockedUserIds.value = emptySet()
         _mutedChatIds.value = emptySet()
 
@@ -543,7 +561,13 @@ class ChatViewModel : ViewModel() {
             }
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Pre-warm room participants, public keys, push metadata, and FCM OAuth2 token BEFORE user sends a message
+            launch {
+                try {
+                    repository.prefetchRoomMetadata(roomId, currentRoom?.participants)
+                } catch (_: Exception) {}
+            }
             try {
                 pendingRoomCreations[roomId]?.await()
             } catch (_: Exception) {}
@@ -551,18 +575,16 @@ class ChatViewModel : ViewModel() {
                 repository.markAsRead(roomId)
             } catch (_: Exception) {}
             try {
-                val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                if (currentUid != null) {
+                val activeUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (activeUid != null) {
                     val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                    val userDoc = firestore.collection("users").document(currentUid).get().await()
+                    val userDoc = firestore.collection("users").document(activeUid).get().await()
                     if (userDoc.getString("publicKey").isNullOrBlank()) {
                         val pubKey = com.chroma.studio.utils.CryptoHelper.getPublicKeyBase64()
-                        firestore.collection("users").document(currentUid).update("publicKey", pubKey)
+                        firestore.collection("users").document(activeUid).update("publicKey", pubKey)
                     }
                 }
-            } catch (e: Exception) {
-                // ignore
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -809,7 +831,7 @@ class ChatViewModel : ViewModel() {
             _recentChats.value = currentChats
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try { pendingRoomCreations[roomId]?.await() } catch (_: Exception) {}
             val success = repository.sendMessage(
                 roomId = roomId,
@@ -825,9 +847,9 @@ class ChatViewModel : ViewModel() {
                 flashVideoAuthorAvatarUrl = flashVideo.authorAvatarUrl,
                 flashVideoDurationMs = flashVideo.duration
             )
-            if (!success && _activeRoomId.value == roomId) {
+            if (_activeRoomId.value == roomId) {
                 _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = true) else it
+                    if (it.id == msgId) it.copy(isPending = false, isError = !success) else it
                 }
             }
         }
@@ -896,7 +918,7 @@ class ChatViewModel : ViewModel() {
             _recentChats.value = currentChats
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try { pendingRoomCreations[roomId]?.await() } catch (_: Exception) {}
             val success = repository.sendMessage(
                 roomId = roomId,
@@ -908,10 +930,9 @@ class ChatViewModel : ViewModel() {
                 storyId = storyId,
                 storyThumbnailUrl = storyThumbnailUrl
             )
-            if (!success && _activeRoomId.value == roomId) {
-                // Mark as failed
+            if (_activeRoomId.value == roomId) {
                 _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = true) else it
+                    if (it.id == msgId) it.copy(isPending = false, isError = !success) else it
                 }
             }
         }
@@ -1110,7 +1131,7 @@ class ChatViewModel : ViewModel() {
             _recentChats.value = currentChats
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val audioUrl = repository.uploadAudioToSupabase(audioBytes, "m4a")
             if (audioUrl != null) {
                 val success = repository.sendMessage(
@@ -1122,12 +1143,12 @@ class ChatViewModel : ViewModel() {
                     durationSeconds = durationSeconds,
                     replyToMessageId = replyToMessageId
                 )
-                if (!success) {
+                if (_activeRoomId.value == roomId) {
                     _localMessages.value = _localMessages.value.map {
-                        if (it.id == msgId) it.copy(isPending = false, isError = true) else it
+                        if (it.id == msgId) it.copy(isPending = false, isError = !success) else it
                     }
                 }
-            } else {
+            } else if (_activeRoomId.value == roomId) {
                 _localMessages.value = _localMessages.value.map {
                     if (it.id == msgId) it.copy(isPending = false, isError = true) else it
                 }
@@ -1284,6 +1305,175 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    private fun updateLocalUploadProgress(msgId: String, progress: Int) {
+        val clamped = progress.coerceIn(0, 100)
+        _localMessages.value = _localMessages.value.map { msg ->
+            if (msg.id == msgId && msg.uploadProgress != clamped) {
+                msg.copy(uploadProgress = clamped)
+            } else {
+                msg
+            }
+        }
+    }
+
+    private suspend fun uploadAndCommitMedia(
+        roomId: String,
+        msgId: String,
+        mediaBytes: ByteArray,
+        extLower: String,
+        messageType: String,
+        text: String,
+        replyToMessageId: String?,
+        scaleMinPct: Int = 0
+    ) {
+        val scalePct: (Int) -> Int = { raw ->
+            if (scaleMinPct <= 0) raw
+            else (scaleMinPct + ((raw.coerceIn(0, 100) * (100 - scaleMinPct)) / 100)).coerceIn(scaleMinPct, 100)
+        }
+        val trackProgress: ((Int) -> Unit)? = if (messageType == "image" || messageType == "video") {
+            { pct ->
+                if (_activeRoomId.value == roomId) {
+                    updateLocalUploadProgress(msgId, scalePct(pct))
+                }
+            }
+        } else null
+
+        val mediaUrl = when (messageType) {
+            "video" -> repository.uploadVideoToSupabase(mediaBytes, extLower, onProgress = trackProgress)
+            "audio" -> repository.uploadAudioToSupabase(mediaBytes, extLower)
+            "sticker" -> repository.uploadImageToSupabase(mediaBytes, "png")
+            "file" -> {
+                com.chroma.studio.data.SupabaseMediaStorage.uploadFile(
+                    bytes = mediaBytes,
+                    fileName = "chat_${msgId}.$extLower",
+                    bucket = "chat-media"
+                ) ?: repository.uploadVideoToSupabase(mediaBytes, extLower)
+            }
+            else -> {
+                val compressedBytes = com.chroma.studio.utils.ImageUtils.compressChatImageBytes(mediaBytes) ?: mediaBytes
+                repository.uploadImageToSupabase(compressedBytes, extLower, onProgress = trackProgress)
+            }
+        }
+
+        if (mediaUrl != null) {
+            if (_activeRoomId.value == roomId && trackProgress != null) {
+                updateLocalUploadProgress(msgId, 100)
+            }
+            val success = repository.sendMessage(
+                roomId = roomId,
+                text = text,
+                imageUrl = mediaUrl,
+                preGeneratedId = msgId,
+                messageType = messageType,
+                replyToMessageId = replyToMessageId
+            )
+            if (_activeRoomId.value == roomId) {
+                _localMessages.value = _localMessages.value.map {
+                    if (it.id == msgId) it.copy(isPending = false, isError = !success, uploadProgress = null) else it
+                }
+            }
+        } else if (_activeRoomId.value == roomId) {
+            _localMessages.value = _localMessages.value.map {
+                if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
+            }
+        }
+    }
+
+    fun sendMediaUri(
+        context: android.content.Context,
+        uri: android.net.Uri,
+        caption: String = "",
+        replyToMessageId: String? = null,
+        explicitMessageType: String? = null
+    ) {
+        val roomId = _activeRoomId.value ?: return
+        val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val isVideo = explicitMessageType == "video" || com.chroma.studio.chat.media.ChatMediaLimiter.isVideoUri(context, uri)
+        val messageType = explicitMessageType ?: if (isVideo) "video" else "image"
+
+        val maxLimit = if (isVideo) {
+            com.chroma.studio.chat.media.ChatMediaLimiter.MAX_VIDEO_SIZE_BYTES
+        } else {
+            com.chroma.studio.chat.media.ChatMediaLimiter.MAX_FILE_SIZE_BYTES
+        }
+        val rawSize = com.chroma.studio.chat.media.ChatMediaLimiter.getMediaSizeBytes(context, uri)
+        if (rawSize > maxLimit) {
+            val formatted = com.chroma.studio.chat.media.ChatMediaLimiter.formatFileSize(rawSize)
+            com.chroma.studio.ui.components.ToastManager.showToast("File size exceeds 100 MB limit ($formatted).")
+            return
+        }
+
+        setTypingStatus(false)
+        val msgId = java.util.UUID.randomUUID().toString()
+        val timestamp = System.currentTimeMillis()
+        val previewStr = uri.toString()
+
+        val pendingMsg = ChatMessage(
+            id = msgId,
+            senderId = currentUserId,
+            text = caption,
+            timestamp = timestamp,
+            isPending = true,
+            uploadProgress = if (messageType == "image" || messageType == "video") 0 else null,
+            messageType = messageType,
+            imageUrl = previewStr,
+            mediaUrl = previewStr,
+            replyToMessageId = replyToMessageId
+        )
+        _localMessages.value = listOf(pendingMsg) + _localMessages.value
+
+        try {
+            com.chroma.studio.chat.data.ChatLocalCacheManager.appendOrUpdateMessage(
+                com.chroma.studio.ChromaApp.instance,
+                roomId,
+                pendingMsg
+            )
+        } catch (_: Exception) {
+        }
+
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            val chat = currentChats.removeAt(index)
+            val previewText = if (caption.isNotBlank()) caption else if (messageType == "video") "Video" else "Image"
+            currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
+            _recentChats.value = currentChats
+        }
+
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            if (messageType == "image" || messageType == "video") {
+                updateLocalUploadProgress(msgId, 5)
+            }
+            val bytes = if (isVideo) {
+                com.chroma.studio.chat.media.ChatMediaLimiter.processAndCompressVideo(context, uri)
+                    ?: context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            } else {
+                com.chroma.studio.chat.media.ChatMediaLimiter.processAndCompressPhoto(context, uri)
+                    ?: context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }
+            val extLower = if (isVideo) "mp4" else (com.chroma.studio.chat.media.MediaStoreHelper.getFileExtension(context, uri)?.lowercase() ?: "jpg")
+            if (bytes != null) {
+                if (messageType == "image" || messageType == "video") {
+                    updateLocalUploadProgress(msgId, 12)
+                }
+                uploadAndCommitMedia(
+                    roomId = roomId,
+                    msgId = msgId,
+                    mediaBytes = bytes,
+                    extLower = extLower,
+                    messageType = messageType,
+                    text = caption,
+                    replyToMessageId = replyToMessageId,
+                    scaleMinPct = 12
+                )
+            } else if (_activeRoomId.value == roomId) {
+                _localMessages.value = _localMessages.value.map {
+                    if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
+                }
+            }
+        }
+    }
+
     fun sendMediaMessage(
         imageBytes: ByteArray,
         extension: String,
@@ -1325,6 +1515,7 @@ class ChatViewModel : ViewModel() {
             text = text,
             timestamp = timestamp,
             isPending = true,
+            uploadProgress = if (messageType == "image" || messageType == "video") 0 else null,
             messageType = messageType,
             imageUrl = localPreviewUri,
             mediaUrl = localPreviewUri,
@@ -1361,42 +1552,15 @@ class ChatViewModel : ViewModel() {
         }
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val mediaUrl = when (messageType) {
-                "video" -> repository.uploadVideoToSupabase(imageBytes, extLower)
-                "audio" -> repository.uploadAudioToSupabase(imageBytes, extLower)
-                "sticker" -> repository.uploadImageToSupabase(imageBytes, "png") // Preserve PNG transparency
-                "file" -> {
-                    // Upload generic files to Supabase Storage (or Cloudinary raw/video fallback)
-                    com.chroma.studio.data.SupabaseMediaStorage.uploadFile(
-                        bytes = imageBytes,
-                        fileName = "chat_${msgId}.$extLower",
-                        bucket = "chat-media"
-                    ) ?: repository.uploadVideoToSupabase(imageBytes, extLower)
-                }
-                else -> {
-                    val compressedBytes = com.chroma.studio.utils.ImageUtils.compressChatImageBytes(imageBytes) ?: imageBytes
-                    repository.uploadImageToSupabase(compressedBytes, extLower)
-                }
-            }
-            if (mediaUrl != null) {
-                val success = repository.sendMessage(
-                    roomId = roomId,
-                    text = text,
-                    imageUrl = mediaUrl,
-                    preGeneratedId = msgId,
-                    messageType = messageType,
-                    replyToMessageId = replyToMessageId
-                )
-                if (!success) {
-                    _localMessages.value = _localMessages.value.map {
-                        if (it.id == msgId) it.copy(isPending = false, isError = true) else it
-                    }
-                }
-            } else {
-                _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = true) else it
-                }
-            }
+            uploadAndCommitMedia(
+                roomId = roomId,
+                msgId = msgId,
+                mediaBytes = imageBytes,
+                extLower = extLower,
+                messageType = messageType,
+                text = text,
+                replyToMessageId = replyToMessageId
+            )
         }
     }
 

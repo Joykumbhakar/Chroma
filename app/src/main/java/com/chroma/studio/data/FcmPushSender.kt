@@ -66,6 +66,13 @@ object FcmPushSender {
         }
     }
 
+    /** Pre-warms RSA private key + OAuth2 access token so first chat push has 0ms auth latency. */
+    suspend fun warmup(context: Context) {
+        try {
+            getAccessToken(context)
+        } catch (_: Exception) {}
+    }
+
     /** Returns a cached OAuth2 token, minting a new one (once, even under parallel sends) if needed. */
     suspend fun getAccessToken(context: Context): String? = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()

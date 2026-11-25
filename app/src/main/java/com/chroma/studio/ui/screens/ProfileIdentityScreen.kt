@@ -618,6 +618,7 @@ fun ProfileIdentityScreen(
                                     VerifiedBadge(
                                         size = 17.dp,
                                         tier = VerifiedBadgeTier.BLUE,
+                                        tone = profile.verifiedTone,
                                         animated = true
                                     )
                                 }

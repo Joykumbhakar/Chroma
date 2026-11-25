@@ -37,14 +37,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CheckCircle
 import com.chroma.studio.R
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.doubleEdgeGlassBorder
 import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.ArrowRight
+import com.composables.icons.lucide.BadgeCheck
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.User
 
@@ -67,10 +66,10 @@ fun AccountConfirmationScreen(
 ) {
     val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
     val isDark = colors.isDark
-    val screenBg = if (isDark) Color(0xFF080808) else Color(0xFFFAFAFA)
-    val cardBg = if (isDark) Color(0xFF17171A) else Color(0xFFFFFFFF)
-    val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF000000)
-    val textMuted = if (isDark) Color(0xFF8E8E93) else Color(0xFF71717A)
+    val screenBg = if (isDark) Color(0xFF09090B) else Color(0xFFFAFAFA)
+    val cardBg = if (isDark) Color(0xFF13131A) else Color(0xFFFFFFFF)
+    val textPrimary = if (isDark) Color(0xFFFAFAFA) else Color(0xFF09090B)
+    val textMuted = if (isDark) Color(0xFFA1A1AA) else Color(0xFF71717A)
 
     Box(
         modifier = Modifier
@@ -105,7 +104,7 @@ fun AccountConfirmationScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.CheckCircle,
+                            imageVector = Lucide.BadgeCheck,
                             contentDescription = null,
                             tint = if (isDark) Color(0xFF3E91FF) else Color(0xFF0072DE),
                             modifier = Modifier.size(14.dp)

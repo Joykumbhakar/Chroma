@@ -26,7 +26,8 @@ data class ChatInAppEvent(
     val messageText: String,
     val avatarUrl: String = "",
     val timestamp: Long = System.currentTimeMillis(),
-    val metadata: Map<String, String> = emptyMap()
+    val metadata: Map<String, String> = emptyMap(),
+    val isVerified: Boolean = false
 )
 
 /**
@@ -124,10 +125,13 @@ object ChatStateManager {
             messageText = event.messageText,
             avatarUrl = event.avatarUrl,
             timeText = "now",
+            isVerified = event.isVerified,
             onReply = { replyText ->
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        SupabaseChatRepository().sendMessage(event.roomId, replyText)
+                        val repo = SupabaseChatRepository()
+                        repo.sendMessage(event.roomId, replyText)
+                        repo.markAsRead(event.roomId)
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to send in-app reply", e)
                     }
@@ -142,6 +146,26 @@ object ChatStateManager {
                     }
                 }
             },
+            onQuickReact = { emoji ->
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val repo = SupabaseChatRepository()
+                        repo.sendMessage(event.roomId, emoji)
+                        repo.markAsRead(event.roomId)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to send quick reaction in-app", e)
+                    }
+                }
+            },
+            onMute = if (event.roomId.isNotBlank()) ({
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        SupabaseChatRepository().muteChat(event.roomId, true)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to mute chat in-app", e)
+                    }
+                }
+            }) else null,
             onClick = {
                 if (event.roomId.isNotBlank()) {
                     onNavigateToRoom?.invoke(event.roomId)
@@ -155,7 +179,8 @@ object ChatStateManager {
         senderId: String,
         senderName: String,
         messageText: String,
-        avatarUrl: String = ""
+        avatarUrl: String = "",
+        isVerified: Boolean = false
     ) {
         emitInAppEvent(
             ChatInAppEvent(
@@ -163,7 +188,8 @@ object ChatStateManager {
                 senderId = senderId,
                 senderName = senderName,
                 messageText = messageText,
-                avatarUrl = avatarUrl
+                avatarUrl = avatarUrl,
+                isVerified = isVerified
             )
         )
     }

@@ -472,7 +472,10 @@ fun ContactInfoDrawer(
                             textAlign = TextAlign.Center
                         )
                         if (chat.isVerified) {
-                            VerifiedBadge(size = 20.dp)
+                            VerifiedBadge(
+                                size = 20.dp,
+                                tone = chat.verifiedTone
+                            )
                         }
                         if (isGroup) {
                             LucideEdit(tint = colors.iosBlue, size = 16.dp)

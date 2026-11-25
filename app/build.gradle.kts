@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -25,8 +27,8 @@ android {
         applicationId = "com.chroma.studio"
         minSdk = 26 // Haze blur needs 26+ for best results (uses RenderEffect on 31+, fallback below)
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 6
+        versionName = "1.4.1"
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64"))
@@ -57,6 +59,21 @@ android {
     }
 
     signingConfigs {
+        val keystorePropertiesFile = rootProject.file("keystore.properties")
+        if (keystorePropertiesFile.exists()) {
+            val props = Properties().apply {
+                keystorePropertiesFile.inputStream().use { load(it) }
+            }
+            val releaseStore = rootProject.file(props.getProperty("storeFile", "oscellion-release.jks"))
+            if (releaseStore.exists()) {
+                create("release") {
+                    storeFile = releaseStore
+                    storePassword = props.getProperty("storePassword")
+                    keyAlias = props.getProperty("keyAlias")
+                    keyPassword = props.getProperty("keyPassword")
+                }
+            }
+        }
         if (file("${rootDir}/debug.keystore").exists()) {
             create("debugConfig") {
                 storeFile = file("${rootDir}/debug.keystore")
@@ -75,7 +92,10 @@ android {
         }
         release {
             isMinifyEnabled = false
-            if (file("${rootDir}/debug.keystore").exists()) {
+            val releaseSigning = signingConfigs.findByName("release")
+            if (releaseSigning != null) {
+                signingConfig = releaseSigning
+            } else if (file("${rootDir}/debug.keystore").exists()) {
                 signingConfig = signingConfigs.getByName("debugConfig")
             }
         }

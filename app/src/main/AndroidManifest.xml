@@ -14,14 +14,10 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- App Locker: Overlay permission for instant shield overlay -->
+    <!-- App Locker: Display over other apps + Usage Access (no Accessibility service, sideload-safe) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- App Locker: Foreground service & Usage stats fallback -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
-
     <queries>
-        <!-- Allows querying launchable installed applications for App Locker -->
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -53,6 +49,7 @@
         <activity
             android:name=".HomeActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:supportsPictureInPicture="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:theme="@style/Theme.Oscellion.Splash"
@@ -68,6 +65,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="oscellion.vercel.app" />
+                <data android:scheme="http" android:host="oscellion.vercel.app" />
             </intent-filter>
 
             <!-- Custom URI Schemes (oscellion:// and chromastudio://) -->
@@ -223,20 +221,7 @@
                 android:resource="@xml/file_provider_paths" />
         </provider>
 
-        <!-- App Locker Accessibility Engine (Zero-Latency Foreground Detection) -->
-        <service
-            android:name=".security.applock.OscellionAppLockService"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
-
-        <!-- Instant App Lock Shield Activity (Translucent, Excluded from Recents) -->
+        <!-- Internal App Lock Shield Activity -->
         <activity
             android:name=".security.applock.AppLockActivity"
             android:exported="false"

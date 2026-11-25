@@ -65,6 +65,7 @@ fun AccountCenterScreen(
     onNavigateToAppearance: (() -> Unit)? = null,
     onNavigateToPrivacyTerms: () -> Unit = {},
     onNavigateToSwitchLab: (() -> Unit)? = null,
+    onNavigateToUpgradeToPro: () -> Unit = {},
     onBack: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -673,6 +674,22 @@ fun AccountCenterScreen(
                             dividerColor = dividerColor,
                             textMuted = textMuted
                         ) {
+                            OneUiSettingsRow(
+                                title = if (profile?.verified == true) "Oscellion Pro & Verified Badge" else "Upgrade to Pro",
+                                subtitle = if (profile?.verified == true) {
+                                    "Manage Pro pass, custom badge color & status"
+                                } else {
+                                    "Apply for Verified Badge, Luxury colors & track progress"
+                                },
+                                icon = Lucide.Sparkles,
+                                iconTint = Color(0xFF8B5CF6),
+                                textDark = textDark,
+                                textMuted = textMuted,
+                                onClick = onNavigateToUpgradeToPro
+                            )
+
+                            HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
+
                             OneUiSettingsRow(
                                 title = "Download My Information",
                                 subtitle = "Export personal JSON archive",

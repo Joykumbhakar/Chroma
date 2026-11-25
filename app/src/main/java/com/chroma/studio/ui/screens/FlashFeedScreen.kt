@@ -8,9 +8,9 @@ import androidx.compose.animation.core.*
 import com.chroma.studio.ui.components.FlatDoubleTapHeartOverlay
 import com.chroma.studio.ui.components.rememberDoubleTapLikeState
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -23,13 +23,14 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,29 +40,15 @@ import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.chroma.studio.model.FlashDraft
 import com.chroma.studio.model.FlashVideo
-import com.chroma.studio.ui.components.GlassButton
-import com.chroma.studio.ui.components.GlassDialog
-import com.chroma.studio.ui.components.GlassIconButton
-import com.chroma.studio.ui.components.GlassTextButton
-import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import com.chroma.studio.ui.components.IosAlertDialog
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
-import com.chroma.studio.ui.components.AppleFlashGraphic
 import com.chroma.studio.ui.components.ToastManager
-import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.ui.theme.ChromaIcons
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.FlashViewModel
 import com.composables.icons.lucide.*
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import com.chroma.studio.model.FlashComment
 import com.chroma.studio.ui.components.ShareFlashToChatSheet
-import com.chroma.studio.viewmodel.CommentSortOrder
-
 import com.google.firebase.auth.FirebaseAuth
 import com.chroma.studio.utils.ExportHelper
 import kotlinx.coroutines.Dispatchers
@@ -93,13 +80,36 @@ fun FlashFeedScreen(
     val isRefreshing by flashVm.isRefreshing.collectAsState()
     val likedVideoIds by flashVm.likedVideoIds.collectAsState()
     val drafts by flashVm.drafts.collectAsState()
+    val followingUserIds by com.chroma.studio.data.mutation.OptimisticFollowManager.followingUserIds.collectAsState()
+    val currentUid = FirebaseAuth.getInstance().currentUser?.uid
 
-    var selectedTab by remember { mutableStateOf("Reels") }
+    var selectedTab by remember { mutableStateOf("For You") }
     var shareVideoTarget by remember { mutableStateOf<FlashVideo?>(null) }
+    val hiddenVideoIds = remember { mutableStateListOf<String>() }
 
-    val initialPage = remember(initialVideoId, flashFeed) {
+    fun requireSignedIn(): Boolean {
+        val signedIn = FirebaseAuth.getInstance().currentUser != null &&
+            !com.chroma.studio.data.SavedAccountManager.isGuest(context)
+        if (!signedIn) onRequireLogin()
+        return signedIn
+    }
+
+    val displayedFeed = remember(flashFeed, selectedTab, followingUserIds, currentUid, hiddenVideoIds.size) {
+        val visible = flashFeed.filterNot { it.id in hiddenVideoIds }
+        if (selectedTab == "Following") {
+            visible.filter { v ->
+                v.creatorId == currentUid ||
+                    v.creatorId in followingUserIds ||
+                    com.chroma.studio.data.mutation.FollowingLocalStorageManager.isFollowing(v.creatorId)
+            }
+        } else {
+            visible
+        }
+    }
+
+    val initialPage = remember(initialVideoId, displayedFeed) {
         if (!initialVideoId.isNullOrBlank()) {
-            val idx = flashFeed.indexOfFirst { it.id == initialVideoId }
+            val idx = displayedFeed.indexOfFirst { it.id == initialVideoId }
             if (idx >= 0) idx else 0
         } else {
             0
@@ -107,7 +117,7 @@ fun FlashFeedScreen(
     }
     val pagerState = rememberPagerState(
         initialPage = initialPage,
-        pageCount = { flashFeed.size.coerceAtLeast(1) }
+        pageCount = { displayedFeed.size.coerceAtLeast(1) }
     )
 
     BackHandler {
@@ -120,12 +130,18 @@ fun FlashFeedScreen(
         }
     }
 
-    LaunchedEffect(initialVideoId, flashFeed) {
-        if (!initialVideoId.isNullOrBlank() && flashFeed.isNotEmpty()) {
-            val idx = flashFeed.indexOfFirst { it.id == initialVideoId }
+    LaunchedEffect(initialVideoId, displayedFeed) {
+        if (!initialVideoId.isNullOrBlank() && displayedFeed.isNotEmpty()) {
+            val idx = displayedFeed.indexOfFirst { it.id == initialVideoId }
             if (idx >= 0 && pagerState.currentPage != idx) {
                 pagerState.scrollToPage(idx)
             }
+        }
+    }
+
+    LaunchedEffect(selectedTab) {
+        if (displayedFeed.isNotEmpty() && pagerState.currentPage >= displayedFeed.size) {
+            pagerState.scrollToPage(0)
         }
     }
 
@@ -173,17 +189,17 @@ fun FlashFeedScreen(
     }
 
     // Load more when near end and Trigger AOT Prefetching
-    LaunchedEffect(pagerState.currentPage, flashFeed.size) {
-        if (pagerState.currentPage >= flashFeed.size - 3) {
+    LaunchedEffect(pagerState.currentPage, displayedFeed.size) {
+        if (selectedTab == "For You" && pagerState.currentPage >= displayedFeed.size - 3) {
             flashVm.loadMoreFeed()
         }
 
         // AOT Prefetching for the next 2-3 videos
         for (i in 1..3) {
             val idx = pagerState.currentPage + i
-            if (idx < flashFeed.size) {
-                val url = flashFeed[idx].videoUrl
-                launch(kotlinx.coroutines.Dispatchers.IO) {
+            if (idx < displayedFeed.size) {
+                val url = displayedFeed[idx].videoUrl
+                launch(Dispatchers.IO) {
                     com.chroma.studio.utils.VideoPrefetcher.prefetchVideo(context, url)
                 }
             }
@@ -193,18 +209,22 @@ fun FlashFeedScreen(
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (isLoading && flashFeed.isEmpty()) {
             FlashFeedSkeleton()
-        } else if (flashFeed.isEmpty()) {
-            if (emptyContent != null) {
+        } else if (displayedFeed.isEmpty()) {
+            if (selectedTab == "Following" && flashFeed.isNotEmpty()) {
+                FollowingFlashEmptyState(
+                    onExploreForYou = { selectedTab = "For You" },
+                    onRefresh = { flashVm.loadFeed(isRefresh = true) }
+                )
+            } else if (emptyContent != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .statusBarsPadding()
                         .padding(top = 56.dp)
                         .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                        .background(Color.White)
+                        .background(if (colors.isDark) Color(0xFF09090B) else Color.White)
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        // Drag handle pill at the top of the sheet
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -225,27 +245,30 @@ fun FlashFeedScreen(
                     }
                 }
             } else {
-                FlashEmptyState(onUpload = onNavigateToFlashPicker)
+                FlashEmptyState(
+                    onUpload = {
+                        if (requireSignedIn()) onNavigateToFlashPicker()
+                    }
+                )
             }
         } else {
             VerticalPager(
                 state = pagerState,
+                key = { page -> displayedFeed.getOrNull(page)?.id ?: page },
                 modifier = Modifier.fillMaxSize()
             ) { page ->
-                val video = flashFeed.getOrNull(page)
+                val video = displayedFeed.getOrNull(page)
                 if (video != null) {
                     FlashVideoItem(
                         player = exoPlayers[page % exoPlayers.size],
                         video = video,
-                        isActive = pagerState.currentPage == page,
+                        isActive = pagerState.currentPage == page && shareVideoTarget == null,
                         isLiked = video.id in likedVideoIds,
                         isMuted = isMuted,
                         onToggleMute = { isMuted = !isMuted },
                         onRequireLogin = onRequireLogin,
                         onLike = {
-                            if (FirebaseAuth.getInstance().currentUser == null || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
-                                onRequireLogin()
-                            } else {
+                            if (requireSignedIn()) {
                                 flashVm.toggleLike(video.id)
                             }
                         },
@@ -253,85 +276,124 @@ fun FlashFeedScreen(
                             shareVideoTarget = video
                         },
                         onAuthorClick = { onNavigateToProfile(video.creatorId) },
+                        onHideVideo = {
+                            hiddenVideoIds.add(video.id)
+                            ToastManager.showToast("Hidden from your Flash feed")
+                        },
                         flashVm = flashVm,
                         commentVm = commentVm,
                         onRemixRequested = onRemixRequested,
-                        onNavigateToFlashPicker = onNavigateToFlashPicker,
+                        onNavigateToFlashPicker = {
+                            if (requireSignedIn()) onNavigateToFlashPicker()
+                        },
                         onRemixVideo = onRemixVideo
                     )
                 }
             }
         }
 
-        // ── Top Bar (Reels / Friends Header) ──────────────────────────────────
-        Box(
+        // ── Top Studio Header (For You / Following + Clean Controls) ──────────
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color.Black.copy(alpha = 0.65f), Color.Black.copy(alpha = 0.25f), Color.Transparent)
+                        listOf(
+                            Color.Black.copy(alpha = 0.68f),
+                            Color.Black.copy(alpha = 0.24f),
+                            Color.Transparent
+                        )
                     )
                 )
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-                .align(Alignment.TopCenter)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .align(Alignment.TopCenter),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left: Back button
-            Icon(
-                imageVector = Lucide.ArrowLeft,
-                contentDescription = "Back",
-                tint = Color.White,
+            Box(
                 modifier = Modifier
-                    .size(26.dp)
-                    .align(Alignment.CenterStart)
-                    .clickable { onNavigateToOldHome() }
-            )
-
-            // Center: Tabs (Reels / Friends)
-            Row(
-                modifier = Modifier.align(Alignment.Center),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.28f))
+                    .clickable { onNavigateToOldHome() },
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "Reels",
-                    color = if (selectedTab == "Reels") Color.White else Color.White.copy(alpha = 0.6f),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { selectedTab = "Reels" }
-                )
-                Text(
-                    text = "Friends",
-                    color = if (selectedTab == "Friends") Color.White else Color.White.copy(alpha = 0.6f),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { selectedTab = "Friends" }
+                Icon(
+                    imageVector = Lucide.ArrowLeft,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
-            // Right: Camera / Create / Drafts button
             Row(
-                modifier = Modifier.align(Alignment.CenterEnd),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                listOf("Following", "For You").forEach { tab ->
+                    val selected = selectedTab == tab
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { selectedTab = tab }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = tab,
+                            color = if (selected) Color.White else Color.White.copy(alpha = 0.56f),
+                            fontSize = 15.5.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(if (selected) 20.dp else 0.dp)
+                                .height(2.5.dp)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                        )
+                    }
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.28f))
+                        .clickable { isMuted = !isMuted },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isMuted) Lucide.VolumeX else Lucide.Volume2,
+                        contentDescription = if (isMuted) "Unmute" else "Mute",
+                        tint = Color.White,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+
                 if (drafts.isNotEmpty()) {
                     Box(
                         modifier = Modifier
                             .size(34.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.White.copy(alpha = 0.2f))
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.18f))
                             .clickable { showDraftSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Lucide.FileVideo, "Drafts", tint = Color.White, modifier = Modifier.size(18.dp))
+                        Icon(Lucide.FileVideo, "Drafts", tint = Color.White, modifier = Modifier.size(17.dp))
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .offset(x = (-2).dp, y = 2.dp)
                                 .size(14.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFFF3B30)),
+                                .background(Color(0xFF0381FE)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text("${drafts.size}", fontSize = 8.5.sp, color = Color.White, fontWeight = FontWeight.Bold)
@@ -339,20 +401,36 @@ fun FlashFeedScreen(
                     }
                 }
 
-                Icon(
-                    imageVector = Lucide.Camera,
-                    contentDescription = "Upload Flash",
-                    tint = Color.White,
+                Box(
                     modifier = Modifier
-                        .size(26.dp)
-                        .clickable { onNavigateToFlashPicker() }
-                )
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.28f))
+                        .clickable {
+                            if (requireSignedIn()) onNavigateToFlashPicker()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Camera,
+                        contentDescription = "Create Flash",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
 
-        // Pull to refresh indicator
+        // Refresh indicator
         if (isRefreshing) {
-            Box(Modifier.fillMaxWidth().padding(top = 100.dp).align(Alignment.TopCenter), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 64.dp)
+                    .align(Alignment.TopCenter),
+                contentAlignment = Alignment.Center
+            ) {
                 OscellionLoadingSpinner(color = Color.White, modifier = Modifier.size(24.dp))
             }
         }
@@ -362,7 +440,7 @@ fun FlashFeedScreen(
     if (showDraftSheet) {
         ModalBottomSheet(
             onDismissRequest = { showDraftSheet = false },
-            containerColor = if (colors.isDark) Color(0xFF1C1C1E) else Color.White,
+            containerColor = if (colors.isDark) Color(0xFF13131A) else Color.White,
             dragHandle = { BottomSheetDefaults.DragHandle(color = colors.cardBorder) },
             windowInsets = WindowInsets(0.dp)
         ) {
@@ -370,14 +448,17 @@ fun FlashFeedScreen(
                 Text(
                     "Drafts",
                     color = colors.textMain,
-                    fontSize = 20.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(bottom = 14.dp)
                 )
                 drafts.forEach { draft ->
                     DraftItem(
                         draft = draft,
-                        onResume = { showDraftSheet = false; onNavigateToFlashPicker() },
+                        onResume = {
+                            showDraftSheet = false
+                            if (requireSignedIn()) onNavigateToFlashPicker()
+                        },
                         onDelete = { draftToDelete = draft }
                     )
                 }
@@ -403,7 +484,6 @@ fun FlashFeedScreen(
         )
     }
 
-    // Instagram-style Share to Chat bottom sheet
     shareVideoTarget?.let { videoToShare ->
         ShareFlashToChatSheet(
             flashVideo = videoToShare,
@@ -413,7 +493,7 @@ fun FlashFeedScreen(
                 flashVm.shareFlash(videoToShare.id)
                 val sendIntent = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, "Check out this Flash on Oscellion: https://oscellion.vercel.app/flash/${videoToShare.id}")
+                    putExtra(Intent.EXTRA_TEXT, "Check out this Flash on Oscellion: https://oscellion.app/flash/${videoToShare.id}")
                 }
                 context.startActivity(Intent.createChooser(sendIntent, "Share via"))
             },
@@ -437,6 +517,7 @@ private fun FlashVideoItem(
     onLike: () -> Unit,
     onShare: () -> Unit,
     onAuthorClick: () -> Unit,
+    onHideVideo: () -> Unit,
     flashVm: FlashViewModel,
     commentVm: com.chroma.studio.viewmodel.FlashCommentViewModel,
     onRemixRequested: (Uri, String, String) -> Unit,
@@ -455,7 +536,32 @@ private fun FlashVideoItem(
     var showComments by remember { mutableStateOf(false) }
     var isCaptionExpanded by remember { mutableStateOf(false) }
 
+    val currentUserAvatar = remember(context, auth.currentUser?.uid) {
+        val uid = auth.currentUser?.uid
+        val saved = uid?.let { u -> com.chroma.studio.data.SavedAccountManager.getSavedAccounts(context).firstOrNull { it.uid == u } }
+        saved?.avatarUrl?.takeIf { it.isNotBlank() } ?: auth.currentUser?.photoUrl?.toString().orEmpty()
+    }
+    val currentUserName = remember(context, auth.currentUser?.uid) {
+        auth.currentUser?.displayName?.takeIf { it.isNotBlank() } ?: "You"
+    }
+
+    fun requireSignedIn(): Boolean {
+        val signedIn = auth.currentUser != null && !com.chroma.studio.data.SavedAccountManager.isGuest(context)
+        if (!signedIn) onRequireLogin()
+        return signedIn
+    }
+
+    var liveCreatorProfile by remember(video.creatorId) { mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
+    val resolvedCreatorAvatar = liveCreatorProfile?.avatarUrl?.takeIf { it.isNotBlank() } ?: video.authorAvatarUrl
+    val resolvedCreatorDisplayName = liveCreatorProfile?.displayName?.takeIf { it.isNotBlank() } ?: video.authorDisplayName.ifBlank { video.authorUsername }
+    val resolvedCreatorUsername = liveCreatorProfile?.username?.takeIf { it.isNotBlank() } ?: video.authorUsername
+    val resolvedCreatorVerified = liveCreatorProfile?.verified ?: video.authorVerified
+    val resolvedCreatorVerifiedTone = liveCreatorProfile?.verifiedTone ?: video.authorVerifiedTone
+
     LaunchedEffect(video.creatorId) {
+        if (video.creatorId.isNotBlank()) {
+            liveCreatorProfile = discoverRepo.getUserProfile(video.creatorId)
+        }
         val currentUid = auth.currentUser?.uid
         if (!currentUid.isNullOrBlank() && currentUid != video.creatorId && !com.chroma.studio.data.mutation.OptimisticFollowManager.isFollowing(video.creatorId)) {
             val serverFollowing = discoverRepo.checkIsFollowing(currentUid, video.creatorId)
@@ -467,11 +573,58 @@ private fun FlashVideoItem(
         }
     }
 
-    // Prepare the pooled player for this specific video
-    LaunchedEffect(video.videoUrl, player) {
-        player.setMediaItem(androidx.media3.common.MediaItem.fromUri(video.videoUrl))
-        player.volume = if (isMuted) 0f else 1f
-        player.prepare()
+    val colors = LocalOscellionColors.current
+    val doubleTapLikeState = rememberDoubleTapLikeState()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var isPlaying by remember { mutableStateOf(false) }
+    var userPaused by remember(video.id, isActive) { mutableStateOf(false) }
+    var overlayShowsPauseIcon by remember { mutableStateOf(false) }
+    var showPlayPauseOverlay by remember { mutableStateOf(false) }
+    var is2xSpeed by remember(video.id, isActive) { mutableStateOf(false) }
+    var showMoreOptionsSheet by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    val isOwner = auth.currentUser?.uid == video.creatorId
+    var currentPosition by remember(video.id) { mutableLongStateOf(0L) }
+    var videoDuration by remember(video.id) { mutableLongStateOf(video.duration.coerceAtLeast(1L)) }
+    var isScrubbing by remember { mutableStateOf(false) }
+    var scrubFraction by remember { mutableFloatStateOf(0f) }
+    var scrubberWidthPx by remember { mutableFloatStateOf(1f) }
+
+    var isPlayerReady by remember(video.videoUrl, player) { mutableStateOf(false) }
+    var isBuffering by remember(video.videoUrl, player) { mutableStateOf(false) }
+    var showBufferingSpinner by remember { mutableStateOf(false) }
+    var hasPlaybackError by remember(video.videoUrl, player) { mutableStateOf(false) }
+    var videoRatio by remember(video.videoUrl) { mutableFloatStateOf(9f / 16f) }
+    var attachedTextureView by remember { mutableStateOf<android.view.TextureView?>(null) }
+
+    LaunchedEffect(isBuffering, isActive, isPlayerReady, hasPlaybackError) {
+        if (isBuffering && isActive && !isPlayerReady && !hasPlaybackError) {
+            delay(350)
+            showBufferingSpinner = true
+        } else {
+            showBufferingSpinner = false
+        }
+    }
+
+    // Prepare the pooled player cleanly only when its URI differs or needs preparation
+    LaunchedEffect(video.videoUrl, player, isActive) {
+        if (isActive || player.currentMediaItem?.localConfiguration?.uri?.toString() != video.videoUrl) {
+            val loadedUri = player.currentMediaItem?.localConfiguration?.uri?.toString()
+            if (loadedUri != video.videoUrl) {
+                isPlayerReady = false
+                hasPlaybackError = false
+                player.setMediaItem(androidx.media3.common.MediaItem.fromUri(video.videoUrl))
+                player.prepare()
+            } else if (player.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+                hasPlaybackError = false
+                player.prepare()
+            }
+            if (isActive) {
+                attachedTextureView?.let { tv ->
+                    player.setVideoTextureView(tv)
+                }
+            }
+        }
     }
 
     // Track app lifecycle to pause video when app goes to background
@@ -486,9 +639,23 @@ private fun FlashVideoItem(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Play/Pause logic based on pager state and app lifecycle
-    LaunchedEffect(isActive, lifecycleEvent, isMuted, player) {
-        if (isActive && (lifecycleEvent == androidx.lifecycle.Lifecycle.Event.ON_RESUME || lifecycleEvent == androidx.lifecycle.Lifecycle.Event.ON_ANY)) {
+    // Sync mute cleanly without resetting user pause state
+    LaunchedEffect(isMuted, player) {
+        player.volume = if (isMuted) 0f else 1f
+    }
+
+    // Sync 2x speed cleanly
+    LaunchedEffect(is2xSpeed, isActive, player) {
+        player.setPlaybackSpeed(if (isActive && is2xSpeed) 2.0f else 1.0f)
+    }
+
+    // Play/Pause logic respecting active pager item, lifecycle, and explicit user pause
+    LaunchedEffect(isActive, lifecycleEvent, userPaused, player) {
+        val canRunLifecycle = lifecycleEvent == androidx.lifecycle.Lifecycle.Event.ON_RESUME ||
+            lifecycleEvent == androidx.lifecycle.Lifecycle.Event.ON_START ||
+            lifecycleEvent == androidx.lifecycle.Lifecycle.Event.ON_ANY
+        if (isActive && !userPaused && canRunLifecycle) {
+            attachedTextureView?.let { player.setVideoTextureView(it) }
             player.volume = if (isMuted) 0f else 1f
             player.play()
         } else {
@@ -496,35 +663,27 @@ private fun FlashVideoItem(
         }
     }
 
-    val colors = LocalOscellionColors.current
-    val doubleTapLikeState = rememberDoubleTapLikeState()
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    var isPlaying by remember { mutableStateOf(player.isPlaying) }
-    var showPlayPauseOverlay by remember { mutableStateOf(false) }
-    var showMoreOptionsSheet by remember { mutableStateOf(false) }
-    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
-    val isOwner = auth.currentUser?.uid == video.creatorId
-    var currentPosition by remember { mutableLongStateOf(0L) }
-    var videoDuration by remember { mutableLongStateOf(0L) }
-
-    // Sync volume with global mute state and player instance
-    LaunchedEffect(isMuted, player) {
-        player.volume = if (isMuted) 0f else 1f
-    }
-
-    var isPlayerReady by remember { mutableStateOf(false) }
-    var videoRatio by remember { mutableFloatStateOf(1f) }
-
-    // Sync play state and track progress
-    DisposableEffect(player) {
+    // Attach listener cleanly for the active item/player pair
+    DisposableEffect(player, video.videoUrl, isActive) {
         val listener = object : androidx.media3.common.Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
+                isBuffering = playbackState == androidx.media3.common.Player.STATE_BUFFERING
                 if (playbackState == androidx.media3.common.Player.STATE_READY) {
                     isPlayerReady = true
+                    hasPlaybackError = false
                 }
+            }
+            override fun onRenderedFirstFrame() {
+                isPlayerReady = true
+                isBuffering = false
+                hasPlaybackError = false
+            }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                hasPlaybackError = true
+                isBuffering = false
             }
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
                 if (videoSize.width > 0 && videoSize.height > 0) {
@@ -533,31 +692,43 @@ private fun FlashVideoItem(
             }
         }
         player.addListener(listener)
-        onDispose { player.removeListener(listener) }
+        if (isActive && player.playbackState == androidx.media3.common.Player.STATE_READY) {
+            isPlayerReady = true
+            isPlaying = player.isPlaying
+        }
+        onDispose {
+            player.removeListener(listener)
+            if (isActive) {
+                player.setPlaybackSpeed(1.0f)
+                player.pause()
+            }
+        }
     }
 
-    LaunchedEffect(player, isPlaying) {
-        while (isPlaying) {
-            currentPosition = player.currentPosition
-            videoDuration = player.duration.coerceAtLeast(1L)
+    LaunchedEffect(player, isPlaying, isActive, isScrubbing) {
+        while (isActive && (isPlaying || isScrubbing)) {
+            if (!isScrubbing) {
+                currentPosition = player.currentPosition
+                videoDuration = player.duration.coerceAtLeast(1L)
+            }
             delay(50)
         }
     }
 
     val playPauseScale by animateFloatAsState(
-        targetValue = if (showPlayPauseOverlay) 1f else 0.5f,
+        targetValue = if (showPlayPauseOverlay) 1f else 0.6f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "playPauseScale"
     )
     val playPauseAlpha by animateFloatAsState(
         targetValue = if (showPlayPauseOverlay) 1f else 0f,
-        animationSpec = tween(300),
+        animationSpec = tween(260),
         label = "playPauseAlpha"
     )
 
     LaunchedEffect(showPlayPauseOverlay) {
         if (showPlayPauseOverlay) {
-            delay(500)
+            delay(550)
             showPlayPauseOverlay = false
         }
     }
@@ -568,7 +739,6 @@ private fun FlashVideoItem(
         label = "likeScale"
     )
 
-    // Infinite rotation for the vinyl/audio disc
     val infiniteTransition = rememberInfiniteTransition(label = "disc_spin")
     val discRotation by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -583,22 +753,37 @@ private fun FlashVideoItem(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .pointerInput(video.id, isActive) {
                 detectTapGestures(
                     onDoubleTap = { offset ->
                         doubleTapLikeState.trigger(offset)
-                        val uid = FirebaseAuth.getInstance().currentUser?.uid
-                        if (uid.isNullOrBlank()) {
-                            onLike()
-                        } else {
-                            // Double tap ALWAYS LIKES and NEVER DISLIKES (User must tap heart button to unlike)
+                        if (requireSignedIn()) {
                             flashVm.toggleLike(video.id, forceLike = true)
                         }
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        // silent
+                    },
+                    onLongPress = {
+                        if (isActive && isPlaying) {
+                            is2xSpeed = true
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        }
+                    },
+                    onPress = {
+                        tryAwaitRelease()
+                        if (is2xSpeed) {
+                            is2xSpeed = false
+                        }
                     },
                     onTap = {
-                        if (isPlaying) player.pause() else player.play()
+                        val nextPaused = !userPaused
+                        userPaused = nextPaused
+                        overlayShowsPauseIcon = nextPaused
+                        if (nextPaused) {
+                            player.pause()
+                        } else {
+                            attachedTextureView?.let { player.setVideoTextureView(it) }
+                            player.play()
+                        }
                         showPlayPauseOverlay = true
                     }
                 )
@@ -621,21 +806,27 @@ private fun FlashVideoItem(
             update = { view ->
                 val frameLayout = view as androidx.media3.ui.AspectRatioFrameLayout
                 val textureView = frameLayout.tag as android.view.TextureView
-
-                if (textureView.tag != player) {
-                    textureView.tag = player
+                attachedTextureView = textureView
+                if (isActive) {
                     player.setVideoTextureView(textureView)
                 }
                 frameLayout.setAspectRatio(videoRatio)
             },
+            onRelease = { view ->
+                val frameLayout = view as? androidx.media3.ui.AspectRatioFrameLayout
+                val textureView = frameLayout?.tag as? android.view.TextureView
+                if (textureView != null) {
+                    player.clearVideoTextureView(textureView)
+                }
+            },
             modifier = Modifier.fillMaxSize()
         )
 
-        // Thumbnail image
+        // Thumbnail overlay until first rendered frame
         androidx.compose.animation.AnimatedVisibility(
             visible = !isPlayerReady,
-            enter = androidx.compose.animation.fadeIn(),
-            exit = androidx.compose.animation.fadeOut(animationSpec = tween(100))
+            enter = fadeIn(),
+            exit = fadeOut(animationSpec = tween(160))
         ) {
             if (video.thumbnailUrl.isNotBlank()) {
                 AsyncImage(
@@ -651,115 +842,162 @@ private fun FlashVideoItem(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.55f)
+                .fillMaxHeight(0.50f)
                 .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.35f),
-                            Color.Black.copy(alpha = 0.75f),
+                            Color.Black.copy(alpha = 0.28f),
+                            Color.Black.copy(alpha = 0.72f),
                             Color.Black.copy(alpha = 0.92f)
                         )
                     )
                 )
         )
 
-        // Center Volume Indicator (Pill badge)
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .offset(y = (-60).dp)
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable { onToggleMute() },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = if (isMuted) Lucide.VolumeX else Lucide.Volume2,
-                contentDescription = "Mute",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
+        // Buffering spinner (only when stalled >350ms)
+        if (showBufferingSpinner) {
+            OscellionLoadingSpinner(
+                color = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(30.dp)
             )
         }
 
-        // Center Play / Pause Animated Indicator
-        if (showPlayPauseOverlay) {
-            Box(
+        // Error retry pill
+        if (hasPlaybackError) {
+            Row(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(68.dp)
-                    .scale(playPauseScale)
-                    .graphicsLayer { alpha = playPauseAlpha }
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f)),
-                contentAlignment = Alignment.Center
+                    .background(Color.Black.copy(alpha = 0.72f))
+                    .clickable {
+                        hasPlaybackError = false
+                        isPlayerReady = false
+                        player.setMediaItem(androidx.media3.common.MediaItem.fromUri(video.videoUrl))
+                        player.prepare()
+                        player.play()
+                    }
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(
-                    imageVector = if (isPlaying) Lucide.Play else Lucide.Pause,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
+                Icon(Lucide.RefreshCw, contentDescription = "Retry", tint = Color.White, modifier = Modifier.size(16.dp))
+                Text(
+                    text = "Video unavailable · Tap to retry",
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
 
-        // Double-tap heart animation (Simple, Flat, Smooth and Clean)
+        // 2x Speed indicator during long-press
+        AnimatedVisibility(
+            visible = is2xSpeed,
+            enter = fadeIn() + scaleIn(initialScale = 0.9f),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 62.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.72f))
+                    .padding(horizontal = 12.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(Lucide.Zap, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                Text(
+                    text = "2x Speed",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        // Center Play / Pause Animated Feedback
+        if (showPlayPauseOverlay) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(64.dp)
+                    .scale(playPauseScale)
+                    .graphicsLayer { alpha = playPauseAlpha }
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.56f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (overlayShowsPauseIcon) Lucide.Pause else Lucide.Play,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+
+        // Double-tap heart animation
         FlatDoubleTapHeartOverlay(
             state = doubleTapLikeState,
             modifier = Modifier.fillMaxSize(),
-            heartSize = 115.dp
+            heartSize = 110.dp
         )
 
-        // ── Right-Side Vertical Action Column (Reels Style) ───────────────────
-        // Bottom padding = nav bar inset + comment bar (≈60dp) + breathing room
         val navBarBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val overlayAlpha by animateFloatAsState(
+            targetValue = if (isScrubbing || is2xSpeed) 0.25f else 1f,
+            animationSpec = tween(180),
+            label = "hudDimAlpha"
+        )
+
+        // ── Right-Side Vertical Action Column ─────────────────────────────────
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = 68.dp + navBarBottomDp),
+                .padding(end = 12.dp, bottom = 74.dp + navBarBottomDp)
+                .graphicsLayer { alpha = overlayAlpha },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Like (Heart icon: outline when unliked, filled red when liked)
             ReelsActionButton(
                 icon = if (isLiked) ChromaIcons.HeartFilled else Lucide.Heart,
-                tint = if (isLiked) Color(0xFFFF3B30) else Color.White,
+                tint = if (isLiked) Color(0xFFF43F5E) else Color.White,
                 label = if (video.hideLikesCount) "" else formatCount(maxOf(video.likesCount, video.likedBy.size)),
                 scale = likeScale,
                 onClick = onLike
             )
 
-            // Comments (only if comments are not turned off)
             if (!video.turnOffComments) {
                 ReelsActionButton(
                     icon = Lucide.MessageCircle,
                     tint = Color.White,
                     label = formatCount(video.commentCount),
                     onClick = {
-                        if (FirebaseAuth.getInstance().currentUser == null || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
-                            onRequireLogin()
-                        } else {
+                        if (requireSignedIn()) {
                             showComments = true
                         }
                     }
                 )
             }
 
-            // Remix (Heart-shaped Handshake) (only if remix is not turned off)
             if (!video.turnOffRemix) {
                 ReelsActionButton(
                     icon = Lucide.HeartHandshake,
                     tint = Color.White,
                     label = formatCount(video.remixCount),
                     onClick = {
-                        if (FirebaseAuth.getInstance().currentUser == null || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
-                            onRequireLogin()
-                        } else if (onRemixVideo != null) {
+                        if (!requireSignedIn()) return@ReelsActionButton
+                        if (onRemixVideo != null) {
                             onRemixVideo(video)
                         } else {
-                            android.widget.Toast.makeText(context, "Preparing for Remix...", android.widget.Toast.LENGTH_SHORT).show()
+                            ToastManager.showToast("Preparing remix…")
                             flashVm.downloadVideoForRemix(
                                 context = context,
                                 videoUrl = video.videoUrl,
@@ -768,7 +1006,7 @@ private fun FlashVideoItem(
                                     if (uri != null) {
                                         onRemixRequested(uri, video.id, video.authorUsername)
                                     } else {
-                                        android.widget.Toast.makeText(context, "Failed to download video.", android.widget.Toast.LENGTH_SHORT).show()
+                                        ToastManager.showToast("Failed to download video")
                                     }
                                 }
                             )
@@ -777,7 +1015,6 @@ private fun FlashVideoItem(
                 )
             }
 
-            // Share / Direct Paper Plane
             ReelsActionButton(
                 icon = Lucide.Send,
                 tint = Color.White,
@@ -785,18 +1022,19 @@ private fun FlashVideoItem(
                 onClick = onShare
             )
 
-            // Bookmark / Save
             ReelsActionButton(
                 icon = Lucide.Bookmark,
-                tint = if (isSaved) Color(0xFFFFCC00) else Color.White,
+                tint = if (isSaved) Color(0xFFFBBF24) else Color.White,
                 label = formatCount(video.saveCount),
-                onClick = { flashVm.toggleSave(video.id) }
+                onClick = {
+                    if (requireSignedIn()) flashVm.toggleSave(video.id)
+                }
             )
 
-            // More Options (Three horizontal dots)
             Box(
                 modifier = Modifier
                     .size(38.dp)
+                    .clip(CircleShape)
                     .clickable { showMoreOptionsSheet = true },
                 contentAlignment = Alignment.Center
             ) {
@@ -808,19 +1046,18 @@ private fun FlashVideoItem(
                 )
             }
 
-            // Audio Vinyl Disc / Squircle
+            // Audio Disc Squircle (Borderless, clean contrast)
             Box(
                 modifier = Modifier
                     .size(32.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(1.5.dp, Color.White, RoundedCornerShape(8.dp))
-                    .background(Color(0xFF1E1E1E))
-                    .rotate(if (isPlaying) discRotation else 0f),
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(Color(0xFF1B1B22))
+                    .rotate(if (isPlaying && isActive) discRotation else 0f),
                 contentAlignment = Alignment.Center
             ) {
-                if (video.authorAvatarUrl.isNotBlank()) {
+                if (resolvedCreatorAvatar.isNotBlank()) {
                     AsyncImage(
-                        model = video.authorAvatarUrl,
+                        model = resolvedCreatorAvatar,
                         contentDescription = "Audio Art",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -836,70 +1073,82 @@ private fun FlashVideoItem(
             }
         }
 
-        // ── Bottom-Left Info Overlay (Reels Style) ────────────────────────────
+        // ── Bottom-Left Creator & Caption Info ────────────────────────────────
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 16.dp, end = 76.dp, bottom = 64.dp + navBarBottomDp)
+                .padding(start = 16.dp, end = 76.dp, bottom = 70.dp + navBarBottomDp)
+                .graphicsLayer { alpha = overlayAlpha }
         ) {
-            // User Row (Avatar + @username + Verified + Follow button)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Circular Avatar
                 IosAvatarView(
-                    name = video.authorDisplayName.ifBlank { video.authorUsername },
-                    avatarUrl = video.authorAvatarUrl,
+                    name = resolvedCreatorDisplayName.ifBlank { resolvedCreatorUsername },
+                    avatarUrl = resolvedCreatorAvatar,
                     size = 36.dp,
                     modifier = Modifier
                         .clip(CircleShape)
-                        .border(1.5.dp, Color.White, CircleShape)
                         .clickable { onAuthorClick() }
                 )
 
-                // Username + Verified badge
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.clickable { onAuthorClick() }
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .clickable { onAuthorClick() }
                 ) {
-                    Text(
-                        text = video.authorUsername.ifBlank { "epro.grams" },
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        style = androidx.compose.ui.text.TextStyle(
-                            shadow = androidx.compose.ui.graphics.Shadow(
-                                color = Color.Black.copy(alpha = 0.8f),
-                                blurRadius = 4f
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = resolvedCreatorDisplayName.ifBlank { resolvedCreatorUsername.ifBlank { "Creator" } },
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = androidx.compose.ui.text.TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.75f),
+                                    blurRadius = 4f
+                                )
                             )
                         )
-                    )
-                    if (video.authorVerified) {
-                        VerifiedBadge(size = 13.dp)
+                        if (resolvedCreatorVerified) {
+                            VerifiedBadge(
+                                size = 13.dp,
+                                tone = resolvedCreatorVerifiedTone
+                            )
+                        }
                     }
+                    Text(
+                        text = "@${resolvedCreatorUsername.ifBlank { "creator" }}",
+                        color = Color.White.copy(alpha = 0.82f),
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
-                // Follow Pill Button (Hidden when already following)
                 if (auth.currentUser?.uid != video.creatorId && !isFollowing) {
                     Box(
                         modifier = Modifier
                             .height(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .border(1.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(8.dp))
-                            .background(Color.Transparent)
+                            .clip(CircleShape)
+                            .background(Color(0xFF0381FE))
                             .clickable {
-                                val currentUid = auth.currentUser?.uid
-                                if (!currentUid.isNullOrBlank()) {
-                                    com.chroma.studio.data.mutation.OptimisticFollowManager.toggleFollow(
-                                        currentUserId = currentUid,
-                                        targetUserId = video.creatorId,
-                                        baseFollowing = false
-                                    )
-                                }
+                                if (!requireSignedIn()) return@clickable
+                                val currentUid = auth.currentUser?.uid ?: return@clickable
+                                com.chroma.studio.data.mutation.OptimisticFollowManager.toggleFollow(
+                                    currentUserId = currentUid,
+                                    targetUserId = video.creatorId,
+                                    baseFollowing = false
+                                )
                             }
-                            .padding(horizontal = 12.dp),
+                            .padding(horizontal = 13.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -912,9 +1161,8 @@ private fun FlashVideoItem(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(9.dp))
 
-            // Audio track row
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -922,39 +1170,36 @@ private fun FlashVideoItem(
                 Icon(
                     imageVector = Lucide.Music,
                     contentDescription = "Audio",
-                    tint = Color.White,
+                    tint = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.size(13.dp)
                 )
                 Text(
-                    text = "${video.authorDisplayName.ifBlank { "Original audio" }} • Original audio",
-                    color = Color.White,
+                    text = "${video.authorDisplayName.ifBlank { video.authorUsername.ifBlank { "Creator" } }} · Original audio",
+                    color = Color.White.copy(alpha = 0.9f),
                     fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            Spacer(Modifier.height(6.dp))
-
-            // Caption
             if (video.caption.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = video.caption,
                     color = Color.White,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
+                    fontSize = 13.5.sp,
+                    lineHeight = 18.5.sp,
                     maxLines = if (isCaptionExpanded) 6 else 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.clickable { isCaptionExpanded = !isCaptionExpanded }
                 )
             }
 
-            // Hashtags
             if (video.hashtags.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = video.hashtags.take(5).joinToString(" ") { "#$it" },
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = Color(0xFF38BDF8),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -963,64 +1208,149 @@ private fun FlashVideoItem(
             }
         }
 
-        // ── Bottom Comment Input Bar (Pinned across bottom) ───────────────────
-        Box(
+        // ── Bottom Comment Prompt + Scrubbable Progress Rail ──────────────────
+        val playbackFraction = if (videoDuration > 0L) {
+            (currentPosition.toFloat() / videoDuration.toFloat()).coerceIn(0f, 1f)
+        } else 0f
+        val shownProgress = if (isScrubbing) scrubFraction else playbackFraction
+
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            Row(
+            if (isScrubbing) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val scrubMs = (scrubFraction * videoDuration).toLong()
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.78f))
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "${formatFlashTime(scrubMs)} / ${formatFlashTime(videoDuration)}",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(Color.White.copy(alpha = if (video.turnOffComments) 0.08f else 0.16f))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(22.dp))
-                    .clickable(enabled = !video.turnOffComments) {
-                        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
-                            onRequireLogin()
-                        } else {
-                            showComments = true
-                        }
-                    }
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Text(
-                    text = if (video.turnOffComments) "Comments are turned off" else "Add comment...",
-                    color = Color.White.copy(alpha = if (video.turnOffComments) 0.45f else 0.7f),
-                    fontSize = 13.sp
-                )
-                Icon(
-                    imageVector = if (video.turnOffComments) Lucide.MessageSquareOff else Lucide.Smile,
-                    contentDescription = "Comments",
-                    tint = Color.White.copy(alpha = if (video.turnOffComments) 0.45f else 0.7f),
-                    modifier = Modifier.size(20.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (video.turnOffComments) Color.White.copy(alpha = 0.08f)
+                            else Color.Black.copy(alpha = 0.44f)
+                        )
+                        .clickable(enabled = !video.turnOffComments) {
+                            if (requireSignedIn()) {
+                                showComments = true
+                            }
+                        }
+                        .padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (!video.turnOffComments) {
+                        IosAvatarView(
+                            name = currentUserName,
+                            avatarUrl = currentUserAvatar,
+                            size = 24.dp,
+                            modifier = Modifier.clip(CircleShape)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Lucide.Lock,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.45f),
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                    Text(
+                        text = if (video.turnOffComments) "Comments are turned off" else "Add a comment…",
+                        color = Color.White.copy(alpha = if (video.turnOffComments) 0.45f else 0.72f),
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (!video.turnOffComments) {
+                        Icon(
+                            imageVector = Lucide.MessageCircle,
+                            contentDescription = "Comments",
+                            tint = Color.White.copy(alpha = 0.72f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            // Interactive Scrubbable Progress Bar
+            val barHeight by animateDpAsState(
+                targetValue = if (isScrubbing) 5.dp else 2.5.dp,
+                animationSpec = tween(140),
+                label = "scrubberHeight"
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(18.dp)
+                    .onSizeChanged { size -> scrubberWidthPx = size.width.toFloat().coerceAtLeast(1f) }
+                    .pointerInput(video.id, videoDuration) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { offset ->
+                                isScrubbing = true
+                                scrubFraction = (offset.x / scrubberWidthPx).coerceIn(0f, 1f)
+                            },
+                            onHorizontalDrag = { change, _ ->
+                                change.consume()
+                                scrubFraction = (change.position.x / scrubberWidthPx).coerceIn(0f, 1f)
+                            },
+                            onDragEnd = {
+                                val targetMs = (scrubFraction * videoDuration).toLong()
+                                player.seekTo(targetMs)
+                                currentPosition = targetMs
+                                isScrubbing = false
+                            },
+                            onDragCancel = {
+                                isScrubbing = false
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.BottomStart
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(barHeight)
+                        .background(Color.White.copy(alpha = 0.22f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(shownProgress)
+                            .fillMaxHeight()
+                            .background(if (isScrubbing) Color(0xFF38BDF8) else Color.White)
+                    )
+                }
             }
         }
 
-        // ── Video Progress Bar at the very bottom edge ────────────────────────
-        val progress = if (videoDuration > 0) currentPosition.toFloat() / videoDuration.toFloat() else 0f
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.5.dp)
-                .align(Alignment.BottomCenter)
-                .background(Color.White.copy(alpha = 0.25f))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(progress.coerceIn(0f, 1f))
-                    .fillMaxHeight()
-                    .background(Color.White)
-            )
-        }
-
-        // Comments Bottom Sheet (Plain pure white)
+        // Comments Bottom Sheet
         if (showComments) {
             FlashCommentsSheet(
                 video = video,
@@ -1037,7 +1367,7 @@ private fun FlashVideoItem(
             )
         }
 
-        // More Options Bottom Sheet (Plain pure white)
+        // More Options Bottom Sheet
         if (showMoreOptionsSheet) {
             FlashMoreOptionsSheet(
                 video = video,
@@ -1050,6 +1380,10 @@ private fun FlashVideoItem(
                 onShareClick = {
                     showMoreOptionsSheet = false
                     onShare()
+                },
+                onNotInterestedClick = {
+                    showMoreOptionsSheet = false
+                    onHideVideo()
                 },
                 onDownloadClick = {
                     showMoreOptionsSheet = false
@@ -1067,7 +1401,7 @@ private fun FlashVideoItem(
                                 val savedUri = ExportHelper.saveVideoToGallery(context, tempFile)
                                 withContext(Dispatchers.Main) {
                                     if (savedUri != null) {
-                                        ToastManager.showToast("Saved to gallery! 🎬")
+                                        ToastManager.showToast("Saved to gallery")
                                     } else {
                                         ToastManager.showToast("Failed to save to gallery")
                                     }
@@ -1087,7 +1421,6 @@ private fun FlashVideoItem(
             )
         }
 
-        // Delete confirmation dialog (Apple HIG Style)
         if (showDeleteConfirmDialog) {
             IosAlertDialog(
                 title = "Delete Flash Video?",
@@ -1111,6 +1444,13 @@ private fun FlashVideoItem(
     }
 }
 
+private fun formatFlashTime(ms: Long): String {
+    val totalSec = (ms / 1000L).coerceAtLeast(0L)
+    val min = totalSec / 60L
+    val sec = totalSec % 60L
+    return "$min:${sec.toString().padStart(2, '0')}"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FlashMoreOptionsSheet(
@@ -1119,213 +1459,148 @@ private fun FlashMoreOptionsSheet(
     onDismiss: () -> Unit,
     onDeleteClick: () -> Unit,
     onShareClick: () -> Unit,
+    onNotInterestedClick: () -> Unit,
     onDownloadClick: () -> Unit
 ) {
     val context = LocalContext.current
     val colors = LocalOscellionColors.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetBg = if (colors.isDark) Color(0xFF13131A) else Color.White
+    val iconChipBg = if (colors.isDark) Color(0xFF1E1E28) else Color(0xFFEEEEF3)
+    val dangerBg = Color(0xFFF43F5E).copy(alpha = 0.12f)
+    val dangerColor = Color(0xFFF43F5E)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = if (colors.isDark) Color(0xFF1C1C1E) else Color.White,
-        dragHandle = {
-            BottomSheetDefaults.DragHandle(color = colors.cardBorder)
-        },
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = sheetBg,
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
         windowInsets = WindowInsets(0.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(36.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(colors.textMuted.copy(alpha = 0.45f))
+                )
+            }
+
             Text(
-                text = "Flash Options",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.textMain,
-                modifier = Modifier.padding(bottom = 8.dp)
+                text = "Flash options",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textMuted,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
             )
 
-            if (isOwner) {
-                // Destructive Delete option
+            @Composable
+            fun OptionRow(
+                icon: androidx.compose.ui.graphics.vector.ImageVector,
+                label: String,
+                danger: Boolean = false,
+                onClick: () -> Unit
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(if (colors.isDark) Color(0xFF3B1E1E) else Color(0xFFFEF2F2))
-                        .clickable { onDeleteClick() }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .clickable(onClick = onClick)
+                        .padding(horizontal = 8.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(
-                        imageVector = Lucide.Trash2,
-                        contentDescription = "Delete Video",
-                        tint = Color(0xFFFF3B30),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(14.dp))
-                    Text(
-                        text = "Delete Flash Video",
-                        color = Color(0xFFFF3B30),
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp
-                    )
-                }
-            }
-
-            // Share option
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable { onShareClick() }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Lucide.Share2,
-                    contentDescription = "Share",
-                    tint = colors.textMain,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.width(14.dp))
-                Text(
-                    text = "Share Video",
-                    color = colors.textMain,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp
-                )
-            }
-
-            // Copy Link
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable {
-                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        val clip = android.content.ClipData.newPlainText("Flash Video", video.videoUrl)
-                        clipboard.setPrimaryClip(clip)
-                        ToastManager.showToast("Link copied to clipboard")
-                        onDismiss()
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(if (danger) dangerBg else iconChipBg),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = label,
+                            tint = if (danger) dangerColor else colors.textMain,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Lucide.Link,
-                    contentDescription = "Copy Link",
-                    tint = colors.textMain,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.width(14.dp))
-                Text(
-                    text = "Copy Link",
-                    color = colors.textMain,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp
-                )
+                    Text(
+                        text = label,
+                        color = if (danger) dangerColor else colors.textMain,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp
+                    )
+                }
             }
 
-            // Download
-            Row(
+            OptionRow(Lucide.Share2, "Share Flash", onClick = onShareClick)
+
+            OptionRow(Lucide.Link, "Copy link") {
+                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clip = android.content.ClipData.newPlainText("Flash Video", "https://oscellion.app/flash/${video.id}")
+                clipboard.setPrimaryClip(clip)
+                ToastManager.showToast("Link copied to clipboard")
+                onDismiss()
+            }
+
+            OptionRow(Lucide.Download, "Save to device", onClick = onDownloadClick)
+
+            if (isOwner) {
+                OptionRow(Lucide.Trash2, "Delete Flash video", danger = true, onClick = onDeleteClick)
+            } else {
+                OptionRow(Lucide.EyeOff, "Not interested", onClick = onNotInterestedClick)
+                OptionRow(Lucide.Flag, "Report video", danger = true) {
+                    val reporterUid = FirebaseAuth.getInstance().currentUser?.uid
+                    if (!reporterUid.isNullOrBlank()) {
+                        val reportData = mapOf(
+                            "reporterId" to reporterUid,
+                            "targetId" to video.id,
+                            "targetType" to "flash_video",
+                            "targetAuthorId" to video.creatorId,
+                            "reason" to "Inappropriate content",
+                            "timestamp" to System.currentTimeMillis()
+                        )
+                        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("reports")
+                            .add(reportData)
+                    }
+                    ToastManager.showToast("Report submitted. Thank you.")
+                    onDismiss()
+                }
+            }
+
+            Spacer(Modifier.height(6.dp))
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .clickable { onDownloadClick() }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .background(iconChipBg)
+                    .clickable(onClick = onDismiss)
+                    .padding(vertical = 13.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Lucide.Download,
-                    contentDescription = "Save Video",
-                    tint = colors.textMain,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.width(14.dp))
                 Text(
-                    text = "Save to Device",
+                    text = "Cancel",
                     color = colors.textMain,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
-
-            if (!isOwner) {
-                // Report option
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable {
-                            val reporterUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                            if (!reporterUid.isNullOrBlank()) {
-                                val reportData = mapOf(
-                                    "reporterId" to reporterUid,
-                                    "targetId" to video.id,
-                                    "targetType" to "flash_video",
-                                    "targetAuthorId" to video.creatorId,
-                                    "reason" to "Inappropriate content",
-                                    "timestamp" to System.currentTimeMillis()
-                                )
-                                com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                    .collection("reports")
-                                    .add(reportData)
-                            }
-                            ToastManager.showToast("Report submitted. Thank you.")
-                            onDismiss()
-                        }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Lucide.Flag,
-                        contentDescription = "Report",
-                        tint = Color(0xFFFF3B30),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(14.dp))
-                    Text(
-                        text = "Report Video",
-                        color = Color(0xFFFF3B30),
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 15.sp
-                    )
-                }
-
-                // Not Interested
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable {
-                            ToastManager.showToast("We'll tune your feed recommendations.")
-                            onDismiss()
-                        }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Lucide.EyeOff,
-                        contentDescription = "Not Interested",
-                        tint = colors.textMuted,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(14.dp))
-                    Text(
-                        text = "Not Interested",
-                        color = colors.textMuted,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 15.sp
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -1340,11 +1615,14 @@ private fun ReelsActionButton(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable { onClick() }
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 2.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(38.dp)
+                .size(36.dp)
                 .scale(scale),
             contentAlignment = Alignment.Center
         ) {
@@ -1360,7 +1638,7 @@ private fun ReelsActionButton(
             Text(
                 text = label,
                 color = Color.White,
-                fontSize = 11.sp,
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 style = androidx.compose.ui.text.TextStyle(
                     shadow = androidx.compose.ui.graphics.Shadow(
@@ -1375,33 +1653,107 @@ private fun ReelsActionButton(
 
 @Composable
 private fun FlashEmptyState(onUpload: () -> Unit) {
-    val emptyState = rememberAppleGraphicAnimationState()
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color(0xFF09090B))
+            .padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        AppleFlashGraphic(
-            modifier = Modifier.size(135.dp),
-            state = emptyState,
-            enableClickToAnimate = true
-        )
-        Spacer(Modifier.height(20.dp))
-        Text("No Reels Yet", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        Text("Be the first to share a video!", color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp)
-        Spacer(Modifier.height(28.dp))
-        GlassButton(
-            onClick = onUpload,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE)),
-            shape = RoundedCornerShape(32.dp),
-            modifier = Modifier.height(50.dp)
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF181820)),
+            contentAlignment = Alignment.Center
         ) {
-            Icon(Lucide.Plus, null, tint = Color.White)
-            Spacer(Modifier.width(8.dp))
-            Text("Create Reel", color = Color.White, fontWeight = FontWeight.Bold)
+            Icon(
+                imageVector = Lucide.Film,
+                contentDescription = null,
+                tint = Color(0xFF38BDF8),
+                modifier = Modifier.size(28.dp)
+            )
+        }
+        Spacer(Modifier.height(18.dp))
+        Text("No Flash Videos Yet", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Share a short video or remix from the studio.",
+            color = Color.White.copy(alpha = 0.62f),
+            fontSize = 14.sp
+        )
+        Spacer(Modifier.height(24.dp))
+        Row(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(Color(0xFF0381FE))
+                .clickable(onClick = onUpload)
+                .padding(horizontal = 22.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(Lucide.Plus, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Text("Create Flash", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun FollowingFlashEmptyState(
+    onExploreForYou: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF09090B))
+            .padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF181820)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Lucide.Users,
+                contentDescription = null,
+                tint = Color(0xFF38BDF8),
+                modifier = Modifier.size(26.dp)
+            )
+        }
+        Spacer(Modifier.height(18.dp))
+        Text("No Following Flash Yet", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Follow creators in For You to see their Flash videos here.",
+            color = Color.White.copy(alpha = 0.62f),
+            fontSize = 14.sp
+        )
+        Spacer(Modifier.height(24.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Color(0xFF0381FE))
+                    .clickable(onClick = onExploreForYou)
+                    .padding(horizontal = 20.dp, vertical = 11.dp)
+            ) {
+                Text("Explore For You", color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Color(0xFF1E1E28))
+                    .clickable(onClick = onRefresh)
+                    .padding(horizontal = 16.dp, vertical = 11.dp)
+            ) {
+                Text("Refresh", color = Color.White.copy(alpha = 0.85f), fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
+            }
         }
     }
 }
@@ -1483,6 +1835,10 @@ fun FlashCommentsSheet(
         creatorId = video.creatorId,
         creatorUsername = video.authorUsername,
         creatorAvatarUrl = video.authorAvatarUrl,
+        creatorVerified = video.authorVerified,
+        creatorVerifiedTone = video.authorVerifiedTone,
+        postCaption = video.caption,
+        postThumbnailUrl = video.thumbnailUrl,
         turnOffComments = video.turnOffComments,
         commentVm = commentVm,
         onDismiss = onDismiss,

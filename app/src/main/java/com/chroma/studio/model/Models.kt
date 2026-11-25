@@ -27,6 +27,8 @@ data class UserProfile(
     val homeLocation: String = "",
     val countryLocation: String = "",
     val verified: Boolean = false,
+    val verifiedTone: String? = null,
+    val isPro: Boolean = false,
     val online: Boolean = false,
     val showLocation: Boolean = false,
     val lastSeen: Long? = null,
@@ -97,6 +99,7 @@ data class DiscoverPost(
     val authorDisplayName: String = "",
     val authorAvatarUrl: String = "",
     val authorVerified: Boolean = false,
+    val authorVerifiedTone: String? = null,
     val title: String = "",
     val description: String = "",
     val aspectRatio: String = "4:3",
@@ -141,10 +144,21 @@ data class DiscoverPost(
     val remixedFromAuthorAvatar: String? = null,
     val remixedFromAuthorVerified: Boolean = false,
     
-    // Archive state
+    // Archive & Trending Curation state
     @get:com.google.firebase.firestore.PropertyName("archived")
     @set:com.google.firebase.firestore.PropertyName("archived")
-    var isArchived: Boolean = false
+    var isArchived: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isTrending")
+    @set:com.google.firebase.firestore.PropertyName("isTrending")
+    var isTrending: Boolean = false,
+    val trendingExcluded: Boolean = false,
+    val trendingOrder: Int? = null,
+    @get:com.google.firebase.firestore.PropertyName("isFeatured")
+    @set:com.google.firebase.firestore.PropertyName("isFeatured")
+    var isFeatured: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isTakedown")
+    @set:com.google.firebase.firestore.PropertyName("isTakedown")
+    var isTakedown: Boolean = false
 ) {
     @get:com.google.firebase.firestore.Exclude
     val effectiveCommentsCount: Int
@@ -152,8 +166,13 @@ data class DiscoverPost(
 
     @get:com.google.firebase.firestore.Exclude
     val isTrendingMasterwork: Boolean
-        get() = likesCount > 100 && effectiveCommentsCount >= 5
+        get() = !isTakedown && !trendingExcluded && (isTrending || (likesCount > 100 && effectiveCommentsCount >= 5))
 }
+
+data class TrendingConfig(
+    val mode: String = "curated_first", // "curated_first" | "curated_only"
+    val maxSpotlight: Int = 6
+)
 
 data class CreatorPostDraft(
     val id: String = java.util.UUID.randomUUID().toString(),
@@ -233,6 +252,8 @@ data class ChatMessage(
     val isPending: Boolean = false,
     @get:com.google.firebase.firestore.Exclude
     val isError: Boolean = false,
+    @get:com.google.firebase.firestore.Exclude
+    val uploadProgress: Int? = null,
     val messageType: String = "text", // "text", "image", "video", "audio", "system"
     val iv: String = "", // Initialization Vector for AES
     val encryptedAesKeys: Map<String, String> = emptyMap(), // participantId -> RSA Encrypted AES Key
@@ -353,6 +374,7 @@ data class ChromaNotification(
     val actorAvatarUrl: String? = null,
     val actorGender: String? = null,
     val isVerified: Boolean = false,
+    val actorVerifiedTone: String? = null,
     val actionText: String = "",
     val detailText: String? = null,
     val targetPreviewUrl: String? = null,
@@ -396,6 +418,7 @@ data class FlashComment(
     val displayName: String = "",
     val avatarUrl: String = "",
     val verified: Boolean = false,
+    val verifiedTone: String? = null,
     val text: String = "",
     val timestamp: Long = System.currentTimeMillis(),
     val likesCount: Int = 0,
@@ -423,6 +446,7 @@ data class FlashVideo(
     val authorDisplayName: String = "",
     val authorAvatarUrl: String = "",
     val authorVerified: Boolean = false,
+    val authorVerifiedTone: String? = null,
     val videoUrl: String = "",      // Cloudinary optimised URL
     val thumbnailUrl: String = "",  // Cloudinary image URL
     val caption: String = "",
@@ -446,7 +470,19 @@ data class FlashVideo(
     val turnOffRemix: Boolean = false,
     @get:com.google.firebase.firestore.PropertyName("archived")
     @set:com.google.firebase.firestore.PropertyName("archived")
-    var isArchived: Boolean = false
+    var isArchived: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isTrending")
+    @set:com.google.firebase.firestore.PropertyName("isTrending")
+    var isTrending: Boolean = false,
+    val trendingExcluded: Boolean = false,
+    val trendingOrder: Int? = null,
+    val trendingTag: String? = null,
+    @get:com.google.firebase.firestore.PropertyName("isFeatured")
+    @set:com.google.firebase.firestore.PropertyName("isFeatured")
+    var isFeatured: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("isTakedown")
+    @set:com.google.firebase.firestore.PropertyName("isTakedown")
+    var isTakedown: Boolean = false
 )
 
 /** Locally persisted draft before publishing a Flash. */

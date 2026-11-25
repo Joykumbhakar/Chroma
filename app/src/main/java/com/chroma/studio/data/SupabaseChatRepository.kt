@@ -14,14 +14,20 @@ import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import io.github.jan.supabase.postgrest.query.Order
 
 /**
@@ -39,18 +45,75 @@ class SupabaseChatRepository {
 
     private val chatsCollection = firestore.collection("chats")
     private val usersCollection = firestore.collection("users")
+    private val pushScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // High-performance in-memory cache to eliminate repeated Firestore round-trips when sending messages
     private val roomParticipantsCache = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
+    private val roomGroupNameCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val roomIsGroupCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
     private val userPublicKeyCache = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val decryptedMessageCache = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val roomDeletedAtCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    @Volatile
+    private var syncedPublicKeyUserId: String? = null
 
     fun clearCaches() {
         roomParticipantsCache.clear()
+        roomGroupNameCache.clear()
+        roomIsGroupCache.clear()
         userPublicKeyCache.clear()
         decryptedMessageCache.clear()
         roomDeletedAtCache.clear()
+        syncedPublicKeyUserId = null
+        NotificationDispatcher.clearPushCaches()
+    }
+
+    /** Pre-warms room participants, RSA public keys, FCM token & push metadata in parallel when opening a room. */
+    suspend fun prefetchRoomMetadata(roomId: String, knownParticipants: List<String>? = null) = withContext(Dispatchers.IO) {
+        val uid = auth.currentUser?.uid ?: return@withContext
+        try {
+            val participants = knownParticipants?.takeIf { it.isNotEmpty() }
+                ?: roomParticipantsCache[roomId]
+                ?: run {
+                    val snap = chatsCollection.document(roomId).get().await()
+                    val room = snap.toObject(ChatRoom::class.java)
+                    if (room != null) {
+                        roomParticipantsCache[roomId] = room.participants
+                        roomIsGroupCache[roomId] = room.isGroup
+                        if (!room.name.isNullOrBlank()) roomGroupNameCache[roomId] = room.name
+                        room.participants
+                    } else emptyList()
+                }
+            if (participants.isNotEmpty()) {
+                roomParticipantsCache[roomId] = participants
+            }
+
+            // Ensure current user's publicKey is synced at most once per session
+            if (syncedPublicKeyUserId != uid) {
+                val myPubKey = com.chroma.studio.utils.CryptoHelper.getPublicKeyBase64()
+                if (myPubKey.isNotEmpty()) {
+                    syncedPublicKeyUserId = uid
+                    usersCollection.document(uid).update("publicKey", myPubKey)
+                }
+            }
+
+            val others = participants.filter { it != uid }
+            coroutineScope {
+                val pushPrep = async { NotificationDispatcher.preloadChatPushContext(others, roomId) }
+                val fcmWarmup = async { FcmPushSender.warmup(com.chroma.studio.ChromaApp.instance) }
+                val keyJobs = others.filter { userPublicKeyCache[it].isNullOrEmpty() }.map { pid ->
+                    async {
+                        try {
+                            val fetchedKey = usersCollection.document(pid).get().await().getString("publicKey")
+                            if (!fetchedKey.isNullOrEmpty()) userPublicKeyCache[pid] = fetchedKey
+                        } catch (_: Exception) {}
+                    }
+                }
+                pushPrep.await()
+                fcmWarmup.await()
+                keyJobs.awaitAll()
+            }
+        } catch (_: Exception) {}
     }
 
     private fun getChatRoomId(uid1: String, uid2: String): String {
@@ -167,11 +230,14 @@ class SupabaseChatRepository {
             val encryptedKeysMap = mutableMapOf<String, String>()
             val myPubKey = com.chroma.studio.utils.CryptoHelper.getPublicKeyBase64()
 
-            // Always encrypt for current user with their active local public key
+            // Always encrypt for current user with their active local public key; only sync once per session
             if (myPubKey.isNotEmpty()) {
                 val myEncKey = com.chroma.studio.utils.CryptoHelper.encryptAESKeyWithRSA(aesBytes, myPubKey)
                 encryptedKeysMap[currentUserId] = myEncKey
-                usersCollection.document(currentUserId).update("publicKey", myPubKey)
+                if (syncedPublicKeyUserId != currentUserId) {
+                    syncedPublicKeyUserId = currentUserId
+                    usersCollection.document(currentUserId).update("publicKey", myPubKey)
+                }
             }
 
             // Room fallback encryption
@@ -188,30 +254,39 @@ class SupabaseChatRepository {
                 val room = roomSnapshot.toObject(ChatRoom::class.java)
                 if (room != null) {
                     roomParticipantsCache[roomId] = room.participants
+                    roomIsGroupCache[roomId] = room.isGroup
+                    if (!room.name.isNullOrBlank()) roomGroupNameCache[roomId] = room.name
                     room.participants
                 } else emptyList()
             }
 
-            if (participants.isNotEmpty()) {
-                for (participantId in participants) {
-                    if (participantId == currentUserId) continue
-                    var pubKeyStr = userPublicKeyCache[participantId]
-                    if (pubKeyStr.isNullOrEmpty()) {
-                        try {
-                            val userDoc = usersCollection.document(participantId).get().await()
-                            val fetchedKey = userDoc.getString("publicKey")
-                            if (!fetchedKey.isNullOrEmpty()) {
-                                userPublicKeyCache[participantId] = fetchedKey
-                                pubKeyStr = fetchedKey
+            val others = participants.filter { it != currentUserId }
+            val missingKeys = others.filter { userPublicKeyCache[it].isNullOrEmpty() }
+            if (missingKeys.isNotEmpty()) {
+                // Parallel fetch with short timeout so missing keys never stall message sending
+                withTimeoutOrNull(1500L) {
+                    coroutineScope {
+                        missingKeys.map { participantId ->
+                            async {
+                                try {
+                                    val fetchedKey = usersCollection.document(participantId).get().await().getString("publicKey")
+                                    if (!fetchedKey.isNullOrEmpty()) {
+                                        userPublicKeyCache[participantId] = fetchedKey
+                                    }
+                                } catch (_: Exception) {}
                             }
-                        } catch (_: Exception) {}
+                        }.awaitAll()
                     }
-                    if (!pubKeyStr.isNullOrEmpty()) {
-                        try {
-                            val encKey = com.chroma.studio.utils.CryptoHelper.encryptAESKeyWithRSA(aesBytes, pubKeyStr)
-                            encryptedKeysMap[participantId] = encKey
-                        } catch (_: Exception) {}
-                    }
+                }
+            }
+
+            for (participantId in others) {
+                val pubKeyStr = userPublicKeyCache[participantId]
+                if (!pubKeyStr.isNullOrEmpty()) {
+                    try {
+                        val encKey = com.chroma.studio.utils.CryptoHelper.encryptAESKeyWithRSA(aesBytes, pubKeyStr)
+                        encryptedKeysMap[participantId] = encKey
+                    } catch (_: Exception) {}
                 }
             }
             Triple(encryptedMsg, iv, encryptedKeysMap)
@@ -247,11 +322,17 @@ class SupabaseChatRepository {
         val currentUser = auth.currentUser ?: return@withContext false
         try {
             val messageId = preGeneratedId ?: java.util.UUID.randomUUID().toString()
-            val timestamp = System.currentTimeMillis()
+            val minTimestamp = (roomDeletedAtCache[roomId] ?: 0L) + 1L
+            val timestamp = maxOf(System.currentTimeMillis(), minTimestamp)
             val (finalMessageText, finalIv, finalEncryptedKeys) = if (messageType != "system" && messageType != "flash_video" && messageType != "call" && text.isNotBlank()) {
                 encryptPayload(roomId, text, currentUser.uid)
             } else {
                 Triple(text, "", emptyMap<String, String>())
+            }
+
+            // Pre-populate decryption cache so sender's observeMessages skips KeyStore RSA decryption on this message
+            if (finalIv.isNotEmpty() && finalMessageText.isNotEmpty()) {
+                decryptedMessageCache["${messageId}_${finalMessageText.hashCode()}_$finalIv"] = text
             }
 
             val message = ChatMessage(
@@ -282,106 +363,110 @@ class SupabaseChatRepository {
                 callType = callType
             )
 
-            // 1. Save directly to Firestore subcollection for 100% reliable persistence & realtime listeners
-            chatsCollection.document(roomId).collection("messages").document(message.id).set(message).await()
-
-            // 2. Update chat room last message in Firebase for the ChatList
             val roomRef = chatsCollection.document(roomId)
-            firestore.runTransaction { transaction ->
-                val roomSnapshot = transaction.get(roomRef)
-                val room = roomSnapshot.toObject(ChatRoom::class.java)
+            val msgRef = roomRef.collection("messages").document(message.id)
+
+            // Resolve participants from cache first (0 extra Firestore reads!)
+            val cachedParticipants = roomParticipantsCache[roomId]
+            val participants: List<String> = cachedParticipants ?: run {
+                val roomSnap = try { roomRef.get().await() } catch (_: Exception) { null }
+                val room = roomSnap?.toObject(ChatRoom::class.java)
                 if (room != null) {
-                    val updatedUnreadCount = mutableMapOf<String, Int>()
-                    try {
-                        val rawMap = roomSnapshot.get("unreadCount") as? Map<*, *>
-                        if (rawMap != null) {
-                            for ((k, v) in rawMap) {
-                                val keyStr = k?.toString() ?: continue
-                                val countVal = (v as? Number)?.toInt() ?: 0
-                                updatedUnreadCount[keyStr] = countVal
-                            }
-                        }
-                    } catch (_: Exception) {}
+                    roomParticipantsCache[roomId] = room.participants
+                    roomIsGroupCache[roomId] = room.isGroup
+                    if (!room.name.isNullOrBlank()) roomGroupNameCache[roomId] = room.name
+                    room.participants
+                } else emptyList()
+            }
 
-                    for (participantId in room.participants) {
-                        if (participantId != currentUser.uid) {
-                            updatedUnreadCount[participantId] = (updatedUnreadCount[participantId] ?: 0) + 1
-                        }
-                    }
-                    val displayMessage = if (messageType == "call") {
-                        val type = callType ?: "Audio"
-                        val dur = if (!callDuration.isNullOrBlank()) " • $callDuration" else ""
-                        "$type call$dur"
-                    } else if (messageType == "flash_video" || flashVideoId != null) {
-                        "⚡ Shared a Flash video"
-                    } else if (storyThumbnailUrl != null || storyId != null) {
-                        "Replied to story: $text"
-                    } else if (imageUrl != null) {
-                        if (messageType == "video") "Sent a video" else if (messageType == "audio") "Voice message" else "Sent an image"
-                    } else if (workId != null) {
-                        "Shared a work"
-                    } else if (text.startsWith("[POLL]:")) {
-                        val q = text.removePrefix("[POLL]:").substringBefore("|||").trim()
-                        "Poll: $q"
-                    } else {
-                        text
-                    }
+            val displayMessage = if (messageType == "call") {
+                val type = callType ?: "Audio"
+                val dur = if (!callDuration.isNullOrBlank()) " • $callDuration" else ""
+                "$type call$dur"
+            } else if (messageType == "flash_video" || flashVideoId != null) {
+                "⚡ Shared a Flash video"
+            } else if (storyThumbnailUrl != null || storyId != null) {
+                "Replied to story: $text"
+            } else if (imageUrl != null) {
+                if (messageType == "video") "Sent a video" else if (messageType == "audio") "Voice message" else "Sent an image"
+            } else if (workId != null) {
+                "Shared a work"
+            } else if (text.startsWith("[POLL]:")) {
+                val q = text.removePrefix("[POLL]:").substringBefore("|||").trim()
+                "Poll: $q"
+            } else {
+                text
+            }
 
-                    transaction.update(roomRef, "lastMessage", displayMessage)
-                    transaction.update(roomRef, "lastMessageTime", message.timestamp)
-                    transaction.update(roomRef, "lastSender", currentUser.uid)
-                    transaction.update(roomRef, "lastMessageId", message.id)
-                    transaction.update(roomRef, "lastMessageIsRead", false)
-                    transaction.update(roomRef, "lastMessageIsDelivered", false)
-                    transaction.update(roomRef, "unreadCount", updatedUnreadCount)
-                    // Clear deletedBy for everyone so the chat resurrects in both inboxes.
-                    // Old messages will still be hidden via the deletedAt timestamp.
-                    transaction.update(roomRef, "deletedBy", emptyList<String>())
+            // 1 single atomic WriteBatch: creates message doc AND updates room metadata + unread counts in 1 RTT (zero transaction locks/retries!)
+            val roomUpdates = mutableMapOf<String, Any?>(
+                "lastMessage" to displayMessage,
+                "lastMessageTime" to message.timestamp,
+                "lastSender" to currentUser.uid,
+                "lastMessageId" to message.id,
+                "lastMessageIsRead" to false,
+                "lastMessageIsDelivered" to false,
+                "deletedBy" to emptyList<String>()
+            )
+            for (participantId in participants) {
+                if (participantId != currentUser.uid) {
+                    roomUpdates["unreadCount.$participantId"] = FieldValue.increment(1L)
                 }
-            }.await()
+            }
 
-            // 3. Dispatch FCM push notification to recipient(s)
-            // NOTE: We use the original plaintext `text` (before encryption) for the notification
-            // snippet so the receiver sees readable content, not ciphertext.
             try {
-                val roomSnap = roomRef.get().await()
-                val room = roomSnap.toObject(ChatRoom::class.java)
-                if (room != null) {
-                    // Build a human-readable notification body based on message type
-                    val displaySnippet = when {
-                        messageType == "flash_video" || flashVideoId != null -> "⚡ Shared a Flash video"
-                        messageType == "audio" || messageType == "voice" -> "🎤 Voice message"
-                        messageType == "video" -> "🎥 Sent a video"
-                        messageType == "image" || (imageUrl != null && messageType == "text") -> "📷 Sent a photo"
-                        imageUrl != null && messageType == "audio" -> "🎤 Voice message"
-                        imageUrl != null -> "📎 Sent a file"
-                        workId != null -> "🎨 Shared a work"
-                        storyId != null || storyThumbnailUrl != null -> "↩️ Replied to your story"
-                        text.startsWith("[POLL]:") -> {
-                            val question = text.removePrefix("[POLL]:").substringBefore("|||").trim()
-                            "📊 Poll: $question"
-                        }
-                        // Use original plain `text` — NOT the encrypted finalMessageText
-                        text.isNotBlank() -> text.take(200)
-                        else -> "New message"
+                val batch = firestore.batch()
+                batch.set(msgRef, message)
+                if (participants.isNotEmpty()) {
+                    batch.update(roomRef, roomUpdates)
+                }
+                batch.commit().await()
+            } catch (batchErr: Exception) {
+                // Fallback if parent room doc doesn't exist yet on first-ever race
+                msgRef.set(message).await()
+                try {
+                    roomRef.update(roomUpdates).await()
+                } catch (_: Exception) {}
+            }
+
+            // 2. Dispatch FCM push asynchronously in parallel without blocking message send completion
+            val isGroup = roomIsGroupCache[roomId] ?: roomId.startsWith("group_")
+            val groupName = if (isGroup) roomGroupNameCache[roomId] else null
+            val recipients = participants.filter { it != currentUser.uid }.ifEmpty {
+                if (!roomId.startsWith("group_") && roomId.contains("_")) {
+                    roomId.split("_").filter { it.isNotBlank() && it != currentUser.uid }
+                } else emptyList()
+            }
+            if (recipients.isNotEmpty()) {
+                val displaySnippet = when {
+                    messageType == "flash_video" || flashVideoId != null -> "⚡ Shared a Flash video"
+                    messageType == "audio" || messageType == "voice" -> "🎤 Voice message"
+                    messageType == "video" -> "🎥 Sent a video"
+                    messageType == "image" || (imageUrl != null && messageType == "text") -> "📷 Sent a photo"
+                    imageUrl != null && messageType == "audio" -> "🎤 Voice message"
+                    imageUrl != null -> "📎 Sent a file"
+                    workId != null -> "🎨 Shared a work"
+                    storyId != null || storyThumbnailUrl != null -> "↩️ Replied to your story"
+                    text.startsWith("[POLL]:") -> {
+                        val question = text.removePrefix("[POLL]:").substringBefore("|||").trim()
+                        "📊 Poll: $question"
                     }
-                    val recipients = if (room.isGroup) {
-                        room.participants.filter { it != currentUser.uid }
-                    } else {
-                        listOfNotNull(room.participants.firstOrNull { it != currentUser.uid })
-                    }
-                    if (recipients.isNotEmpty()) {
+                    text.isNotBlank() -> text.take(200)
+                    else -> "New message"
+                }
+                pushScope.launch {
+                    try {
                         NotificationDispatcher.sendChatPush(
                             recipientIds = recipients,
                             roomId = roomId,
-                            groupName = if (room.isGroup) room.name else null,
+                            groupName = groupName,
                             body = displaySnippet,
                             messageType = messageType,
                             messageId = messageId
                         )
-                    }
+                    } catch (_: Exception) {}
                 }
-            } catch (_: Exception) {}
+            }
 
             true
         } catch (e: Exception) {
@@ -413,96 +498,110 @@ class SupabaseChatRepository {
     suspend fun markAsRead(roomId: String) = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext
         try {
-            // Update Firebase unread count & last message read/delivered flags
             val roomRef = chatsCollection.document(roomId)
-            firestore.runTransaction { transaction ->
-                val roomSnapshot = transaction.get(roomRef)
-                val room = roomSnapshot.toObject(ChatRoom::class.java)
-                if (room != null) {
-                    val updatedUnreadCount = room.unreadCount.toMutableMap()
-                    updatedUnreadCount[currentUser.uid] = 0
-                    transaction.update(roomRef, "unreadCount", updatedUnreadCount)
-                    if (room.lastSender != null && room.lastSender != currentUser.uid) {
-                        transaction.update(roomRef, "lastMessageIsRead", true)
-                        transaction.update(roomRef, "lastMessageIsDelivered", true)
-                    }
-                }
-            }.await()
 
-            // Update Firestore individual messages as read & delivered
-            try {
-                val recentMessages = roomRef.collection("messages")
+            // Fetch up to 30 recent messages first so we can commit room + message updates in 1 atomic WriteBatch (zero transaction locks!)
+            val recentDocs = try {
+                roomRef.collection("messages")
                     .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                    .limit(100)
+                    .limit(30)
                     .get()
                     .await()
-                val docsToUpdate = recentMessages.documents.filter { doc ->
-                    val senderId = doc.getString("senderId")
-                    val isRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: false
-                    !isRead && senderId != null && senderId != currentUser.uid
-                }
-                if (docsToUpdate.isNotEmpty()) {
-                    docsToUpdate.chunked(450).forEach { chunk ->
-                        val batch = firestore.batch()
-                        for (doc in chunk) {
-                            batch.update(doc.reference, mapOf(
-                                "isRead" to true,
-                                "read" to true,
-                                "isDelivered" to true,
-                                "delivered" to true
-                            ))
-                        }
-                        batch.commit().await()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w("SupabaseChatRepository", "markAsRead message batch update error: ${e.message}")
+                    .documents
+            } catch (_: Exception) {
+                emptyList()
             }
+
+            val docsToUpdate = recentDocs.filter { doc ->
+                val senderId = doc.getString("senderId")
+                val isRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: false
+                !isRead && senderId != null && senderId != currentUser.uid
+            }
+
+            val batch = firestore.batch()
+            val roomUpdates = mutableMapOf<String, Any>(
+                "unreadCount.${currentUser.uid}" to 0
+            )
+            // If latest message came from someone else, also mark room-level read/delivered flags
+            val latestDoc = recentDocs.firstOrNull()
+            val latestSender = latestDoc?.getString("senderId")
+            if (latestSender == null || latestSender != currentUser.uid) {
+                roomUpdates["lastMessageIsRead"] = true
+                roomUpdates["lastMessageIsDelivered"] = true
+            }
+            batch.update(roomRef, roomUpdates)
+
+            for (doc in docsToUpdate) {
+                batch.update(
+                    doc.reference,
+                    mapOf(
+                        "isRead" to true,
+                        "read" to true,
+                        "isDelivered" to true,
+                        "delivered" to true
+                    )
+                )
+            }
+            batch.commit().await()
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error marking as read", e)
         }
     }
 
-    suspend fun markAsDelivered(roomId: String) = withContext(Dispatchers.IO) {
+    suspend fun markAsDelivered(roomId: String, targetMessageId: String? = null) = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext
         try {
             val roomRef = chatsCollection.document(roomId)
 
-            // 1. Update room's lastMessageIsDelivered if last sender was someone else
-            firestore.runTransaction { transaction ->
-                val roomSnapshot = transaction.get(roomRef)
-                val room = roomSnapshot.toObject(ChatRoom::class.java)
-                if (room != null && room.lastSender != null && room.lastSender != currentUser.uid && !room.lastMessageIsDelivered) {
-                    transaction.update(roomRef, "lastMessageIsDelivered", true)
+            // Fast 0-read WriteBatch path when triggered directly from an FCM push carrying messageId
+            if (!targetMessageId.isNullOrBlank()) {
+                try {
+                    val batch = firestore.batch()
+                    batch.update(roomRef, "lastMessageIsDelivered", true)
+                    batch.update(
+                        roomRef.collection("messages").document(targetMessageId),
+                        mapOf("isDelivered" to true, "delivered" to true)
+                    )
+                    batch.commit().await()
+                    return@withContext
+                } catch (_: Exception) {
+                    // Fall through to query-based fallback if target doc is missing/locked
                 }
-            }.await()
+            }
 
-            // 2. Mark undelivered messages from other users as delivered
-            try {
-                val recentMessages = roomRef.collection("messages")
+            val recentMessages = try {
+                roomRef.collection("messages")
                     .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                    .limit(100)
+                    .limit(20)
                     .get()
                     .await()
-                val docsToUpdate = recentMessages.documents.filter { doc ->
-                    val senderId = doc.getString("senderId")
-                    val isDelivered = doc.getBoolean("isDelivered") ?: doc.getBoolean("delivered") ?: false
-                    !isDelivered && senderId != null && senderId != currentUser.uid
-                }
-                if (docsToUpdate.isNotEmpty()) {
-                    docsToUpdate.chunked(450).forEach { chunk ->
-                        val batch = firestore.batch()
-                        for (doc in chunk) {
-                            batch.update(doc.reference, mapOf(
-                                "isDelivered" to true,
-                                "delivered" to true
-                            ))
-                        }
-                        batch.commit().await()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w("SupabaseChatRepository", "markAsDelivered message batch update error: ${e.message}")
+                    .documents
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            val docsToUpdate = recentMessages.filter { doc ->
+                val senderId = doc.getString("senderId")
+                val isDelivered = doc.getBoolean("isDelivered") ?: doc.getBoolean("delivered") ?: false
+                !isDelivered && senderId != null && senderId != currentUser.uid
+            }
+
+            val batch = firestore.batch()
+            val latestSender = recentMessages.firstOrNull()?.getString("senderId")
+            var hasWrites = false
+            if (latestSender == null || latestSender != currentUser.uid) {
+                batch.update(roomRef, "lastMessageIsDelivered", true)
+                hasWrites = true
+            }
+            for (doc in docsToUpdate) {
+                batch.update(
+                    doc.reference,
+                    mapOf("isDelivered" to true, "delivered" to true)
+                )
+                hasWrites = true
+            }
+            if (hasWrites) {
+                batch.commit().await()
             }
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error marking as delivered", e)
@@ -537,6 +636,8 @@ class SupabaseChatRepository {
                     ?: emptyList()
                 for (chat in rawChats) {
                     roomParticipantsCache[chat.id] = chat.participants
+                    roomIsGroupCache[chat.id] = chat.isGroup
+                    if (!chat.name.isNullOrBlank()) roomGroupNameCache[chat.id] = chat.name
                     val dAt = chat.deletedAt[uid] ?: 0L
                     roomDeletedAtCache[chat.id] = dAt
                 }
@@ -555,8 +656,9 @@ class SupabaseChatRepository {
             return@callbackFlow
         }
 
-        // Instant synchronous retrieval from memory cache (0ms delay) to immediately attach snapshot listener
         val deletedAt = roomDeletedAtCache[roomId] ?: 0L
+        val snapshotSeqGen = java.util.concurrent.atomic.AtomicLong(0L)
+        val latestEmittedSeq = java.util.concurrent.atomic.AtomicLong(0L)
 
         var query = chatsCollection.document(roomId).collection("messages")
             .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
@@ -580,99 +682,104 @@ class SupabaseChatRepository {
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
+                    val seq = snapshotSeqGen.incrementAndGet()
                     launch(Dispatchers.Default) {
                         val activeUid = targetUid ?: auth.currentUser?.uid
-                        val messages = snapshot.documents.mapNotNull { doc ->
-                            val rawMsg = doc.toObject(ChatMessage::class.java) ?: return@mapNotNull null
-                            val docIsRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: rawMsg.isRead
-                            val docIsDelivered = doc.getBoolean("isDelivered") ?: doc.getBoolean("delivered") ?: rawMsg.isDelivered
-                            val msg = rawMsg.copy(
-                                id = if (rawMsg.id.isBlank() || rawMsg.id != doc.id) doc.id else rawMsg.id,
-                                isRead = docIsRead,
-                                isDelivered = docIsDelivered || docIsRead
-                            )
+                        val messages = coroutineScope {
+                            snapshot.documents.map { doc ->
+                                async {
+                                    val rawMsg = doc.toObject(ChatMessage::class.java) ?: return@async null
+                                    val docIsRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: rawMsg.isRead
+                                    val docIsDelivered = doc.getBoolean("isDelivered") ?: doc.getBoolean("delivered") ?: rawMsg.isDelivered
+                                    val msg = rawMsg.copy(
+                                        id = if (rawMsg.id.isBlank() || rawMsg.id != doc.id) doc.id else rawMsg.id,
+                                        isRead = docIsRead,
+                                        isDelivered = docIsDelivered || docIsRead
+                                    )
 
-                            // Filter out messages deleted by current user for themselves
-                            if (activeUid != null && msg.deletedFor.contains(activeUid)) {
-                                return@mapNotNull null
-                            }
+                                    // Filter out messages deleted by current user for themselves
+                                    if (activeUid != null && msg.deletedFor.contains(activeUid)) {
+                                        return@async null
+                                    }
 
-                            if (msg.messageType == "system" || msg.iv.isEmpty() || msg.text.isEmpty()) {
-                                return@mapNotNull msg
-                            }
+                                    if (msg.messageType == "system" || msg.iv.isEmpty() || msg.text.isEmpty()) {
+                                        return@async msg
+                                    }
 
-                            val cacheKey = "${msg.id}_${msg.text.hashCode()}_${msg.iv}"
-                            val cached = decryptedMessageCache[cacheKey]
-                            if (cached != null) {
-                                return@mapNotNull msg.copy(text = cached)
-                            }
+                                    val cacheKey = "${msg.id}_${msg.text.hashCode()}_${msg.iv}"
+                                    val cached = decryptedMessageCache[cacheKey]
+                                    if (cached != null) {
+                                        return@async msg.copy(text = cached)
+                                    }
 
-                            var decryptedText = msg.text
-                            var isDecrypted = false
+                                    var decryptedText = msg.text
+                                    var isDecrypted = false
 
-                            // 1. Try user-specific RSA decryption
-                            if (currentUid != null && msg.encryptedAesKeys.containsKey(currentUid)) {
-                                try {
-                                    val myEncryptedAes = msg.encryptedAesKeys[currentUid]
-                                    if (!myEncryptedAes.isNullOrEmpty()) {
-                                        val aesBytes = com.chroma.studio.utils.CryptoHelper.decryptAESKeyWithRSA(myEncryptedAes)
-                                        if (aesBytes != null) {
-                                            val res = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, aesBytes)
-                                            if (res.isNotEmpty() || msg.text.isEmpty()) {
-                                                decryptedText = res
-                                                isDecrypted = true
+                                    // 1. Try ultra-fast room key fallback first if available (pure CPU AES ~0.05ms vs AndroidKeyStore RSA ~30ms), then user-specific RSA
+                                    try {
+                                        val roomKey = com.chroma.studio.utils.CryptoHelper.deriveRoomKey(roomId)
+                                        val fallbackEntry = msg.encryptedAesKeys["_room_fallback"]
+                                        if (!fallbackEntry.isNullOrEmpty() && fallbackEntry.contains(":")) {
+                                            val parts = fallbackEntry.split(":", limit = 2)
+                                            val aesBase64 = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(parts[0], parts[1], roomKey)
+                                            if (aesBase64.isNotEmpty()) {
+                                                val aesBytes = android.util.Base64.decode(aesBase64, android.util.Base64.NO_WRAP)
+                                                val res = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, aesBytes)
+                                                if (res.isNotEmpty() || msg.text.isEmpty()) {
+                                                    decryptedText = res
+                                                    isDecrypted = true
+                                                }
                                             }
                                         }
-                                    }
-                                } catch (ex: Exception) {
-                                    // fall through to room fallback
-                                }
-                            }
+                                    } catch (_: Exception) {}
 
-                            // 2. Try room-level fallback decryption
-                            if (!isDecrypted) {
-                                try {
-                                    val roomKey = com.chroma.studio.utils.CryptoHelper.deriveRoomKey(roomId)
-                                    val fallbackEntry = msg.encryptedAesKeys["_room_fallback"]
-                                    if (!fallbackEntry.isNullOrEmpty() && fallbackEntry.contains(":")) {
-                                        val parts = fallbackEntry.split(":", limit = 2)
-                                        val aesBase64 = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(parts[0], parts[1], roomKey)
-                                        if (aesBase64.isNotEmpty()) {
-                                            val aesBytes = android.util.Base64.decode(aesBase64, android.util.Base64.NO_WRAP)
-                                            val res = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, aesBytes)
-                                            if (res.isNotEmpty() || msg.text.isEmpty()) {
-                                                decryptedText = res
+                                    // 2. Fallback to user-specific RSA decryption if room fallback wasn't present
+                                    if (!isDecrypted && currentUid != null && msg.encryptedAesKeys.containsKey(currentUid)) {
+                                        try {
+                                            val myEncryptedAes = msg.encryptedAesKeys[currentUid]
+                                            if (!myEncryptedAes.isNullOrEmpty()) {
+                                                val aesBytes = com.chroma.studio.utils.CryptoHelper.decryptAESKeyWithRSA(myEncryptedAes)
+                                                if (aesBytes != null) {
+                                                    val res = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, aesBytes)
+                                                    if (res.isNotEmpty() || msg.text.isEmpty()) {
+                                                        decryptedText = res
+                                                        isDecrypted = true
+                                                    }
+                                                }
+                                            }
+                                        } catch (_: Exception) {}
+                                    }
+
+                                    if (!isDecrypted) {
+                                        try {
+                                            val roomKey = com.chroma.studio.utils.CryptoHelper.deriveRoomKey(roomId)
+                                            val direct = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, roomKey)
+                                            if (direct.isNotEmpty()) {
+                                                decryptedText = direct
                                                 isDecrypted = true
                                             }
-                                        }
-                                    } else {
-                                        val direct = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, roomKey)
-                                        if (direct.isNotEmpty()) {
-                                            decryptedText = direct
-                                            isDecrypted = true
+                                        } catch (_: Exception) {}
+                                    }
+
+                                    if (!isDecrypted) {
+                                        val isMedia = msg.imageUrl != null || msg.mediaUrl != null || msg.messageType in listOf("image", "video", "voice", "audio", "file")
+                                        decryptedText = if (isMedia) {
+                                            ""
+                                        } else if (msg.text.isNotEmpty() && !msg.text.contains(" ") && msg.text.length > 20) {
+                                            "🔒 Message encrypted"
+                                        } else {
+                                            msg.text
                                         }
                                     }
-                                } catch (ex: Exception) {
-                                    // fall through
-                                }
-                            }
 
-                            // 3. If still not decrypted, check if msg.text was already plaintext or a media message without caption
-                            if (!isDecrypted) {
-                                val isMedia = msg.imageUrl != null || msg.mediaUrl != null || msg.messageType in listOf("image", "video", "voice", "audio", "file")
-                                decryptedText = if (isMedia) {
-                                    ""
-                                } else if (msg.text.isNotEmpty() && !msg.text.contains(" ") && msg.text.length > 20) {
-                                    "🔒 Message encrypted"
-                                } else {
-                                    msg.text
+                                    decryptedMessageCache[cacheKey] = decryptedText
+                                    msg.copy(text = decryptedText)
                                 }
-                            }
-
-                            decryptedMessageCache[cacheKey] = decryptedText
-                            msg.copy(text = decryptedText)
+                            }.awaitAll().filterNotNull()
                         }
-                        trySend(messages)
+                        if (seq >= latestEmittedSeq.getAndUpdate { prev -> maxOf(prev, seq) }) {
+                            trySend(messages)
+                        }
                     }
                 }
             }
@@ -984,9 +1091,13 @@ class SupabaseChatRepository {
     }
 
     // Helper for uploading chat media to Cloudinary CDN (reserving Supabase exclusively for avatars/banners)
-    suspend fun uploadImageToSupabase(imageBytes: ByteArray, extension: String = "jpg"): String? = withContext(Dispatchers.IO) {
+    suspend fun uploadImageToSupabase(
+        imageBytes: ByteArray,
+        extension: String = "jpg",
+        onProgress: ((Int) -> Unit)? = null
+    ): String? = withContext(Dispatchers.IO) {
         try {
-            CloudinaryClient.uploadImage(imageBytes, folder = "chat_media")
+            CloudinaryClient.uploadImage(imageBytes, folder = "chat_media", onProgress = onProgress)
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error uploading chat image to Cloudinary", e)
             null
@@ -994,9 +1105,13 @@ class SupabaseChatRepository {
     }
 
     // Helper for uploading audio voice note to Cloudinary CDN
-        suspend fun uploadVideoToSupabase(videoBytes: ByteArray, extension: String = "mp4"): String? = withContext(Dispatchers.IO) {
+        suspend fun uploadVideoToSupabase(
+            videoBytes: ByteArray,
+            extension: String = "mp4",
+            onProgress: ((Int) -> Unit)? = null
+        ): String? = withContext(Dispatchers.IO) {
         try {
-            CloudinaryClient.uploadVideo(videoBytes, folder = "chat_videos")
+            CloudinaryClient.uploadVideo(videoBytes, folder = "chat_videos", onProgress = onProgress)
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error uploading video", e)
             null

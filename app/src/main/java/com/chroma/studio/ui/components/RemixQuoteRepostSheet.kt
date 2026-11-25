@@ -348,7 +348,10 @@ fun RemixQuoteRepostSheet(
                         )
 
                         if (post.authorVerified) {
-                            VerifiedBadge(size = 12.dp)
+                            VerifiedBadge(
+                                size = 12.dp,
+                                tone = post.authorVerifiedTone
+                            )
                         }
                     }
 

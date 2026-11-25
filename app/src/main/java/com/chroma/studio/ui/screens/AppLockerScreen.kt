@@ -66,12 +66,18 @@ fun AppLockerScreen(
 
     var isEnabled by remember { mutableStateOf(AppLockerManager.isEnabled(context)) }
     var hasOverlayPermission by remember { mutableStateOf(AppLockerManager.hasOverlayPermission(context)) }
-    var isAccessibilityEnabled by remember { mutableStateOf(AppLockerManager.isAccessibilityServiceEnabled(context)) }
+    val hasAccessibilityDeclared = remember { AppLockerManager.hasAccessibilityServiceDeclared(context) }
+    var isAccessibilityEnabled by remember {
+        mutableStateOf(hasAccessibilityDeclared && AppLockerManager.isAccessibilityServiceEnabled(context))
+    }
     var hasUsageStatsPermission by remember { mutableStateOf(AppLockerManager.hasUsageStatsPermission(context)) }
     var hasPinConfigured by remember { mutableStateOf(SecurityPinManager.hasPin(context)) }
     var isBiometricEnabled by remember { mutableStateOf(SecurityPinManager.isBiometricEnabled(context)) }
+    var relockMode by remember { mutableStateOf(AppLockerManager.getRelockMode(context)) }
+    var appFilterTab by remember { mutableStateOf("ALL") } // ALL, LOCKED, DOWNLOADED
     var showPinSetupDialog by remember { mutableStateOf(false) }
     var showRestrictedSettingsGuideModal by remember { mutableStateOf(false) }
+    var showTestLockPreview by remember { mutableStateOf(false) }
 
     var searchQuery by remember { mutableStateOf("") }
     var installedApps by remember { mutableStateOf<List<AppLockTarget>>(emptyList()) }
@@ -82,10 +88,11 @@ fun AppLockerScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasOverlayPermission = AppLockerManager.hasOverlayPermission(context)
-                isAccessibilityEnabled = AppLockerManager.isAccessibilityServiceEnabled(context)
+                isAccessibilityEnabled = hasAccessibilityDeclared && AppLockerManager.isAccessibilityServiceEnabled(context)
                 hasUsageStatsPermission = AppLockerManager.hasUsageStatsPermission(context)
-                if (!isAccessibilityEnabled && hasUsageStatsPermission) {
-                    AppLockerManager.startUsageWatcherIfNeeded(context, scope)
+                hasPinConfigured = SecurityPinManager.hasPin(context)
+                if (isEnabled && (!isAccessibilityEnabled) && hasUsageStatsPermission) {
+                    AppLockerManager.startUsageWatcherIfNeeded(context)
                 }
             }
         }
@@ -97,7 +104,7 @@ fun AppLockerScreen(
 
     LaunchedEffect(isEnabled, isAccessibilityEnabled, hasUsageStatsPermission) {
         if (isEnabled && !isAccessibilityEnabled && hasUsageStatsPermission) {
-            AppLockerManager.startUsageWatcherIfNeeded(context, scope)
+            AppLockerManager.startUsageWatcherIfNeeded(context)
         } else if (!isEnabled || isAccessibilityEnabled) {
             AppLockerManager.stopUsageWatcher()
         }
@@ -114,22 +121,31 @@ fun AppLockerScreen(
     }
 
     BackHandler(enabled = true) {
-        onBack()
-    }
-
-    val filteredApps = remember(installedApps, searchQuery) {
-        if (searchQuery.isBlank()) {
-            installedApps
+        if (showTestLockPreview) {
+            showTestLockPreview = false
         } else {
-            val q = searchQuery.trim().lowercase()
-            installedApps.filter {
-                it.appName.lowercase().contains(q) || it.packageName.lowercase().contains(q)
-            }
+            onBack()
         }
     }
 
     val lockedCount = remember(installedApps) {
         installedApps.count { it.isLocked }
+    }
+
+    val filteredApps = remember(installedApps, searchQuery, appFilterTab) {
+        val tabFiltered = when (appFilterTab) {
+            "LOCKED" -> installedApps.filter { it.isLocked }
+            "DOWNLOADED" -> installedApps.filter { !it.isSystem }
+            else -> installedApps
+        }
+        if (searchQuery.isBlank()) {
+            tabFiltered
+        } else {
+            val q = searchQuery.trim().lowercase()
+            tabFiltered.filter {
+                it.appName.lowercase().contains(q) || it.packageName.lowercase().contains(q)
+            }
+        }
     }
 
     OneUiCollapsingHeaderLayout(
@@ -174,9 +190,10 @@ fun AppLockerScreen(
                     AppleSettingToggleRow(
                         title = "Enable App Locker",
                         subtitle = if (isEnabled) {
-                            if (isAccessibilityEnabled) "Active • Zero-latency Accessibility"
-                            else if (hasUsageStatsPermission) "Active • Usage Access Fallback"
-                            else "Enabled • Grant permission below"
+                            if (isAccessibilityEnabled) "Active • Accessibility Protection"
+                            else if (hasUsageStatsPermission && hasOverlayPermission) "Active • Usage Access + Overlay Shield"
+                            else if (hasUsageStatsPermission) "Active • Usage Access Monitoring"
+                            else "Enabled • Grant Usage Access & Overlay below"
                         } else "Disabled • No apps locked",
                         icon = Lucide.ShieldCheck,
                         iconGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE)),
@@ -184,13 +201,43 @@ fun AppLockerScreen(
                         onCheckedChange = { checked ->
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             SoundManager.playReaction()
+                            if (checked && !hasPinConfigured) {
+                                ToastManager.showToast("Set a 4-digit PIN first")
+                                showPinSetupDialog = true
+                                return@AppleSettingToggleRow
+                            }
                             isEnabled = checked
                             AppLockerManager.setEnabled(context, checked)
                             if (checked && !isAccessibilityEnabled && hasUsageStatsPermission) {
-                                AppLockerManager.startUsageWatcherIfNeeded(context, scope)
+                                AppLockerManager.startUsageWatcherIfNeeded(context)
                             } else if (!checked) {
                                 AppLockerManager.stopUsageWatcher()
                             }
+                        }
+                    )
+
+                    AppleSettingDivider()
+
+                    AppleSettingNavRow(
+                        title = "Re-lock Timing",
+                        subtitle = if (relockMode == AppLockerManager.RELOCK_IMMEDIATELY) {
+                            "Locks again as soon as you leave an unlocked app"
+                        } else {
+                            "Stays unlocked until your screen turns off"
+                        },
+                        icon = Lucide.Clock,
+                        iconGradient = listOf(Color(0xFF5856D6), Color(0xFF3B82F6)),
+                        valueText = if (relockMode == AppLockerManager.RELOCK_IMMEDIATELY) "On Exit" else "Screen Off",
+                        showChevron = false,
+                        onClick = {
+                            SoundManager.playReaction()
+                            val nextMode = if (relockMode == AppLockerManager.RELOCK_IMMEDIATELY) {
+                                AppLockerManager.RELOCK_SCREEN_OFF
+                            } else {
+                                AppLockerManager.RELOCK_IMMEDIATELY
+                            }
+                            relockMode = nextMode
+                            AppLockerManager.setRelockMode(context, nextMode)
                         }
                     )
 
@@ -244,9 +291,9 @@ fun AppLockerScreen(
                 item {
                     AppleSettingsGroup(
                         header = "Required System Permissions",
-                        footer = "App Locker requires these settings to detect launched apps and display the security shield."
+                        footer = "Usage Access detects launched apps reliably without sideload restrictions, and Display Over Other Apps shows the lock shield."
                     ) {
-                        if (!isAccessibilityEnabled) {
+                        if (hasAccessibilityDeclared && !isAccessibilityEnabled) {
                             AppleSettingNavRow(
                                 title = "Accessibility Service",
                                 subtitle = if (AppLockerManager.isRestrictedSettingsApplicable()) "Zero-latency • Tap for Restricted Setting fix" else "Required for instant zero-latency interception",
@@ -262,46 +309,39 @@ fun AppLockerScreen(
                                     }
                                 }
                             )
+                            AppleSettingDivider()
                         }
 
-                        if (!hasUsageStatsPermission && !isAccessibilityEnabled) {
-                            if (!isAccessibilityEnabled) {
-                                AppleSettingDivider()
+                        AppleSettingNavRow(
+                            title = "Usage Access",
+                            subtitle = if (hasUsageStatsPermission) "Granted • App launch detection active" else "Required to detect when protected apps open",
+                            icon = Lucide.Activity,
+                            iconGradient = listOf(Color(0xFF10B981), Color(0xFF059669)),
+                            valueText = if (hasUsageStatsPermission) "Granted" else "Grant",
+                            onClick = {
+                                SoundManager.playReaction()
+                                AppLockerManager.openUsageStatsSettings(context)
                             }
-                            AppleSettingNavRow(
-                                title = "Usage Access (Alternative)",
-                                subtitle = "Bypasses Android Restricted Setting lock",
-                                icon = Lucide.Activity,
-                                iconGradient = listOf(Color(0xFF10B981), Color(0xFF059669)),
-                                valueText = "Grant",
-                                onClick = {
-                                    SoundManager.playReaction()
-                                    AppLockerManager.openUsageStatsSettings(context)
-                                }
-                            )
-                        }
+                        )
 
-                        if (!hasOverlayPermission) {
-                            if (!isAccessibilityEnabled || !hasUsageStatsPermission) {
-                                AppleSettingDivider()
+                        AppleSettingDivider()
+
+                        AppleSettingNavRow(
+                            title = "Display Over Other Apps",
+                            subtitle = if (hasOverlayPermission) "Granted • Instant shield display ready" else "Required to display lock shield over other apps",
+                            icon = Lucide.Layers,
+                            iconGradient = listOf(Color(0xFF00C7BE), Color(0xFF0082FB)),
+                            valueText = if (hasOverlayPermission) "Granted" else "Grant",
+                            onClick = {
+                                SoundManager.playReaction()
+                                AppLockerManager.openOverlaySettings(context)
                             }
-                            AppleSettingNavRow(
-                                title = "Display Over Other Apps",
-                                subtitle = "Allows the lock screen to cover locked apps immediately",
-                                icon = Lucide.Layers,
-                                iconGradient = listOf(Color(0xFF00C7BE), Color(0xFF0082FB)),
-                                valueText = "Grant",
-                                onClick = {
-                                    SoundManager.playReaction()
-                                    AppLockerManager.openOverlaySettings(context)
-                                }
-                            )
-                        }
+                        )
                     }
                 }
 
-                // Android 13+ (API 33+) Restricted Settings Helper Card
-                if (!isAccessibilityEnabled && AppLockerManager.isRestrictedSettingsApplicable()) {
+                // Android 13+ (API 33+) Restricted Settings Helper Card (only if Accessibility service is declared)
+                if (hasAccessibilityDeclared && !isAccessibilityEnabled && AppLockerManager.isRestrictedSettingsApplicable()) {
                     item {
                         RestrictedSettingAlertCard(
                             isDark = isDark,
@@ -342,33 +382,102 @@ fun AppLockerScreen(
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             val added = AppLockerManager.lockRecommended(context)
                             ToastManager.showToast("Protected $added recommended apps")
-                            // Refresh list state
                             val updated = installedApps.map {
-                                it.copy(isLocked = AppLockerManager.isPackageLocked(context, it.packageName))
+                                it.copy(isLocked = AppLockerManager.getLockedPackages(context).contains(it.packageName))
                             }
                             installedApps = updated
                         }
                     )
+
+                    AppleSettingDivider()
+
+                    AppleSettingNavRow(
+                        title = "Test Lock Screen",
+                        subtitle = "Preview biometric, PIN & wallpaper lock shield",
+                        icon = Lucide.Eye,
+                        iconGradient = listOf(Color(0xFF0381FE), Color(0xFF0072DE)),
+                        valueText = "Preview",
+                        onClick = {
+                            SoundManager.playReaction()
+                            showTestLockPreview = true
+                        }
+                    )
+
+                    if (lockedCount > 0) {
+                        AppleSettingDivider()
+
+                        AppleSettingNavRow(
+                            title = "Unlock All Apps",
+                            subtitle = "Remove all $lockedCount apps from App Locker",
+                            icon = Lucide.LockOpen,
+                            iconGradient = listOf(Color(0xFFFF3B30), Color(0xFFDC2626)),
+                            valueText = "Clear",
+                            showChevron = false,
+                            onClick = {
+                                SoundManager.playReaction()
+                                AppLockerManager.clearAllLockedPackages(context)
+                                installedApps = installedApps.map { it.copy(isLocked = false) }
+                                ToastManager.showToast("Cleared all locked apps")
+                            }
+                        )
+                    }
                 }
             }
 
             // =====================================================================
-            // 4. SEARCH APPS BAR
+            // 4. FILTER CHIPS + SEARCH APPS BAR
             // =====================================================================
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(colors.cardSurface)
-                        .border(
-                            width = 0.75.dp,
-                            color = colors.cardBorder,
-                            shape = RoundedCornerShape(14.dp)
-                        )
-                        .padding(horizontal = 14.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            "ALL" to "All (${installedApps.size})",
+                            "LOCKED" to "Locked ($lockedCount)",
+                            "DOWNLOADED" to "Downloaded"
+                        ).forEach { (key, label) ->
+                            val selected = appFilterTab == key
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(if (selected) Color(0xFF0381FE) else colors.cardSurface)
+                                    .border(
+                                        width = 0.75.dp,
+                                        color = if (selected) Color(0xFF0381FE) else colors.cardBorder,
+                                        shape = CircleShape
+                                    )
+                                    .clickable {
+                                        SoundManager.playTap(context)
+                                        appFilterTab = key
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 7.dp)
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (selected) Color.White else colors.textMain,
+                                    fontFamily = InterFontFamily
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.cardSurface)
+                            .border(
+                                width = 0.75.dp,
+                                color = colors.cardBorder,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .padding(horizontal = 14.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                     Icon(
                         imageVector = Lucide.Search,
                         contentDescription = "Search",
@@ -412,6 +521,7 @@ fun AppLockerScreen(
                             )
                         }
                     }
+                }
                 }
             }
 
@@ -516,6 +626,14 @@ fun AppLockerScreen(
             }
         )
     }
+
+    if (showTestLockPreview) {
+        OscellionLockScreen(
+            titleText = "Lock Preview",
+            onBack = { showTestLockPreview = false },
+            onUnlockSuccess = { showTestLockPreview = false }
+        )
+    }
 }
 
 @Composable
@@ -554,6 +672,9 @@ private fun AppLockRowItem(
                             scaleType = ImageView.ScaleType.FIT_CENTER
                             setImageDrawable(target.icon)
                         }
+                    },
+                    update = { view ->
+                        view.setImageDrawable(target.icon)
                     },
                     modifier = Modifier.size(36.dp)
                 )

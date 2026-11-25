@@ -116,7 +116,8 @@ object ChatAdapters {
             avatar = profile?.avatarUrl?.takeIf { it.isNotBlank() } ?: drawableUri(com.chroma.studio.R.drawable.ic_avatar_corporate_navy),
             banner = profile?.bannerUrl?.takeIf { it.isNotBlank() } ?: drawableUri(com.chroma.studio.R.drawable.banner_wave_banner_midnight_glow),
             status = if (profile?.online == true) "Online" else "Active on Oscellion",
-            isVerified = profile?.verified ?: false
+            isVerified = profile?.verified ?: false,
+            verifiedTone = profile?.verifiedTone
         )
     }
 
@@ -255,7 +256,7 @@ object ChatAdapters {
             mediaType = mappedMediaType,
             mediaUrl = msg.imageUrl ?: msg.mediaUrl ?: msg.flashVideoUrl,
             mediaUrls = listOfNotNull(msg.imageUrl ?: msg.mediaUrl ?: msg.flashVideoUrl),
-            localUri = if (mappedMediaType == "voice") (msg.imageUrl ?: msg.mediaUrl) else null,
+            localUri = if (mappedMediaType == "voice" || msg.isPending) (msg.imageUrl ?: msg.mediaUrl) else null,
             fileName = if (mappedMediaType == "file") {
                 msg.text.takeIf { it.isNotBlank() && it != "🔒 Message encrypted" } ?: "Document"
             } else null,
@@ -272,6 +273,7 @@ object ChatAdapters {
             time = timeStr,
             timestamp = msg.timestamp,
             status = statusStr,
+            uploadProgress = msg.uploadProgress,
             reactions = reactionCounts,
             userReaction = myReaction,
             replyTo = replyToQuote,
@@ -420,6 +422,7 @@ object ChatAdapters {
         }
 
         val isVerified = if (room.isGroup) false else (otherProfile?.verified ?: false)
+        val verifiedTone = if (room.isGroup) null else otherProfile?.verifiedTone
 
         return ChatConversation(
             id = room.id,
@@ -437,6 +440,7 @@ object ChatAdapters {
             isMuted = false,
             isBlocked = false,
             isVerified = isVerified,
+            verifiedTone = verifiedTone,
             members = membersList,
             messages = resolvedMessages,
             otherUserId = otherUid,
