@@ -1133,11 +1133,13 @@ fun DiscoverScreen(
                 savedCount = savedWorkIds.size,
 
                 onSelectFeedTab = { tab ->
-
+                    val alreadyOnForYou = selectedFeedTab == CommunityFeedTab.ALL && tab == CommunityFeedTab.ALL
                     selectedFeedTab = tab
-
+                    if (alreadyOnForYou) {
+                        discoverViewModel?.rerollForYouFeed()
+                        showToast("Refreshed For You picks")
+                    }
                     coroutineScope.launch { listState.animateScrollToItem(0) }
-
                 },
 
                 onSelectSortOrder = { sort ->
@@ -1847,6 +1849,8 @@ fun DiscoverScreen(
                                 },
 
                                 onFlashVideoClick = onFlashVideoClick,
+
+                                onUseAudioClick = { onCreateFlash() },
 
                                 onUpdateVisibility = { hideLikes, hideShares, hideRemixes, hideDownloads, hideSaves ->
 
@@ -7776,6 +7780,8 @@ fun FeedPostCard(
 
     onFlashVideoClick: ((String) -> Unit)? = null,
 
+    onUseAudioClick: (() -> Unit)? = null,
+
     onUpdateVisibility: ((hideLikes: Boolean, hideShares: Boolean, hideRemixes: Boolean, hideDownloads: Boolean, hideSaves: Boolean) -> Unit)? = null
 
 ) {
@@ -8410,7 +8416,11 @@ fun FeedPostCard(
                             showLyricsSticker = true
                         )
                     )
-                    ToastManager.showToast("Audio selected: ${track.title} — tap Flash or Post to record")
+                    if (onUseAudioClick != null) {
+                        onUseAudioClick()
+                    } else {
+                        ToastManager.showToast("Audio selected: ${track.title} — tap Flash or Post to record")
+                    }
                 } else {
                     onRequireLogin()
                 }

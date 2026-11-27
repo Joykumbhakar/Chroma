@@ -276,6 +276,10 @@ class DiscoverViewModel : ViewModel() {
         } catch (_: Exception) {}
     }
 
+    fun rerollForYouFeed() {
+        commitSeenSnapshotAndSeed(bumpSeed = true)
+    }
+
     fun loadWorks(isRefresh: Boolean = false) {
         if (isRefresh && _isRefreshing.value) return
         if (!isRefresh && _isLoading.value) return

@@ -328,12 +328,9 @@ class Milestone1And2StressTest {
         assertFalse("DemoOutgoingVideoClip must not have text = \"A\"", transitionContent.contains("text = \"A\""))
         assertFalse("DemoIncomingVideoClip must not have text = \"B\"", transitionContent.contains("text = \"B\""))
 
-        // 3. Verify TransitionPickerSheet does NOT contain 'A' or 'B' letter box fallbacks
+        // 3. Verify legacy TransitionPickerSheet.kt remains removed (replaced by FinalCutProVideoEditor)
         val transitionPickerFile = File(mainDir, "com/chroma/studio/ui/screens/TransitionPickerSheet.kt")
-        assertTrue("TransitionPickerSheet.kt must exist", transitionPickerFile.exists())
-        val pickerContent = transitionPickerFile.readText()
-        assertFalse("TransitionPickerSheet must not contain text = \"A\"", pickerContent.contains("text = \"A\""))
-        assertFalse("TransitionPickerSheet must not contain text = \"B\"", pickerContent.contains("text = \"B\""))
+        assertFalse("Legacy TransitionPickerSheet.kt must remain removed", transitionPickerFile.exists())
 
         // 4. Verify FinalCutProVideoEditor contains isExporting guards on scrub and play controls
         val fcpEditorFile = File(mainDir, "com/chroma/studio/ui/screens/FinalCutProVideoEditor.kt")
