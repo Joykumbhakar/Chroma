@@ -821,7 +821,7 @@ fun UserProfileScreen(
                     }
                 )
             }
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            item(key = "profile_actions_tabs", span = { GridItemSpan(maxLineSpan) }) {
                 UserProfileActionsStoriesSection(
                     isCurrentUser = isCurrentUser,
                     isFollowing = isFollowingEffective,
@@ -1113,11 +1113,32 @@ fun UserProfileScreen(
         }
     }
 
-    // Morphing Sticky Compact Header (slides in smoothly from top once scrolled past banner identity)
+    // Morphing Sticky Compact Header + Docked Sticky 5-Tab Bar
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val stickyDensity = androidx.compose.ui.platform.LocalDensity.current
+    val stickyHeaderBottomPx = with(stickyDensity) { (statusBarTop + 56.dp).toPx() }
+    val tabsBarHeightPx = with(stickyDensity) { 60.dp.toPx() }
     val showCompactHeader by remember {
         derivedStateOf {
             gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 92
+        }
+    }
+    val showStickyTabs by remember {
+        derivedStateOf {
+            val layoutInfo = gridState.layoutInfo
+            val actionsItem = layoutInfo.visibleItemsInfo.find { it.key == "profile_actions_tabs" }
+            if (actionsItem != null) {
+                (actionsItem.offset.y + actionsItem.size.height - tabsBarHeightPx) <= stickyHeaderBottomPx
+            } else {
+                gridState.firstVisibleItemIndex >= 2
+            }
+        }
+    }
+    val stickyTabLabels = remember(isCurrentUser, profileTabIcons.size) {
+        if (isCurrentUser || profileTabIcons.size >= 5) {
+            listOf("All", "Posts", "Flash", "Remixes", "Saved")
+        } else {
+            listOf("All", "Posts", "Flash", "Remixes")
         }
     }
 
@@ -1396,7 +1417,19 @@ fun UserProfileScreen(
                         }
                     }
                 }
-                HorizontalDivider(thickness = 1.dp, color = OscellionProfilePalette.hairline(colors.isDark))
+                if (showStickyTabs) {
+                    OscellionProfileTabsBar(
+                        tabs = stickyTabLabels,
+                        selectedIndex = selectedTabIndex,
+                        isDark = colors.isDark,
+                        onSelectTab = {
+                            com.chroma.studio.chat.sound.SoundManager.playReaction()
+                            selectedTabIndex = it
+                        }
+                    )
+                } else {
+                    HorizontalDivider(thickness = 1.dp, color = OscellionProfilePalette.hairline(colors.isDark))
+                }
             }
         }
     }
@@ -3109,8 +3142,7 @@ fun ProfileFlashCard(
             .fillMaxWidth()
             .aspectRatio(9f / 16f)
             .clip(RectangleShape)
-            .background(colors.glassBgHover)
-            .border(0.5.dp, colors.glassBorder, RectangleShape)
+            .background(if (colors.isDark) colors.glassBgHover else Color(0xFFEEF3FB))
             .clickable(onClick = onClick)
     ) {
         if (posterUrl.isNotBlank()) {
@@ -3148,68 +3180,83 @@ fun ProfileFlashCard(
             )
         }
 
-        // Top Flash Header Bar
+        // Top Flash Duration Pill (⚡ 0:24) & Owner Menu
+        val flashDurationLabel = remember(flash.duration) {
+            if (flash.duration > 0L) {
+                val totalSec = (flash.duration / 1000L).coerceAtLeast(1L)
+                "%d:%02d".format(totalSec / 60L, totalSec % 60L)
+            } else {
+                "Flash"
+            }
+        }
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopStart)
-                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.65f), Color.Transparent)))
-                .padding(horizontal = 6.dp, vertical = 5.dp),
+                .align(Alignment.TopEnd)
+                .padding(6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = Color.Black.copy(alpha = 0.6f),
-                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.25f))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Color(0xB8070B18))
+                    .padding(horizontal = 6.dp, vertical = 2.5.dp)
             ) {
+                Icon(
+                    imageVector = Lucide.Zap,
+                    contentDescription = "Flash",
+                    tint = Color.White,
+                    modifier = Modifier.size(10.dp)
+                )
                 Text(
-                    text = "FLASH",
-                    fontSize = 8.5.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = flashDurationLabel,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Medium,
                     color = Color.White,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                    letterSpacing = 0.5.sp
+                    style = ScreenTightTextStyle.copy(fontFeatureSettings = "tnum")
                 )
             }
 
             if (isOwner) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.4f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
-                        .clickable { showMenu = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Lucide.EllipsisVertical,
-                        contentDescription = "Options",
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x99070B18))
+                            .clickable { showMenu = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.EllipsisVertical,
+                            contentDescription = "Options",
+                            tint = Color.White,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
 
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                    modifier = Modifier
-                        .shadow(16.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(colors.glassBg)
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Delete Flash", color = colors.error, fontWeight = FontWeight.SemiBold) },
-                        onClick = {
-                            showMenu = false
-                            onDeleteClick()
-                        },
-                        leadingIcon = {
-                            Icon(Lucide.Trash2, contentDescription = null, tint = colors.error, modifier = Modifier.size(16.dp))
-                        }
-                    )
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier
+                            .shadow(16.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.glassBg)
+                            .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Delete Flash", color = colors.error, fontWeight = FontWeight.SemiBold) },
+                            onClick = {
+                                showMenu = false
+                                onDeleteClick()
+                            },
+                            leadingIcon = {
+                                Icon(Lucide.Trash2, contentDescription = null, tint = colors.error, modifier = Modifier.size(16.dp))
+                            }
+                        )
+                    }
                 }
             }
         }

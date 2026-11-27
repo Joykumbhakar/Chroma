@@ -35,6 +35,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -1745,10 +1747,21 @@ internal fun FloatingDraggableProfileMusicPlayer(
     val safeTrack = tracks[trackIndex.coerceIn(0, tracks.lastIndex)]
     var isPlaying by remember { mutableStateOf(false) }
     var isMuted by remember { mutableStateOf(false) }
+    var isShuffle by remember { mutableStateOf(false) }
+    var showQueue by remember { mutableStateOf(false) }
     var panelExpanded by remember { mutableStateOf(false) }
     var currentPosMs by remember { mutableIntStateOf(0) }
     var totalDurMs by remember(safeTrack.id) { mutableIntStateOf(safeTrack.fallbackDurationSec * 1000) }
     var isPrepared by remember(safeTrack.id) { mutableStateOf(false) }
+
+    fun pickNextIndex(step: Int): Int {
+        if (tracks.size <= 1) return 0
+        if (isShuffle) {
+            val candidates = tracks.indices.filter { it != trackIndex }
+            return candidates.randomOrNull() ?: ((trackIndex + step + tracks.size) % tracks.size)
+        }
+        return (trackIndex + step + tracks.size) % tracks.size
+    }
 
     val mediaPlayer = remember { MediaPlayer() }
 
@@ -1792,7 +1805,7 @@ internal fun FloatingDraggableProfileMusicPlayer(
                 mediaPlayer.setOnCompletionListener {
                     if (tracks.size > 1) {
                         isPrepared = false
-                        trackIndex = (trackIndex + 1) % tracks.size
+                        trackIndex = pickNextIndex(1)
                     } else {
                         isPlaying = false
                         currentPosMs = 0
@@ -1900,9 +1913,13 @@ internal fun FloatingDraggableProfileMusicPlayer(
                     }
             ) {
                 ProfileMusicControlPanel(
+                    tracks = tracks,
+                    trackIndex = trackIndex,
                     track = safeTrack,
                     isPlaying = isPlaying,
                     isMuted = isMuted,
+                    isShuffle = isShuffle,
+                    showQueue = showQueue,
                     currentMs = currentPosMs,
                     totalMs = totalDurMs,
                     isDark = isDark,
@@ -1910,12 +1927,21 @@ internal fun FloatingDraggableProfileMusicPlayer(
                     onPrev = {
                         isPrepared = false
                         currentPosMs = 0
-                        trackIndex = (trackIndex - 1 + tracks.size) % tracks.size
+                        trackIndex = pickNextIndex(-1)
                     },
                     onNext = {
                         isPrepared = false
                         currentPosMs = 0
-                        trackIndex = (trackIndex + 1) % tracks.size
+                        trackIndex = pickNextIndex(1)
+                    },
+                    onSelectTrack = { idx ->
+                        if (idx != trackIndex) {
+                            isPrepared = false
+                            currentPosMs = 0
+                            trackIndex = idx
+                        }
+                        isPlaying = true
+                        showQueue = false
                     },
                     onSeek = { ratio ->
                         val targetMs = (ratio * totalDurMs).roundToInt().coerceIn(0, totalDurMs)
@@ -1925,7 +1951,9 @@ internal fun FloatingDraggableProfileMusicPlayer(
                         } catch (_: Exception) {}
                     },
                     onToggleMute = { isMuted = !isMuted },
-                    onClose = { panelExpanded = false }
+                    onToggleShuffle = { isShuffle = !isShuffle },
+                    onToggleQueue = { showQueue = !showQueue },
+                    onClose = { panelExpanded = false; showQueue = false }
                 )
             }
 
@@ -2018,17 +2046,24 @@ internal fun FloatingDraggableProfileMusicPlayer(
 
 @Composable
 private fun ProfileMusicControlPanel(
+    tracks: List<ProfilePlayableTrack>,
+    trackIndex: Int,
     track: ProfilePlayableTrack,
     isPlaying: Boolean,
     isMuted: Boolean,
+    isShuffle: Boolean,
+    showQueue: Boolean,
     currentMs: Int,
     totalMs: Int,
     isDark: Boolean,
     onTogglePlay: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
+    onSelectTrack: (Int) -> Unit,
     onSeek: (Float) -> Unit,
     onToggleMute: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onToggleQueue: () -> Unit,
     onClose: () -> Unit
 ) {
     val safeTotal = totalMs.coerceAtLeast(1000)
@@ -2051,7 +2086,7 @@ private fun ProfileMusicControlPanel(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(
                 contentAlignment = Alignment.Center,
@@ -2093,6 +2128,21 @@ private fun ProfileMusicControlPanel(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = OscellionTightTextStyle
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(OscellionProfilePalette.pillSurface(isDark))
+                    .clickable(onClick = onToggleMute),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isMuted) Lucide.VolumeX else Lucide.Volume2,
+                    contentDescription = if (isMuted) "Unmute" else "Mute",
+                    tint = if (isMuted) OscellionProfilePalette.CrimsonTrack else OscellionProfilePalette.inkMuted(isDark),
+                    modifier = Modifier.size(13.5.dp)
                 )
             }
             Box(
@@ -2146,18 +2196,44 @@ private fun ProfileMusicControlPanel(
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(
-                imageVector = if (isMuted) Lucide.VolumeX else Lucide.Volume2,
-                contentDescription = if (isMuted) "Unmute" else "Mute",
-                tint = OscellionProfilePalette.inkMuted(isDark),
+            Box(
                 modifier = Modifier
-                    .size(16.dp)
-                    .clickable(onClick = onToggleMute)
-            )
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onToggleShuffle),
+                contentAlignment = Alignment.Center
+            ) {
+                val shuffleTint = if (isShuffle) OscellionProfilePalette.BlueAccent else Color(0xFF777777)
+                Canvas(modifier = Modifier.size(17.dp)) {
+                    val w = size.width
+                    val h = size.height
+                    val s = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    if (isShuffle) {
+                        drawLine(shuffleTint, Offset(w * 0.16f, h * 0.80f), Offset(w * 0.84f, h * 0.20f), strokeWidth = 1.7.dp.toPx(), cap = StrokeCap.Round)
+                        drawLine(shuffleTint, Offset(w * 0.16f, h * 0.20f), Offset(w * 0.40f, h * 0.42f), strokeWidth = 1.7.dp.toPx(), cap = StrokeCap.Round)
+                        drawLine(shuffleTint, Offset(w * 0.60f, h * 0.58f), Offset(w * 0.84f, h * 0.80f), strokeWidth = 1.7.dp.toPx(), cap = StrokeCap.Round)
+                    } else {
+                        val top = Path().apply {
+                            moveTo(w * 0.14f, h * 0.46f)
+                            lineTo(w * 0.14f, h * 0.28f)
+                            lineTo(w * 0.86f, h * 0.28f)
+                        }
+                        val bot = Path().apply {
+                            moveTo(w * 0.86f, h * 0.54f)
+                            lineTo(w * 0.86f, h * 0.72f)
+                            lineTo(w * 0.14f, h * 0.72f)
+                        }
+                        drawPath(top, shuffleTint, style = s)
+                        drawPath(bot, shuffleTint, style = s)
+                    }
+                }
+            }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -2226,7 +2302,72 @@ private fun ProfileMusicControlPanel(
                 }
             }
 
-            Spacer(modifier = Modifier.size(16.dp))
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onToggleQueue),
+                contentAlignment = Alignment.Center
+            ) {
+                val queueTint = if (showQueue) OscellionProfilePalette.BlueAccent else Color(0xFF777777)
+                Canvas(modifier = Modifier.size(17.dp)) {
+                    val w = size.width
+                    val h = size.height
+                    val sw = 1.7.dp.toPx()
+                    listOf(0.26f, 0.50f, 0.74f).forEach { y ->
+                        drawCircle(queueTint, radius = 1.2.dp.toPx(), center = Offset(w * 0.16f, h * y))
+                        drawLine(queueTint, Offset(w * 0.34f, h * y), Offset(w * 0.88f, h * y), strokeWidth = sw, cap = StrokeCap.Round)
+                    }
+                }
+            }
+        }
+
+        if (showQueue && tracks.size > 1) {
+            HorizontalDivider(color = OscellionProfilePalette.hairline(isDark))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 128.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                tracks.forEachIndexed { idx, item ->
+                    val active = idx == trackIndex
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (active) OscellionProfilePalette.pillSurface(isDark) else Color.Transparent)
+                            .clickable { onSelectTrack(idx) }
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = item.title,
+                                fontSize = 11.5.sp,
+                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                                color = if (active) OscellionProfilePalette.BlueAccent else OscellionProfilePalette.inkPrimary(isDark),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = OscellionTightTextStyle
+                            )
+                            Text(
+                                text = item.artist,
+                                fontSize = 10.sp,
+                                color = OscellionProfilePalette.inkMuted(isDark),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = OscellionTightTextStyle
+                            )
+                        }
+                        if (active) {
+                            MusicEqBars(isPlaying = isPlaying)
+                        }
+                    }
+                }
+            }
         }
     }
 }
