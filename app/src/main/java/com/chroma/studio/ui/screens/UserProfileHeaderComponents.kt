@@ -55,7 +55,9 @@ import androidx.compose.material.icons.rounded.Male
 import androidx.compose.material.icons.rounded.Transgender
 import com.composables.icons.lucide.ShieldAlert
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.components.getAppleStatusRingBrush
@@ -117,6 +119,9 @@ val ProfileTightTextStyle = TextStyle(
 )
 
 @OptIn(ExperimentalFoundationApi::class)
+private fun lerpFloat(start: Float, end: Float, fraction: Float): Float = start + (end - start) * fraction
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun UserProfileHeroSection(
     profile: UserProfile?,
@@ -130,370 +135,508 @@ fun UserProfileHeroSection(
     onPostsClick: (() -> Unit)? = null,
     isUploading: Boolean = false,
     isUploadFailed: Boolean = false,
-    isOnlyFriendStory: Boolean = false
+    isOnlyFriendStory: Boolean = false,
+    bannerProgress: Float = 0f,
+    isStorySeen: Boolean = false,
+    isCurrentUser: Boolean = false,
+    showBackButton: Boolean = true,
+    onBack: () -> Unit = {},
+    onQrClick: (() -> Unit)? = null,
+    onEditBannerClick: (() -> Unit)? = null,
+    onSettingsClick: (() -> Unit)? = null,
+    onMoreClick: (() -> Unit)? = null,
+    onBannerTap: (() -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
     val isDark = colors.isDark
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val presetBannerRes = remember(profile?.bannerUrl) { getBannerPresetDrawableRes(profile?.bannerUrl) }
-    val appleBlue = AppleProfileTokens.accentBlue(isDark)
-    val hairline = AppleProfileTokens.hairlineBorder(isDark)
+    val sheetBg = OscellionProfilePalette.sheetBg(isDark)
+    val inkPrimary = OscellionProfilePalette.inkPrimary(isDark)
+    val inkMuted = OscellionProfilePalette.inkMuted(isDark)
+    val hairline = OscellionProfilePalette.hairline(isDark)
+    val statsDivider = OscellionProfilePalette.statsDivider(isDark)
 
     // Real-time online presence matching the chat / message screen
     val presence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(userId)
     val isUserOnline = presence.online && (profile?.showOnlineStatus != false)
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 10.dp)
-    ) {
-        // 1. Clean Edge-to-Edge Apple Profile Cover Banner (preserves Oscellion artwork)
+    val ease = smoothStepFraction(bannerProgress)
+    val density = LocalDensity.current
+    val baseBannerDp = 176f
+    val bannerHeight = (baseBannerDp + 114f * bannerProgress.coerceIn(0f, 1.35f)).dp
+    val avatarSizeDp = 96.dp
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        // 1. Pull-to-Expand Signature Liquid-Wave or Custom Profile Cover Banner
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(154.dp)
-                .background(if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
+                .height(bannerHeight)
+                .then(
+                    if (onBannerTap != null) {
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onBannerTap
+                        )
+                    } else Modifier
+                )
         ) {
-            if (presetBannerRes != null) {
-                Image(
-                    painter = painterResource(id = presetBannerRes),
-                    contentDescription = "Profile Banner",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else if (!profile?.bannerUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = profile?.bannerUrl,
-                    contentDescription = "Profile Banner",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Image(
-                    painter = painterResource(id = R.drawable.banner_wave_banner_midnight_glow),
-                    contentDescription = "Default Profile Banner",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+            val cleanBanner = profile?.bannerUrl?.trim().orEmpty()
+            val useCustomBanner = cleanBanner.isNotBlank() &&
+                !cleanBanner.contains("midnight_glow", ignoreCase = true) &&
+                !cleanBanner.contains("default_banner", ignoreCase = true)
+
+            when {
+                presetBannerRes != null && useCustomBanner -> {
+                    Image(
+                        painter = painterResource(id = presetBannerRes),
+                        contentDescription = "Profile Banner",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val zoom = 1f + ease * 0.05f
+                                scaleX = zoom
+                                scaleY = zoom
+                            },
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                useCustomBanner -> {
+                    AsyncImage(
+                        model = cleanBanner,
+                        contentDescription = "Profile Banner",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val zoom = 1f + ease * 0.05f
+                                scaleX = zoom
+                                scaleY = zoom
+                            },
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                else -> {
+                    LiquidWaveBannerCanvas(
+                        isDark = isDark,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val zoom = 1f + ease * 0.05f
+                                scaleX = zoom
+                                scaleY = zoom
+                            }
+                    )
+                }
             }
 
-            // Delicate top scrim for translucent nav controls & subtle bottom edge hairline
+            // Pull-to-Expand Visual Cue Pill
+            val cueAlpha = (1f - bannerProgress * 2.2f).coerceIn(0f, 1f)
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 36.dp)
+                    .size(width = 32.dp, height = 4.dp)
+                    .clip(CircleShape)
                     .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.28f), Color.Transparent)
-                        )
+                        (if (isDark) Color.White else OscellionProfilePalette.BlueAccent)
+                            .copy(alpha = 0.22f * cueAlpha)
                     )
             )
-            Box(
+
+            // Frosted Circular Banner Actions Row
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(0.5.dp)
-                    .align(Alignment.BottomCenter)
-                    .background(hairline)
-            )
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (showBackButton) {
+                    BannerGlassCircleButton(
+                        isDark = isDark,
+                        onClick = {
+                            com.chroma.studio.chat.sound.SoundManager.playReaction()
+                            onBack()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Lucide.ChevronLeft,
+                            contentDescription = "Back",
+                            tint = inkPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.size(36.dp))
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (onQrClick != null) {
+                        BannerGlassCircleButton(
+                            isDark = isDark,
+                            onClick = {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onQrClick()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Lucide.QrCode,
+                                contentDescription = "Share Card",
+                                tint = inkPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    if (isCurrentUser && onEditBannerClick != null) {
+                        BannerGlassCircleButton(
+                            isDark = isDark,
+                            onClick = {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onEditBannerClick()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Pencil,
+                                contentDescription = "Edit Cover",
+                                tint = inkPrimary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+
+                    if (isCurrentUser && onSettingsClick != null) {
+                        BannerGlassCircleButton(
+                            isDark = isDark,
+                            onClick = {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onSettingsClick()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Settings,
+                                contentDescription = "Settings",
+                                tint = inkPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    } else if (!isCurrentUser && onMoreClick != null) {
+                        BannerGlassCircleButton(
+                            isDark = isDark,
+                            onClick = {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onMoreClick()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Lucide.EllipsisVertical,
+                                contentDescription = "More Options",
+                                tint = inkPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
-        // 2. Natural Overlap Avatar + Below-Banner Compact Stats Row
-        Row(
+        // 2. Rounded Sheet Overlapping Banner Bottom + Continuous Center-Shift Choreography
+        // Note: Do NOT .clip() this Column vertically so the overlapping avatar & story ring render uncropped above the seam
+        val sheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(top = 110.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(top = (bannerHeight - 28.dp).coerceAtLeast(100.dp))
+                .shadow(
+                    elevation = 8.dp,
+                    shape = sheetShape,
+                    ambientColor = Color(0x180A183E),
+                    spotColor = Color(0x180A183E),
+                    clip = false
+                )
+                .background(sheetBg, sheetShape)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 8.dp)
         ) {
-            val avatarInteractionSource = remember { MutableInteractionSource() }
-            val isAvatarPressed by avatarInteractionSource.collectIsPressedAsState()
-            val avatarScale by animateFloatAsState(
-                targetValue = if (isAvatarPressed) 0.96f else 1f,
-                animationSpec = tween(140, easing = FastOutSlowInEasing),
-                label = "avatarScale"
-            )
+            val roleText = profile?.role?.trim()?.takeIf { it.isNotBlank() }
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val innerMaxWidth = this@BoxWithConstraints.maxWidth
+                val innerWidthPx = with(density) { innerMaxWidth.toPx() }
+                val avatarSizePx = with(density) { avatarSizeDp.toPx() }
+                val avatarDx = ((innerWidthPx - avatarSizePx) / 2f) * ease
+                val avatarYOffset = lerpFloat(-46f, -42f, ease).dp
 
-            // 88dp total container -> 44dp over cover banner, 44dp below cover seam
-            Box(
-                modifier = Modifier
-                    .size(88.dp)
-                    .scale(avatarScale),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(84.dp)
-                        .clip(CircleShape)
-                        .background(colors.bg)
-                        .combinedClickable(
-                            interactionSource = avatarInteractionSource,
-                            indication = null,
-                            onClick = { onAvatarClick() },
-                            onLongClick = {
+                var nameRowWidthPx by remember { mutableFloatStateOf(0f) }
+                var usernameWidthPx by remember { mutableFloatStateOf(0f) }
+                var statsWidthPx by remember { mutableFloatStateOf(0f) }
+
+                val nameDx = maxOf(0f, (innerWidthPx - nameRowWidthPx) / 2f) * ease
+                val userDx = maxOf(0f, (innerWidthPx - usernameWidthPx) / 2f) * ease
+
+                val statsInitialLeft = (innerWidthPx - statsWidthPx).coerceAtLeast(0f)
+                val statsTargetLeft = ((innerWidthPx - statsWidthPx) / 2f).coerceAtLeast(0f)
+                val statsDx = (statsTargetLeft - statsInitialLeft) * ease
+                val statsDy = with(density) { 86.dp.toPx() } * ease
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Top Row: Avatar + Right-Aligned Tabular Stats
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(62.dp)
+                    ) {
+                        OscellionProfileAvatar(
+                            profile = profile,
+                            avatarUrl = profile?.avatarUrl.orEmpty(),
+                            isDark = isDark,
+                            isOnline = isUserOnline,
+                            hasActiveStories = hasActiveStories,
+                            isStorySeen = isStorySeen,
+                            isOnlyFriendStory = isOnlyFriendStory,
+                            isVerified = profile?.verified == true,
+                            isUploading = isUploading,
+                            isUploadFailed = isUploadFailed,
+                            size = avatarSizeDp,
+                            onTap = { onAvatarClick() },
+                            onLongTap = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 SoundManager.playReaction()
                                 onAvatarLongClick?.invoke()
-                            }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val shouldShowRing = hasActiveStories || isUploading || isUploadFailed
-                    val ringBrush = when {
-                        isUploadFailed -> Brush.linearGradient(listOf(Color(0xFFFF3B30), Color(0xFFFF453A)))
-                        isUploading -> Brush.sweepGradient(
-                            listOf(
-                                appleBlue,
-                                Color(0xFF38BDF8),
-                                appleBlue
-                            )
-                        )
-                        hasActiveStories -> getAppleStatusRingBrush(
-                            hasStatus = true,
-                            isSeen = false,
-                            isDark = isDark,
-                            isOnlyFriend = isOnlyFriendStory,
-                            isVerified = profile?.verified == true
-                        )
-                        else -> null
-                    }
-                    val infiniteTransition = rememberInfiniteTransition(label = "profile_upload_ring")
-                    val uploadRingRotation by infiniteTransition.animateFloat(
-                        initialValue = 0f,
-                        targetValue = 360f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(1200, easing = LinearEasing),
-                            repeatMode = RepeatMode.Restart
-                        ),
-                        label = "profile_ring_rot"
-                    )
-
-                    if (shouldShowRing && ringBrush != null) {
-                        Box(
+                            },
                             modifier = Modifier
-                                .fillMaxSize()
+                                .offset(y = avatarYOffset)
                                 .graphicsLayer {
-                                    if (isUploading) rotationZ = uploadRingRotation
+                                    translationX = avatarDx
+                                    val zoom = 1f + 0.09f * ease
+                                    scaleX = zoom
+                                    scaleY = zoom
                                 }
-                                .border(width = 2.4.dp, brush = ringBrush, shape = CircleShape)
-                                .padding(4.dp)
-                                .clip(CircleShape)
-                                .background(colors.bg)
-                        ) {
-                            IosAvatarView(
-                                name = profile?.displayName ?: profile?.username ?: "",
-                                avatarUrl = profile?.avatarUrl.orEmpty(),
-                                size = 72.dp,
-                                gender = profile?.gender,
-                                isOnline = false,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                        )
 
-                            if (isUploading) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black.copy(alpha = 0.45f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    androidx.compose.material3.CircularProgressIndicator(
-                                        strokeWidth = 2.dp,
-                                        color = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            } else if (isUploadFailed) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color(0xFFFF3B30).copy(alpha = 0.35f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.ShieldAlert,
-                                        contentDescription = "Failed",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        // Crisp theme cutout ring + subtle hairline outline (no excessive shadow)
-                        Box(
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(18.dp),
                             modifier = Modifier
-                                .fillMaxSize()
-                                .border(width = 3.5.dp, color = colors.bg, shape = CircleShape)
-                                .padding(3.5.dp)
-                                .clip(CircleShape)
-                                .border(width = 0.75.dp, color = hairline, shape = CircleShape)
+                                .align(Alignment.BottomEnd)
+                                .padding(bottom = 4.dp, end = 4.dp)
+                                .onGloballyPositioned { statsWidthPx = it.size.width.toFloat() }
+                                .graphicsLayer {
+                                    translationX = statsDx
+                                    translationY = statsDy
+                                }
                         ) {
-                            IosAvatarView(
-                                name = profile?.displayName ?: profile?.username ?: "",
-                                avatarUrl = profile?.avatarUrl.orEmpty(),
-                                size = 77.dp,
-                                gender = profile?.gender,
-                                isOnline = false,
-                                modifier = Modifier.fillMaxSize()
+                            ProfileStatItem(
+                                value = formatCount(worksCount),
+                                label = "Posts",
+                                inkColor = inkPrimary,
+                                mutedColor = inkMuted,
+                                onClick = { onPostsClick?.invoke() }
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(20.dp)
+                                    .background(statsDivider)
+                            )
+                            ProfileStatItem(
+                                value = formatCount(profile?.followersCount ?: 0),
+                                label = "Followers",
+                                inkColor = inkPrimary,
+                                mutedColor = inkMuted,
+                                onClick = {
+                                    if (isRestricted) ToastManager.showToast("This account is private.")
+                                    else onNavigateToUserList?.invoke(userId, "followers")
+                                }
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(20.dp)
+                                    .background(statsDivider)
+                            )
+                            ProfileStatItem(
+                                value = formatCount(profile?.followingCount ?: 0),
+                                label = "Following",
+                                inkColor = inkPrimary,
+                                mutedColor = inkMuted,
+                                onClick = {
+                                    if (isRestricted) ToastManager.showToast("This account is private.")
+                                    else onNavigateToUserList?.invoke(userId, "following")
+                                }
                             )
                         }
                     }
-                }
 
-                // Purposeful, subtle Green Online Dot (no heavy glow/bounce)
-                if (isUserOnline && (profile?.showOnlineStatus != false)) {
-                    com.chroma.studio.ui.components.OnlineStatusDot(
-                        isOnline = true,
-                        size = 15.dp,
-                        showPulse = false,
-                        ringColor = colors.bg,
+                    Spacer(Modifier.height(6.dp))
+
+                    // Display Name + Multi-Tier Verified Badge + Role Capsule Badge
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp),
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .offset(x = (-3).dp, y = (-3).dp)
-                    )
-                }
-            }
+                            .widthIn(max = innerMaxWidth)
+                            .onGloballyPositioned { nameRowWidthPx = it.size.width.toFloat() }
+                            .graphicsLayer { translationX = nameDx }
+                    ) {
+                        Text(
+                            text = profile?.displayName ?: "Unknown",
+                            color = inkPrimary,
+                            fontSize = 21.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = (-0.5).sp,
+                            lineHeight = 25.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = ProfileTightTextStyle,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
 
-            // 3. Stats Row — Aligned below the banner seam alongside lower half of avatar
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 14.dp, bottom = 6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val statNumberColor = colors.textMain
-                val statLabelColor = AppleProfileTokens.mutedText(isDark)
-
-                // Posts
-                val postsInteraction = remember { MutableInteractionSource() }
-                val isPostsPressed by postsInteraction.collectIsPressedAsState()
-                val postsScale by animateFloatAsState(
-                    targetValue = if (isPostsPressed) 0.96f else 1f,
-                    animationSpec = tween(120),
-                    label = "postsScale"
-                )
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .scale(postsScale)
-                        .clickable(interactionSource = postsInteraction, indication = null) {
-                            onPostsClick?.invoke()
+                        if (profile?.verified == true) {
+                            VerifiedBadge(
+                                size = 19.dp,
+                                tone = profile.verifiedTone,
+                                userId = profile.uid,
+                                showGlow = false
+                            )
                         }
-                ) {
-                    Text(
-                        text = formatCount(worksCount),
-                        color = statNumberColor,
-                        fontSize = 16.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = (-0.02).em,
-                        lineHeight = 19.sp,
-                        style = ProfileTightTextStyle.copy(fontFeatureSettings = "tnum")
-                    )
-                    Text(
-                        text = "Posts",
-                        color = statLabelColor,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Normal,
-                        lineHeight = 13.5.sp,
-                        style = ProfileTightTextStyle
-                    )
-                }
 
-                Box(
-                    modifier = Modifier
-                        .height(18.dp)
-                        .width(0.5.dp)
-                        .background(hairline)
-                )
-
-                // Followers
-                val followersInteraction = remember { MutableInteractionSource() }
-                val isFollowersPressed by followersInteraction.collectIsPressedAsState()
-                val followersScale by animateFloatAsState(
-                    targetValue = if (isFollowersPressed) 0.96f else 1f,
-                    animationSpec = tween(120),
-                    label = "followersScale"
-                )
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .scale(followersScale)
-                        .clickable(interactionSource = followersInteraction, indication = null) {
-                            if (isRestricted) ToastManager.showToast("This account is private.")
-                            else onNavigateToUserList?.invoke(userId, "followers")
+                        if (roleText != null) {
+                            OscellionRoleCapsuleBadge(
+                                role = roleText,
+                                isDark = isDark
+                            )
                         }
-                ) {
-                    Text(
-                        text = formatCount(profile?.followersCount ?: 0),
-                        color = statNumberColor,
-                        fontSize = 16.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = (-0.02).em,
-                        lineHeight = 19.sp,
-                        style = ProfileTightTextStyle.copy(fontFeatureSettings = "tnum")
-                    )
-                    Text(
-                        text = "Followers",
-                        color = statLabelColor,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Normal,
-                        lineHeight = 13.5.sp,
-                        style = ProfileTightTextStyle
-                    )
-                }
+                    }
 
-                Box(
-                    modifier = Modifier
-                        .height(18.dp)
-                        .width(0.5.dp)
-                        .background(hairline)
-                )
+                    // @username with subtle copy affordance
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .widthIn(max = innerMaxWidth)
+                            .onGloballyPositioned { usernameWidthPx = it.size.width.toFloat() }
+                            .graphicsLayer { translationX = userDx }
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("username", "@${profile?.username ?: ""}")
+                                clipboard.setPrimaryClip(clip)
+                                ToastManager.showToast("Username copied to clipboard")
+                            }
+                            .padding(vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "@${profile?.username ?: "unknown"}",
+                            color = inkMuted,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 16.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = ProfileTightTextStyle,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Icon(
+                            imageVector = Lucide.Copy,
+                            contentDescription = "Copy username",
+                            tint = inkMuted.copy(alpha = 0.72f),
+                            modifier = Modifier.size(11.5.dp)
+                        )
+                    }
 
-                // Following
-                val followingInteraction = remember { MutableInteractionSource() }
-                val isFollowingPressed by followingInteraction.collectIsPressedAsState()
-                val followingScale by animateFloatAsState(
-                    targetValue = if (isFollowingPressed) 0.96f else 1f,
-                    animationSpec = tween(120),
-                    label = "followingScale"
-                )
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .scale(followingScale)
-                        .clickable(interactionSource = followingInteraction, indication = null) {
-                            if (isRestricted) ToastManager.showToast("This account is private.")
-                            else onNavigateToUserList?.invoke(userId, "following")
-                        }
-                ) {
-                    Text(
-                        text = formatCount(profile?.followingCount ?: 0),
-                        color = statNumberColor,
-                        fontSize = 16.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = (-0.02).em,
-                        lineHeight = 19.sp,
-                        style = ProfileTightTextStyle.copy(fontFeatureSettings = "tnum")
-                    )
-                    Text(
-                        text = "Following",
-                        color = statLabelColor,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Normal,
-                        lineHeight = 13.5.sp,
-                        style = ProfileTightTextStyle
-                    )
+                    // Smoothly opening slot for centered stats when banner expands
+                    Spacer(Modifier.height(56.dp * ease))
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BannerGlassCircleButton(
+    isDark: Boolean,
+    onClick: () -> Unit,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.91f else 1f,
+        animationSpec = tween(110),
+        label = "bannerBtnScale"
+    )
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .scale(scale)
+            .shadow(2.dp, CircleShape, ambientColor = Color(0x1E070B18), spotColor = Color(0x1E070B18))
+            .clip(CircleShape)
+            .background(OscellionProfilePalette.topIconBg(isDark))
+            .border(1.dp, OscellionProfilePalette.topIconBorder(isDark), CircleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center,
+        content = content
+    )
+}
+
+@Composable
+private fun ProfileStatItem(
+    value: String,
+    label: String,
+    inkColor: Color,
+    mutedColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = tween(110),
+        label = "statScale"
+    )
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+        modifier = modifier
+            .scale(scale)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 2.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = value,
+            color = inkColor,
+            fontSize = 15.5.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = (-0.02).em,
+            lineHeight = 18.sp,
+            style = ProfileTightTextStyle.copy(fontFeatureSettings = "tnum")
+        )
+        Text(
+            text = label,
+            color = mutedColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            lineHeight = 13.sp,
+            style = ProfileTightTextStyle
+        )
     }
 }
 
@@ -507,15 +650,15 @@ fun UserProfileBioDetailsSection(
     userId: String,
     onShowShareCard: () -> Unit,
     onNavigateToUserList: ((String, String) -> Unit)?,
-    onNavigateToProfile: ((String) -> Unit)? = null
+    onNavigateToProfile: ((String) -> Unit)? = null,
+    onOpenWebsiteSheet: ((url: String, cta: String) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
     val isDark = colors.isDark
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val appleBlue = AppleProfileTokens.accentBlue(isDark)
-    val mutedText = AppleProfileTokens.mutedText(isDark)
-    val hairline = AppleProfileTokens.hairlineBorder(isDark)
+    val blueAccent = OscellionProfilePalette.BlueAccent
+    val bioInk = OscellionProfilePalette.inkSecondary(isDark)
+    val mutedText = OscellionProfilePalette.inkMuted(isDark)
     var isBioExpanded by remember { mutableStateOf(false) }
 
     val vis = profile?.dataVisibility
@@ -526,427 +669,23 @@ fun UserProfileBioDetailsSection(
     val dobVisible = isFieldVisible("dob", vis, isCurrentUser, isFollowing) && profile?.dateOfBirthAsLong != null
     val genderVisible = isFieldVisible("gender", vis, isCurrentUser, isFollowing) && !profile?.gender.isNullOrBlank()
 
+    var fallbackWebsiteSheetUrl by remember { mutableStateOf<String?>(null) }
+    var fallbackWebsiteCta by remember { mutableStateOf("Open") }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .background(OscellionProfilePalette.sheetBg(isDark))
+            .padding(horizontal = 20.dp)
     ) {
-        // 1. Identity Block: Primary Name + Secondary @username + Copy + Inline Online Status + Quiet QR Pass
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = profile?.displayName ?: "Unknown",
-                        color = colors.textMain,
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.025).em,
-                        lineHeight = 24.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = ProfileTightTextStyle,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (profile?.verified == true) {
-                        Spacer(Modifier.width(5.dp))
-                        VerifiedBadge(
-                            size = 17.dp,
-                            tone = profile.verifiedTone,
-                            showGlow = false
-                        )
-                    }
-                }
-
-                // Secondary Row: @username + copy
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = ClipData.newPlainText("username", "@${profile?.username ?: ""}")
-                            clipboard.setPrimaryClip(clip)
-                            ToastManager.showToast("Username copied to clipboard")
-                        }
-                        .padding(vertical = 1.dp)
-                ) {
-                    Text(
-                        text = "@${profile?.username ?: "unknown"}",
-                        color = mutedText,
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Normal,
-                        lineHeight = 16.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = ProfileTightTextStyle
-                    )
-                    Icon(
-                        imageVector = Lucide.Copy,
-                        contentDescription = "Copy username",
-                        tint = mutedText.copy(alpha = 0.72f),
-                        modifier = Modifier.size(12.dp)
-                    )
-                }
-            }
-
-            // Quiet iOS circular QR / Pass trigger with hairline border
-            val qrInteraction = remember { MutableInteractionSource() }
-            val isQrPressed by qrInteraction.collectIsPressedAsState()
-            val qrScale by animateFloatAsState(
-                targetValue = if (isQrPressed) 0.93f else 1f,
-                animationSpec = tween(120),
-                label = "qrScale"
-            )
-            Box(
-                modifier = Modifier
-                    .scale(qrScale)
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(AppleProfileTokens.secondaryFill(isDark))
-                    .border(0.5.dp, hairline, CircleShape)
-                    .clickable(interactionSource = qrInteraction, indication = null) {
-                        com.chroma.studio.chat.sound.SoundManager.playReaction()
-                        onShowShareCard()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Lucide.QrCode,
-                    contentDescription = "Show Pass",
-                    tint = colors.textMain,
-                    modifier = Modifier.size(15.5.dp)
-                )
-            }
-        }
-
-        // 2. Profile Information: ONLY Role uses subtle pill background; Location, Year (20XX), & Gender Icon stay completely borderless/backgroundless
-        val roleText = profile?.role?.trim()?.takeIf { it.isNotBlank() }
-        val genderValue = profile?.gender?.trim()?.takeIf { it.isNotBlank() }
-        val genderIcon: ImageVector? = remember(genderVisible, genderValue) {
-            if (!genderVisible || genderValue.isNullOrBlank()) null
-            else when (genderValue.lowercase()) {
-                "male", "man", "boy", "m" -> Icons.Rounded.Male
-                "female", "woman", "girl", "f" -> Icons.Rounded.Female
-                "prefer not to say", "none", "hidden" -> null
-                else -> Icons.Rounded.Transgender
-            }
-        }
-
-        val metadataItems = remember(locationVisible, office, home, country, dobVisible, profile) {
-            val list = mutableListOf<Pair<ImageVector, String>>()
-            if (locationVisible) {
-                val locText = when {
-                    !office.isNullOrBlank() && !country.isNullOrBlank() -> "$office, $country"
-                    !office.isNullOrBlank() -> office
-                    !country.isNullOrBlank() -> country
-                    !home.isNullOrBlank() -> home
-                    else -> null
-                }
-                if (!locText.isNullOrBlank()) {
-                    list.add(Lucide.MapPin to locText)
-                }
-            }
-            val dob = profile?.dateOfBirthAsLong
-            if (dobVisible && dob != null && dob > 0L) {
-                val yr = SimpleDateFormat("yyyy", Locale.getDefault()).format(Date(dob))
-                list.add(Lucide.Calendar to yr)
-            }
-            list
-        }
-
-        if (roleText != null || metadataItems.isNotEmpty() || genderIcon != null) {
-            Spacer(Modifier.height(10.dp))
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                if (roleText != null) {
-                    val roleIcon = when (roleText.lowercase()) {
-                        "admin", "superadmin", "founder", "ceo", "owner" -> Lucide.Crown
-                        "developer" -> Lucide.Terminal
-                        "designer", "web designer" -> Lucide.Palette
-                        "content creator" -> Lucide.Video
-                        "engineer" -> Lucide.Wrench
-                        else -> Lucide.Briefcase
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        modifier = Modifier
-                            .align(Alignment.CenterVertically)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(appleBlue.copy(alpha = 0.11f))
-                            .border(0.5.dp, appleBlue.copy(alpha = 0.22f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.5.dp)
-                    ) {
-                        Icon(
-                            imageVector = roleIcon,
-                            contentDescription = null,
-                            tint = appleBlue,
-                            modifier = Modifier.size(12.5.dp)
-                        )
-                        Text(
-                            text = roleText,
-                            color = appleBlue,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = (-0.01).em,
-                            lineHeight = 14.sp,
-                            style = ProfileTightTextStyle
-                        )
-                    }
-                }
-
-                metadataItems.forEach { (icon, text) ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.5.dp),
-                        modifier = Modifier.align(Alignment.CenterVertically)
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = mutedText,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = text,
-                            color = mutedText,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.Normal,
-                            letterSpacing = (-0.01).em,
-                            lineHeight = 15.sp,
-                            style = ProfileTightTextStyle
-                        )
-                    }
-                }
-
-                if (genderIcon != null) {
-                    Icon(
-                        imageVector = genderIcon,
-                        contentDescription = genderValue,
-                        tint = mutedText,
-                        modifier = Modifier
-                            .align(Alignment.CenterVertically)
-                            .size(15.dp)
-                    )
-                }
-            }
-        }
-
-        // 3. Icon-Only Socials & Website Favicon Row (zero background containers)
-        val socialLinksMap = profile?.socialLinks ?: emptyMap()
-        val ghUrl = socialLinksMap["github"]?.trim()?.takeIf { it.isNotBlank() }
-        val igUrl = socialLinksMap["instagram"]?.trim()?.takeIf { it.isNotBlank() }
-        val webUrl = socialLinksMap["website"]?.trim()?.takeIf { it.isNotBlank() }
-        val websiteCta = socialLinksMap["website_cta"]?.trim()?.takeIf { it.isNotBlank() }
-            ?: socialLinksMap["website_label"]?.trim()?.takeIf { it.isNotBlank() }
-            ?: "Open"
-
-        val normalizedWebUrl = remember(webUrl) {
-            webUrl?.let { raw ->
-                if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) raw
-                else "https://$raw"
-            }
-        }
-        val faviconUrl = remember(normalizedWebUrl) {
-            normalizedWebUrl?.let { url ->
-                runCatching {
-                    val host = Uri.parse(url).host?.trim()?.takeIf { it.isNotBlank() }
-                    host?.let { "https://www.google.com/s2/favicons?domain=$it&sz=64" }
-                }.getOrNull()
-            }
-        }
-        var showWebsiteSheet by remember { mutableStateOf(false) }
-
-        if (ghUrl != null || igUrl != null || normalizedWebUrl != null) {
-            Spacer(Modifier.height(10.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-            ) {
-                if (normalizedWebUrl != null) {
-                    var faviconLoaded by remember(faviconUrl) { mutableStateOf(false) }
-                    var faviconError by remember(faviconUrl) { mutableStateOf(false) }
-
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                com.chroma.studio.chat.sound.SoundManager.playReaction()
-                                showWebsiteSheet = true
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (!faviconLoaded || faviconError || faviconUrl == null) {
-                            Icon(
-                                imageVector = Lucide.Globe,
-                                contentDescription = "Website",
-                                tint = colors.textMain,
-                                modifier = Modifier.size(19.dp)
-                            )
-                        }
-                        if (faviconUrl != null && !faviconError) {
-                            AsyncImage(
-                                model = faviconUrl,
-                                contentDescription = "Website",
-                                contentScale = ContentScale.Crop,
-                                onSuccess = { faviconLoaded = true },
-                                onError = { faviconError = true },
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clip(RoundedCornerShape(5.dp))
-                                    .graphicsLayer { alpha = if (faviconLoaded) 1f else 0f }
-                            )
-                        }
-                    }
-                }
-
-                if (ghUrl != null) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                try {
-                                    val target = when {
-                                        ghUrl.startsWith("http://", true) || ghUrl.startsWith("https://", true) -> ghUrl
-                                        ghUrl.contains(".") -> "https://$ghUrl"
-                                        else -> "https://github.com/${ghUrl.removePrefix("@")}"
-                                    }
-                                    com.chroma.studio.ui.components.InAppBrowserManager.openUrl(target)
-                                } catch (_: Exception) {
-                                    ToastManager.showToast("Could not open GitHub")
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_social_github),
-                            contentDescription = "GitHub",
-                            colorFilter = ColorFilter.tint(colors.textMain),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-
-                if (igUrl != null) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                try {
-                                    val target = when {
-                                        igUrl.startsWith("http://", true) || igUrl.startsWith("https://", true) -> igUrl
-                                        igUrl.contains(".") -> "https://$igUrl"
-                                        else -> "https://instagram.com/${igUrl.removePrefix("@")}"
-                                    }
-                                    com.chroma.studio.ui.components.InAppBrowserManager.openUrl(target)
-                                } catch (_: Exception) {
-                                    ToastManager.showToast("Could not open Instagram")
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_social_instagram),
-                            contentDescription = "Instagram",
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        if (showWebsiteSheet && normalizedWebUrl != null) {
-            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-            ModalBottomSheet(
-                onDismissRequest = { showWebsiteSheet = false },
-                sheetState = sheetState,
-                containerColor = if (isDark) Color(0xFF1C1C1E) else Color.White,
-                dragHandle = {
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 10.dp, bottom = 6.dp)
-                            .width(36.dp)
-                            .height(4.dp)
-                            .clip(CircleShape)
-                            .background(colors.textMuted.copy(alpha = 0.28f))
-                    )
-                }
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 20.dp)
-                        .padding(top = 8.dp, bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = normalizedWebUrl,
-                        color = colors.textMain,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = 20.sp,
-                        style = ProfileTightTextStyle
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(appleBlue)
-                            .clickable {
-                                showWebsiteSheet = false
-                                try {
-                                    com.chroma.studio.ui.components.InAppBrowserManager.openUrl(normalizedWebUrl)
-                                } catch (_: Exception) {
-                                    ToastManager.showToast("Could not open link")
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = websiteCta,
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            style = ProfileTightTextStyle
-                        )
-                    }
-                }
-            }
-        }
-
-        // 4. Clean Editorial Biography with interactive @mentions and Read more / Show less
+        // 1. Clean Editorial Biography with interactive @mentions and Read more / Show less
         val bioText = profile?.bio?.trim() ?: ""
         if (bioText.isNotBlank()) {
-            Spacer(Modifier.height(10.dp))
             val isBioLong = remember(bioText) {
                 bioText.length > 90 || bioText.contains("\n")
             }
 
-            val displayedBio = remember(bioText, isBioExpanded, isBioLong, appleBlue, mutedText) {
+            val displayedBio = remember(bioText, isBioExpanded, isBioLong, blueAccent, mutedText) {
                 buildAnnotatedString {
                     val source = if (!isBioLong || isBioExpanded) {
                         bioText
@@ -969,13 +708,13 @@ fun UserProfileBioDetailsSection(
                             val cleanHandle = word.trimEnd('.', ',', '!', '?', ':', ';', ')')
                             val trailing = word.removePrefix(cleanHandle)
                             pushStringAnnotation(tag = "MENTION", annotation = cleanHandle.removePrefix("@"))
-                            withStyle(SpanStyle(color = appleBlue, fontWeight = FontWeight.SemiBold)) {
+                            withStyle(SpanStyle(color = blueAccent, fontWeight = FontWeight.SemiBold)) {
                                 append(cleanHandle)
                             }
                             pop()
                             if (trailing.isNotEmpty()) append(trailing)
                         } else if (word.startsWith("#") && word.length > 1) {
-                            withStyle(SpanStyle(color = appleBlue, fontWeight = FontWeight.Medium)) {
+                            withStyle(SpanStyle(color = blueAccent, fontWeight = FontWeight.Medium)) {
                                 append(word)
                             }
                         } else {
@@ -988,13 +727,13 @@ fun UserProfileBioDetailsSection(
                             append("… ")
                         }
                         pushStringAnnotation(tag = "TOGGLE_BIO", annotation = "expand")
-                        withStyle(SpanStyle(color = appleBlue, fontWeight = FontWeight.Medium)) {
+                        withStyle(SpanStyle(color = blueAccent, fontWeight = FontWeight.SemiBold)) {
                             append("Read more")
                         }
                         pop()
                     } else if (isBioLong && isBioExpanded) {
                         pushStringAnnotation(tag = "TOGGLE_BIO", annotation = "collapse")
-                        withStyle(SpanStyle(color = appleBlue, fontWeight = FontWeight.Medium)) {
+                        withStyle(SpanStyle(color = blueAccent, fontWeight = FontWeight.SemiBold)) {
                             append("  Show less")
                         }
                         pop()
@@ -1006,10 +745,9 @@ fun UserProfileBioDetailsSection(
 
             Text(
                 text = displayedBio,
-                color = colors.textMain,
+                color = bioInk,
                 fontSize = 13.5.sp,
-                lineHeight = 19.sp,
-                letterSpacing = (-0.01).em,
+                lineHeight = 21.5.sp,
                 style = TextStyle(
                     platformStyle = ProfileTightPlatformStyle,
                     lineHeightStyle = LineHeightStyle(
@@ -1022,6 +760,7 @@ fun UserProfileBioDetailsSection(
                 onTextLayout = { textLayoutResult = it },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(top = 4.dp)
                     .animateContentSize(animationSpec = tween(220, easing = FastOutSlowInEasing))
                     .pointerInput(displayedBio, isBioLong) {
                         detectTapGestures { offset ->
@@ -1054,7 +793,224 @@ fun UserProfileBioDetailsSection(
             )
         }
 
-        // 5. Mutual Connections Group
+        // 2. Borderless Compact Metadata Row: Location · [Calendar] 20XX · [Gender Symbol Icon ONLY]
+        val locationLabel = remember(locationVisible, office, home, country) {
+            if (!locationVisible) null
+            else when {
+                !office.isNullOrBlank() && !country.isNullOrBlank() -> "$office, $country"
+                !office.isNullOrBlank() -> office
+                !country.isNullOrBlank() -> country
+                !home.isNullOrBlank() -> home
+                else -> null
+            }
+        }
+        val birthYearLabel = remember(dobVisible, profile?.dateOfBirthAsLong) {
+            val dob = profile?.dateOfBirthAsLong
+            if (dobVisible && dob != null && dob > 0L) {
+                SimpleDateFormat("yyyy", Locale.getDefault()).format(Date(dob))
+            } else null
+        }
+        val genderValue = profile?.gender?.trim()?.takeIf {
+            genderVisible && it.isNotBlank() && it.lowercase() !in setOf("prefer not to say", "none", "hidden")
+        }
+
+        if (locationLabel != null || birthYearLabel != null || genderValue != null) {
+            Spacer(Modifier.height(12.dp))
+            val sepColor = if (isDark) Color(0xFF3B475C) else Color(0xFFCFD8E6)
+            val metaIconTint = OscellionProfilePalette.inkMuted(isDark)
+            val metaTextInk = OscellionProfilePalette.metaInk(isDark)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (locationLabel != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    ) {
+                        LocationPinVectorIcon(tint = metaIconTint, modifier = Modifier.size(14.dp))
+                        Text(
+                            text = locationLabel,
+                            color = metaTextInk,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 15.sp,
+                            style = ProfileTightTextStyle
+                        )
+                    }
+                }
+                if (locationLabel != null && (birthYearLabel != null || genderValue != null)) {
+                    Text(
+                        text = "·",
+                        color = sepColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    )
+                }
+                if (birthYearLabel != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    ) {
+                        CalendarYearVectorIcon(tint = metaIconTint, modifier = Modifier.size(14.dp))
+                        Text(
+                            text = birthYearLabel,
+                            color = metaTextInk,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 15.sp,
+                            style = ProfileTightTextStyle.copy(fontFeatureSettings = "tnum")
+                        )
+                    }
+                }
+                if (birthYearLabel != null && genderValue != null) {
+                    Text(
+                        text = "·",
+                        color = sepColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    )
+                }
+                if (genderValue != null) {
+                    GenderSymbolVectorIcon(
+                        gender = genderValue,
+                        tint = metaIconTint,
+                        modifier = Modifier
+                            .align(Alignment.CenterVertically)
+                            .size(14.dp)
+                    )
+                }
+            }
+        }
+
+        // 3. 3D Floating + Sheen Borderless Social Links Row (GitHub, Instagram, Website)
+        val socialLinksMap = profile?.socialLinks ?: emptyMap()
+        val ghUrl = socialLinksMap["github"]?.trim()?.takeIf { it.isNotBlank() }
+        val igUrl = socialLinksMap["instagram"]?.trim()?.takeIf { it.isNotBlank() }
+        val webUrl = socialLinksMap["website"]?.trim()?.takeIf { it.isNotBlank() }
+        val websiteCta = socialLinksMap["website_cta"]?.trim()?.takeIf { it.isNotBlank() }
+            ?: socialLinksMap["website_label"]?.trim()?.takeIf { it.isNotBlank() }
+            ?: "Open"
+
+        val normalizedWebUrl = remember(webUrl) {
+            webUrl?.let { raw ->
+                if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) raw
+                else "https://$raw"
+            }
+        }
+
+        if (ghUrl != null || igUrl != null || normalizedWebUrl != null) {
+            Spacer(Modifier.height(14.dp))
+            Social3DLinksRow(
+                showGithub = ghUrl != null,
+                showInstagram = igUrl != null,
+                showWebsite = normalizedWebUrl != null,
+                onGithubClick = {
+                    val raw = ghUrl ?: return@Social3DLinksRow
+                    try {
+                        val target = when {
+                            raw.startsWith("http://", true) || raw.startsWith("https://", true) -> raw
+                            raw.contains(".") -> "https://$raw"
+                            else -> "https://github.com/${raw.removePrefix("@")}"
+                        }
+                        com.chroma.studio.ui.components.InAppBrowserManager.openUrl(target)
+                    } catch (_: Exception) {
+                        ToastManager.showToast("Could not open GitHub")
+                    }
+                },
+                onInstagramClick = {
+                    val raw = igUrl ?: return@Social3DLinksRow
+                    try {
+                        val target = when {
+                            raw.startsWith("http://", true) || raw.startsWith("https://", true) -> raw
+                            raw.contains(".") -> "https://$raw"
+                            else -> "https://instagram.com/${raw.removePrefix("@")}"
+                        }
+                        com.chroma.studio.ui.components.InAppBrowserManager.openUrl(target)
+                    } catch (_: Exception) {
+                        ToastManager.showToast("Could not open Instagram")
+                    }
+                },
+                onWebsiteClick = {
+                    val targetUrl = normalizedWebUrl ?: return@Social3DLinksRow
+                    com.chroma.studio.chat.sound.SoundManager.playReaction()
+                    if (onOpenWebsiteSheet != null) {
+                        onOpenWebsiteSheet(targetUrl, websiteCta)
+                    } else {
+                        fallbackWebsiteCta = websiteCta
+                        fallbackWebsiteSheetUrl = targetUrl
+                    }
+                }
+            )
+        }
+
+        if (fallbackWebsiteSheetUrl != null) {
+            val activeUrl = fallbackWebsiteSheetUrl!!
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ModalBottomSheet(
+                onDismissRequest = { fallbackWebsiteSheetUrl = null },
+                sheetState = sheetState,
+                containerColor = OscellionProfilePalette.elevatedCard(isDark),
+                dragHandle = {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 12.dp, bottom = 6.dp)
+                            .width(38.dp)
+                            .height(4.dp)
+                            .clip(CircleShape)
+                            .background(if (isDark) Color(0xFF3A4458) else Color(0xFFCBD5E1))
+                    )
+                },
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                windowInsets = WindowInsets(0.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 8.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        text = activeUrl,
+                        color = OscellionProfilePalette.inkPrimary(isDark),
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 20.sp,
+                        style = ProfileTightTextStyle
+                    )
+
+                    OscellionPrimaryGradientButton(
+                        onClick = {
+                            fallbackWebsiteSheetUrl = null
+                            try {
+                                com.chroma.studio.ui.components.InAppBrowserManager.openUrl(activeUrl)
+                            } catch (_: Exception) {
+                                ToastManager.showToast("Could not open link")
+                            }
+                        },
+                        height = 46.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = fallbackWebsiteCta,
+                            color = Color.White,
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            style = ProfileTightTextStyle
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. Mutual Connections Group
         if (mutualFollowers.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
             val connectedUsers = remember(mutualFollowers) {
@@ -1231,17 +1187,21 @@ fun UserProfileActionsStoriesSection(
 ) {
     val colors = LocalOscellionColors.current
     val isDark = colors.isDark
-    val appleBlue = AppleProfileTokens.accentBlue(isDark)
-    val hairline = AppleProfileTokens.hairlineBorder(isDark)
+    val sheetBg = OscellionProfilePalette.sheetBg(isDark)
+    val inkPrimary = OscellionProfilePalette.inkPrimary(isDark)
+    val mutedInk = OscellionProfilePalette.inkMuted(isDark)
+    val softPill = OscellionProfilePalette.softPill(isDark)
+    val hairline = OscellionProfilePalette.hairline(isDark)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .background(sheetBg)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 20.dp)
         ) {
             Spacer(Modifier.height(8.dp))
 
@@ -1252,30 +1212,33 @@ fun UserProfileActionsStoriesSection(
                 userId = userId
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
 
-            // Symmetric Apple HIG Action Buttons Row (40dp height, 12dp radius)
+            // Symmetric Oscellion Action Pill Buttons Row (43dp CircleShape pills)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (isCurrentUser) {
-                    ProfileActionButton(
-                        onClick = onNavigateToEditProfile,
-                        isPrimary = true,
+                    OscellionPrimaryGradientButton(
+                        onClick = {
+                            com.chroma.studio.chat.sound.SoundManager.playReaction()
+                            onNavigateToEditProfile()
+                        },
+                        height = 43.dp,
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(
                             imageVector = Lucide.Pencil,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(14.5.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                         Text(
                             text = "Edit Profile",
                             color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Bold,
                             fontSize = 13.5.sp,
                             letterSpacing = (-0.01).em,
                             lineHeight = 16.sp,
@@ -1283,154 +1246,201 @@ fun UserProfileActionsStoriesSection(
                         )
                     }
 
-                    ProfileActionButton(
-                        onClick = onShowShareCard,
-                        isPrimary = false,
-                        modifier = Modifier.weight(1f)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(43.dp)
+                            .clip(CircleShape)
+                            .background(if (isDark) Color(0xFF182030) else Color(0xFFF4F7FD))
+                            .border(1.dp, if (isDark) Color(0xFF283247) else Color(0xFFE6EDF8), CircleShape)
+                            .clickable {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onShowShareCard()
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Lucide.Share2,
-                            contentDescription = null,
-                            tint = colors.textMain,
-                            modifier = Modifier.size(14.5.dp)
-                        )
-                        Text(
-                            text = "Share Card",
-                            color = colors.textMain,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.5.sp,
-                            letterSpacing = (-0.01).em,
-                            lineHeight = 16.sp,
-                            style = ProfileTightTextStyle
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Share,
+                                contentDescription = null,
+                                tint = OscellionProfilePalette.BlueAccent,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "Share Card",
+                                color = inkPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                letterSpacing = (-0.01).em,
+                                lineHeight = 16.sp,
+                                style = ProfileTightTextStyle
+                            )
+                        }
                     }
                 } else {
                     if (isFollowing) {
-                        ProfileActionButton(
-                            onClick = onToggleFollow,
-                            isPrimary = false,
-                            modifier = Modifier.weight(1f)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(43.dp)
+                                .clip(CircleShape)
+                                .background(if (isDark) Color(0xFF182030) else Color(0xFFF4F7FD))
+                                .border(1.dp, if (isDark) Color(0xFF283247) else Color(0xFFDCE5F4), CircleShape)
+                                .clickable {
+                                    com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                    onToggleFollow()
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Lucide.Check,
-                                contentDescription = null,
-                                tint = colors.textMain,
-                                modifier = Modifier.size(14.5.dp)
-                            )
-                            Text(
-                                text = "Following",
-                                color = colors.textMain,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.5.sp,
-                                letterSpacing = (-0.01).em,
-                                lineHeight = 16.sp,
-                                style = ProfileTightTextStyle
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Check,
+                                    contentDescription = null,
+                                    tint = inkPrimary,
+                                    modifier = Modifier.size(14.5.dp)
+                                )
+                                Text(
+                                    text = "Following",
+                                    color = inkPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    style = ProfileTightTextStyle
+                                )
+                            }
                         }
                     } else if (isFollowRequested) {
-                        ProfileActionButton(
-                            onClick = onToggleFollow,
-                            isPrimary = false,
-                            modifier = Modifier.weight(1f)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(43.dp)
+                                .clip(CircleShape)
+                                .background(if (isDark) Color(0xFF182030) else Color(0xFFF4F7FD))
+                                .border(1.dp, if (isDark) Color(0xFF283247) else Color(0xFFDCE5F4), CircleShape)
+                                .clickable {
+                                    com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                    onToggleFollow()
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Lucide.Clock,
-                                contentDescription = null,
-                                tint = colors.textMuted,
-                                modifier = Modifier.size(14.5.dp)
-                            )
-                            Text(
-                                text = "Requested",
-                                color = colors.textMuted,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.5.sp,
-                                letterSpacing = (-0.01).em,
-                                lineHeight = 16.sp,
-                                style = ProfileTightTextStyle
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Clock,
+                                    contentDescription = null,
+                                    tint = mutedInk,
+                                    modifier = Modifier.size(14.5.dp)
+                                )
+                                Text(
+                                    text = "Requested",
+                                    color = mutedInk,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    style = ProfileTightTextStyle
+                                )
+                            }
                         }
                     } else {
-                        ProfileActionButton(
-                            onClick = onToggleFollow,
-                            isPrimary = true,
+                        OscellionPrimaryGradientButton(
+                            onClick = {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onToggleFollow()
+                            },
+                            height = 43.dp,
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(
                                 imageVector = Lucide.UserPlus,
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.size(14.5.dp)
+                                modifier = Modifier.size(15.5.dp)
                             )
                             Text(
                                 text = "Follow",
                                 color = Color.White,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.5.sp,
-                                letterSpacing = (-0.01).em,
-                                lineHeight = 16.sp,
+                                fontSize = 13.sp,
                                 style = ProfileTightTextStyle
                             )
                         }
                     }
 
-                    ProfileActionButton(
-                        onClick = { onNavigateToChat?.invoke(userId) },
-                        isPrimary = false,
-                        modifier = Modifier.weight(1f)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(43.dp)
+                            .clip(CircleShape)
+                            .background(OscellionProfilePalette.elevatedCard(isDark))
+                            .border(1.dp, OscellionProfilePalette.ringInactive(isDark), CircleShape)
+                            .clickable {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onNavigateToChat?.invoke(userId)
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Lucide.MessageSquare,
-                            contentDescription = null,
-                            tint = colors.textMain,
-                            modifier = Modifier.size(14.5.dp)
-                        )
-                        Text(
-                            text = "Message",
-                            color = colors.textMain,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.5.sp,
-                            letterSpacing = (-0.01).em,
-                            lineHeight = 16.sp,
-                            style = ProfileTightTextStyle
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.MessageCircle,
+                                contentDescription = null,
+                                tint = OscellionProfilePalette.BlueAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Message",
+                                color = inkPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                style = ProfileTightTextStyle
+                            )
+                        }
                     }
-
-                    val shareInteraction = remember { MutableInteractionSource() }
-                    val isSharePressed by shareInteraction.collectIsPressedAsState()
-                    val shareScale by animateFloatAsState(
-                        targetValue = if (isSharePressed) 0.96f else 1f,
-                        animationSpec = tween(120),
-                        label = "shareScale"
-                    )
 
                     Box(
                         modifier = Modifier
-                            .scale(shareScale)
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(AppleProfileTokens.secondaryFill(isDark))
-                            .border(0.5.dp, hairline, RoundedCornerShape(12.dp))
-                            .clickable(
-                                interactionSource = shareInteraction,
-                                indication = null,
-                                onClick = {
-                                    com.chroma.studio.chat.sound.SoundManager.playReaction()
-                                    onShowShareCard()
-                                }
-                            ),
+                            .height(43.dp)
+                            .clip(CircleShape)
+                            .background(OscellionProfilePalette.pillSurface(isDark))
+                            .border(1.dp, if (isDark) Color(0xFF283247) else Color(0xFFE6EDF8), CircleShape)
+                            .clickable {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onShowShareCard()
+                            }
+                            .padding(horizontal = 14.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Lucide.Share2,
-                            contentDescription = "Share",
-                            tint = colors.textMain,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Share,
+                                contentDescription = "Share Profile Card",
+                                tint = OscellionProfilePalette.subInk(isDark),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Share",
+                                color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF374151),
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 13.sp,
+                                style = ProfileTightTextStyle
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(20.dp))
 
             // Saved Story Collections / Highlights
             UserProfileHighlightsSection(
@@ -1449,18 +1459,24 @@ fun UserProfileActionsStoriesSection(
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // Full-width Minimal Icon Profile Content Tab Switcher
-        ProfileSeamlessTabBar(
-            icons = profileTabIcons,
+        // Labeled Profile Content Tab Switcher with Custom Heart-Handshake Remix Icon & Sliding Pill Indicator
+        val tabLabels = remember(isCurrentUser, profileTabIcons.size) {
+            if (isCurrentUser || profileTabIcons.size >= 5) {
+                listOf("All", "Posts", "Flash", "Remixes", "Saved")
+            } else {
+                listOf("All", "Posts", "Flash", "Remixes")
+            }
+        }
+        OscellionProfileTabsBar(
+            tabs = tabLabels,
             selectedIndex = selectedTabIndex,
-            onItemSelected = {
+            isDark = isDark,
+            onSelectTab = {
                 com.chroma.studio.chat.sound.SoundManager.playReaction()
                 onTabSelected(it)
-            },
-            selectedColor = appleBlue,
-            unselectedColor = AppleProfileTokens.mutedText(isDark)
+            }
         )
 
         Spacer(Modifier.height(2.dp))

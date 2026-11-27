@@ -27,8 +27,8 @@ android {
         applicationId = "com.chroma.studio"
         minSdk = 26 // Haze blur needs 26+ for best results (uses RenderEffect on 31+, fallback below)
         targetSdk = 34
-        versionCode = 12
-        versionName = "1.4.7"
+        versionCode = 13
+        versionName = "1.4.8"
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86_64"))

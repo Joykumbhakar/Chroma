@@ -46,11 +46,15 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.abs
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -81,6 +85,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -489,6 +497,18 @@ fun UserProfileScreen(
         }
     }
     val remixWorks = remember(works) { works.filter { it.remixedFromPostId != null } }
+    val allCombinedWorks = remember(works, flashDiscoverPosts) {
+        (works + flashDiscoverPosts)
+            .distinctBy { it.id }
+            .filter { !it.isArchived && !it.isTakedown }
+            .sortedByDescending { it.timestamp }
+    }
+    val photoAndArtPosts = remember(normalWorks, imagePosts) {
+        (imagePosts + normalWorks)
+            .distinctBy { it.id }
+            .filter { !it.isArchived && !it.isTakedown }
+            .sortedByDescending { it.timestamp }
+    }
 
     LaunchedEffect(isWorksLoading, initialPostId, works, flashDiscoverPosts) {
         if (!isWorksLoading && !initialPostId.isNullOrBlank()) {
@@ -580,19 +600,100 @@ fun UserProfileScreen(
         }
     }
 
+    val bannerExpandAnim = remember { Animatable(0f) }
+    var websiteSheetUrl by remember { mutableStateOf<String?>(null) }
+    var websiteSheetCta by remember { mutableStateOf("Open") }
+
+    val bannerNestedScroll = remember(gridState, scope) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (available.y < 0f && bannerExpandAnim.value > 0f) {
+                    val next = (bannerExpandAnim.value + available.y / 380f).coerceAtLeast(0f)
+                    val deltaConsumed = (next - bannerExpandAnim.value) * 380f
+                    scope.launch { bannerExpandAnim.snapTo(next) }
+                    return Offset(0f, deltaConsumed)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                val atTop = gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
+                if (source == NestedScrollSource.Drag && atTop && available.y > 0f && consumed.y == 0f) {
+                    val next = (bannerExpandAnim.value + available.y / 380f).coerceIn(0f, 1.35f)
+                    scope.launch { bannerExpandAnim.snapTo(next) }
+                    return available
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (bannerExpandAnim.value > 0f) {
+                    val target = if (bannerExpandAnim.value > 0.36f) 1f else 0f
+                    scope.launch {
+                        bannerExpandAnim.animateTo(
+                            targetValue = target,
+                            animationSpec = spring(dampingRatio = 0.78f, stiffness = 360f)
+                        )
+                    }
+                }
+                return Velocity.Zero
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.bg)
+            .background(OscellionProfilePalette.sheetBg(colors.isDark))
     ) {
-        // Unified 3-Column Grid for entire screen: eliminates nested scrolling & lag
+        val tabsCount = profileTabIcons.size
+        // Unified 3-Column Grid for entire screen + horizontal swipe to switch tabs
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             state = gridState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(bannerNestedScroll)
+                .pointerInput(tabsCount, selectedTabIndex) {
+                    val slop = viewConfiguration.touchSlop
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var totalDx = 0f
+                        var totalDy = 0f
+                        var switched = false
+                        var prevPos = down.position
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            val dx = change.position.x - prevPos.x
+                            val dy = change.position.y - prevPos.y
+                            prevPos = change.position
+                            totalDx += dx
+                            totalDy += dy
+                            if (!switched && abs(totalDx) > 96f && abs(totalDx) > abs(totalDy) * 1.6f && abs(totalDx) > slop) {
+                                val nextIdx = if (totalDx < 0f) {
+                                    (selectedTabIndex + 1).coerceAtMost(tabsCount - 1)
+                                } else {
+                                    (selectedTabIndex - 1).coerceAtLeast(0)
+                                }
+                                if (nextIdx != selectedTabIndex) {
+                                    com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                    selectedTabIndex = nextIdx
+                                }
+                                switched = true
+                                change.consume()
+                            }
+                        }
+                    }
+                },
             contentPadding = PaddingValues(bottom = 120.dp),
-            horizontalArrangement = Arrangement.spacedBy(1.5.dp),
-            verticalArrangement = Arrangement.spacedBy(1.5.dp)
+            horizontalArrangement = Arrangement.spacedBy(1.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
             // Header Content spans all 3 columns
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -607,6 +708,24 @@ fun UserProfileScreen(
                     isUploading = isMyStoryUploading,
                     isUploadFailed = isMyStoryFailed,
                     isOnlyFriendStory = hasOnlyFriendStory,
+                    bannerProgress = bannerExpandAnim.value,
+                    isStorySeen = false,
+                    isCurrentUser = isCurrentUser,
+                    showBackButton = showBackButton,
+                    onBack = onBack,
+                    onQrClick = { showShareCardModal = true },
+                    onEditBannerClick = { showBannerLibrarySheet = true },
+                    onSettingsClick = { showSettingsBottomSheet = true },
+                    onMoreClick = { showOtherUserOptionsSheet = true },
+                    onBannerTap = {
+                        scope.launch {
+                            val target = if (bannerExpandAnim.value > 0.5f) 0f else 1f
+                            bannerExpandAnim.animateTo(
+                                targetValue = target,
+                                animationSpec = spring(dampingRatio = 0.78f, stiffness = 340f)
+                            )
+                        }
+                    },
                     onPostsClick = {
                         selectedTabIndex = 0
                         scope.launch { gridState.animateScrollToItem(0) }
@@ -695,7 +814,11 @@ fun UserProfileScreen(
                     userId = userId,
                     onShowShareCard = { showShareCardModal = true },
                     onNavigateToUserList = onNavigateToUserList,
-                    onNavigateToProfile = { targetUid -> onNavigateToOriginal(targetUid, "") }
+                    onNavigateToProfile = { targetUid -> onNavigateToOriginal(targetUid, "") },
+                    onOpenWebsiteSheet = { url, cta ->
+                        websiteSheetUrl = url
+                        websiteSheetCta = cta
+                    }
                 )
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -815,12 +938,12 @@ fun UserProfileScreen(
         } else {
             when (selectedTabIndex) {
                 0 -> {
-                    // Works / Creations Tab
-                    if (isWorksLoading) {
+                    // All Content Tab (Works + Photos + Flashes unified stream)
+                    if (isWorksLoading && isFlashesLoading) {
                         items(6) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
-                    } else if (normalWorks.isEmpty()) {
+                    } else if (allCombinedWorks.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             val worksGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
@@ -832,12 +955,12 @@ fun UserProfileScreen(
                                     )
                                 },
                                 title = "No Works Yet",
-                                subtitle = "Creations will appear here once published."
+                                subtitle = "Creations, photos, and videos will appear here once published."
                             )
                         }
                     } else {
-                        items(normalWorks.size, key = { normalWorks[it].id }) { index ->
-                            val work = normalWorks[index]
+                        items(allCombinedWorks.size, key = { allCombinedWorks[it].id }) { index ->
+                            val work = allCombinedWorks[index]
                             ProfileWorkCard(
                                 work = work,
                                 isLiked = likedWorkIds.contains(work.id),
@@ -848,12 +971,12 @@ fun UserProfileScreen(
                     }
                 }
                 1 -> {
-                    // Photos Tab (Images)
+                    // Posts Tab (Photos & Studio Works)
                     if (isWorksLoading) {
                         items(6) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
-                    } else if (imagePosts.isEmpty()) {
+                    } else if (photoAndArtPosts.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             val photosGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
@@ -864,13 +987,13 @@ fun UserProfileScreen(
                                         enableClickToAnimate = true
                                     )
                                 },
-                                title = "No Photos Yet",
-                                subtitle = "Photo posts will appear here once shared."
+                                title = "No Posts Yet",
+                                subtitle = "Photo and studio posts will appear here once shared."
                             )
                         }
                     } else {
-                        items(imagePosts.size, key = { imagePosts[it].id }) { index ->
-                            val work = imagePosts[index]
+                        items(photoAndArtPosts.size, key = { photoAndArtPosts[it].id }) { index ->
+                            val work = photoAndArtPosts[index]
                             ProfileWorkCard(
                                 work = work,
                                 isLiked = likedWorkIds.contains(work.id),
@@ -980,6 +1103,7 @@ fun UserProfileScreen(
                                 work = work,
                                 isLiked = likedWorkIds.contains(work.id),
                                 repository = repository,
+                                showSavedBadge = true,
                                 onClick = { selectedPostIndex = index }
                             )
                         }
@@ -989,202 +1113,347 @@ fun UserProfileScreen(
         }
     }
 
-    // Apple HIG Translucent Navigation Bar
+    // Morphing Sticky Compact Header (slides in smoothly from top once scrolled past banner identity)
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val topBarBg = colors.bg.copy(alpha = (scrollProgress * 0.96f).coerceIn(0f, 0.96f))
-    val topBarBorder = colors.cardBorderSubtle.copy(alpha = scrollProgress * 0.9f)
+    val showCompactHeader by remember {
+        derivedStateOf {
+            gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 92
+        }
+    }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .align(Alignment.TopCenter)
-            .background(topBarBg)
-            .drawBehind {
-                if (topBarBorder.alpha > 0.02f) {
-                    val stroke = 0.5.dp.toPx()
-                    drawLine(
-                        color = topBarBorder,
-                        start = Offset(0f, size.height - stroke / 2f),
-                        end = Offset(size.width, size.height - stroke / 2f),
-                        strokeWidth = stroke
-                    )
-                }
-            }
-            .padding(top = statusBarTop + 6.dp, bottom = 8.dp, start = 16.dp, end = 16.dp)
+    AnimatedVisibility(
+        visible = showCompactHeader,
+        enter = fadeIn(tween(180)) + slideInVertically(initialOffsetY = { -it }),
+        exit = fadeOut(tween(150)) + slideOutVertically(targetOffsetY = { -it }),
+        modifier = Modifier.align(Alignment.TopCenter)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            color = OscellionProfilePalette.sheetBg(colors.isDark).copy(alpha = 0.94f),
+            shadowElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            val topIconBg = Color.Black.copy(alpha = 0.28f * (1f - scrollProgress))
-            val topIconRim = Color.White.copy(alpha = 0.22f * (1f - scrollProgress))
-            val actionIconTint = if (scrollProgress > 0.4f) colors.textMain else Color.White
-
-            // Back button
-            if (showBackButton) {
-                Box(
+            Column(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
+                Row(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(topIconBg)
-                        .then(
-                            if (topIconRim.alpha > 0.02f) Modifier.border(0.5.dp, topIconRim, CircleShape)
-                            else Modifier
-                        )
-                        .clickable {
-                            com.chroma.studio.chat.sound.SoundManager.playReaction()
-                            onBack()
-                        },
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Lucide.ChevronLeft,
-                        contentDescription = "Back",
-                        tint = actionIconTint,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            } else {
-                Spacer(Modifier.size(36.dp))
-            }
+                    val topIconBg = if (colors.isDark) Color(0xFF182030) else Color(0xFFF4F7FD)
+                    val topIconRim = OscellionProfilePalette.hairline(colors.isDark)
+                    val actionIconTint = OscellionProfilePalette.inkPrimary(colors.isDark)
 
-            // Collapsed title when scrolled (iOS inline header transition)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (scrollProgress > 0.08f) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(1.dp),
-                        modifier = Modifier.graphicsLayer {
-                            alpha = ((scrollProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
-                            translationY = (1f - scrollProgress) * 6f
+                    // Left: Back/Top button + 32dp Avatar + Name + Verified + @username (tap identity to scroll top)
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (showBackButton) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(topIconBg)
+                                    .clickable {
+                                        com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                        onBack()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Lucide.ChevronLeft,
+                                    contentDescription = "Back",
+                                    tint = actionIconTint,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    scope.launch { gridState.animateScrollToItem(0) }
+                                }
+                        ) {
+                            val compactAvatar = profile?.avatarUrl.orEmpty().trim()
+                            val compactPreset = remember(compactAvatar) { getAvatarPresetDrawableRes(compactAvatar) }
+                            val compactCustom = compactAvatar.isNotBlank() && !compactAvatar.contains("default_avatar") && compactPreset == null
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .border(1.dp, if (colors.isDark) Color(0xFF283247) else Color(0xFFDCE5F4), CircleShape)
+                                    .clip(CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                when {
+                                    compactPreset != null -> Image(
+                                        painter = painterResource(id = compactPreset),
+                                        contentDescription = profile?.displayName ?: "Avatar",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    compactCustom -> AsyncImage(
+                                        model = compactAvatar,
+                                        contentDescription = profile?.displayName ?: "Avatar",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    else -> MacOsDefaultAvatarCanvas(modifier = Modifier.fillMaxSize())
+                                }
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = profile?.displayName ?: "",
+                                        color = actionIconTint,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.5.sp,
+                                        fontFamily = InterFontFamily,
+                                        lineHeight = 16.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = ScreenTightTextStyle,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    if (profile?.verified == true) {
+                                        VerifiedBadge(
+                                            size = 14.dp,
+                                            tone = profile?.verifiedTone,
+                                            userId = profile?.uid ?: userId,
+                                            showGlow = false
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = "@${profile?.username ?: ""}",
+                                    color = OscellionProfilePalette.inkMuted(colors.isDark),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = InterFontFamily,
+                                    lineHeight = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = ScreenTightTextStyle
+                                )
+                            }
+                        }
+                    }
+
+                    // Right: Compact Follow/Edit pill + 32dp QR Card trigger
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(start = 8.dp)
                     ) {
-                        Text(
-                            text = profile?.displayName ?: "",
-                            color = colors.textMain,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            fontFamily = InterFontFamily,
-                            lineHeight = 17.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = ScreenTightTextStyle
-                        )
-                        Text(
-                            text = "@${profile?.username ?: ""}",
-                            color = colors.textMuted,
-                            fontSize = 11.5.sp,
-                            fontFamily = InterFontFamily,
-                            lineHeight = 13.5.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = ScreenTightTextStyle
-                        )
+                        if (isCurrentUser) {
+                            Box(
+                                modifier = Modifier
+                                    .height(32.dp)
+                                    .clip(CircleShape)
+                                    .background(topIconBg)
+                                    .border(0.75.dp, topIconRim, CircleShape)
+                                    .clickable {
+                                        com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                        onNavigateToEditProfile()
+                                    }
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Edit",
+                                    color = actionIconTint,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    style = ScreenTightTextStyle
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(topIconBg)
+                                    .clickable {
+                                        com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                        showShareCardModal = true
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Lucide.QrCode,
+                                    contentDescription = "Profile Card",
+                                    tint = actionIconTint,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(topIconBg)
+                                    .clickable {
+                                        com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                        showSettingsBottomSheet = true
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Lucide.Settings,
+                                    contentDescription = "Settings",
+                                    tint = actionIconTint,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        } else {
+                            if (isFollowingEffective || isFollowRequested) {
+                                Box(
+                                    modifier = Modifier
+                                        .height(32.dp)
+                                        .clip(CircleShape)
+                                        .background(topIconBg)
+                                        .border(0.75.dp, topIconRim, CircleShape)
+                                        .clickable {
+                                            if (currentUserId == null) onRequireLogin()
+                                            else {
+                                                val isPrivate = profile?.isPrivateAccount == true
+                                                if (isPrivate && !isFollowingEffective) {
+                                                    isFollowRequested = false
+                                                    scope.launch { discoverVm.repository.setFollow(currentUserId, userId, false) }
+                                                } else {
+                                                    discoverVm.toggleFollow(userId, currentUserId, baseFollowing = isFollowingEffective)
+                                                }
+                                            }
+                                        }
+                                        .padding(horizontal = 14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (isFollowingEffective) "Following" else "Requested",
+                                        color = actionIconTint,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        style = ScreenTightTextStyle
+                                    )
+                                }
+                            } else {
+                                OscellionPrimaryGradientButton(
+                                    onClick = {
+                                        if (currentUserId == null) onRequireLogin()
+                                        else {
+                                            val isPrivate = profile?.isPrivateAccount == true
+                                            if (isPrivate) {
+                                                isFollowRequested = true
+                                                scope.launch { discoverVm.repository.setFollow(currentUserId, userId, true) }
+                                            } else {
+                                                discoverVm.toggleFollow(userId, currentUserId, baseFollowing = false)
+                                            }
+                                        }
+                                    },
+                                    height = 32.dp
+                                ) {
+                                    Text(
+                                        text = "Follow",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(horizontal = 14.dp),
+                                        style = ScreenTightTextStyle
+                                    )
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(topIconBg)
+                                    .clickable {
+                                        com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                        showShareCardModal = true
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Lucide.QrCode,
+                                    contentDescription = "Show Profile Card",
+                                    tint = actionIconTint,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
                     }
                 }
+                HorizontalDivider(thickness = 1.dp, color = OscellionProfilePalette.hairline(colors.isDark))
             }
+        }
+    }
 
-            // Action Menu
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (isCurrentUser) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(topIconBg)
-                            .then(
-                                if (topIconRim.alpha > 0.02f) Modifier.border(0.5.dp, topIconRim, CircleShape)
-                                else Modifier
-                            )
-                            .clickable {
-                                com.chroma.studio.chat.sound.SoundManager.playReaction()
-                                showBannerLibrarySheet = true
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Lucide.Pencil,
-                            contentDescription = "Edit Banner",
-                            tint = actionIconTint,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+    // Floating Draggable 50x50 Vinyl Music Player
+    if (selectedPostIndex == null && !showStoryViewer && !showAvatarOverlay) {
+        FloatingDraggableProfileMusicPlayer(
+            profile = effectiveProfile,
+            works = works,
+            flashes = flashPosts,
+            context = context,
+            isDark = colors.isDark
+        )
+    }
 
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(topIconBg)
-                            .then(
-                                if (topIconRim.alpha > 0.02f) Modifier.border(0.5.dp, topIconRim, CircleShape)
-                                else Modifier
-                            )
-                            .clickable {
-                                com.chroma.studio.chat.sound.SoundManager.playReaction()
-                                showSettingsBottomSheet = true
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Lucide.Settings,
-                            contentDescription = "Settings",
-                            tint = actionIconTint,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(topIconBg)
-                            .then(
-                                if (topIconRim.alpha > 0.02f) Modifier.border(0.5.dp, topIconRim, CircleShape)
-                                else Modifier
-                            )
-                            .clickable {
-                                com.chroma.studio.chat.sound.SoundManager.playReaction()
-                                showShareCardModal = true
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Lucide.Share2,
-                            contentDescription = "Share Card",
-                            tint = actionIconTint,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+    // Clean Website URL Bottom Slider (displays only complete URL + single CTA button)
+    OscellionBottomSlider(
+        visible = websiteSheetUrl != null,
+        isDark = colors.isDark,
+        onDismiss = { websiteSheetUrl = null }
+    ) {
+        val targetUrl = websiteSheetUrl ?: ""
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = targetUrl,
+                color = OscellionProfilePalette.inkPrimary(colors.isDark),
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.Medium,
+                lineHeight = 20.sp,
+                style = ScreenTightTextStyle
+            )
 
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(topIconBg)
-                            .then(
-                                if (topIconRim.alpha > 0.02f) Modifier.border(0.5.dp, topIconRim, CircleShape)
-                                else Modifier
-                            )
-                            .clickable {
-                                com.chroma.studio.chat.sound.SoundManager.playReaction()
-                                showOtherUserOptionsSheet = true
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Lucide.EllipsisVertical,
-                            contentDescription = "More Options",
-                            tint = actionIconTint,
-                            modifier = Modifier.size(16.dp)
-                        )
+            OscellionPrimaryGradientButton(
+                onClick = {
+                    val openTarget = targetUrl
+                    websiteSheetUrl = null
+                    try {
+                        com.chroma.studio.ui.components.InAppBrowserManager.openUrl(openTarget)
+                    } catch (_: Exception) {
+                        ToastManager.showToast("Could not open link")
                     }
-                }
+                },
+                height = 46.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = websiteSheetCta,
+                    color = Color.White,
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    style = ScreenTightTextStyle
+                )
             }
         }
     }
@@ -1223,10 +1492,10 @@ fun UserProfileScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         if (selectedPostIndex != null) {
-            val activeList = remember(selectedTabIndex, normalWorks, imagePosts, flashDiscoverPosts, remixWorks, savedWorks, works) {
+            val activeList = remember(selectedTabIndex, allCombinedWorks, photoAndArtPosts, flashDiscoverPosts, remixWorks, savedWorks, works) {
                 when (selectedTabIndex) {
-                    0 -> normalWorks
-                    1 -> imagePosts
+                    0 -> allCombinedWorks
+                    1 -> photoAndArtPosts
                     2 -> flashDiscoverPosts
                     3 -> remixWorks
                     4 -> savedWorks
@@ -2038,129 +2307,104 @@ private fun UserProfileModalsAndSheets(
 
     if (showOtherUserOptionsSheet) {
         val isDark = colors.isDark
+        val rowDivider = if (isDark) Color(0xFF1F2633) else Color(0xFFEEF2F9)
+        val rowText = if (isDark) Color(0xFFF5F8FF) else Color(0xFF070B18)
+        val mutedIcon = if (isDark) Color(0xFF94A3B8) else Color(0xFF525E75)
         ModalBottomSheet(
             onDismissRequest = onDismissOtherUserOptions,
-            containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F4F7),
-            dragHandle = { BottomSheetDefaults.DragHandle() },
+            containerColor = if (isDark) Color(0xFF151B27) else Color.White,
+            dragHandle = {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 12.dp, bottom = 6.dp)
+                        .width(40.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(if (isDark) Color(0xFF3A4458) else Color(0xFFDCE4F0))
+                )
+            },
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             windowInsets = WindowInsets(0.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp)
                     .navigationBarsPadding()
-                    .padding(bottom = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(bottom = 24.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Profile Options",
-                        color = if (isDark) Color.White else Color(0xFF0F172A),
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        fontFamily = InterFontFamily
-                    )
-                    IconButton(
-                        onClick = onDismissOtherUserOptions,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(Lucide.X, contentDescription = "Close", tint = if (isDark) Color.White else Color(0xFF0F172A), modifier = Modifier.size(18.dp))
+                ProfileOptionSheetRow(
+                    title = "Share Profile Card",
+                    icon = Lucide.QrCode,
+                    iconTint = Color(0xFF0064FA),
+                    textColor = rowText,
+                    onClick = {
+                        onDismissOtherUserOptions()
+                        onShowShareCardModal()
                     }
-                }
+                )
+                HorizontalDivider(color = rowDivider, thickness = 0.75.dp)
 
-                OneUiSettingsGroup(title = "Actions") {
-                    OneUiSettingsNavRow(
-                        title = "Share Profile",
-                        subtitle = "Share @${profile?.username ?: ""} with others",
-                        icon = Lucide.Share2,
-                        iconColor = Color(0xFF0055FF),
-                        onClick = {
-                            onDismissOtherUserOptions()
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, "Check out @${profile?.username ?: ""} on Oscellion: https://oscellion.vercel.app/u/${profile?.username ?: ""}")
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Profile"))
-                        }
-                    )
-                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
-                    OneUiSettingsNavRow(
-                        title = "Copy Profile Link",
-                        subtitle = "oscellion.vercel.app/u/${profile?.username ?: ""}",
-                        icon = Lucide.Copy,
-                        iconColor = Color(0xFF0055FF),
-                        onClick = {
-                            onDismissOtherUserOptions()
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("profile_link", "https://oscellion.vercel.app/u/${profile?.username ?: ""}"))
-                            ToastManager.showToast("Profile link copied")
-                        }
-                    )
-                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
-                    OneUiSettingsNavRow(
-                        title = "Profile Pass Card",
-                        subtitle = "View scannable digital card",
-                        icon = Lucide.QrCode,
-                        iconColor = Color(0xFF0055FF),
-                        onClick = {
-                            onDismissOtherUserOptions()
-                            onShowShareCardModal()
-                        }
-                    )
-                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
-                    OneUiSettingsNavRow(
-                        title = "Direct Message",
-                        subtitle = "Open conversation with @${profile?.username ?: ""}",
-                        icon = Lucide.MessageSquare,
-                        iconColor = Color(0xFF0055FF),
-                        onClick = {
-                            onDismissOtherUserOptions()
-                            onNavigateToChat?.invoke(userId)
-                        }
-                    )
-                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
-                    OneUiSettingsNavRow(
-                        title = if (isMutedStories) "Unmute Stories" else "Mute Stories",
-                        subtitle = if (isMutedStories) "Show stories in feed" else "Hide stories from feed",
-                        icon = if (isMutedStories) Lucide.Bell else Lucide.BellOff,
-                        iconColor = Color(0xFF0055FF),
-                        onClick = {
-                            onDismissOtherUserOptions()
-                            onToggleMuteStories()
-                        }
-                    )
-                }
+                ProfileOptionSheetRow(
+                    title = "Copy Profile URL",
+                    icon = Lucide.Copy,
+                    iconTint = mutedIcon,
+                    textColor = rowText,
+                    onClick = {
+                        onDismissOtherUserOptions()
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("profile_link", "https://oscellion.vercel.app/u/${profile?.username ?: ""}"))
+                        ToastManager.showToast("Profile link copied!")
+                    }
+                )
+                HorizontalDivider(color = rowDivider, thickness = 0.75.dp)
 
-                OneUiSettingsGroup(title = "Safety & Reporting") {
-                    OneUiSettingsNavRow(
-                        title = "Block User",
-                        subtitle = "Prevent @${profile?.username ?: ""} from contacting you",
-                        icon = Lucide.Ban,
-                        iconColor = Color(0xFFEF4444),
-                        isDestructive = true,
-                        onClick = {
-                            onDismissOtherUserOptions()
-                            onShowBlockConfirmDialog(true)
-                        }
-                    )
-                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
-                    OneUiSettingsNavRow(
-                        title = "Report Account",
-                        subtitle = "Report spam, abuse, or safety violation",
-                        icon = Lucide.Flag,
-                        iconColor = Color(0xFFEF4444),
-                        isDestructive = true,
-                        onClick = {
-                            onDismissOtherUserOptions()
-                            onShowReportUserSheet(true)
-                        }
-                    )
-                }
+                ProfileOptionSheetRow(
+                    title = "Direct Message",
+                    icon = Lucide.MessageCircle,
+                    iconTint = mutedIcon,
+                    textColor = rowText,
+                    onClick = {
+                        onDismissOtherUserOptions()
+                        onNavigateToChat?.invoke(userId)
+                    }
+                )
+                HorizontalDivider(color = rowDivider, thickness = 0.75.dp)
+
+                ProfileOptionSheetRow(
+                    title = if (isMutedStories) "Unmute Stories" else "Mute Stories",
+                    icon = if (isMutedStories) Lucide.Bell else Lucide.BellOff,
+                    iconTint = mutedIcon,
+                    textColor = rowText,
+                    onClick = {
+                        onDismissOtherUserOptions()
+                        onToggleMuteStories()
+                    }
+                )
+                HorizontalDivider(color = rowDivider, thickness = 0.75.dp)
+
+                ProfileOptionSheetRow(
+                    title = "Report Account",
+                    icon = Lucide.Flag,
+                    iconTint = Color(0xFFDC2626),
+                    textColor = Color(0xFFDC2626),
+                    onClick = {
+                        onDismissOtherUserOptions()
+                        onShowReportUserSheet(true)
+                    }
+                )
+                HorizontalDivider(color = rowDivider, thickness = 0.75.dp)
+
+                ProfileOptionSheetRow(
+                    title = "Block User",
+                    icon = Lucide.Ban,
+                    iconTint = Color(0xFFDC2626),
+                    textColor = Color(0xFFDC2626),
+                    onClick = {
+                        onDismissOtherUserOptions()
+                        onShowBlockConfirmDialog(true)
+                    }
+                )
             }
         }
     }
@@ -2999,10 +3243,43 @@ fun ProfileFlashCard(
 }
 
 @Composable
+private fun ProfileOptionSheetRow(
+    title: String,
+    icon: ImageVector,
+    iconTint: Color,
+    textColor: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = title,
+            color = textColor,
+            fontSize = 14.5.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
 fun ProfileWorkCard(
     work: DiscoverPost,
     isLiked: Boolean,
     repository: WorkRepository,
+    showSavedBadge: Boolean = false,
     onClick: () -> Unit
 ) {
     var layers by remember(work.jsonUrl) { mutableStateOf<List<com.chroma.studio.model.GradientLayer>?>(LayerCache.get(work.jsonUrl)) }
@@ -3015,17 +3292,21 @@ fun ProfileWorkCard(
         }
     }
 
+    val isFlashTile = isVideoPost(work) || work.postType == "video"
+    val isRemixTile = work.remixedFromPostId != null
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .clip(RectangleShape)
-            .background(Color.Gray.copy(alpha = 0.15f))
+            .background(Color(0xFFEEF3FB))
             .clickable { onClick() }
     ) {
-        if (work.postType == "image" && !work.imageUrl.isNullOrBlank()) {
+        val previewImage = work.thumbnailUrl?.takeIf { it.isNotBlank() } ?: work.imageUrl?.takeIf { it.isNotBlank() }
+        if (previewImage != null && (work.postType == "image" || isFlashTile || layers.isNullOrEmpty())) {
             AsyncImage(
-                model = work.imageUrl,
+                model = previewImage,
                 contentDescription = work.title,
                 modifier = Modifier
                     .fillMaxSize()
@@ -3043,43 +3324,70 @@ fun ProfileWorkCard(
             )
         }
 
-        val effectiveLikes = maxOf(work.likesCount, work.likedBy.size)
-        if (effectiveLikes > 0 || isLiked) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black.copy(alpha = 0.45f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = ChromaIcons.HeartFilled,
-                    contentDescription = null,
-                    tint = if (isLiked) Color(0xFFFF2D55) else Color.White,
-                    modifier = Modifier.size(11.dp)
-                )
-                if (effectiveLikes > 0) {
-                    Spacer(Modifier.width(3.dp))
-                    Text(
-                        text = effectiveLikes.toString(),
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+        when {
+            showSavedBadge -> {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xE60064FA)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Bookmark,
+                        contentDescription = "Saved",
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
                     )
                 }
             }
-        } else if (work.remixCount > 0) {
-            Icon(
-                Lucide.HeartHandshake,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .size(14.dp)
-            )
+            isFlashTile -> {
+                val durText = work.musicDurationSec.takeIf { it > 0 }?.let { sec ->
+                    "%d:%02d".format(sec / 60, sec % 60)
+                } ?: "Flash"
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xB3070B18))
+                        .padding(horizontal = 6.dp, vertical = 2.5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.Zap,
+                        contentDescription = "Flash",
+                        tint = Color.White,
+                        modifier = Modifier.size(10.dp)
+                    )
+                    Text(
+                        text = durText,
+                        color = Color.White,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        style = ScreenTightTextStyle.copy(fontFeatureSettings = "tnum")
+                    )
+                }
+            }
+            isRemixTile -> {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xA6070B18)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    RemixHeartHandshakeVectorIcon(
+                        tint = Color.White,
+                        modifier = Modifier.size(13.5.dp)
+                    )
+                }
+            }
         }
 
         if (work.collaboratorIds.isNotEmpty()) {

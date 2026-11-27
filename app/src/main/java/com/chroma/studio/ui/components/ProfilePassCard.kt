@@ -14,6 +14,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -22,10 +23,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -42,12 +45,19 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -884,8 +894,598 @@ private suspend fun savePassCardImageToGallery(
     }
 }
 
+private suspend fun saveModernBlueCardToGallery(
+    context: Context,
+    profile: UserProfile,
+    userId: String,
+    profileShareUrl: String
+): Boolean = withContext(Dispatchers.IO) {
+    try {
+        val width = 1280
+        val height = 720
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        // Base electric royal navy gradient
+        val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+                0f, 0f, width.toFloat(), height.toFloat(),
+                intArrayOf(0xFF0A32A3.toInt(), 0xFF0064FA.toInt(), 0xFF3E95FF.toInt()),
+                floatArrayOf(0f, 0.45f, 1f),
+                Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()), 64f, 64f, basePaint)
+
+        // Sculpted deep sapphire waves matching ModernBlueProfileCard
+        val sx = width / 400f
+        val sy = height / 225f
+        val wave1 = android.graphics.Path().apply {
+            moveTo(-20f * sx, 90f * sy)
+            cubicTo(90f * sx, 30f * sy, 180f * sx, 160f * sy, 290f * sx, 95f * sy)
+            cubicTo(360f * sx, 55f * sy, 410f * sx, 100f * sy, 430f * sx, 85f * sy)
+            lineTo(430f * sx, 240f * sy)
+            lineTo(-20f * sx, 240f * sy)
+            close()
+        }
+        canvas.drawPath(
+            wave1,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = LinearGradient(0f, 30f * sy, width.toFloat(), height.toFloat(), 0x99002073.toInt(), 0x8C004AE0.toInt(), Shader.TileMode.CLAMP)
+            }
+        )
+        val wave2 = android.graphics.Path().apply {
+            moveTo(-20f * sx, 150f * sy)
+            cubicTo(85f * sx, 195f * sy, 165f * sx, 105f * sy, 265f * sx, 155f * sy)
+            cubicTo(335f * sx, 190f * sy, 395f * sx, 140f * sy, 430f * sx, 155f * sy)
+            lineTo(430f * sx, 240f * sy)
+            lineTo(-20f * sx, 240f * sy)
+            close()
+        }
+        canvas.drawPath(
+            wave2,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = LinearGradient(0f, 110f * sy, width.toFloat(), height.toFloat(), 0x59FFFFFF, 0xCC001657.toInt(), Shader.TileMode.CLAMP)
+            }
+        )
+
+        // Left identity text & OSCELLION brand
+        val badgeBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFFFFFC.toInt()
+        }
+        val brandX = 112f
+        val brandY = 230f
+        canvas.drawCircle(brandX, brandY, 24f, badgeBg)
+        val brandStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = 0xFF0057E3.toInt()
+            strokeWidth = 4.5f
+            strokeCap = Paint.Cap.ROUND
+        }
+        canvas.drawCircle(brandX, brandY, 13f, brandStroke)
+
+        val brandTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFEBF3FF.toInt()
+            textSize = 26f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            letterSpacing = 0.22f
+        }
+        canvas.drawText("OSCELLION", brandX + 38f, brandY + 9f, brandTextPaint)
+
+        val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            textSize = 54f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val displayName = profile.displayName.ifBlank { profile.username.ifBlank { "Oscellion Creator" } }
+        canvas.drawText(displayName.take(24), 88f, 340f, namePaint)
+
+        val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFDCEBFF.toInt()
+            textSize = 34f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val handle = "@${profile.username.ifBlank { userId.take(10) }}"
+        canvas.drawText(handle, 88f, 396f, handlePaint)
+
+        val pillRect = RectF(88f, 456f, 430f, 520f)
+        canvas.drawRoundRect(pillRect, 32f, 32f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x26FFFFFF })
+        canvas.drawRoundRect(
+            pillRect,
+            32f,
+            32f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 2f
+                color = 0x45FFFFFF
+            }
+        )
+        val scanPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            textSize = 24f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        canvas.drawText("Scan to view profile", 140f, 496f, scanPaint)
+
+        // White QR Card on Right
+        val qrCardRect = RectF(780f, 120f, 1188f, 600f)
+        canvas.drawRoundRect(qrCardRect, 48f, 48f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xF7FFFFFF.toInt() })
+        val qrBmp = generateQrBitmap(profileShareUrl, sizePx = 340, foregroundColor = 0xFF0A1628.toInt())
+        if (qrBmp != null) {
+            canvas.drawBitmap(qrBmp, 814f, 190f, null)
+            qrBmp.recycle()
+        }
+
+        val filename = "Oscellion_Card_${profile.username.ifBlank { userId }}_${System.currentTimeMillis()}.png"
+        val saved: Boolean
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Oscellion")
+            }
+            val resolver = context.contentResolver
+            val imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+            saved = imageUri?.let { uri ->
+                resolver.openOutputStream(uri)?.use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out) }
+                true
+            } ?: false
+        } else {
+            @Suppress("DEPRECATION")
+            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Oscellion")
+            if (!dir.exists()) dir.mkdirs()
+            val outFile = File(dir, filename)
+            FileOutputStream(outFile).use { out -> bitmap.compress(Bitmap.CompressFormat.PNG, 100, out) }
+            saved = true
+        }
+        bitmap.recycle()
+        saved
+    } catch (_: Exception) {
+        false
+    }
+}
+
+@Composable
+private fun ModernBlueCardBrandCircle(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val s = minOf(w, h) / 48f
+        drawCircle(color = Color(0xFAFFFFFF), radius = minOf(w, h) / 2f)
+        drawCircle(
+            color = Color(0xFF0057E3),
+            radius = 12.2f * s,
+            center = Offset(24f * s, 24f * s),
+            style = Stroke(width = 4.6f * s, cap = StrokeCap.Round)
+        )
+        drawArc(
+            color = Color(0xFF00A3FF),
+            startAngle = -55f,
+            sweepAngle = 155f,
+            useCenter = false,
+            topLeft = Offset(14.5f * s, 14.5f * s),
+            size = Size(19f * s, 19f * s),
+            style = Stroke(width = 3.6f * s, cap = StrokeCap.Round)
+        )
+    }
+}
+
+@Composable
+private fun ModernBlueCardWavesCanvas(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+
+        // Base rich blue gradient
+        drawRect(
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFF002CA0), Color(0xFF034DD8), Color(0xFF013BC2), Color(0xFF002B9E)),
+                start = Offset.Zero,
+                end = Offset(w, h)
+            )
+        )
+
+        // Top sky bloom
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFF8DD4FF).copy(alpha = 0.96f),
+                    Color(0xFF2D96FF).copy(alpha = 0.80f),
+                    Color(0xFF095FF0).copy(alpha = 0.40f),
+                    Color.Transparent
+                ),
+                center = Offset(w * 0.67f, h * 0.04f),
+                radius = w * 0.54f
+            )
+        )
+
+        // Bottom-left glow
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFF45A9FF).copy(alpha = 0.85f),
+                    Color(0xFF1372FF).copy(alpha = 0.50f),
+                    Color.Transparent
+                ),
+                center = Offset(w * 0.11f, h * 0.95f),
+                radius = w * 0.48f
+            )
+        )
+
+        // Right wedge highlight
+        val rightWedge = Path().apply {
+            moveTo(w, h * 0.18f)
+            cubicTo(w * 0.88f, h * 0.31f, w * 0.79f, h * 0.48f, w * 0.74f, h * 0.73f)
+            cubicTo(w * 0.715f, h * 0.83f, w * 0.70f, h * 0.92f, w * 0.695f, h)
+            lineTo(w, h)
+            close()
+        }
+        drawPath(
+            path = rightWedge,
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFF2994FF).copy(alpha = 0.70f),
+                    Color(0xFF0D69F4).copy(alpha = 0.46f),
+                    Color(0xFF0341BE).copy(alpha = 0.14f)
+                ),
+                start = Offset(w * 0.95f, h * 0.18f),
+                end = Offset(w * 0.68f, h * 0.95f)
+            )
+        )
+
+        // Top-Left Outer Wave
+        val tlOuter = Path().apply {
+            moveTo(0f, h * 0.385f)
+            cubicTo(w * 0.145f, h * 0.32f, w * 0.29f, h * 0.225f, w * 0.40f, 0f)
+            lineTo(0f, 0f)
+            close()
+        }
+        drawPath(
+            path = tlOuter,
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFF002EA8), Color(0xFF0A5CE8), Color(0xFF2D8EFF), Color(0xFF69C1FF)),
+                start = Offset(w * 0.05f, h * 0.05f),
+                end = Offset(w * 0.40f, h * 0.38f)
+            )
+        )
+
+        // Top-Left Inner Wave + Crisp Rim
+        val tlInner = Path().apply {
+            moveTo(0f, h * 0.27f)
+            cubicTo(w * 0.108f, h * 0.225f, w * 0.22f, h * 0.15f, w * 0.29f, 0f)
+            lineTo(0f, 0f)
+            close()
+        }
+        drawPath(
+            path = tlInner,
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFF00299E), Color(0xFF0A5BE6), Color(0xFF359AFF), Color(0xFF87D2FF)),
+                start = Offset.Zero,
+                end = Offset(w * 0.29f, h * 0.27f)
+            )
+        )
+        val tlRim = Path().apply {
+            moveTo(0f, h * 0.27f)
+            cubicTo(w * 0.108f, h * 0.225f, w * 0.22f, h * 0.15f, w * 0.29f, 0f)
+        }
+        drawPath(
+            path = tlRim,
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFF67BCFF).copy(alpha = 0.4f), Color.White.copy(alpha = 0.9f)),
+                start = Offset(0f, h * 0.27f),
+                end = Offset(w * 0.29f, 0f)
+            ),
+            style = Stroke(width = 2.4f, cap = StrokeCap.Round)
+        )
+
+        // Bottom-Right Outer Wave
+        val brOuter = Path().apply {
+            moveTo(w * 0.50f, h)
+            cubicTo(w * 0.62f, h * 0.83f, w * 0.78f, h * 0.75f, w, h * 0.76f)
+            lineTo(w, h)
+            close()
+        }
+        drawPath(
+            path = brOuter,
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFF5DB9FF), Color(0xFF1978FC), Color(0xFF044AD0), Color(0xFF002DA3)),
+                start = Offset(w * 0.50f, h * 0.74f),
+                end = Offset(w, h)
+            )
+        )
+
+        // Bottom-Right Front Wave + Rim
+        val brFront = Path().apply {
+            moveTo(w * 0.685f, h)
+            cubicTo(w * 0.775f, h * 0.83f, w * 0.89f, h * 0.725f, w, h * 0.68f)
+            lineTo(w, h)
+            close()
+        }
+        drawPath(
+            path = brFront,
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFF88D4FF), Color(0xFF2D93FF), Color(0xFF085AE6), Color(0xFF0035B8)),
+                start = Offset(w * 0.68f, h * 0.68f),
+                end = Offset(w, h)
+            )
+        )
+        val brRim = Path().apply {
+            moveTo(w * 0.685f, h)
+            cubicTo(w * 0.775f, h * 0.83f, w * 0.89f, h * 0.725f, w, h * 0.68f)
+        }
+        drawPath(
+            path = brRim,
+            brush = Brush.linearGradient(
+                colors = listOf(Color(0xFF9CD7FF).copy(alpha = 0.72f), Color.White.copy(alpha = 0.92f)),
+                start = Offset(w * 0.685f, h),
+                end = Offset(w, h * 0.68f)
+            ),
+            style = Stroke(width = 2.6f, cap = StrokeCap.Round)
+        )
+    }
+}
+
+@Composable
+private fun ModernBlueCardView(
+    profile: UserProfile,
+    userId: String,
+    profileShareUrl: String,
+    qrBitmap: Bitmap?,
+    onQrClick: () -> Unit
+) {
+    val cleanAvatar = profile.avatarUrl.trim()
+    val presetRes = remember(cleanAvatar) { getAvatarPresetDrawableRes(cleanAvatar) }
+    val isCustomPhoto = cleanAvatar.isNotBlank() && !cleanAvatar.contains("default_avatar") && presetRes == null
+    val handle = profile.username.ifBlank { userId.take(10) }
+
+    var tiltX by remember { mutableFloatStateOf(0f) }
+    var tiltY by remember { mutableFloatStateOf(0f) }
+    val animTiltX by animateFloatAsState(
+        targetValue = tiltX,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 280f),
+        label = "cardTiltX"
+    )
+    val animTiltY by animateFloatAsState(
+        targetValue = tiltY,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 280f),
+        label = "cardTiltY"
+    )
+
+    val sheenInfinite = rememberInfiniteTransition(label = "cardSheen")
+    val autoSheen by sheenInfinite.animateFloat(
+        initialValue = -0.35f,
+        targetValue = 1.45f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4200, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "autoSheen"
+    )
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                rotationX = animTiltX
+                rotationY = animTiltY
+                cameraDistance = 18f * density
+            }
+            .shadow(
+                elevation = 22.dp,
+                shape = RoundedCornerShape(24.dp),
+                ambientColor = Color(0x660064FA),
+                spotColor = Color(0x700039AD)
+            )
+            .clip(RoundedCornerShape(24.dp))
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragEnd = { tiltX = 0f; tiltY = 0f },
+                    onDragCancel = { tiltX = 0f; tiltY = 0f },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        tiltY = (tiltY + dragAmount.x * 0.14f).coerceIn(-12f, 12f)
+                        tiltX = (tiltX - dragAmount.y * 0.14f).coerceIn(-9f, 9f)
+                    }
+                )
+            }
+    ) {
+        val cqw = (maxWidth.value / 100f).coerceAtLeast(2.4f)
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+        ) {
+            ModernBlueCardWavesCanvas(modifier = Modifier.fillMaxSize())
+
+            // Dynamic specular sheen across the card face
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val offset = autoSheen * size.width * 1.4f
+                val band = Path().apply {
+                    moveTo(offset - size.width * 0.18f, 0f)
+                    lineTo(offset + size.width * 0.06f, 0f)
+                    lineTo(offset - size.width * 0.34f, size.height)
+                    lineTo(offset - size.width * 0.58f, size.height)
+                    close()
+                }
+                drawPath(band, Color(0x16FFFFFF))
+            }
+
+            // Glass inner stroke
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .border(1.2.dp, Color(0x52FFFFFF), RoundedCornerShape(24.dp))
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = (4.2f * cqw).dp, end = (4.1f * cqw).dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 1. Left: Large 22.6cqw Circular Avatar with Ice-White Ring
+                Box(
+                    modifier = Modifier
+                        .size((22.6f * cqw).dp)
+                        .offset(y = (-1.8f * cqw).dp)
+                        .shadow(14.dp, CircleShape, ambientColor = Color(0x80000E44), spotColor = Color(0x80000E44))
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color.White, Color(0xFFDFEEFF), Color(0xFFCFE5FF))
+                            )
+                        )
+                        .padding((0.48f * cqw).dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF173E8F)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        presetRes != null -> {
+                            Image(
+                                painter = painterResource(id = presetRes),
+                                contentDescription = profile.displayName,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().clip(CircleShape)
+                            )
+                        }
+                        isCustomPhoto -> {
+                            AsyncImage(
+                                model = cleanAvatar,
+                                contentDescription = profile.displayName,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().clip(CircleShape)
+                            )
+                        }
+                        else -> {
+                            com.chroma.studio.ui.screens.MacOsDefaultAvatarCanvas(modifier = Modifier.fillMaxSize())
+                        }
+                    }
+                }
+
+                // 2. Center: Display Name + VerifiedBadge + @username + Frosted Scan Pill
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = (3.15f * cqw).dp, end = (2.2f * cqw).dp)
+                        .offset(y = (0.5f * cqw).dp),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy((1.05f * cqw).dp)
+                    ) {
+                        Text(
+                            text = profile.displayName.ifBlank { handle },
+                            fontSize = (4.15f * cqw).sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (profile.verified) {
+                            VerifiedBadge(
+                                size = (3.4f * cqw).dp,
+                                tone = profile.verifiedTone,
+                                userId = profile.uid
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "@$handle",
+                        fontSize = (2.45f * cqw).sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xE0CEE3FF),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = (0.65f * cqw).dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .padding(top = (2.55f * cqw).dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color(0x29FFFFFF), Color(0x17FFFFFF))
+                                )
+                            )
+                            .border(0.8.dp, Color(0x57FFFFFF), CircleShape)
+                            .padding(
+                                start = (1.85f * cqw).dp,
+                                end = (2.15f * cqw).dp,
+                                top = (1.05f * cqw).dp,
+                                bottom = (1.05f * cqw).dp
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy((1.25f * cqw).dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.ScanLine,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size((2.3f * cqw).dp)
+                        )
+                        Text(
+                            text = "Scan to view profile",
+                            fontSize = (1.82f * cqw).sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                // 3. Fading Vertical Hairline Divider
+                Box(
+                    modifier = Modifier
+                        .padding(end = (2.75f * cqw).dp)
+                        .width(1.dp)
+                        .height((18.2f * cqw).dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0x14FFFFFF), Color(0x80FFFFFF), Color(0x14FFFFFF))
+                            )
+                        )
+                )
+
+                // 4. Right: 20.1cqw Elevated White Square QR Code Tile
+                Box(
+                    modifier = Modifier
+                        .size((20.1f * cqw).dp)
+                        .shadow(16.dp, RoundedCornerShape((2.25f * cqw).dp), ambientColor = Color(0x70001048), spotColor = Color(0x70001048))
+                        .clip(RoundedCornerShape((2.25f * cqw).dp))
+                        .background(Color.White)
+                        .clickable(onClick = onQrClick)
+                        .padding((1.65f * cqw).dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (qrBitmap != null) {
+                        Image(
+                            bitmap = qrBitmap.asImageBitmap(),
+                            contentDescription = "Profile QR Code",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Lucide.QrCode,
+                            contentDescription = "QR",
+                            tint = Color(0xFF0A1628),
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 /**
- * Modern Profile Pass Sheet Modal with interactive Customization Studio
+ * Modern Blue Profile Card QR Bottom Sheet (16:9 Liquid-Blue card + Copy Link + Save + Done).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -897,40 +1497,36 @@ fun AppleProfileCardSheet(
     onDismiss: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
     val context = LocalContext.current
-    val density = LocalDensity.current.density
     val scope = rememberCoroutineScope()
-    val profileShareUrl = "https://oscellion.vercel.app/u/${profile.username.ifBlank { userId }}"
+    val handle = profile.username.ifBlank { userId }
+    val profileShareUrl = "https://oscellion.vercel.app/u/$handle"
 
-    var customization by remember { mutableStateOf(PassCustomization()) }
-    var activeTab by remember { mutableStateOf(0) } // 0: Background, 1: QR Code, 2: Text & Accents
     var showEnlargedQr by remember { mutableStateOf(false) }
     var isSavingImage by remember { mutableStateOf(false) }
+    var copiedFeedback by remember { mutableStateOf(false) }
 
-    // Photo picker launcher for custom background image
-    val photoPickerLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
-        title = "Pass Card Background",
-        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
-        showAlbumsTab = true
-    ) { uri ->
-        customization = customization.copy(
-            bgMode = PassBackgroundMode.CUSTOM_IMAGE,
-            customImageUri = uri,
-            isDarkText = false // Default to light text for custom photos
+    val qrBitmap = remember(profileShareUrl) {
+        generateQrBitmap(
+            content = profileShareUrl,
+            sizePx = 560,
+            foregroundColor = 0xFF0A1628.toInt(),
+            backgroundColor = 0xFFFFFFFF.toInt()
         )
     }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = colors.bg,
+        containerColor = if (isDark) Color(0xFF151B27) else Color.White,
         dragHandle = {
             Box(
                 modifier = Modifier
-                    .padding(top = 10.dp, bottom = 4.dp)
-                    .width(36.dp)
+                    .padding(top = 12.dp, bottom = 6.dp)
+                    .width(38.dp)
                     .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(colors.glassBorder.copy(alpha = 0.6f))
+                    .clip(CircleShape)
+                    .background(if (isDark) Color(0xFF3A4458) else Color(0xFFCBD5E1))
             )
         },
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -946,105 +1542,54 @@ fun AppleProfileCardSheet(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // ── Header ──
+            // Header row: Profile Card | Ready to share
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "Profile Pass Card",
-                        color = colors.textMain,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Customize and export your digital creator identity",
-                        color = Color(0xFF8E8E93),
-                        fontSize = 12.sp
-                    )
-                }
-
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(colors.glassBgHover)
-                ) {
-                    Icon(
-                        imageVector = Lucide.X,
-                        contentDescription = "Close",
-                        tint = colors.textMain,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                Text(
+                    text = "Profile Card",
+                    color = if (isDark) Color(0xFFF5F8FF) else Color(0xFF070B18),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Ready to share",
+                    color = if (isDark) Color(0xFF8C9AB0) else Color(0xFF8B95AA),
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
 
-            var isFlipped by remember { mutableStateOf(false) }
-
-            // ── The Customized Profile Pass Card ──
-            ProfilePassCardView(
+            // Modern 16:9 Blue Profile Card
+            ModernBlueCardView(
                 profile = profile,
                 userId = userId,
-                customization = customization,
-                worksCount = worksCount,
-                isFlipped = isFlipped,
-                onFlipCard = { isFlipped = !isFlipped },
+                profileShareUrl = profileShareUrl,
+                qrBitmap = qrBitmap,
                 onQrClick = { showEnlargedQr = true }
             )
 
-            // ── Quick Tactile Action Deck ──
+            // Action Deck: Primary Gradient Copy Link + Save + Done
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. Flip Card Button
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFECEFF4))
-                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-                        .clickable {
-                            isFlipped = !isFlipped
-                            com.chroma.studio.chat.sound.SoundManager.playTap(context)
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Lucide.QrCode,
-                            contentDescription = null,
-                            tint = colors.textMain,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Text(
-                            text = if (isFlipped) "Show Front" else "Show QR",
-                            color = colors.textMain,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                // 2. Copy Link Button
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFECEFF4))
-                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                        .height(44.dp)
+                        .shadow(10.dp, CircleShape, ambientColor = Color(0x520064FA), spotColor = Color(0x520064FA))
+                        .clip(CircleShape)
+                        .background(Brush.verticalGradient(listOf(Color(0xFF1A7EFF), Color(0xFF0064FA), Color(0xFF0052D6))))
                         .clickable {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("Profile Link", profileShareUrl))
+                            copiedFeedback = true
                             ToastManager.showToast("Profile link copied!")
                         },
                     contentAlignment = Alignment.Center
@@ -1054,518 +1599,90 @@ fun AppleProfileCardSheet(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(
-                            imageVector = Lucide.Copy,
-                            contentDescription = null,
-                            tint = colors.textMain,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Text(
-                            text = "Copy Link",
-                            color = colors.textMain,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                // 3. Share Button
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
-                        .clickable {
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(
-                                    Intent.EXTRA_TEXT,
-                                    "Connect with ${profile.displayName} (@${profile.username}) on Oscellion: $profileShareUrl"
-                                )
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Profile"))
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Lucide.Share2,
+                            imageVector = if (copiedFeedback) Lucide.Check else Lucide.Copy,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = "Share",
+                            text = if (copiedFeedback) "Copied" else "Copy Link",
                             color = Color.White,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
                         )
                     }
                 }
-            }
 
-            // ── Identity Unchangeable Notice ──
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colors.glassBgHover.copy(alpha = 0.3f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Icon(
-                    imageVector = Lucide.Lock,
-                    contentDescription = "Locked",
-                    tint = Color(0xFF8E8E93),
-                    modifier = Modifier.size(12.dp)
-                )
-                Text(
-                    text = "Name, Username, Verified status, and Avatar are locked to your authentic profile.",
-                    color = Color(0xFF8E8E93),
-                    fontSize = 11.sp
-                )
-            }
-
-            // ── Customization Category Tabs ──
-            val tabs = listOf("Background", "QR Code", "Text & Accents")
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colors.glassBgHover.copy(alpha = 0.5f))
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    val isSelected = activeTab == index
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) colors.bg else Color.Transparent)
-                            .clickable { activeTab = index }
-                            .padding(vertical = 7.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = title,
-                            color = if (isSelected) Color(0xFF0381FE) else colors.textMain,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                Box(
+                    modifier = Modifier
+                        .height(44.dp)
+                        .clip(CircleShape)
+                        .background(if (isDark) Color(0xFF151B27) else Color.White)
+                        .border(1.dp, if (isDark) Color(0xFF283247) else Color(0xFFDCE5F4), CircleShape)
+                        .clickable {
+                            if (!isSavingImage) {
+                                isSavingImage = true
+                                scope.launch {
+                                    val saved = saveModernBlueCardToGallery(context, profile, userId, profileShareUrl)
+                                    isSavingImage = false
+                                    ToastManager.showToast(if (saved) "Saved Profile Card PNG to Photos!" else "Unable to save image")
+                                }
+                            }
+                        }
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSavingImage) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = Color(0xFF0064FA)
                         )
-                    }
-                }
-            }
-
-            // ── Tab 0: Background Customization ──
-            if (activeTab == 0) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Mode Selector: Default vs Gradient Maker vs Custom Image
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Default
-                        OutlinedButton(
-                            onClick = {
-                                customization = customization.copy(
-                                    bgMode = PassBackgroundMode.DEFAULT,
-                                    isDarkText = true
-                                )
-                            },
-                            modifier = Modifier.weight(1f).height(36.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(
-                                if (customization.bgMode == PassBackgroundMode.DEFAULT) 1.5.dp else 0.5.dp,
-                                if (customization.bgMode == PassBackgroundMode.DEFAULT) Color(0xFF0381FE) else colors.glassBorder
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (customization.bgMode == PassBackgroundMode.DEFAULT) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
-                            ),
-                            contentPadding = PaddingValues(0.dp)
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
+                            Icon(
+                                imageVector = Lucide.Download,
+                                contentDescription = null,
+                                tint = Color(0xFF0064FA),
+                                modifier = Modifier.size(14.dp)
+                            )
                             Text(
-                                "Default",
-                                color = if (customization.bgMode == PassBackgroundMode.DEFAULT) Color(0xFF0381FE) else colors.textMain,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        // Gradient Maker
-                        OutlinedButton(
-                            onClick = {
-                                customization = customization.copy(
-                                    bgMode = PassBackgroundMode.GRADIENT_MAKER,
-                                    isDarkText = false
-                                )
-                            },
-                            modifier = Modifier.weight(1f).height(36.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(
-                                if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) 1.5.dp else 0.5.dp,
-                                if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) Color(0xFF0381FE) else colors.glassBorder
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
-                            ),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text(
-                                "Gradient",
-                                color = if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) Color(0xFF0381FE) else colors.textMain,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        // Custom Image
-                        OutlinedButton(
-                            onClick = {
-                                photoPickerLauncher.launch("image/*")
-                            },
-                            modifier = Modifier.weight(1f).height(36.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(
-                                if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE) 1.5.dp else 0.5.dp,
-                                if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE) Color(0xFF0381FE) else colors.glassBorder
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
-                            ),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(Lucide.Image, contentDescription = null, modifier = Modifier.size(13.dp))
-                                Text(
-                                    "Photo",
-                                    color = if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE) Color(0xFF0381FE) else colors.textMain,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-
-                    // If Gradient Maker Mode: Workspace Button + Chroma Studio Gradient Presets
-                    if (customization.bgMode == PassBackgroundMode.GRADIENT_MAKER) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .border(1.dp, Color(0xFF0381FE).copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-                                .clickable {
-                                    val intent = Intent(context, com.chroma.studio.MainActivity::class.java).apply {
-                                        putExtra(com.chroma.studio.MainActivity.EXTRA_IS_PASS_CARD_MODE, true)
-                                        putExtra(com.chroma.studio.MainActivity.EXTRA_PASS_USER_ID, userId)
-                                        putExtra(com.chroma.studio.MainActivity.EXTRA_PASS_DISPLAY_NAME, profile.displayName)
-                                        putExtra(com.chroma.studio.MainActivity.EXTRA_PASS_USERNAME, profile.username)
-                                        putExtra(com.chroma.studio.MainActivity.EXTRA_PASS_AVATAR, profile.avatarUrl)
-                                        putExtra(com.chroma.studio.MainActivity.EXTRA_PASS_ROLE, profile.role)
-                                        putExtra(com.chroma.studio.MainActivity.EXTRA_PASS_VERIFIED, profile.verified)
-                                        putExtra(com.chroma.studio.MainActivity.EXTRA_PASS_GENDER, profile.gender)
-                                    }
-                                    context.startActivity(intent)
-                                },
-                            color = Color(0xFF0381FE).copy(alpha = 0.08f),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF00C6FF)))),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    AiWaveSphereIcon(
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Open in Gradient Maker Workspace",
-                                        color = colors.textMain,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Live edit multi-layer gradients with real-time Pass Card preview",
-                                        color = Color(0xFF8E8E93),
-                                        fontSize = 11.5.sp
-                                    )
-                                }
-                                Icon(
-                                    imageVector = Lucide.ChevronRight,
-                                    contentDescription = null,
-                                    tint = Color(0xFF0381FE),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-
-                        Text("Quick Presets", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(CHROMA_GRADIENT_PRESETS) { preset ->
-                                val isSelected = customization.gradientColors == preset.colors
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Brush.linearGradient(preset.colors))
-                                        .border(
-                                            width = if (isSelected) 2.dp else 0.5.dp,
-                                            color = if (isSelected) Color.White else Color.Black.copy(alpha = 0.2f),
-                                            shape = RoundedCornerShape(8.dp)
-                                        )
-                                        .clickable {
-                                            customization = customization.copy(
-                                                gradientColors = preset.colors,
-                                                isDarkText = false
-                                            )
-                                        }
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                                ) {
-                                    Text(
-                                        text = preset.name,
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // If Custom Image Mode: Scrim and Blur controls
-                    if (customization.bgMode == PassBackgroundMode.CUSTOM_IMAGE && customization.customImageUri != null) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Dark Scrim Overlay", color = colors.textMain, fontSize = 12.sp)
-                                Text("${(customization.imageScrimAlpha * 100).toInt()}%", color = Color(0xFF8E8E93), fontSize = 12.sp)
-                            }
-                            AppleSlider(
-                                value = customization.imageScrimAlpha,
-                                onValueChange = { customization = customization.copy(imageScrimAlpha = it) },
-                                valueRange = 0f..0.8f
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Blur Effect", color = colors.textMain, fontSize = 12.sp)
-                                Text("${customization.imageBlur.toInt()} dp", color = Color(0xFF8E8E93), fontSize = 12.sp)
-                            }
-                            AppleSlider(
-                                value = customization.imageBlur,
-                                onValueChange = { customization = customization.copy(imageBlur = it) },
-                                valueRange = 0f..20f
+                                text = "Save",
+                                color = if (isDark) Color(0xFFF5F8FF) else Color(0xFF070B18),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
                             )
                         }
                     }
                 }
-            }
 
-            // ── Tab 1: QR Code Customization ──
-            if (activeTab == 1) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                Box(
+                    modifier = Modifier
+                        .height(44.dp)
+                        .clip(CircleShape)
+                        .background(if (isDark) Color(0xFF1B2231) else Color(0xFFF4F7FD))
+                        .border(1.dp, if (isDark) Color(0xFF283247) else Color(0xFFE6EDF8), CircleShape)
+                        .clickable(onClick = onDismiss)
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("QR Code Foreground Color", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(QR_COLOR_PRESETS) { color ->
-                            val isSelected = customization.qrColor == color
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(color)
-                                    .border(
-                                        width = if (isSelected) 2.5.dp else 1.dp,
-                                        color = if (isSelected) Color(0xFF0381FE) else colors.glassBorder,
-                                        shape = CircleShape
-                                    )
-                                    .clickable { customization = customization.copy(qrColor = color) },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Lucide.Check,
-                                        contentDescription = null,
-                                        tint = if (color == Color.White) Color.Black else Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Text("QR Code Frame Container", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        QrFrameStyle.values().forEach { frameStyle ->
-                            val isSelected = customization.qrFrameStyle == frameStyle
-                            val label = when (frameStyle) {
-                                QrFrameStyle.SOLID_WHITE -> "White"
-                                QrFrameStyle.FROSTED_GLASS -> "Glass"
-                                QrFrameStyle.SOLID_DARK -> "Dark"
-                                QrFrameStyle.MINIMAL -> "Minimal"
-                            }
-                            OutlinedButton(
-                                onClick = { customization = customization.copy(qrFrameStyle = frameStyle) },
-                                modifier = Modifier.weight(1f).height(34.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                border = androidx.compose.foundation.BorderStroke(
-                                    if (isSelected) 1.5.dp else 0.5.dp,
-                                    if (isSelected) Color(0xFF0381FE) else colors.glassBorder
-                                ),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = if (isSelected) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
-                                ),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Text(
-                                    label,
-                                    color = if (isSelected) Color(0xFF0381FE) else colors.textMain,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
+                    Text(
+                        text = "Done",
+                        color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF525E75),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
-            }
-
-            // ── Tab 2: Text & Accent Customization ──
-            if (activeTab == 2) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text("Text Contrast Tone", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { customization = customization.copy(isDarkText = false) },
-                            modifier = Modifier.weight(1f).height(34.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(
-                                if (!customization.isDarkText) 1.5.dp else 0.5.dp,
-                                if (!customization.isDarkText) Color(0xFF0381FE) else colors.glassBorder
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (!customization.isDarkText) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
-                            )
-                        ) {
-                            Text("Light Text (Dark Bg)", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
-                        }
-
-                        OutlinedButton(
-                            onClick = { customization = customization.copy(isDarkText = true) },
-                            modifier = Modifier.weight(1f).height(34.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            border = androidx.compose.foundation.BorderStroke(
-                                if (customization.isDarkText) 1.5.dp else 0.5.dp,
-                                if (customization.isDarkText) Color(0xFF0381FE) else colors.glassBorder
-                            ),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (customization.isDarkText) Color(0xFF0381FE).copy(alpha = 0.12f) else Color.Transparent
-                            )
-                        ) {
-                            Text("Dark Text (Light Bg)", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-
-                    Text("Accent Tint & Badges Color", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(ACCENT_COLOR_PRESETS) { color ->
-                            val isSelected = customization.accentColor == color
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(color)
-                                    .border(
-                                        width = if (isSelected) 2.5.dp else 1.dp,
-                                        color = if (isSelected) Color.White else colors.glassBorder,
-                                        shape = CircleShape
-                                    )
-                                    .clickable { customization = customization.copy(accentColor = color) },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Lucide.Check,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ── Modal Bottom Action (Save to Photos) ──
-            ChromaPillButton(
-                onClick = {
-                    if (!isSavingImage) {
-                        isSavingImage = true
-                        scope.launch {
-                            val success = savePassCardImageToGallery(context, profile, userId, customization)
-                            isSavingImage = false
-                            if (success) {
-                                ToastManager.showToast("Custom Pass saved to Photos!")
-                            } else {
-                                ToastManager.showToast("Failed to save image")
-                            }
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth(),
-                variant = ChromaPillVariant.Emerald,
-                height = 46.dp
-            ) {
-                if (isSavingImage) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 1.8.dp, color = Color.White)
-                } else {
-                    Icon(Lucide.Download, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                }
-                Spacer(Modifier.width(8.dp))
-                Text("Save to Photos", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
             }
         }
     }
 
-    // ── Fullscreen Enlarged QR Dialog ──
+    // Fullscreen Enlarged QR Dialog
     if (showEnlargedQr) {
         Dialog(
             onDismissRequest = { showEnlargedQr = false },
@@ -1589,16 +1706,16 @@ fun AppleProfileCardSheet(
                 ) {
                     Text(
                         text = "Scan to Connect",
-                        color = Color(0xFF1D1D1F),
+                        color = Color(0xFF070B18),
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
 
-                    val largeQr = remember(profileShareUrl, customization.qrColor) {
+                    val largeQr = remember(profileShareUrl) {
                         generateQrBitmap(
                             profileShareUrl,
                             sizePx = 600,
-                            foregroundColor = customization.qrColor.toArgb()
+                            foregroundColor = 0xFF0A1628.toInt()
                         )
                     }
 
@@ -1606,7 +1723,7 @@ fun AppleProfileCardSheet(
                         modifier = Modifier
                             .size(220.dp)
                             .clip(RoundedCornerShape(20.dp))
-                            .background(Color(0xFFF5F5F7))
+                            .background(Color(0xFFF4F7FD))
                             .padding(14.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1620,15 +1737,15 @@ fun AppleProfileCardSheet(
                     }
 
                     Text(
-                        text = "@${profile.username.ifBlank { profile.displayName }}",
-                        color = customization.accentColor,
+                        text = "@$handle",
+                        color = Color(0xFF0064FA),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
                     )
 
                     Text(
                         text = "Scan with any camera or QR scanner to view profile directly.",
-                        color = Color(0xFF86868B),
+                        color = Color(0xFF5C6B80),
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center
                     )

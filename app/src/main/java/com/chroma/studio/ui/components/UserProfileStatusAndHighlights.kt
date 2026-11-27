@@ -24,9 +24,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -118,18 +121,18 @@ fun UserProfileStatusSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (statusText.isNotBlank()) {
-                val pillBg = if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
-                val pillBorder = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.06f)
+                val pillBg = if (isDark) Color(0xFF1B2231) else Color(0xFFEFF1F6)
+                val pillBorder = if (isDark) Color(0xFF283247) else Color(0xFFE2E8F0)
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(CircleShape)
                         .background(pillBg)
-                        .border(0.5.dp, pillBorder, RoundedCornerShape(10.dp))
+                        .border(0.75.dp, pillBorder, CircleShape)
                         .clickable(enabled = isCurrentUser) {
                             SoundManager.playReaction()
                             showEditDialog = true
                         }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
@@ -137,7 +140,7 @@ fun UserProfileStatusSection(
                         Icon(
                             imageVector = Lucide.Headphones,
                             contentDescription = "Music activity",
-                            tint = if (isDark) Color(0xFF0A84FF) else Color(0xFF007AFF),
+                            tint = Color(0xFF0064FA),
                             modifier = Modifier.size(13.dp)
                         )
                     } else if (statusEmoji.isBlank()) {
@@ -481,14 +484,29 @@ fun UserProfileHighlightsSection(
         return
     }
 
-    val itemBorderColor = if (isDark) Color.White.copy(alpha = 0.13f) else Color.Black.copy(alpha = 0.08f)
-    val newHighlightBg = if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
+    val itemBorderColor = if (isDark) Color(0xFF283247) else Color(0xFFDCE5F4)
+    val sheetBg = if (isDark) Color(0xFF0D1017) else Color.White
+    val newHighlightBg = if (isDark) Color(0xFF182030) else Color(0xFFF4F7FD)
 
     Column(modifier = modifier.fillMaxWidth()) {
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.fillMaxWidth()
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            0f to Color.Transparent,
+                            0.04f to Color.Black,
+                            0.94f to Color.Black,
+                            1f to Color.Transparent
+                        ),
+                        blendMode = BlendMode.DstIn
+                    )
+                }
         ) {
             // + New Highlight (if current user)
             if (isCurrentUser) {
@@ -496,7 +514,7 @@ fun UserProfileHighlightsSection(
                     val interactionSource = remember { MutableInteractionSource() }
                     val isPressed by interactionSource.collectIsPressedAsState()
                     val scale by animateFloatAsState(
-                        targetValue = if (isPressed) 0.95f else 1f,
+                        targetValue = if (isPressed) 0.94f else 1f,
                         animationSpec = tween(120, easing = FastOutSlowInEasing),
                         label = "newHlScale"
                     )
@@ -504,7 +522,7 @@ fun UserProfileHighlightsSection(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .width(60.dp)
+                            .width(58.dp)
                             .graphicsLayer { scaleX = scale; scaleY = scale }
                             .clickable(interactionSource = interactionSource, indication = null) {
                                 SoundManager.playReaction()
@@ -517,26 +535,28 @@ fun UserProfileHighlightsSection(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(58.dp)
+                                .size(56.dp)
                                 .clip(CircleShape)
-                                .background(newHighlightBg)
-                                .border(0.75.dp, itemBorderColor, CircleShape),
+                                .border(1.dp, itemBorderColor, CircleShape)
+                                .padding(2.5.dp)
+                                .clip(CircleShape)
+                                .background(newHighlightBg),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Lucide.Plus,
                                 contentDescription = "New Highlight",
-                                tint = colors.textMain,
-                                modifier = Modifier.size(19.dp)
+                                tint = Color(0xFF0064FA),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         Spacer(Modifier.height(6.dp))
                         Text(
                             text = "New",
-                            fontSize = 11.5.sp,
+                            fontSize = 11.sp,
                             fontFamily = InterFontFamily,
                             fontWeight = FontWeight.Medium,
-                            color = colors.textMain,
+                            color = if (isDark) Color(0xFFD0D9EA) else Color(0xFF374151),
                             textAlign = TextAlign.Center,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -552,7 +572,7 @@ fun UserProfileHighlightsSection(
                 val interactionSource = remember { MutableInteractionSource() }
                 val isPressed by interactionSource.collectIsPressedAsState()
                 val scale by animateFloatAsState(
-                    targetValue = if (isPressed) 0.95f else 1f,
+                    targetValue = if (isPressed) 0.94f else 1f,
                     animationSpec = tween(120, easing = FastOutSlowInEasing),
                     label = "hlScale"
                 )
@@ -561,7 +581,7 @@ fun UserProfileHighlightsSection(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .width(60.dp)
+                        .width(58.dp)
                         .graphicsLayer { scaleX = scale; scaleY = scale }
                         .combinedClickable(
                             interactionSource = interactionSource,
@@ -586,47 +606,59 @@ fun UserProfileHighlightsSection(
                         )
                 ) {
                     val titleLower = hl.title.lowercase()
+                    val pastelBg = when (titleLower) {
+                        "projects", "builds" -> listOf(Color(0xFFF0F7FF), Color(0xFFD6E8FF))
+                        "android" -> listOf(Color(0xFFECFDF5), Color(0xFFCCF5E4))
+                        "studio", "setup" -> listOf(Color(0xFFF8FAFC), Color(0xFFE2E8F0))
+                        "travel" -> listOf(Color(0xFFFFF7ED), Color(0xFFFDE4C8))
+                        "artworks", "clicks" -> listOf(Color(0xFFFDF2F8), Color(0xFFFBD5EA))
+                        else -> gradientColors
+                    }
                     Box(
                         modifier = Modifier
-                            .size(58.dp)
+                            .size(56.dp)
                             .clip(CircleShape)
-                            .background(
-                                when (titleLower) {
-                                    "projects" -> Brush.linearGradient(StudioDesignTokens.CobaltGradient)
-                                    "studio" -> Brush.linearGradient(listOf(Color(0xFF0F172A), Color(0xFF1E293B)))
-                                    "artworks" -> Brush.linearGradient(StudioDesignTokens.ElectricVioletGradient)
-                                    "travel" -> Brush.linearGradient(StudioDesignTokens.EmeraldMintGradient)
-                                    else -> Brush.linearGradient(gradientColors)
-                                }
-                            )
-                            .border(0.75.dp, itemBorderColor, CircleShape),
+                            .background(sheetBg, CircleShape)
+                            .border(1.dp, itemBorderColor, CircleShape)
+                            .padding(2.5.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (!hl.coverUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = hl.coverUrl,
-                                contentDescription = hl.title,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            when (titleLower) {
-                                "projects" -> Icon(Lucide.Code, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                                "studio" -> Icon(Lucide.Camera, contentDescription = null, tint = Color(0xFF3892F6), modifier = Modifier.size(20.dp))
-                                else -> Text(
-                                    text = hl.emoji,
-                                    fontSize = 20.sp
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .background(Brush.linearGradient(pastelBg)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!hl.coverUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = hl.coverUrl,
+                                    contentDescription = hl.title,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
                                 )
+                            } else {
+                                when (titleLower) {
+                                    "projects", "builds" -> Icon(Lucide.Code, contentDescription = null, tint = Color(0xFF0064FA), modifier = Modifier.size(19.dp))
+                                    "android" -> Icon(Lucide.Smartphone, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(19.dp))
+                                    "studio", "setup" -> Icon(Lucide.Monitor, contentDescription = null, tint = Color(0xFF334155), modifier = Modifier.size(19.dp))
+                                    "travel" -> Icon(Lucide.Compass, contentDescription = null, tint = Color(0xFFEA580C), modifier = Modifier.size(19.dp))
+                                    "artworks", "clicks" -> Icon(Lucide.Camera, contentDescription = null, tint = Color(0xFFDB2777), modifier = Modifier.size(19.dp))
+                                    else -> Text(
+                                        text = hl.emoji,
+                                        fontSize = 19.sp
+                                    )
+                                }
                             }
                         }
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = hl.title,
-                        fontSize = 11.5.sp,
+                        fontSize = 11.sp,
                         fontFamily = InterFontFamily,
                         fontWeight = FontWeight.Medium,
-                        color = colors.textMain,
+                        color = if (isDark) Color(0xFFD0D9EA) else Color(0xFF374151),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
