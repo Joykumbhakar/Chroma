@@ -663,6 +663,69 @@ private fun FlashVideoItem(
         player.setPlaybackSpeed(if (isActive && is2xSpeed) 2.0f else 1.0f)
     }
 
+    val isLifecycleActive = lifecycleEvent == androidx.lifecycle.Lifecycle.Event.ON_RESUME ||
+        lifecycleEvent == androidx.lifecycle.Lifecycle.Event.ON_START ||
+        lifecycleEvent == androidx.lifecycle.Lifecycle.Event.ON_ANY
+
+    val flashMusicUrl = remember(video.musicAudioUrl) {
+        com.chroma.studio.data.normalizeMusicStreamUrl(video.musicAudioUrl)
+    }
+    val needsSyncedFlashMusic = !video.musicMixedInVideo && flashMusicUrl.isNotBlank()
+    val flashMusicPlayer = remember(video.id) {
+        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+            repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+            volume = 1f
+        }
+    }
+    DisposableEffect(flashMusicPlayer) {
+        onDispose {
+            try {
+                flashMusicPlayer.stop()
+                flashMusicPlayer.release()
+            } catch (_: Throwable) {}
+        }
+    }
+    LaunchedEffect(video.id, flashMusicUrl, needsSyncedFlashMusic, video.musicStartSec, isActive) {
+        if (isActive && needsSyncedFlashMusic) {
+            try {
+                if (flashMusicPlayer.currentMediaItem?.localConfiguration?.uri?.toString() != flashMusicUrl) {
+                    flashMusicPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(flashMusicUrl))
+                    flashMusicPlayer.prepare()
+                }
+                flashMusicPlayer.seekTo((video.musicStartSec * 1000L).coerceAtLeast(0L))
+            } catch (_: Throwable) {}
+        } else {
+            try {
+                flashMusicPlayer.pause()
+            } catch (_: Throwable) {}
+        }
+    }
+    LaunchedEffect(isActive, needsSyncedFlashMusic, userPaused, isMuted, isLifecycleActive, video.musicStartSec, video.musicDurationSec) {
+        if (isActive && needsSyncedFlashMusic && !userPaused && !isMuted && isLifecycleActive) {
+            try {
+                flashMusicPlayer.volume = 1f
+                flashMusicPlayer.playWhenReady = true
+                if (!flashMusicPlayer.isPlaying) flashMusicPlayer.play()
+                val durSec = video.musicDurationSec
+                if (durSec > 0) {
+                    val startMs = (video.musicStartSec * 1000L).coerceAtLeast(0L)
+                    val endMs = startMs + durSec * 1000L
+                    while (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true) {
+                        delay(250L)
+                        if (flashMusicPlayer.isPlaying && flashMusicPlayer.currentPosition >= endMs) {
+                            flashMusicPlayer.seekTo(startMs)
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+        } else {
+            try {
+                flashMusicPlayer.playWhenReady = false
+                if (flashMusicPlayer.isPlaying) flashMusicPlayer.pause()
+            } catch (_: Throwable) {}
+        }
+    }
+
     // Play/Pause logic respecting active pager item, lifecycle, and explicit user pause
     LaunchedEffect(isActive, lifecycleEvent, userPaused, player) {
         val canRunLifecycle = lifecycleEvent == androidx.lifecycle.Lifecycle.Event.ON_RESUME ||

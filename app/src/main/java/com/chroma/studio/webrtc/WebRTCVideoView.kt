@@ -2,7 +2,11 @@ package com.chroma.studio.webrtc
 
 import android.util.Log
 import android.view.ViewGroup
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import org.webrtc.RendererCommon
@@ -13,6 +17,7 @@ fun WebRTCVideoView(
     callManager: CallManager,
     isLocal: Boolean,
     modifier: Modifier = Modifier,
+    isPipOverlay: Boolean = isLocal,
     scalingType: RendererCommon.ScalingType = RendererCommon.ScalingType.SCALE_ASPECT_FILL
 ) {
     val activeClient by callManager.webRTCClientFlow.collectAsState()
@@ -28,7 +33,9 @@ fun WebRTCVideoView(
 
     if (eglContext == null) return
 
-    key(activeClient, isLocal) {
+    // Key by (activeClient, isLocal, isPipOverlay) so swapping Floating <-> Focus You
+    // cleanly promotes/demotes the SurfaceView Z-order overlay layer.
+    key(activeClient, isLocal, isPipOverlay) {
         AndroidView(
             modifier = modifier,
             factory = { ctx ->
@@ -41,13 +48,12 @@ fun WebRTCVideoView(
                         init(eglContext, null)
                         setScalingType(scalingType)
                         setEnableHardwareScaler(true)
+                        setZOrderMediaOverlay(isPipOverlay)
                         if (isLocal) {
                             setMirror(isFrontCamera)
-                            setZOrderMediaOverlay(true)
                             callManager.attachLocalSurface(this)
                         } else {
                             setMirror(false)
-                            setZOrderMediaOverlay(false)
                             callManager.attachRemoteSurface(this)
                         }
                     } catch (e: Throwable) {

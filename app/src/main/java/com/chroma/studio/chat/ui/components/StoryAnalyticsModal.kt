@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -274,6 +275,7 @@ fun StoryAnalyticsModal(
     var selectedFilter by remember { mutableStateOf("all") } // "all", "reactions"
     var searchQuery by remember { mutableStateOf("") }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var isInsightsExpanded by remember(story.id) { mutableStateOf(false) }
 
     // Delete Confirmation Dialog (Apple HIG Style)
     if (showDeleteConfirmDialog) {
@@ -330,7 +332,7 @@ fun StoryAnalyticsModal(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 6.dp),
+                    .padding(top = 6.dp, bottom = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -470,82 +472,184 @@ fun StoryAnalyticsModal(
                     .weight(1f),
                 contentPadding = PaddingValues(bottom = 14.dp)
             ) {
-                // ── 1. Compact 3-Column Metrics Strip ───────────────────────────────
-                item(key = "metrics_row") {
-                    HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorderSubtle)
-                    Row(
+                // ── 1. Expandable Analytics & Activity Menu (Collapsed by Default) ─────
+                item(key = "expandable_insights") {
+                    val chevronRotation by animateFloatAsState(
+                        targetValue = if (isInsightsExpanded) 180f else 0f,
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        label = "insightsChevron"
+                    )
+                    val totalPollVotes = remember(pollSummaries) {
+                        pollSummaries.sumOf { it.totalVotes }
+                    }
+                    val quickSummary = buildString {
+                        append("$totalViews ${if (totalViews == 1) "view" else "views"}")
+                        append(" • ")
+                        append("$totalLikes ${if (totalLikes == 1) "like" else "likes"}")
+                        if (pollSummaries.isNotEmpty()) {
+                            append(" • $totalPollVotes ${if (totalPollVotes == 1) "vote" else "votes"}")
+                        } else {
+                            append(" • $audienceTitle")
+                        }
+                    }
+
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(IntrinsicSize.Min)
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.inputBg)
+                            .border(0.5.dp, colors.cardBorderSubtle, RoundedCornerShape(14.dp))
                     ) {
-                        ProfessionalKpiCard(
-                            title = "Views",
-                            value = totalViews.toString(),
-                            badgeText = "${story.viewers.size} unique",
-                            badgeColor = ytBlue,
-                            icon = { Icon(Lucide.Eye, contentDescription = null, tint = ytBlue, modifier = Modifier.size(12.dp)) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        Box(
+                        Row(
                             modifier = Modifier
-                                .width(0.5.dp)
-                                .fillMaxHeight()
-                                .padding(vertical = 3.dp)
-                                .background(colors.cardBorderSubtle)
-                        )
-                        ProfessionalKpiCard(
-                            title = "Likes",
-                            value = totalLikes.toString(),
-                            badgeText = "%.0f%% rate".format(reactionRate),
-                            badgeColor = Color(0xFFFF2D55),
-                            icon = { Icon(ChromaIcons.HeartFilled, contentDescription = null, tint = Color(0xFFFF2D55), modifier = Modifier.size(12.dp)) },
-                            modifier = Modifier.weight(1f)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .width(0.5.dp)
-                                .fillMaxHeight()
-                                .padding(vertical = 3.dp)
-                                .background(colors.cardBorderSubtle)
-                        )
-                        ProfessionalKpiCard(
-                            title = "Audience",
-                            value = audienceTitle,
-                            badgeText = audienceBadge,
-                            badgeColor = audienceColor,
-                            icon = {
-                                Icon(
-                                    imageVector = if (isOnlyFriends) Lucide.Star else Lucide.Users,
-                                    contentDescription = null,
-                                    tint = audienceColor,
-                                    modifier = Modifier.size(12.dp)
+                                .fillMaxWidth()
+                                .clickable {
+                                    SoundManager.playReaction()
+                                    isInsightsExpanded = !isInsightsExpanded
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(RoundedCornerShape(9.dp))
+                                        .background(ytBlue.copy(alpha = 0.13f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.ChartColumn,
+                                        contentDescription = null,
+                                        tint = ytBlue,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                    Text(
+                                        text = "Insights & Activity",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = textPrimary
+                                    )
+                                    Text(
+                                        text = quickSummary,
+                                        fontSize = 11.sp,
+                                        color = textSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = if (isInsightsExpanded) "Hide" else "Expand",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = ytBlue
                                 )
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorderSubtle)
-                }
+                                Icon(
+                                    imageVector = Lucide.ChevronDown,
+                                    contentDescription = if (isInsightsExpanded) "Collapse analytics" else "Expand analytics",
+                                    tint = ytBlue,
+                                    modifier = Modifier
+                                        .size(15.dp)
+                                        .graphicsLayer { rotationZ = chevronRotation }
+                                )
+                            }
+                        }
 
-                // ── 2. Small Compact Poll Graph (when Poll / Quiz is present) ───────
-                if (pollSummaries.isNotEmpty()) {
-                    item(key = "poll_graph") {
-                        Spacer(Modifier.height(10.dp))
-                        StoryCompactPollGraph(summaries = pollSummaries)
-                        Spacer(Modifier.height(8.dp))
-                        HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorderSubtle)
-                    }
-                }
+                        AnimatedVisibility(
+                            visible = isInsightsExpanded,
+                            enter = expandVertically(tween(240, easing = FastOutSlowInEasing)) + fadeIn(tween(200)),
+                            exit = shrinkVertically(tween(200, easing = FastOutSlowInEasing)) + fadeOut(tween(150))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp)
+                                    .padding(bottom = 12.dp)
+                            ) {
+                                HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorderSubtle)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(IntrinsicSize.Min)
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    ProfessionalKpiCard(
+                                        title = "Views",
+                                        value = totalViews.toString(),
+                                        badgeText = "${story.viewers.size} unique",
+                                        badgeColor = ytBlue,
+                                        icon = { Icon(Lucide.Eye, contentDescription = null, tint = ytBlue, modifier = Modifier.size(12.dp)) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(0.5.dp)
+                                            .fillMaxHeight()
+                                            .padding(vertical = 3.dp)
+                                            .background(colors.cardBorderSubtle)
+                                    )
+                                    ProfessionalKpiCard(
+                                        title = "Likes",
+                                        value = totalLikes.toString(),
+                                        badgeText = "%.0f%% rate".format(reactionRate),
+                                        badgeColor = Color(0xFFFF2D55),
+                                        icon = { Icon(ChromaIcons.HeartFilled, contentDescription = null, tint = Color(0xFFFF2D55), modifier = Modifier.size(12.dp)) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(0.5.dp)
+                                            .fillMaxHeight()
+                                            .padding(vertical = 3.dp)
+                                            .background(colors.cardBorderSubtle)
+                                    )
+                                    ProfessionalKpiCard(
+                                        title = "Audience",
+                                        value = audienceTitle,
+                                        badgeText = audienceBadge,
+                                        badgeColor = audienceColor,
+                                        icon = {
+                                            Icon(
+                                                imageVector = if (isOnlyFriends) Lucide.Star else Lucide.Users,
+                                                contentDescription = null,
+                                                tint = audienceColor,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorderSubtle)
 
-                // ── 3. Compact Hourly Activity Chart ────────────────────────────────
-                item(key = "activity_graph") {
-                    Spacer(Modifier.height(10.dp))
-                    StoryEngagementGraph(
-                        viewCount = story.viewCount,
-                        timestamp = storyTimestamp
-                    )
+                                if (pollSummaries.isNotEmpty()) {
+                                    Spacer(Modifier.height(10.dp))
+                                    StoryCompactPollGraph(summaries = pollSummaries)
+                                    Spacer(Modifier.height(8.dp))
+                                    HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorderSubtle)
+                                }
+
+                                Spacer(Modifier.height(10.dp))
+                                StoryEngagementGraph(
+                                    viewCount = story.viewCount,
+                                    timestamp = storyTimestamp
+                                )
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(10.dp))
                 }
 

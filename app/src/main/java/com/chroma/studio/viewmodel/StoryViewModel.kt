@@ -281,10 +281,11 @@ class StoryViewModel : ViewModel() {
         backgroundColor: String = "",
         isHighlight: Boolean = false,
         highlightTitle: String = "",
-        musicTrack: com.chroma.studio.data.AttachedMusicSelection? = null
+        musicTrack: com.chroma.studio.data.AttachedMusicSelection? = null,
+        slideMusicTracks: List<com.chroma.studio.data.AttachedMusicSelection?> = emptyList()
     ) {
         val indexedSlides = uris.mapIndexed { idx, uri ->
-            uri to textFormats.getOrElse(idx) { textFormat }
+            Triple(uri, textFormats.getOrElse(idx) { textFormat }, slideMusicTracks.getOrNull(idx) ?: musicTrack)
         }.distinctBy { it.first }
         if (indexedSlides.isEmpty()) return
         if (indexedSlides.size == 1) {
@@ -298,7 +299,7 @@ class StoryViewModel : ViewModel() {
                 backgroundColor = backgroundColor,
                 isHighlight = isHighlight,
                 highlightTitle = highlightTitle,
-                musicTrack = musicTrack
+                musicTrack = indexedSlides.first().third
             )
             return
         }
@@ -310,7 +311,7 @@ class StoryViewModel : ViewModel() {
             customAudienceIds
         }
         val baseTs = System.currentTimeMillis()
-        val pendingItems = indexedSlides.mapIndexed { idx, (uri, itemFmt) ->
+        val pendingItems = indexedSlides.mapIndexed { idx, (uri, itemFmt, slideMusic) ->
             val tempId = "temp_story_${baseTs}_$idx"
             tempId to Story(
                 id = tempId,
@@ -328,15 +329,15 @@ class StoryViewModel : ViewModel() {
                 isUploading = true,
                 uploadProgress = 0.1f,
                 isFailed = false,
-                musicTrackId = musicTrack?.trackId,
-                musicTitle = musicTrack?.title,
-                musicArtist = musicTrack?.artist,
-                musicAlbum = musicTrack?.album,
-                musicCoverUrl = musicTrack?.coverUrl,
-                musicAudioUrl = musicTrack?.audioUrl,
-                musicStartSec = musicTrack?.startSec ?: 0,
-                musicDurationSec = musicTrack?.durationSec ?: 0,
-                musicShowLyrics = musicTrack?.showLyricsSticker ?: false
+                musicTrackId = slideMusic?.trackId,
+                musicTitle = slideMusic?.title,
+                musicArtist = slideMusic?.artist,
+                musicAlbum = slideMusic?.album,
+                musicCoverUrl = slideMusic?.coverUrl,
+                musicAudioUrl = slideMusic?.audioUrl,
+                musicStartSec = slideMusic?.startSec ?: 0,
+                musicDurationSec = slideMusic?.durationSec ?: 0,
+                musicShowLyrics = slideMusic?.showLyricsSticker ?: false
             )
         }
         _myStories.value = pendingItems.map { it.second } + _myStories.value.filter { !it.isFailed }
@@ -347,7 +348,7 @@ class StoryViewModel : ViewModel() {
 
         viewModelScope.launch {
             try {
-                indexedSlides.forEachIndexed { idx, (uri, itemFmt) ->
+                indexedSlides.forEachIndexed { idx, (uri, itemFmt, slideMusic) ->
                     val tempId = pendingItems[idx].first
                     performMediaStoryUpload(
                         tempId = tempId,
@@ -362,7 +363,7 @@ class StoryViewModel : ViewModel() {
                         isHighlight = isHighlight,
                         highlightTitle = highlightTitle,
                         refreshAfter = idx == indexedSlides.lastIndex,
-                        musicTrack = musicTrack
+                        musicTrack = slideMusic
                     )
                 }
             } finally {

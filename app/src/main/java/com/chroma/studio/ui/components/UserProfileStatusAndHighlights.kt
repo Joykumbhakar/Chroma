@@ -107,47 +107,107 @@ fun UserProfileStatusSection(
     val presence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(userId)
     val isUserOnline = presence.online && (profile?.showOnlineStatus != false)
 
-    // Breathing glow animation for active dot
-    val infiniteTransition = rememberInfiniteTransition(label = "onlinePulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
-
     if (statusText.isNotBlank() || isCurrentUser) {
+        val statusLower = statusText.lowercase()
+        val isMusicActivity = statusEmoji in listOf("🎧", "🎵", "🎶", "🎼") ||
+            statusLower.contains("listening") ||
+            statusLower.contains("playing") ||
+            statusLower.contains("spotify") ||
+            statusLower.contains("music")
+
         Row(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(vertical = 3.dp)
-                .clickable(enabled = isCurrentUser) {
-                    SoundManager.playReaction()
-                    showEditDialog = true
-                },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            OnlineStatusDot(
-                isOnline = isUserOnline,
-                size = 7.5.dp,
-                showPulse = isUserOnline
-            )
-            Text(
-                text = if (statusText.isNotBlank()) {
-                    if (statusEmoji.isNotBlank()) "$statusEmoji $statusText" else statusText
-                } else "+ Set a status",
-                fontSize = 13.sp,
-                fontFamily = InterFontFamily,
-                fontWeight = FontWeight.Normal,
-                color = if (statusText.isNotBlank()) colors.textMuted else colors.textMuted.copy(alpha = 0.6f),
-                letterSpacing = (-0.01).em,
-                lineHeight = 16.sp,
-                style = StatusTightTextStyle
-            )
+            if (statusText.isNotBlank()) {
+                val pillBg = if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
+                val pillBorder = if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.06f)
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(pillBg)
+                        .border(0.5.dp, pillBorder, RoundedCornerShape(10.dp))
+                        .clickable(enabled = isCurrentUser) {
+                            SoundManager.playReaction()
+                            showEditDialog = true
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    if (isMusicActivity) {
+                        Icon(
+                            imageVector = Lucide.Headphones,
+                            contentDescription = "Music activity",
+                            tint = if (isDark) Color(0xFF0A84FF) else Color(0xFF007AFF),
+                            modifier = Modifier.size(13.dp)
+                        )
+                    } else {
+                        OnlineStatusDot(
+                            isOnline = isUserOnline,
+                            size = 6.5.dp,
+                            showPulse = false
+                        )
+                    }
+                    Text(
+                        text = if (statusEmoji.isNotBlank() && !isMusicActivity) {
+                            "$statusEmoji $statusText"
+                        } else if (statusEmoji.isNotBlank()) {
+                            "$statusEmoji $statusText"
+                        } else {
+                            statusText
+                        },
+                        fontSize = 12.5.sp,
+                        fontFamily = InterFontFamily,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textMain.copy(alpha = 0.88f),
+                        letterSpacing = (-0.01).em,
+                        lineHeight = 15.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = StatusTightTextStyle,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (isCurrentUser) {
+                        Icon(
+                            imageVector = Lucide.ChevronRight,
+                            contentDescription = "Edit status",
+                            tint = colors.textMuted.copy(alpha = 0.55f),
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(enabled = isCurrentUser) {
+                            SoundManager.playReaction()
+                            showEditDialog = true
+                        }
+                        .padding(vertical = 3.dp, horizontal = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    OnlineStatusDot(
+                        isOnline = isUserOnline,
+                        size = 6.5.dp,
+                        showPulse = false
+                    )
+                    Text(
+                        text = "Add status or listening activity",
+                        fontSize = 12.5.sp,
+                        fontFamily = InterFontFamily,
+                        fontWeight = FontWeight.Normal,
+                        color = colors.textMuted.copy(alpha = 0.72f),
+                        letterSpacing = (-0.01).em,
+                        lineHeight = 15.sp,
+                        style = StatusTightTextStyle
+                    )
+                }
+            }
         }
     }
 
@@ -429,10 +489,13 @@ fun UserProfileHighlightsSection(
         return
     }
 
+    val itemBorderColor = if (isDark) Color.White.copy(alpha = 0.13f) else Color.Black.copy(alpha = 0.08f)
+    val newHighlightBg = if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
+
     Column(modifier = modifier.fillMaxWidth()) {
         LazyRow(
             contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             // + New Highlight (if current user)
@@ -440,12 +503,16 @@ fun UserProfileHighlightsSection(
                 item(key = "new_highlight_btn") {
                     val interactionSource = remember { MutableInteractionSource() }
                     val isPressed by interactionSource.collectIsPressedAsState()
-                    val scale by animateFloatAsState(targetValue = if (isPressed) 0.92f else 1f, label = "newHlScale")
+                    val scale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.95f else 1f,
+                        animationSpec = tween(120, easing = FastOutSlowInEasing),
+                        label = "newHlScale"
+                    )
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .width(56.dp)
+                            .width(60.dp)
                             .graphicsLayer { scaleX = scale; scaleY = scale }
                             .clickable(interactionSource = interactionSource, indication = null) {
                                 SoundManager.playReaction()
@@ -458,20 +525,20 @@ fun UserProfileHighlightsSection(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(56.dp)
+                                .size(58.dp)
                                 .clip(CircleShape)
-                                .background(if (isDark) Color(0xFF141724) else Color(0xFFEFF2F6))
-                                .studioBevel(cornerRadius = 28.dp, borderWidth = 1.dp),
+                                .background(newHighlightBg)
+                                .border(0.75.dp, itemBorderColor, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Lucide.Plus,
                                 contentDescription = "New Highlight",
                                 tint = colors.textMain,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(19.dp)
                             )
                         }
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(6.dp))
                         Text(
                             text = "New",
                             fontSize = 11.5.sp,
@@ -479,6 +546,8 @@ fun UserProfileHighlightsSection(
                             fontWeight = FontWeight.Medium,
                             color = colors.textMain,
                             textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             lineHeight = 13.5.sp,
                             style = StatusTightTextStyle
                         )
@@ -490,13 +559,17 @@ fun UserProfileHighlightsSection(
             items(displayHighlights, key = { it.id }) { hl ->
                 val interactionSource = remember { MutableInteractionSource() }
                 val isPressed by interactionSource.collectIsPressedAsState()
-                val scale by animateFloatAsState(targetValue = if (isPressed) 0.92f else 1f, label = "hlScale")
+                val scale by animateFloatAsState(
+                    targetValue = if (isPressed) 0.95f else 1f,
+                    animationSpec = tween(120, easing = FastOutSlowInEasing),
+                    label = "hlScale"
+                )
                 val gradientColors = highlightGradients[hl.gradientColorIndex % highlightGradients.size]
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .width(56.dp)
+                        .width(60.dp)
                         .graphicsLayer { scaleX = scale; scaleY = scale }
                         .combinedClickable(
                             interactionSource = interactionSource,
@@ -520,11 +593,10 @@ fun UserProfileHighlightsSection(
                             }
                         )
                 ) {
-                    // Beveled Professional Gradient Highlight Circle
                     val titleLower = hl.title.lowercase()
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(58.dp)
                             .clip(CircleShape)
                             .background(
                                 when (titleLower) {
@@ -535,7 +607,7 @@ fun UserProfileHighlightsSection(
                                     else -> Brush.linearGradient(gradientColors)
                                 }
                             )
-                            .studioBevel(cornerRadius = 28.dp, borderWidth = 1.2.dp),
+                            .border(0.75.dp, itemBorderColor, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         if (!hl.coverUrl.isNullOrBlank()) {
@@ -556,7 +628,7 @@ fun UserProfileHighlightsSection(
                             }
                         }
                     }
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         text = hl.title,
                         fontSize = 11.5.sp,

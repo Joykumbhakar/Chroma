@@ -47,15 +47,121 @@ class AppAudioManager(private val context: Context) {
             previousSpeakerphoneOn = audioManager.isSpeakerphoneOn
             previousMicrophoneMute = audioManager.isMicrophoneMute
 
-            // Request audio focus
             requestAudioFocus()
 
-            // Set communication mode
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
             audioManager.isMicrophoneMute = false
             setSpeakerphone(isSpeakerDefault)
         } catch (e: Exception) {
             Log.e("AppAudioManager", "Error starting audio manager", e)
+        }
+    }
+
+    /**
+     * Queries real available communication output routes on the device (Earpiece, Speaker,
+     * plus connected Bluetooth / USB / Wired headsets).
+     */
+    fun getAvailableOutputDevices(): List<AudioOutputDevice> {
+        val result = mutableListOf<AudioOutputDevice>()
+        val seenNames = HashSet<String>()
+
+        try {
+            val rawDevices = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioManager.availableCommunicationDevices
+            } else {
+                audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).toList()
+            }
+
+            rawDevices.forEach { info ->
+                when (info.type) {
+                    AudioDeviceInfo.TYPE_BLE_HEADSET,
+                    AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> {
+                        val name = info.productName?.toString()?.trim()?.takeIf { it.isNotBlank() } ?: "Bluetooth"
+                        if (seenNames.add("bt:$name")) {
+                            result.add(AudioOutputDevice(name = name, type = AudioDeviceType.BLUETOOTH, deviceId = info.id))
+                        }
+                    }
+                    AudioDeviceInfo.TYPE_USB_HEADSET,
+                    AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                    AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> {
+                        val name = info.productName?.toString()?.trim()?.takeIf { it.isNotBlank() } ?: "Wired Headset"
+                        if (seenNames.add("wired:$name")) {
+                            result.add(AudioOutputDevice(name = name, type = AudioDeviceType.BLUETOOTH, deviceId = info.id))
+                        }
+                    }
+                    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> {
+                        if (seenNames.add("earpiece")) {
+                            result.add(AudioOutputDevice(name = "Phone", type = AudioDeviceType.IPHONE, deviceId = info.id))
+                        }
+                    }
+                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> {
+                        if (seenNames.add("speaker")) {
+                            result.add(AudioOutputDevice(name = "Speaker", type = AudioDeviceType.SPEAKER, deviceId = info.id))
+                        }
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            Log.w("AppAudioManager", "Could not enumerate communication audio devices: ${e.message}")
+        }
+
+        if (seenNames.add("earpiece") && result.none { it.type == AudioDeviceType.IPHONE }) {
+            result.add(0, AudioOutputDevice("Phone", AudioDeviceType.IPHONE))
+        }
+        if (result.none { it.type == AudioDeviceType.SPEAKER }) {
+            result.add(AudioOutputDevice("Speaker", AudioDeviceType.SPEAKER))
+        }
+        return result.sortedBy {
+            when (it.type) {
+                AudioDeviceType.IPHONE -> 0
+                AudioDeviceType.SPEAKER -> 1
+                AudioDeviceType.BLUETOOTH -> 2
+            }
+        }
+    }
+
+    fun selectOutputDevice(device: AudioOutputDevice) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val devices = audioManager.availableCommunicationDevices
+                val exactMatch = device.deviceId?.let { id -> devices.firstOrNull { it.id == id } }
+                val fallbackMatch = exactMatch ?: when (device.type) {
+                    AudioDeviceType.SPEAKER -> devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                    AudioDeviceType.IPHONE -> devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+                    AudioDeviceType.BLUETOOTH -> devices.firstOrNull {
+                        it.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                            it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET
+                    }
+                }
+                if (fallbackMatch != null) {
+                    audioManager.setCommunicationDevice(fallbackMatch)
+                    @Suppress("DEPRECATION")
+                    audioManager.isSpeakerphoneOn = (fallbackMatch.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
+                    return
+                }
+            }
+            @Suppress("DEPRECATION")
+            when (device.type) {
+                AudioDeviceType.SPEAKER -> {
+                    audioManager.stopBluetoothSco()
+                    audioManager.isBluetoothScoOn = false
+                    audioManager.isSpeakerphoneOn = true
+                }
+                AudioDeviceType.IPHONE -> {
+                    audioManager.stopBluetoothSco()
+                    audioManager.isBluetoothScoOn = false
+                    audioManager.isSpeakerphoneOn = false
+                }
+                AudioDeviceType.BLUETOOTH -> {
+                    audioManager.isSpeakerphoneOn = false
+                    audioManager.startBluetoothSco()
+                    audioManager.isBluetoothScoOn = true
+                }
+            }
+        } catch (e: Throwable) {
+            Log.e("AppAudioManager", "Error selecting audio device ${device.name}", e)
         }
     }
 
@@ -83,7 +189,7 @@ class AppAudioManager(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val active = audioManager.communicationDevice
             if (active != null) {
-                return active.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                return active.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
             }
         }
         @Suppress("DEPRECATION")
@@ -102,6 +208,12 @@ class AppAudioManager(private val context: Context) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 try { audioManager.clearCommunicationDevice() } catch (_: Exception) {}
+            } else {
+                @Suppress("DEPRECATION")
+                try {
+                    audioManager.stopBluetoothSco()
+                    audioManager.isBluetoothScoOn = false
+                } catch (_: Exception) {}
             }
             @Suppress("DEPRECATION")
             audioManager.isSpeakerphoneOn = previousSpeakerphoneOn
@@ -123,7 +235,7 @@ class AppAudioManager(private val context: Context) {
             val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
                 .setAudioAttributes(playbackAttributes)
                 .setAcceptsDelayedFocusGain(false)
-                .setOnAudioFocusChangeListener { /* handle focus changes if needed */ }
+                .setOnAudioFocusChangeListener { }
                 .build()
 
             audioFocusRequest = request

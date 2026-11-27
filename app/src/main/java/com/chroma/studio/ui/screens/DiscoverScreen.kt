@@ -7102,15 +7102,50 @@ private fun FeedPostMetadata(
         if (!work.musicTrackId.isNullOrBlank() || !work.musicTitle.isNullOrBlank()) {
             val musicTitle = work.musicTitle?.takeIf { it.isNotBlank() } ?: "Soundtrack"
             val musicArtist = work.musicArtist?.takeIf { it.isNotBlank() } ?: "Chroma Music"
+            val streamUrl = com.chroma.studio.data.normalizeMusicStreamUrl(work.musicAudioUrl)
+            val context = androidx.compose.ui.platform.LocalContext.current
+            var isPreviewPlaying by remember(work.id, streamUrl) { mutableStateOf(false) }
+            val feedMusicPlayer = remember(work.id, streamUrl) {
+                if (streamUrl.isBlank()) null
+                else androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+                    repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+                    volume = 1f
+                }
+            }
+            DisposableEffect(feedMusicPlayer) {
+                val p = feedMusicPlayer
+                val listener = if (p != null) {
+                    object : androidx.media3.common.Player.Listener {
+                        override fun onIsPlayingChanged(playing: Boolean) {
+                            isPreviewPlaying = playing
+                        }
+                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                            isPreviewPlaying = false
+                        }
+                    }
+                } else null
+                if (p != null && listener != null) p.addListener(listener)
+                onDispose {
+                    if (p != null) {
+                        if (listener != null) p.removeListener(listener)
+                        try {
+                            p.stop()
+                            p.release()
+                        } catch (_: Throwable) {}
+                    }
+                }
+            }
             val pillShape = RoundedCornerShape(999.dp)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(
                     modifier = Modifier
+                        .weight(1f, fill = false)
                         .clip(pillShape)
                         .background(if (colors.isDark) Color(0xFF1D1D24) else Color(0xFFF3F4F6))
                         .border(
@@ -7144,6 +7179,46 @@ private fun FeedPostMetadata(
                         tint = colors.textMuted,
                         modifier = Modifier.size(11.dp)
                     )
+                }
+
+                if (feedMusicPlayer != null && streamUrl.isNotBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isPreviewPlaying) Color(0xFFFA2D48)
+                                else if (colors.isDark) Color(0xFF1D1D24) else Color(0xFFF3F4F6)
+                            )
+                            .border(
+                                0.5.dp,
+                                if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.08f),
+                                CircleShape
+                            )
+                            .clickable {
+                                if (isPreviewPlaying) {
+                                    feedMusicPlayer.pause()
+                                } else {
+                                    try {
+                                        if (feedMusicPlayer.currentMediaItem?.localConfiguration?.uri?.toString() != streamUrl) {
+                                            feedMusicPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(streamUrl))
+                                            feedMusicPlayer.prepare()
+                                        }
+                                        feedMusicPlayer.seekTo((work.musicStartSec * 1000L).coerceAtLeast(0L))
+                                        feedMusicPlayer.playWhenReady = true
+                                        feedMusicPlayer.play()
+                                    } catch (_: Throwable) {}
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isPreviewPlaying) Lucide.Pause else Lucide.Play,
+                            contentDescription = if (isPreviewPlaying) "Pause soundtrack" else "Play soundtrack",
+                            tint = if (isPreviewPlaying) Color.White else colors.textMain,
+                            modifier = Modifier.size(11.dp)
+                        )
+                    }
                 }
             }
         }

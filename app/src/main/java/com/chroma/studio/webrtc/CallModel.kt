@@ -12,6 +12,42 @@ enum class CallState {
 }
 
 @Keep
+enum class CallPresentationMode {
+    FULL_SCREEN,
+    POPUP_NOTIFICATION
+}
+
+/**
+ * Pure deterministic router deciding whether an incoming call renders as the full-screen
+ * Apple incoming call interface or a compact pop-up notification.
+ *
+ * - Device locked or screen not in use (!isAppForeground): FULL_SCREEN
+ * - Screen in use & user running another app (!isAppForeground): POPUP_NOTIFICATION
+ * - In app & user is on a Chat screen/tab: FULL_SCREEN
+ * - In app & user is on other screens/tabs: POPUP_NOTIFICATION
+ */
+fun resolveIncomingCallPresentation(
+    isAppForeground: Boolean,
+    isScreenInteractive: Boolean,
+    isDeviceLocked: Boolean,
+    isOnChatScreen: Boolean
+): CallPresentationMode {
+    return if (!isAppForeground) {
+        if (!isScreenInteractive || isDeviceLocked) {
+            CallPresentationMode.FULL_SCREEN
+        } else {
+            CallPresentationMode.POPUP_NOTIFICATION
+        }
+    } else {
+        if (isOnChatScreen) {
+            CallPresentationMode.FULL_SCREEN
+        } else {
+            CallPresentationMode.POPUP_NOTIFICATION
+        }
+    }
+}
+
+@Keep
 enum class CallConnectionQuality {
     CONNECTING,
     GOOD,

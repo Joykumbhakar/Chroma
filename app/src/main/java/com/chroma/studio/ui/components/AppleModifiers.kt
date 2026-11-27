@@ -788,28 +788,32 @@ fun ProfileSeamlessTabBar(
     selectedIndex: Int,
     onItemSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    selectedColor: Color = Color(0xFF0381FE),
+    selectedColor: Color = Color(0xFF007AFF),
     unselectedColor: Color = Color(0xFF8E8E93)
 ) {
     val tabCount = icons.size
     val safeIndex = if (tabCount > 0) selectedIndex.coerceIn(0, tabCount - 1) else 0
     val animatedIndex by animateFloatAsState(
         targetValue = safeIndex.toFloat(),
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
         label = "tab_indicator_anim"
     )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(44.dp)
+            .height(46.dp)
             .drawBehind {
                 val strokeWidth = 0.5.dp.toPx()
+                val dividerColor = Color(0xFF8E8E93).copy(alpha = 0.18f)
                 drawLine(
-                    color = Color(0xFF8E8E93).copy(alpha = 0.2f),
+                    color = dividerColor,
+                    start = Offset(0f, strokeWidth / 2f),
+                    end = Offset(size.width, strokeWidth / 2f),
+                    strokeWidth = strokeWidth
+                )
+                drawLine(
+                    color = dividerColor,
                     start = Offset(0f, size.height - strokeWidth / 2f),
                     end = Offset(size.width, size.height - strokeWidth / 2f),
                     strokeWidth = strokeWidth
@@ -824,12 +828,12 @@ fun ProfileSeamlessTabBar(
                 val isSelected = safeIndex == index
                 val iconColor by animateColorAsState(
                     targetValue = if (isSelected) selectedColor else unselectedColor,
-                    animationSpec = tween(180),
+                    animationSpec = tween(160, easing = FastOutSlowInEasing),
                     label = "tab_icon_color"
                 )
                 val iconScale by animateFloatAsState(
-                    targetValue = if (isSelected) 1.08f else 1.0f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                    targetValue = if (isSelected) 1.04f else 1.0f,
+                    animationSpec = tween(160, easing = FastOutSlowInEasing),
                     label = "tab_icon_scale"
                 )
 
@@ -848,7 +852,7 @@ fun ProfileSeamlessTabBar(
                         contentDescription = null,
                         tint = iconColor,
                         modifier = Modifier
-                            .size(21.dp)
+                            .size(20.dp)
                             .graphicsLayer {
                                 scaleX = iconScale
                                 scaleY = iconScale
@@ -859,19 +863,19 @@ fun ProfileSeamlessTabBar(
         }
 
         if (tabCount > 0) {
-            // Smooth sliding active underline indicator
+            // Smooth iOS sliding active underline indicator
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val tabWidth = maxWidth / tabCount
-                val indicatorWidth = tabWidth * 0.45f
+                val indicatorWidth = tabWidth * 0.42f
                 val indicatorOffset = (tabWidth * animatedIndex) + ((tabWidth - indicatorWidth) / 2f)
 
                 Box(
                     modifier = Modifier
                         .offset(x = indicatorOffset)
                         .width(indicatorWidth)
-                        .height(2.5.dp)
+                        .height(2.dp)
                         .align(Alignment.BottomStart)
-                        .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
+                        .clip(RoundedCornerShape(topStart = 1.dp, topEnd = 1.dp))
                         .background(selectedColor)
                 )
             }

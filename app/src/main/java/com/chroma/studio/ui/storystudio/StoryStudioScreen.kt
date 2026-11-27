@@ -2152,6 +2152,119 @@ fun StoryStudioScreen(
         }
     }
 
+    // Live ExoPlayer preview for the active slide's Story Music widget
+    val studioMusicPlayer = remember(context) {
+        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+            repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+            volume = 0.9f
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                studioMusicPlayer.stop()
+                studioMusicPlayer.release()
+            } catch (_: Throwable) {}
+        }
+    }
+    val activeSlideMusicWidget = currentSlide.items.filterIsInstance<WidgetStoryItem>()
+        .firstOrNull { it.widgetType == WidgetType.MUSIC && it.musicAudioUrl.isNotBlank() }
+    val studioLifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    var isStudioLifecycleResumed by remember { mutableStateOf(true) }
+    DisposableEffect(studioLifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> isStudioLifecycleResumed = true
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE,
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> isStudioLifecycleResumed = false
+                else -> Unit
+            }
+        }
+        studioLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { studioLifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val shouldPlayStudioMusic = isStudioLifecycleResumed &&
+        !isExporting &&
+        activeSheet != ActiveSheet.MUSIC &&
+        activeSlideMusicWidget != null
+
+    LaunchedEffect(
+        activeSlideMusicWidget?.musicAudioUrl,
+        activeSlideMusicWidget?.musicStartSec
+    ) {
+        val mw = activeSlideMusicWidget
+        val streamUrl = com.chroma.studio.data.normalizeMusicStreamUrl(mw?.musicAudioUrl)
+        if (mw != null && streamUrl.isNotBlank()) {
+            try {
+                val curUri = studioMusicPlayer.currentMediaItem?.localConfiguration?.uri?.toString()
+                if (curUri != streamUrl) {
+                    studioMusicPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(streamUrl))
+                    studioMusicPlayer.prepare()
+                }
+                studioMusicPlayer.seekTo((mw.musicStartSec * 1000L).coerceAtLeast(0L))
+            } catch (_: Throwable) {}
+        } else {
+            try {
+                studioMusicPlayer.stop()
+                studioMusicPlayer.clearMediaItems()
+            } catch (_: Throwable) {}
+        }
+    }
+    LaunchedEffect(
+        shouldPlayStudioMusic,
+        activeSlideMusicWidget?.musicAudioUrl,
+        activeSlideMusicWidget?.musicStartSec,
+        activeSlideMusicWidget?.musicDurationSec
+    ) {
+        val mw = activeSlideMusicWidget
+        if (shouldPlayStudioMusic && mw != null) {
+            try {
+                studioMusicPlayer.playWhenReady = true
+                if (!studioMusicPlayer.isPlaying) studioMusicPlayer.play()
+            } catch (_: Throwable) {}
+            val startMs = (mw.musicStartSec * 1000L).coerceAtLeast(0L)
+            val clipDurMs = (mw.musicDurationSec.coerceAtLeast(5) * 1000L)
+            val endMs = startMs + clipDurMs
+            while (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true) {
+                kotlinx.coroutines.delay(250L)
+                try {
+                    if (studioMusicPlayer.isPlaying && studioMusicPlayer.currentPosition >= endMs) {
+                        studioMusicPlayer.seekTo(startMs)
+                    }
+                } catch (_: Throwable) {}
+            }
+        } else {
+            try {
+                studioMusicPlayer.playWhenReady = false
+                if (studioMusicPlayer.isPlaying) studioMusicPlayer.pause()
+            } catch (_: Throwable) {}
+        }
+    }
+
+    // Consume pending "Use Audio" handoff if user entered Story Studio from an audio pill
+    LaunchedEffect(Unit) {
+        val pending = com.chroma.studio.data.PendingMusicHandoff.consume()
+        if (pending != null && pending.audioUrl.isNotBlank()) {
+            val musicWidget = WidgetStoryItem(
+                widgetType = WidgetType.MUSIC,
+                musicTitle = pending.title,
+                musicArtist = pending.artist,
+                musicFreq = 261.63,
+                musicTrackId = pending.trackId,
+                musicAlbum = pending.album,
+                musicCoverUrl = pending.coverUrl,
+                musicAudioUrl = com.chroma.studio.data.normalizeMusicStreamUrl(pending.audioUrl),
+                musicStartSec = pending.startSec,
+                musicDurationSec = pending.durationSec,
+                yDp = -150f
+            )
+            updateCurrentSlide(commitHistory = false) { s ->
+                val filtered = s.items.filterNot { it is WidgetStoryItem && it.widgetType == WidgetType.MUSIC }
+                s.copy(items = filtered + musicWidget)
+            }
+        }
+    }
+
     // Preload initial image URI if launched with a gallery/camera photo
     LaunchedEffect(initialPhotoUri) {
         val uri = initialPhotoUri ?: return@LaunchedEffect
@@ -3438,6 +3551,10 @@ fun StoryStudioScreen(
                             onClose = ::closeAllSheets,
                             onAddPhotoSticker = { launchPhotoPicker(stickerPhotoPicker) },
                             onAddWidget = { type ->
+                                if (type == WidgetType.MUSIC) {
+                                    activeSheet = ActiveSheet.MUSIC
+                                    return@StickersAndWidgetsSheet
+                                }
                                 val nowStr = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
                                 val item = when (type) {
                                     WidgetType.POLL -> WidgetStoryItem(widgetType = type, question = "Which aesthetic wins?", optA = "Light HIG", optB = "Dark Mode")

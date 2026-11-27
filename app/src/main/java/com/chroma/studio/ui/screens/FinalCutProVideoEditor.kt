@@ -813,7 +813,8 @@ data class FcpCustomAudio(
     val musicAudioUrl: String? = null,
     val musicStartSec: Int = 0,
     val musicDurationSec: Int = 15,
-    val musicShowLyrics: Boolean = false
+    val musicShowLyrics: Boolean = false,
+    val mixedInExport: Boolean = false
 ) {
     fun toAttachedMusicSelection(): com.chroma.studio.data.AttachedMusicSelection? {
         val id = musicTrackId?.takeIf { it.isNotBlank() } ?: return null
@@ -827,7 +828,8 @@ data class FcpCustomAudio(
             startSec = musicStartSec,
             durationSec = musicDurationSec.coerceAtLeast(5),
             totalTrackSec = durationSec.toInt().coerceAtLeast(musicDurationSec.coerceAtLeast(15)),
-            showLyricsSticker = musicShowLyrics
+            showLyricsSticker = musicShowLyrics,
+            mixedInVideo = mixedInExport
         )
     }
     /** Effective trim-out point inside the source file (0 / invalid => whole file). */
@@ -1238,6 +1240,7 @@ fun FinalCutProVideoEditorScreen(
         onMusicAttached(customAudio?.toAttachedMusicSelection())
     }
     var showDeviceMusicModal by remember { mutableStateOf(false) }
+    var showLocalDeviceMusicPicker by remember { mutableStateOf(false) }
     // ── Custom Soundtrack & Video Audio Extraction Pickers ───────────────
     val audioFilePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -1808,6 +1811,14 @@ fun FinalCutProVideoEditorScreen(
                     exportProgress = 1.0f
                     delay(150L)
                     SoundManager.playSend(context)
+                    val bakedAudio = customAudio?.copy(mixedInExport = true)
+                    if (bakedAudio != null) {
+                        customAudio = bakedAudio
+                        bakedAudio.toAttachedMusicSelection()?.let {
+                            com.chroma.studio.data.PendingMusicHandoff.set(it)
+                        }
+                        onMusicAttached(bakedAudio.toAttachedMusicSelection())
+                    }
                     isExporting = false
                     showExportSheet = false
                     restorePreviewAfterExport()
@@ -3682,6 +3693,9 @@ fun FinalCutProVideoEditorScreen(
                                     onAddAudioFile = {
                                         showDeviceMusicModal = true
                                     },
+                                    onPickDeviceAudio = {
+                                        showLocalDeviceMusicPicker = true
+                                    },
                                     onExtractAudioFromVideo = {
                                         videoExtractPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
                                     },
@@ -3970,7 +3984,7 @@ fun FinalCutProVideoEditorScreen(
             onClipConfirmed = { selection ->
                 saveStateForUndo()
                 customAudio = FcpCustomAudio(
-                    uri = Uri.parse(selection.audioUrl),
+                    uri = Uri.parse(com.chroma.studio.data.normalizeMusicStreamUrl(selection.audioUrl)),
                     name = "${selection.title} · ${selection.artist}",
                     durationSec = selection.totalTrackSec.toFloat().coerceAtLeast(selection.durationSec.toFloat()),
                     volume = 1f,
@@ -3984,15 +3998,38 @@ fun FinalCutProVideoEditorScreen(
                     musicArtist = selection.artist,
                     musicAlbum = selection.album,
                     musicCoverUrl = selection.coverUrl,
-                    musicAudioUrl = selection.audioUrl,
+                    musicAudioUrl = com.chroma.studio.data.normalizeMusicStreamUrl(selection.audioUrl),
                     musicStartSec = selection.startSec,
                     musicDurationSec = selection.durationSec,
-                    musicShowLyrics = selection.showLyricsSticker
+                    musicShowLyrics = selection.showLyricsSticker,
+                    mixedInExport = false
                 )
                 com.chroma.studio.data.PendingMusicHandoff.set(selection)
                 showDeviceMusicModal = false
                 ToastManager.showToast("Applied ${selection.title} · ${selection.artist}")
             }
+        )
+    }
+    if (showLocalDeviceMusicPicker) {
+        DeviceMusicTrimmerModal(
+            videoDurationSec = totalDurationSec.coerceAtLeast(15f),
+            onAudioSelected = { uri, name, dur, start, end ->
+                saveStateForUndo()
+                customAudio = FcpCustomAudio(
+                    uri = uri,
+                    name = name,
+                    durationSec = dur.coerceAtLeast(1f),
+                    volume = 1f,
+                    isExtractedFromVideo = false,
+                    muteOriginalVideo = true,
+                    loopAudio = true,
+                    trimStartSec = start,
+                    trimEndSec = end.coerceAtLeast(start + 1f)
+                )
+                showLocalDeviceMusicPicker = false
+                ToastManager.showToast("Applied device audio: $name")
+            },
+            onDismiss = { showLocalDeviceMusicPicker = false }
         )
     }
 }
@@ -6205,6 +6242,7 @@ private fun AudioTabContent(
     onVoiceIsolationChange: (Boolean) -> Unit,
     customAudio: FcpCustomAudio? = null,
     onAddAudioFile: () -> Unit = {},
+    onPickDeviceAudio: () -> Unit = {},
     onExtractAudioFromVideo: () -> Unit = {},
     onAudioVolumeChange: (Float) -> Unit = {},
     onFadeInChange: (Float) -> Unit = {},
@@ -6319,59 +6357,90 @@ private fun AudioTabContent(
                 } else null
             ) {
                 if (customAudio == null) {
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Row(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(colors.inputBg)
-                                .border(0.5.dp, colors.cardBorder, RoundedCornerShape(12.dp))
-                                .clickable { onAddAudioFile() }
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Box(
+                            Row(
                                 modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(RoundedCornerShape(9.dp))
-                                    .background(colors.primary.copy(alpha = 0.12f)),
-                                contentAlignment = Alignment.Center
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.inputBg)
+                                    .border(0.5.dp, colors.cardBorder, RoundedCornerShape(12.dp))
+                                    .clickable { onAddAudioFile() }
+                                    .padding(horizontal = 10.dp, vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Lucide.Music, contentDescription = "Add Music", tint = colors.primary, modifier = Modifier.size(16.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(colors.primary.copy(alpha = 0.12f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Lucide.Music, contentDescription = "Music Library", tint = colors.primary, modifier = Modifier.size(15.dp))
+                                }
+                                Column {
+                                    Text("Music Library", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                                    Text("Trending catalog", fontSize = 10.sp, color = colors.textMuted)
+                                }
                             }
-                            Column {
-                                Text("Add Music", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
-                                Text("MP3, M4A, WAV", fontSize = 10.sp, color = colors.textMuted)
+
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.inputBg)
+                                    .border(0.5.dp, colors.cardBorder, RoundedCornerShape(12.dp))
+                                    .clickable { onPickDeviceAudio() }
+                                    .padding(horizontal = 10.dp, vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF10B981).copy(alpha = 0.12f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Lucide.Headphones, contentDescription = "Device Audio", tint = Color(0xFF10B981), modifier = Modifier.size(15.dp))
+                                }
+                                Column {
+                                    Text("Device Audio", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                                    Text("MP3, M4A, WAV", fontSize = 10.sp, color = colors.textMuted)
+                                }
                             }
                         }
 
                         Row(
                             modifier = Modifier
-                                .weight(1f)
+                                .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(colors.inputBg)
                                 .border(0.5.dp, colors.cardBorder, RoundedCornerShape(12.dp))
                                 .clickable { onExtractAudioFromVideo() }
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(RoundedCornerShape(9.dp))
+                                    .size(30.dp)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .background(colors.primary.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Lucide.Film, contentDescription = "Extract Audio", tint = colors.primary, modifier = Modifier.size(16.dp))
+                                Icon(Lucide.Film, contentDescription = "Extract Audio", tint = colors.primary, modifier = Modifier.size(15.dp))
                             }
                             Column {
-                                Text("From Video", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
-                                Text("Extract track", fontSize = 10.sp, color = colors.textMuted)
+                                Text("Extract Audio from Video", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                                Text("Import soundtrack directly from a gallery clip", fontSize = 10.sp, color = colors.textMuted)
                             }
                         }
                     }

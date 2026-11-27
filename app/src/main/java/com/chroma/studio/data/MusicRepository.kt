@@ -56,6 +56,11 @@ data class CatalogMusicTrack(
     val createdAt: Long = 0L
 )
 
+data class CatalogFetchResult(
+    val tracks: List<CatalogMusicTrack>,
+    val errorMessage: String? = null
+)
+
 /**
  * Pure selection snapshot emitted by [StoryMusicPickerModal] across Flash, Posts, Stories, and Chat.
  */
@@ -69,8 +74,19 @@ data class AttachedMusicSelection(
     val startSec: Int,
     val durationSec: Int,
     val totalTrackSec: Int,
-    val showLyricsSticker: Boolean = true
+    val showLyricsSticker: Boolean = true,
+    val mixedInVideo: Boolean = false
 )
+
+fun normalizeMusicStreamUrl(rawUrl: String?): String {
+    val clean = rawUrl?.trim().orEmpty()
+    if (clean.startsWith("http://res.cloudinary.com/", ignoreCase = true) ||
+        clean.startsWith("http://api.cloudinary.com/", ignoreCase = true)
+    ) {
+        return "https://${clean.removePrefix("http://").removePrefix("HTTP://")}"
+    }
+    return clean
+}
 
 fun CatalogMusicTrack.toAttachedSelection(): AttachedMusicSelection {
     val safeStart = bestPartStartSec.coerceIn(0, maxOf(0, durationSec - 1))
@@ -154,7 +170,10 @@ class MusicRepository {
         return nowSaved
     }
 
-    suspend fun fetchActiveCatalog(context: Context): List<CatalogMusicTrack> = withContext(Dispatchers.IO) {
+    suspend fun fetchActiveCatalog(context: Context): List<CatalogMusicTrack> =
+        fetchActiveCatalogResult(context).tracks
+
+    suspend fun fetchActiveCatalogResult(context: Context): CatalogFetchResult = withContext(Dispatchers.IO) {
         val savedIds = getSavedTrackIds(context)
         try {
             val snap = tracksCol
@@ -163,7 +182,7 @@ class MusicRepository {
                 .get()
                 .await()
 
-            snap.documents
+            val parsed = snap.documents
                 .mapNotNull { doc -> parseTrackDoc(doc.id, doc.data, doc.id in savedIds) }
                 .sortedWith(
                     compareByDescending<CatalogMusicTrack> { it.isTrending }
@@ -171,10 +190,15 @@ class MusicRepository {
                         .thenByDescending { it.useCount }
                         .thenByDescending { it.createdAt }
                 )
+            CatalogFetchResult(tracks = parsed, errorMessage = null)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.w(TAG, "Error loading active music catalog", e)
-            emptyList()
+            CatalogFetchResult(
+                tracks = emptyList(),
+                errorMessage = e.localizedMessage?.takeIf { it.isNotBlank() }
+                    ?: "Could not reach Music Library"
+            )
         }
     }
 
@@ -270,8 +294,8 @@ class MusicRepository {
             description = data["description"]?.toString().orEmpty(),
             category = data["category"]?.toString()?.takeIf { it.isNotBlank() } ?: "Chill",
             collection = MusicMoodCollection.fromRaw(data["collection"]?.toString()),
-            coverUrl = data["coverUrl"]?.toString().orEmpty(),
-            audioUrl = data["audioUrl"]?.toString().orEmpty(),
+            coverUrl = normalizeMusicStreamUrl(data["coverUrl"]?.toString()),
+            audioUrl = normalizeMusicStreamUrl(data["audioUrl"]?.toString()),
             durationSec = durationSec,
             bestPartStartSec = bestStart,
             bestPartEndSec = bestEnd,

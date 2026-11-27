@@ -131,6 +131,7 @@ class ChromaApp : Application(), ImageLoaderFactory {
 
         try {
             ChatNotificationBuilder.ensureNotificationChannel(this)
+            com.chroma.studio.webrtc.IncomingCallNotificationManager.ensureChannel(this)
         } catch (e: Exception) {
             Log.e("ChromaApp", "Failed to create notification channel", e)
         }

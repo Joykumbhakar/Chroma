@@ -733,6 +733,15 @@ private fun AuthenticatedRoute(
                 val currentAuthUid = currentAuthUidState.value
                 val activeUidKey = currentAuthUid
 
+                // Keep CallManager singleton listening whenever authenticated user changes
+                LaunchedEffect(activeUidKey) {
+                    val uid = activeUidKey
+                    if (!uid.isNullOrBlank()) {
+                        chatVm.initializeCallManager(this@HomeActivity)
+                        chatVm.callManager?.startListeningForIncomingCalls(uid)
+                    }
+                }
+
                 LaunchedEffect(activeUidKey) {
                     val uidToListen = activeUidKey
                     if (uidToListen != null) {
@@ -848,6 +857,15 @@ private fun AuthenticatedRoute(
                 }
 
                 // Real-time activity notifications listener (Likes, Comments, Replies, Follows, Remixes, Story Reactions)
+                // Keep CallManager singleton listening whenever authenticated user changes
+                LaunchedEffect(activeUidKey) {
+                    val uid = activeUidKey
+                    if (!uid.isNullOrBlank()) {
+                        chatVm.initializeCallManager(this@HomeActivity)
+                        chatVm.callManager?.startListeningForIncomingCalls(uid)
+                    }
+                }
+
                 LaunchedEffect(activeUidKey) {
                     val uidToListen = activeUidKey ?: return@LaunchedEffect
                     var isInitialNotifSnapshot = true
@@ -2941,7 +2959,8 @@ private fun AuthenticatedRoute(
                                         audienceType = audienceType,
                                         customAudienceIds = customIds,
                                         textFormats = renderedSlides.map { it.interactiveFormatJson },
-                                        musicTrack = renderedSlides.firstNotNullOfOrNull { it.musicTrack }
+                                        musicTrack = renderedSlides.firstNotNullOfOrNull { it.musicTrack },
+                                        slideMusicTracks = renderedSlides.map { it.musicTrack }
                                     )
                                     storyInitialPhotoUri = null
                                     navController.popBackStack()
@@ -2990,22 +3009,41 @@ private fun AuthenticatedRoute(
             com.chroma.studio.ui.components.IosDynamicIslandHost(isNotchMode = false)
             com.chroma.studio.ui.components.ChromaInAppBrowserHost()
 
-            // ── Global WebRTC Incoming Call Overlay ──
+            // ── Global WebRTC Incoming & Active Apple Call Routing ──
+            // • On a Chat route/tab -> full-screen AppleIncomingCallScreen
+            // • On other screens/tabs -> compact Dynamic Island pop-up notification (tap to expand)
             val rtcIncomingCall by chatVm.incomingCall.collectAsState()
+            val rtcActiveCall by chatVm.activeCall.collectAsState()
+            val rtcCallState by chatVm.callState.collectAsState()
+            val rtcIsCaller by (chatVm.callManager?.isCaller ?: remember { kotlinx.coroutines.flow.MutableStateFlow(false) }).collectAsState()
+            val chatProfiles by chatVm.userProfiles.collectAsState()
+
             var pendingAnswerCall by remember { mutableStateOf<com.chroma.studio.webrtc.CallModel?>(null) }
+            var expandedIncomingCallId by remember { mutableStateOf<String?>(null) }
+            var appleActiveCallSession by remember { mutableStateOf<com.chroma.studio.webrtc.CallModel?>(null) }
+
+            val isUserOnChatScreen =
+                currentRoute == "chat" ||
+                fullRoute == "chat/{roomId}" ||
+                fullRoute.startsWith("chat/") ||
+                fullRoute.startsWith("group_info") ||
+                ((currentRoute == "main" || currentRoute == null) && pagerState.currentPage == 3)
+
+            val presentationMode = com.chroma.studio.webrtc.resolveIncomingCallPresentation(
+                isAppForeground = isHomeResumed,
+                isScreenInteractive = true,
+                isDeviceLocked = false,
+                isOnChatScreen = isUserOnChatScreen
+            )
 
             fun proceedAnswerIncomingCall(call: com.chroma.studio.webrtc.CallModel) {
                 try {
+                    com.chroma.studio.webrtc.CallRingtoneController.stop(call.id)
+                    com.chroma.studio.ui.components.DynamicIslandManager.dismissIncomingCall(call.id)
+                    appleActiveCallSession = call
+                    expandedIncomingCallId = null
                     chatVm.initializeCallManager(this@HomeActivity)
                     chatVm.answerCall(call)
-                    if (call.roomId.isNotBlank()) {
-                        coroutineScope.launch {
-                            pagerState.scrollToPage(3)
-                        }
-                        navController.navigate("chat/${call.roomId}") {
-                            launchSingleTop = true
-                        }
-                    }
                 } catch (e: Throwable) {
                     android.util.Log.e("HomeActivity", "Error answering incoming call", e)
                     com.chroma.studio.ui.components.ToastManager.showToast("Unable to answer call: ${e.message}")
@@ -3029,40 +3067,164 @@ private fun AuthenticatedRoute(
                 }
             }
 
+            fun requestAndAnswerIncomingCall(call: com.chroma.studio.webrtc.CallModel) {
+                val hasAudio = androidx.core.content.ContextCompat.checkSelfPermission(
+                    this@HomeActivity,
+                    android.Manifest.permission.RECORD_AUDIO
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                val hasCamera = !call.isVideo || androidx.core.content.ContextCompat.checkSelfPermission(
+                    this@HomeActivity,
+                    android.Manifest.permission.CAMERA
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                if (hasAudio && hasCamera) {
+                    proceedAnswerIncomingCall(call)
+                } else {
+                    pendingAnswerCall = call
+                    val needed = if (call.isVideo) {
+                        arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)
+                    } else {
+                        arrayOf(android.Manifest.permission.RECORD_AUDIO)
+                    }
+                    incomingCallPermissionLauncher.launch(needed)
+                }
+            }
+
+            // Ringtone + Dynamic Island pop-up coordination while an incoming call is ringing in-app
+            LaunchedEffect(rtcIncomingCall?.id, presentationMode, expandedIncomingCallId, isHomeResumed) {
+                val incoming = rtcIncomingCall
+                if (incoming == null) {
+                    expandedIncomingCallId = null
+                    com.chroma.studio.webrtc.CallRingtoneController.stop()
+                    com.chroma.studio.ui.components.DynamicIslandManager.dismissIncomingCall()
+                    return@LaunchedEffect
+                }
+                if (isHomeResumed) {
+                    com.chroma.studio.webrtc.CallRingtoneController.start(this@HomeActivity, incoming.id)
+                }
+                val profile = chatProfiles[incoming.callerId]
+                val callerVerified = profile?.verified == true
+                if (presentationMode == com.chroma.studio.webrtc.CallPresentationMode.POPUP_NOTIFICATION &&
+                    expandedIncomingCallId != incoming.id
+                ) {
+                    com.chroma.studio.ui.components.DynamicIslandManager.showIncomingCall(
+                        callId = incoming.id,
+                        roomId = incoming.roomId,
+                        callerName = incoming.callerName.ifBlank { profile?.displayName ?: "Oscellion User" },
+                        callerAvatar = incoming.callerAvatar.ifBlank { profile?.avatarUrl.orEmpty() },
+                        isVideo = incoming.isVideo,
+                        isVerified = callerVerified,
+                        onAccept = { requestAndAnswerIncomingCall(incoming) },
+                        onDecline = {
+                            expandedIncomingCallId = null
+                            com.chroma.studio.ui.components.DynamicIslandManager.dismissIncomingCall(incoming.id)
+                            chatVm.rejectCall(incoming)
+                        },
+                        onExpand = {
+                            expandedIncomingCallId = incoming.id
+                            com.chroma.studio.ui.components.DynamicIslandManager.dismissIncomingCall(incoming.id)
+                        }
+                    )
+                } else {
+                    com.chroma.studio.ui.components.DynamicIslandManager.dismissIncomingCall(incoming.id)
+                }
+            }
+
+            // Clear active Apple call screen once WebRTC transitions back to ENDED/IDLE
+            LaunchedEffect(rtcCallState, rtcIncomingCall) {
+                if (rtcIncomingCall == null &&
+                    (rtcCallState == com.chroma.studio.webrtc.CallState.ENDED ||
+                        rtcCallState == com.chroma.studio.webrtc.CallState.IDLE)
+                ) {
+                    appleActiveCallSession = null
+                }
+            }
+
+            val showFullScreenIncoming = rtcIncomingCall != null &&
+                (presentationMode == com.chroma.studio.webrtc.CallPresentationMode.FULL_SCREEN ||
+                    expandedIncomingCallId == rtcIncomingCall?.id)
+
+            val activeSession = appleActiveCallSession
+            val showFullScreenActive = !showFullScreenIncoming &&
+                rtcActiveCall != null &&
+                (rtcIsCaller || (activeSession != null && rtcActiveCall?.id == activeSession.id)) &&
+                (rtcCallState == com.chroma.studio.webrtc.CallState.ACTIVE ||
+                    rtcCallState == com.chroma.studio.webrtc.CallState.CALLING)
+
+            val displayedCallModel = if (showFullScreenIncoming) rtcIncomingCall else if (showFullScreenActive) (rtcActiveCall ?: activeSession) else null
+
             androidx.compose.animation.AnimatedVisibility(
-                visible = rtcIncomingCall != null,
+                visible = displayedCallModel != null,
                 enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(250)) + androidx.compose.animation.slideInVertically { -it },
                 exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.slideOutVertically { -it }
             ) {
-                com.chroma.studio.webrtc.IncomingCallOverlay(
-                    call = rtcIncomingCall,
-                    onAccept = {
-                        val call = rtcIncomingCall ?: return@IncomingCallOverlay
-                        val hasAudio = androidx.core.content.ContextCompat.checkSelfPermission(
-                            this@HomeActivity,
-                            android.Manifest.permission.RECORD_AUDIO
-                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                        val hasCamera = !call.isVideo || androidx.core.content.ContextCompat.checkSelfPermission(
-                            this@HomeActivity,
-                            android.Manifest.permission.CAMERA
-                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                        if (hasAudio && hasCamera) {
-                            proceedAnswerIncomingCall(call)
-                        } else {
-                            pendingAnswerCall = call
-                            val needed = if (call.isVideo) {
-                                arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)
-                            } else {
-                                arrayOf(android.Manifest.permission.RECORD_AUDIO)
-                            }
-                            incomingCallPermissionLauncher.launch(needed)
-                        }
-                    },
-                    onDecline = {
-                        val call = rtcIncomingCall ?: return@IncomingCallOverlay
-                        chatVm.rejectCall(call)
+                val callForOverlay = displayedCallModel
+                if (callForOverlay != null) {
+                    val peerUid = if (rtcIsCaller && showFullScreenActive) callForOverlay.calleeId else callForOverlay.callerId
+                    val peerProfile = chatProfiles[peerUid]
+                    val handle = peerProfile?.username?.takeIf { it.isNotBlank() }?.let {
+                        if (it.startsWith("@")) it else "@$it"
+                    } ?: ""
+                    val currentUidForCall = remember {
+                        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
                     }
-                )
+                    val conferenceCandidates = remember(chatProfiles, peerUid, currentUidForCall) {
+                        chatProfiles.values
+                            .filter {
+                                it.uid != peerUid &&
+                                    it.uid != currentUidForCall &&
+                                    it.displayName.isNotBlank()
+                            }
+                            .map { it.displayName }
+                            .distinct()
+                            .take(8)
+                    }
+                    com.chroma.studio.webrtc.IncomingCallOverlay(
+                        call = callForOverlay,
+                        callManager = chatVm.callManager,
+                        callerHandle = handle,
+                        isVerified = peerProfile?.verified == true,
+                        initialStatus = if (showFullScreenActive) {
+                            com.chroma.studio.webrtc.CallStatus.ACTIVE
+                        } else {
+                            com.chroma.studio.webrtc.CallStatus.INCOMING
+                        },
+                        conferenceCandidates = conferenceCandidates,
+                        canAnswerWithoutPrompt = {
+                            val hasAudio = androidx.core.content.ContextCompat.checkSelfPermission(
+                                this@HomeActivity,
+                                android.Manifest.permission.RECORD_AUDIO
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            val hasCamera = !callForOverlay.isVideo || androidx.core.content.ContextCompat.checkSelfPermission(
+                                this@HomeActivity,
+                                android.Manifest.permission.CAMERA
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            hasAudio && hasCamera
+                        },
+                        onAccept = {
+                            requestAndAnswerIncomingCall(callForOverlay)
+                        },
+                        onDecline = {
+                            expandedIncomingCallId = null
+                            com.chroma.studio.webrtc.CallRingtoneController.stop(callForOverlay.id)
+                            chatVm.rejectCall(callForOverlay)
+                        },
+                        onEndActiveCall = { reason ->
+                            appleActiveCallSession = null
+                            expandedIncomingCallId = null
+                            chatVm.endCall(reason)
+                        },
+                        onQuickMessageReply = { replyText ->
+                            val rId = callForOverlay.roomId
+                            if (rId.isNotBlank()) {
+                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    try {
+                                        com.chroma.studio.data.SupabaseChatRepository().sendMessage(rId, replyText)
+                                    } catch (_: Throwable) {}
+                                }
+                            }
+                        }
+                    )
+                }
             }
 
             // ── Device Music Trimmer Modal ──
@@ -3071,7 +3233,31 @@ private fun AuthenticatedRoute(
                     videoDurationSec = 60f,
                     onAudioSelected = { uri, name, dur, start, end ->
                         showDeviceMusicTrimmer = false
-                        com.chroma.studio.ui.components.ToastManager.showToast("Selected: $name")
+                        val startSec = start.toInt().coerceAtLeast(0)
+                        val clipSec = (end - start).toInt().coerceIn(5, 60)
+                        val totalSec = dur.toInt().coerceAtLeast(clipSec)
+                        com.chroma.studio.data.PendingMusicHandoff.set(
+                            com.chroma.studio.data.AttachedMusicSelection(
+                                trackId = "device_${uri.toString().hashCode()}",
+                                title = name.ifBlank { "Device Audio" },
+                                artist = "Device Audio",
+                                album = "",
+                                coverUrl = "",
+                                audioUrl = uri.toString(),
+                                startSec = startSec,
+                                durationSec = clipSec,
+                                totalTrackSec = totalSec,
+                                showLyricsSticker = false
+                            )
+                        )
+                        com.chroma.studio.ui.components.ToastManager.showToast(
+                            "Audio trimmed: $name (${clipSec}s) — choose a video or photo"
+                        )
+                        if (flashPickerVideoUri != null || flashImportedMediaUris.isNotEmpty()) {
+                            navController.navigate("flash_video_editor")
+                        } else {
+                            navController.navigate("create_post")
+                        }
                     },
                     onDismiss = {
                         showDeviceMusicTrimmer = false

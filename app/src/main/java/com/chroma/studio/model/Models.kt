@@ -172,7 +172,8 @@ data class DiscoverPost(
     val musicAudioUrl: String? = null,
     val musicStartSec: Int = 0,
     val musicDurationSec: Int = 15,
-    val musicShowLyrics: Boolean = true
+    val musicShowLyrics: Boolean = true,
+    val musicMixedInVideo: Boolean = false
 ) {
     @get:com.google.firebase.firestore.Exclude
     val effectiveCommentsCount: Int
@@ -566,7 +567,8 @@ data class FlashVideo(
     val musicAudioUrl: String? = null,
     val musicStartSec: Int = 0,
     val musicDurationSec: Int = 15,
-    val musicShowLyrics: Boolean = true
+    val musicShowLyrics: Boolean = true,
+    val musicMixedInVideo: Boolean = false
 )
 
 /** Locally persisted draft before publishing a Flash. */

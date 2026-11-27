@@ -508,7 +508,6 @@ private fun ChatScreenContent(
             }
             try { AudioPlayerManager.stop() } catch (_: Exception) {}
             try { AudioRecorderManager.cancelRecording() } catch (_: Exception) {}
-            try { chatViewModel?.endCall() } catch (_: Exception) {}
             com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = null
         }
     }
@@ -1789,8 +1788,9 @@ private fun ChatScreenContent(
                 if (activeCall != null) {
                     activeCallType = if (activeCall.isVideo) "Video Call" else "Audio Call"
                 }
-                isCallBannerActive = true
-                isFullCallModalOpen = true
+                // Full-screen Apple Call UI is hosted globally in HomeActivity for both incoming & outgoing calls
+                isCallBannerActive = false
+                isFullCallModalOpen = false
             }
             CallState.ENDED, CallState.IDLE -> {
                 isCallBannerActive = false
@@ -1819,8 +1819,8 @@ private fun ChatScreenContent(
         showIsland = { title, desc, type -> showIsland(title, desc, type) },
         onCallUiOpened = { callType ->
             activeCallType = callType
-            isCallBannerActive = true
-            isFullCallModalOpen = true
+            isCallBannerActive = false
+            isFullCallModalOpen = false
             callDurationSeconds = 0
         }
     )

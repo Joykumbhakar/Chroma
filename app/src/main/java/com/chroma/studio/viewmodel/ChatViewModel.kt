@@ -465,6 +465,7 @@ class ChatViewModel : ViewModel() {
 
     fun resetForLogout() {
         currentAuthUserId = null
+        try { callManager?.endCall("ended") } catch (_: Exception) {}
         callManager?.stopListeningForIncomingCalls()
         chatsJob?.cancel()
         chatsJob = null
@@ -2608,16 +2609,15 @@ class ChatViewModel : ViewModel() {
         get() = callManager?.callDurationSec ?: kotlinx.coroutines.flow.MutableStateFlow(0)
 
     fun initializeCallManager(context: android.content.Context) {
-        if (callManager == null) {
-            val mgr = com.chroma.studio.webrtc.CallManager(context.applicationContext)
-            callManager = mgr
-            mgr.onCallEndedListener = { call, durationSec, status ->
-                logCallHistory(call, durationSec, status)
-            }
-            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-            if (!uid.isNullOrBlank()) {
-                mgr.startListeningForIncomingCalls(uid)
-            }
+        val mgr = callManager ?: com.chroma.studio.webrtc.CallManager.getInstance(context.applicationContext).also {
+            callManager = it
+        }
+        mgr.onCallEndedListener = { call, durationSec, status ->
+            logCallHistory(call, durationSec, status)
+        }
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (!uid.isNullOrBlank()) {
+            mgr.startListeningForIncomingCalls(uid)
         }
     }
 
@@ -2771,7 +2771,6 @@ class ChatViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        try { callManager?.endCall() } catch (_: Exception) {}
         try { activityPresenceController.onPauseOrBackground() } catch (_: Exception) {}
         authStateListener?.let { listener ->
             try {

@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -191,6 +192,27 @@
                 <action android:name="com.chroma.studio.action.CHAT_REPLY" />
                 <action android:name="com.chroma.studio.action.CHAT_MARK_READ" />
                 <action android:name="com.chroma.studio.action.CHAT_DISMISSED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Full-screen Apple Incoming & Active Call Activity (lockscreen wakeup + quick answer) -->
+        <activity
+            android:name=".webrtc.IncomingCallActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:theme="@style/Theme.Oscellion" />
+
+        <receiver
+            android:name=".webrtc.CallActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.chroma.studio.action.CALL_DECLINE" />
+                <action android:name="com.chroma.studio.action.CALL_DISMISSED" />
             </intent-filter>
         </receiver>
 

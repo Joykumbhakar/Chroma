@@ -262,5 +262,24 @@ class MessageStatusMachineAndNotificationDedupTest {
                 )
             )
         )
+        assertEquals(
+            FcmPushKind.INCOMING_CALL,
+            FcmPayloadClassifier.classify(
+                mapOf(
+                    "notificationType" to "INCOMING_CALL",
+                    "callId" to "call_42",
+                    "roomId" to "uidA_uidB"
+                )
+            )
+        )
+        assertEquals(
+            FcmPushKind.CALL_SIGNAL_UPDATE,
+            FcmPayloadClassifier.classify(
+                mapOf(
+                    "notificationType" to "CALL_ENDED",
+                    "callId" to "call_42"
+                )
+            )
+        )
     }
 }

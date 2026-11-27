@@ -106,6 +106,14 @@ fun OscellionOnboardingScreen(
     var activeFirebaseUser by remember { mutableStateOf<FirebaseUser?>(null) }
     var wizardError by remember { mutableStateOf<String?>(null) }
     var wizardErrorKey by remember { mutableIntStateOf(0) }
+    var hasPlayedAuthIntro by remember { mutableStateOf(false) }
+    var authToast by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var authToastKey by remember { mutableIntStateOf(0) }
+
+    fun emitAuthError(message: String) {
+        authToast = message to true
+        authToastKey++
+    }
 
     // Helper to purge Google & Firebase credentials cleanly
     fun purgeClientSession(onComplete: () -> Unit = {}) {
@@ -389,43 +397,43 @@ fun OscellionOnboardingScreen(
         ) { state ->
             when (state) {
                 AuthScreenState.WELCOME -> {
-                    WelcomeScreen(
-                        savedAccountName = savedAccountName,
-                        googleLoading = isGoogleLoading,
-                        appleLoading = isAppleLoading,
-                        isSubmitting = isConfirmingLoading,
-                        onContinueSaved = {
-                            if (primarySaved != null) {
-                                launchGoogleSignIn(AuthIntentMode.LOGIN)
+                    OscellionAuthScreen(
+                        playIntroOnStart = !hasPlayedAuthIntro,
+                        isLoading = isGoogleLoading || isConfirmingLoading,
+                        externalToast = authToast,
+                        externalToastKey = authToastKey,
+                        onIntroFinished = { hasPlayedAuthIntro = true },
+                        onGoogleAuth = { isSignUp ->
+                            launchGoogleSignIn(if (isSignUp) AuthIntentMode.SIGN_UP else AuthIntentMode.LOGIN)
+                        },
+                        onCreateAccount = { uname, pwd ->
+                            val clean = uname.trim().removePrefix("@").lowercase()
+                            if (clean.length < 3) {
+                                emitAuthError("Username must be at least 3 characters.")
                             } else {
-                                enterAsGuest()
+                                scope.launch {
+                                    isConfirmingLoading = true
+                                    try {
+                                        val isAvailable = discoverRepo.checkUsernameAvailable(clean)
+                                        if (!isAvailable) {
+                                            emitAuthError("Username @$clean is already taken. Try another.")
+                                        } else {
+                                            initialSignupUsername = clean
+                                            initialSignupPassword = pwd
+                                            activeGoogleUserData = null
+                                            activeFirebaseUser = null
+                                            wizardError = null
+                                            currentScreenState = AuthScreenState.ONBOARDING_WIZARD
+                                        }
+                                    } catch (e: Exception) {
+                                        emitAuthError(e.localizedMessage ?: "Unable to verify username availability.")
+                                    } finally {
+                                        isConfirmingLoading = false
+                                    }
+                                }
                             }
                         },
-                        onGoogle = {
-                            launchGoogleSignIn(AuthIntentMode.LOGIN)
-                        },
-                        onCreateAccount = {
-                            initialSignupUsername = ""
-                            initialSignupPassword = ""
-                            activeGoogleUserData = null
-                            activeFirebaseUser = null
-                            currentScreenState = AuthScreenState.ONBOARDING_WIZARD
-                        },
-                        onApple = { launchAppleSignIn() },
-                        onSignInExisting = {
-                            currentScreenState = AuthScreenState.SIGN_IN_EMAIL
-                        },
-                        onExploreGuest = { enterAsGuest() },
-                        onTerms = { showTermsModal = true },
-                        onSignUpWithCredentials = { uname, pwd ->
-                            initialSignupUsername = uname.trim().removePrefix("@").lowercase()
-                            initialSignupPassword = pwd
-                            activeGoogleUserData = null
-                            activeFirebaseUser = null
-                            wizardError = null
-                            currentScreenState = AuthScreenState.ONBOARDING_WIZARD
-                        },
-                        onSignInWithCredentials = { uname, pwd ->
+                        onSignIn = { uname, pwd ->
                             scope.launch {
                                 isConfirmingLoading = true
                                 try {
@@ -464,14 +472,24 @@ fun OscellionOnboardingScreen(
                                         com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
                                         Toast.makeText(context, "Welcome back, ${savedAcc.displayName}!", Toast.LENGTH_SHORT).show()
                                         onLoginSuccess()
+                                    } else {
+                                        emitAuthError("Sign in failed. Please check your credentials.")
                                     }
+                                } catch (e: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) {
+                                    emitAuthError("Incorrect password or credentials. Please try again.")
+                                } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
+                                    emitAuthError("No account found with this username.")
+                                } catch (e: com.google.firebase.FirebaseNetworkException) {
+                                    emitAuthError("Network error. Check your internet connection.")
                                 } catch (e: Exception) {
-                                    Toast.makeText(context, "Sign in failed: ${e.localizedMessage ?: "Invalid credentials"}", Toast.LENGTH_LONG).show()
+                                    val msg = e.localizedMessage ?: "Invalid credentials"
+                                    emitAuthError(msg)
                                 } finally {
                                     isConfirmingLoading = false
                                 }
                             }
-                        }
+                        },
+                        onContinueWithoutAccount = { enterAsGuest() }
                     )
                 }
 

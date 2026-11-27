@@ -225,4 +225,59 @@ object FcmPushSender {
             conn?.disconnect()
         }
     }
+
+    /**
+     * Dispatches an ultra-low-TTL, high-priority DATA-ONLY incoming/ended call push payload
+     * so backgrounded or locked devices ring immediately via CallStyle/FullScreenIntent
+     * and cancel cleanly without phantom late deliveries.
+     */
+    suspend fun sendCallPushNotification(
+        context: Context,
+        targetFcmToken: String,
+        dataMap: Map<String, String>,
+        ttlSeconds: Int = 45
+    ): FcmResult = withContext(Dispatchers.IO) {
+        if (targetFcmToken.isBlank()) return@withContext FcmResult.FAILED
+        val token = getAccessToken(context) ?: return@withContext FcmResult.FAILED
+
+        var conn: HttpURLConnection? = null
+        try {
+            conn = URL("https://fcm.googleapis.com/v1/projects/$projectId/messages:send")
+                .openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+
+            val dataJson = JSONObject()
+            dataMap.forEach { (k, v) -> dataJson.put(k, v) }
+
+            val payload = JSONObject().put("message", JSONObject().apply {
+                put("token", targetFcmToken)
+                put("data", dataJson)
+                put("android", JSONObject().apply {
+                    put("priority", "HIGH")
+                    put("ttl", "${ttlSeconds.coerceIn(15, 60)}s")
+                    put("direct_boot_ok", true)
+                    put("fcm_options", JSONObject().put("analytics_label", "webrtc_call"))
+                })
+            })
+
+            OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(payload.toString()) }
+
+            val code = conn.responseCode
+            if (code == 200) return@withContext FcmResult.SENT
+
+            val err = BufferedReader(InputStreamReader(conn.errorStream ?: conn.inputStream)).use { it.readText() }
+            Log.w(TAG, "FCM call push returned $code: $err")
+            if (code == 404 && err.contains("UNREGISTERED")) FcmResult.UNREGISTERED else FcmResult.FAILED
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send FCM call push", e)
+            FcmResult.FAILED
+        } finally {
+            conn?.disconnect()
+        }
+    }
 }

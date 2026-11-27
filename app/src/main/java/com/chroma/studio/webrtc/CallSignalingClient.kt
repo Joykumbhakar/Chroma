@@ -26,6 +26,21 @@ class CallSignalingClient {
         }
     }
 
+    suspend fun getCall(callId: String): CallModel? {
+        if (callId.isBlank()) return null
+        return try {
+            val snap = callsCollection.document(callId).get().await()
+            if (snap.exists()) {
+                snap.toObject(CallModel::class.java)?.let { c ->
+                    if (c.id.isBlank()) c.copy(id = snap.id) else c
+                }
+            } else null
+        } catch (e: Exception) {
+            Log.w("CallSignalingClient", "Error fetching call $callId: ${e.message}")
+            null
+        }
+    }
+
     suspend fun updateCallStatus(callId: String, status: String) {
         if (callId.isBlank()) return
         try {

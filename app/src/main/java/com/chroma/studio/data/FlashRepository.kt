@@ -128,7 +128,8 @@ class FlashRepository {
             musicAudioUrl = musicTrack?.audioUrl,
             musicStartSec = musicTrack?.startSec ?: 0,
             musicDurationSec = musicTrack?.durationSec ?: 0,
-            musicShowLyrics = musicTrack?.showLyricsSticker ?: false
+            musicShowLyrics = musicTrack?.showLyricsSticker ?: false,
+            musicMixedInVideo = musicTrack?.mixedInVideo ?: false
         )
         docRef.set(flash).await()
 
@@ -1049,26 +1050,37 @@ class FlashRepository {
     // ── User feed ────────────────────────────────────────────────────────────
 
     suspend fun getFlashesByUser(userId: String): List<FlashVideo> {
+        if (userId.isBlank()) return emptyList()
         return try {
             val ownSnap = collection
                 .whereEqualTo("creatorId", userId)
                 .get().await()
-            val ownList = ownSnap.toObjects(FlashVideo::class.java)
-                .filter { !it.isArchived && !it.isTakedown }
+            val ownList = ownSnap.documents.mapNotNull { doc ->
+                doc.toObject(FlashVideo::class.java)?.let { fv ->
+                    if (fv.id.isBlank()) fv.copy(id = doc.id) else fv
+                }
+            }.filter { !it.isArchived && !it.isTakedown }
 
             val collabList = try {
                 collection
                     .whereArrayContains("collaboratorIds", userId)
                     .get().await()
-                    .toObjects(FlashVideo::class.java)
+                    .documents.mapNotNull { doc ->
+                        doc.toObject(FlashVideo::class.java)?.let { fv ->
+                            if (fv.id.isBlank()) fv.copy(id = doc.id) else fv
+                        }
+                    }
                     .filter { !it.isArchived && !it.isTakedown }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.w("FlashRepository", "Collab flashes query warning for $userId", e)
                 emptyList()
             }
 
             com.chroma.studio.model.mergeCreatorAndCollabFlashes(ownList, collabList)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "Error fetching flashes for user $userId", e)
             emptyList()
         }
     }

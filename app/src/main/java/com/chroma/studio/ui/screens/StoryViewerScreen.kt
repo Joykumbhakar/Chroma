@@ -605,8 +605,9 @@ fun StoryViewerScreen(
         onDispose { storyMusicPlayer.release() }
     }
     LaunchedEffect(currentStory?.id, currentStory?.musicAudioUrl, currentStory?.musicStartSec) {
-        val audioUrl = currentStory?.musicAudioUrl?.takeIf { it.isNotBlank() }
-        if (audioUrl != null) {
+        val audioUrl = com.chroma.studio.data.normalizeMusicStreamUrl(currentStory?.musicAudioUrl)
+            .takeIf { it.isNotBlank() }
+        if (audioUrl != null && currentStory != null) {
             storyMusicPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(audioUrl))
             storyMusicPlayer.prepare()
             storyMusicPlayer.seekTo((currentStory.musicStartSec * 1000L).coerceAtLeast(0L))
@@ -615,11 +616,29 @@ fun StoryViewerScreen(
             storyMusicPlayer.clearMediaItems()
         }
     }
-    LaunchedEffect(currentStory?.id, effectivePaused) {
-        val hasAudio = !currentStory?.musicAudioUrl.isNullOrBlank()
-        if (hasAudio && !effectivePaused) {
+    LaunchedEffect(
+        currentStory?.id,
+        currentStory?.musicAudioUrl,
+        currentStory?.musicStartSec,
+        currentStory?.musicDurationSec,
+        effectivePaused
+    ) {
+        val storyObj = currentStory
+        val hasAudio = !storyObj?.musicAudioUrl.isNullOrBlank()
+        if (hasAudio && storyObj != null && !effectivePaused) {
             storyMusicPlayer.playWhenReady = true
             if (!storyMusicPlayer.isPlaying) storyMusicPlayer.play()
+            val clipDurSec = storyObj.musicDurationSec
+            if (clipDurSec > 0) {
+                val startMs = (storyObj.musicStartSec * 1000L).coerceAtLeast(0L)
+                val endMs = startMs + clipDurSec * 1000L
+                while (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true) {
+                    kotlinx.coroutines.delay(200L)
+                    if (storyMusicPlayer.isPlaying && storyMusicPlayer.currentPosition >= endMs) {
+                        storyMusicPlayer.seekTo(startMs)
+                    }
+                }
+            }
         } else {
             storyMusicPlayer.playWhenReady = false
             if (storyMusicPlayer.isPlaying) storyMusicPlayer.pause()

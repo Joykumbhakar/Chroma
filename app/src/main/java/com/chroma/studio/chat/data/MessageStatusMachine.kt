@@ -56,7 +56,9 @@ data class OutboxRoomStatus(
 enum class FcmPushKind {
     CHAT_MESSAGE,
     SOCIAL_ACTIVITY,
-    APP_UPDATE
+    APP_UPDATE,
+    INCOMING_CALL,
+    CALL_SIGNAL_UPDATE
 }
 
 /**
@@ -82,8 +84,18 @@ object FcmPayloadClassifier {
         "SYSTEM_DROP"
     )
 
+    private val callSignalEndTypes = setOf(
+        "CALL_ENDED",
+        "CALL_CANCELLED",
+        "CALL_REJECTED",
+        "CALL_MISSED",
+        "END_CALL"
+    )
+
     fun classify(data: Map<String, String>): FcmPushKind {
         val rawNotifType = (data["notificationType"] ?: data["type"] ?: "").trim().uppercase()
+        if (rawNotifType == "INCOMING_CALL") return FcmPushKind.INCOMING_CALL
+        if (rawNotifType in callSignalEndTypes) return FcmPushKind.CALL_SIGNAL_UPDATE
         if (rawNotifType == "APP_UPDATE") return FcmPushKind.APP_UPDATE
         if (rawNotifType == "MESSAGE" || rawNotifType == "CHAT_MESSAGE" || rawNotifType == "CHAT") {
             return FcmPushKind.CHAT_MESSAGE

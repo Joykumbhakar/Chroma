@@ -429,11 +429,69 @@ fun UserProfileScreen(
 
     val normalWorks = remember(works) { works.filter { it.remixedFromPostId == null && it.postType == "work" } }
     val imagePosts = remember(works) { works.filter { it.postType == "image" } }
-    val flashPosts = userFlashes
+    val flashPosts = remember(userFlashes, works) {
+        val merged = LinkedHashMap<String, FlashVideo>()
+        userFlashes.filter { !it.isArchived && !it.isTakedown }.forEachIndexed { idx, fv ->
+            val key = fv.id.ifBlank { "flash_raw_$idx" }
+            merged[key] = if (fv.id.isBlank()) fv.copy(id = key) else fv
+        }
+        works.filter {
+            !it.isArchived && !it.isTakedown && (isVideoPost(it) || it.postType == "video")
+        }.forEach { w ->
+            if (!merged.containsKey(w.id)) {
+                val resolvedVideoUrl = extractVideoUrlFromPost(w).orEmpty().ifBlank { w.videoUrl.orEmpty() }
+                merged[w.id] = FlashVideo(
+                    id = w.id,
+                    creatorId = w.creatorId,
+                    authorUsername = w.authorUsername,
+                    authorDisplayName = w.authorDisplayName,
+                    authorAvatarUrl = w.authorAvatarUrl,
+                    authorVerified = w.authorVerified,
+                    authorVerifiedTone = w.authorVerifiedTone,
+                    videoUrl = resolvedVideoUrl,
+                    thumbnailUrl = (w.thumbnailUrl?.takeIf { t -> t.isNotBlank() } ?: w.imageUrl).orEmpty(),
+                    caption = w.title.ifBlank { w.description },
+                    hashtags = w.tags,
+                    mentions = w.mentions,
+                    collaborators = w.collaborators,
+                    pendingCollaboratorIds = w.pendingCollaboratorIds,
+                    collaboratorIds = w.collaboratorIds,
+                    likesCount = w.likesCount,
+                    likedBy = w.likedBy,
+                    commentCount = w.effectiveCommentsCount,
+                    remixCount = w.remixCount,
+                    remixedBy = w.remixedBy,
+                    shareCount = w.shareCount,
+                    sharedBy = w.sharedBy,
+                    saveCount = w.saveCount,
+                    savedBy = w.savedBy,
+                    remixedFromPostId = w.remixedFromPostId,
+                    remixedFromAuthorUsername = w.remixedFromAuthorUsername,
+                    timestamp = w.timestamp,
+                    musicTrackId = w.musicTrackId,
+                    musicTitle = w.musicTitle,
+                    musicArtist = w.musicArtist,
+                    musicAlbum = w.musicAlbum,
+                    musicCoverUrl = w.musicCoverUrl,
+                    musicAudioUrl = w.musicAudioUrl,
+                    musicStartSec = w.musicStartSec,
+                    musicDurationSec = w.musicDurationSec,
+                    musicShowLyrics = w.musicShowLyrics
+                )
+            }
+        }
+        merged.values.sortedByDescending { it.timestamp }
+    }
+    val flashDiscoverPosts = remember(flashPosts, works) {
+        val worksById = works.associateBy { it.id }
+        flashPosts.map { fv ->
+            worksById[fv.id] ?: discoverVm.repository.mapFlashToDiscoverPost(fv, fv.id)
+        }
+    }
     val remixWorks = remember(works) { works.filter { it.remixedFromPostId != null } }
 
-    LaunchedEffect(isWorksLoading, initialPostId, works) {
-        if (!isWorksLoading && !initialPostId.isNullOrBlank() && works.isNotEmpty()) {
+    LaunchedEffect(isWorksLoading, initialPostId, works, flashDiscoverPosts) {
+        if (!isWorksLoading && !initialPostId.isNullOrBlank()) {
             val nIdx = normalWorks.indexOfFirst { it.id == initialPostId }
             if (nIdx >= 0) {
                 selectedTabIndex = 0
@@ -444,15 +502,21 @@ fun UserProfileScreen(
                     selectedTabIndex = 1
                     selectedPostIndex = pIdx
                 } else {
-                    val rIdx = remixWorks.indexOfFirst { it.id == initialPostId }
-                    if (rIdx >= 0) {
-                        selectedTabIndex = 3
-                        selectedPostIndex = rIdx
+                    val fIdx = flashDiscoverPosts.indexOfFirst { it.id == initialPostId }
+                    if (fIdx >= 0) {
+                        selectedTabIndex = 2
+                        selectedPostIndex = fIdx
                     } else {
-                        val allIdx = works.indexOfFirst { it.id == initialPostId }
-                        if (allIdx >= 0) {
-                            selectedTabIndex = 2
-                            selectedPostIndex = allIdx
+                        val rIdx = remixWorks.indexOfFirst { it.id == initialPostId }
+                        if (rIdx >= 0) {
+                            selectedTabIndex = 3
+                            selectedPostIndex = rIdx
+                        } else {
+                            val allIdx = works.indexOfFirst { it.id == initialPostId }
+                            if (allIdx >= 0) {
+                                selectedTabIndex = 0
+                                selectedPostIndex = allIdx
+                            }
                         }
                     }
                 }
@@ -818,7 +882,7 @@ fun UserProfileScreen(
                 }
                 2 -> {
                     // Flash Videos Tab
-                    if (isFlashesLoading) {
+                    if (isFlashesLoading && isWorksLoading && flashPosts.isEmpty()) {
                         items(6) {
                             Box(modifier = Modifier.aspectRatio(9f / 16f).clip(RectangleShape).shimmerEffect())
                         }
@@ -838,11 +902,18 @@ fun UserProfileScreen(
                             )
                         }
                     } else {
-                        items(flashPosts.size, key = { flashPosts[it].id }) { index ->
+                        items(
+                            count = flashPosts.size,
+                            key = { index ->
+                                val id = flashPosts[index].id
+                                if (id.isNotBlank()) id else "flash_$index"
+                            }
+                        ) { index ->
                             val flash = flashPosts[index]
                             ProfileFlashCard(
                                 flash = flash,
                                 isOwner = isCurrentUser,
+                                onClick = { selectedPostIndex = index },
                                 onDeleteClick = { flashToDelete = flash }
                             )
                         }
@@ -918,11 +989,10 @@ fun UserProfileScreen(
         }
     }
 
-    // Samsung One UI 7.0 Translucent Navigation Bar
+    // Apple HIG Translucent Navigation Bar
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val isSysDark = colors.isDark
-    val topBarBg = colors.bg.copy(alpha = (scrollProgress * 0.94f).coerceIn(0f, 0.96f))
-    val topBarBorder = colors.cardBorderSubtle.copy(alpha = scrollProgress)
+    val topBarBg = colors.bg.copy(alpha = (scrollProgress * 0.96f).coerceIn(0f, 0.96f))
+    val topBarBorder = colors.cardBorderSubtle.copy(alpha = scrollProgress * 0.9f)
 
     Box(
         modifier = Modifier
@@ -940,22 +1010,28 @@ fun UserProfileScreen(
                     )
                 }
             }
-            .padding(top = statusBarTop + 4.dp, bottom = 8.dp, start = 14.dp, end = 14.dp)
+            .padding(top = statusBarTop + 6.dp, bottom = 8.dp, start = 16.dp, end = 16.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val topIconBg = Color.Black.copy(alpha = 0.22f * (1f - scrollProgress))
+            val topIconBg = Color.Black.copy(alpha = 0.28f * (1f - scrollProgress))
+            val topIconRim = Color.White.copy(alpha = 0.22f * (1f - scrollProgress))
+            val actionIconTint = if (scrollProgress > 0.4f) colors.textMain else Color.White
 
             // Back button
             if (showBackButton) {
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
                         .background(topIconBg)
+                        .then(
+                            if (topIconRim.alpha > 0.02f) Modifier.border(0.5.dp, topIconRim, CircleShape)
+                            else Modifier
+                        )
                         .clickable {
                             com.chroma.studio.chat.sound.SoundManager.playReaction()
                             onBack()
@@ -965,15 +1041,15 @@ fun UserProfileScreen(
                     Icon(
                         Lucide.ChevronLeft,
                         contentDescription = "Back",
-                        tint = if (scrollProgress > 0.4f) colors.textMain else Color.White,
-                        modifier = Modifier.size(22.dp)
+                        tint = actionIconTint,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             } else {
-                Spacer(Modifier.size(38.dp))
+                Spacer(Modifier.size(36.dp))
             }
 
-            // Collapsed title when scrolled (smooth One UI typography slide & fade)
+            // Collapsed title when scrolled (iOS inline header transition)
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -983,19 +1059,19 @@ fun UserProfileScreen(
                 if (scrollProgress > 0.08f) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(0.5.dp),
+                        verticalArrangement = Arrangement.spacedBy(1.dp),
                         modifier = Modifier.graphicsLayer {
                             alpha = ((scrollProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
-                            translationY = (1f - scrollProgress) * 8f
+                            translationY = (1f - scrollProgress) * 6f
                         }
                     ) {
                         Text(
                             text = profile?.displayName ?: "",
                             color = colors.textMain,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.5.sp,
+                            fontSize = 15.sp,
                             fontFamily = InterFontFamily,
-                            lineHeight = 17.5.sp,
+                            lineHeight = 17.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             style = ScreenTightTextStyle
@@ -1019,67 +1095,59 @@ fun UserProfileScreen(
                 if (isCurrentUser) {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(topIconBg)
+                            .then(
+                                if (topIconRim.alpha > 0.02f) Modifier.border(0.5.dp, topIconRim, CircleShape)
+                                else Modifier
+                            )
                             .clickable {
                                 com.chroma.studio.chat.sound.SoundManager.playReaction()
                                 showBannerLibrarySheet = true
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (!isScrolled) {
-                            Icon(
-                                Lucide.Pencil,
-                                contentDescription = null,
-                                tint = Color.Black.copy(alpha = 0.35f),
-                                modifier = Modifier
-                                    .size(17.dp)
-                                    .offset(x = 0.5.dp, y = 0.75.dp)
-                            )
-                        }
                         Icon(
                             Lucide.Pencil,
                             contentDescription = "Edit Banner",
-                            tint = if (isScrolled) colors.textMain else Color.White,
-                            modifier = Modifier.size(17.dp)
+                            tint = actionIconTint,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
 
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(topIconBg)
+                            .then(
+                                if (topIconRim.alpha > 0.02f) Modifier.border(0.5.dp, topIconRim, CircleShape)
+                                else Modifier
+                            )
                             .clickable {
                                 com.chroma.studio.chat.sound.SoundManager.playReaction()
                                 showSettingsBottomSheet = true
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (!isScrolled) {
-                            Icon(
-                                Lucide.Settings,
-                                contentDescription = null,
-                                tint = Color.Black.copy(alpha = 0.35f),
-                                modifier = Modifier
-                                    .size(17.dp)
-                                    .offset(x = 0.5.dp, y = 0.75.dp)
-                            )
-                        }
                         Icon(
                             Lucide.Settings,
                             contentDescription = "Settings",
-                            tint = if (isScrolled) colors.textMain else Color.White,
-                            modifier = Modifier.size(17.dp)
+                            tint = actionIconTint,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(topIconBg)
+                            .then(
+                                if (topIconRim.alpha > 0.02f) Modifier.border(0.5.dp, topIconRim, CircleShape)
+                                else Modifier
+                            )
                             .clickable {
                                 com.chroma.studio.chat.sound.SoundManager.playReaction()
                                 showShareCardModal = true
@@ -1089,16 +1157,20 @@ fun UserProfileScreen(
                         Icon(
                             Lucide.Share2,
                             contentDescription = "Share Card",
-                            tint = if (isScrolled) colors.textMain else Color.White,
-                            modifier = Modifier.size(17.dp)
+                            tint = actionIconTint,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
 
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(topIconBg)
+                            .then(
+                                if (topIconRim.alpha > 0.02f) Modifier.border(0.5.dp, topIconRim, CircleShape)
+                                else Modifier
+                            )
                             .clickable {
                                 com.chroma.studio.chat.sound.SoundManager.playReaction()
                                 showOtherUserOptionsSheet = true
@@ -1108,8 +1180,8 @@ fun UserProfileScreen(
                         Icon(
                             Lucide.EllipsisVertical,
                             contentDescription = "More Options",
-                            tint = if (isScrolled) colors.textMain else Color.White,
-                            modifier = Modifier.size(17.dp)
+                            tint = actionIconTint,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
@@ -1151,10 +1223,11 @@ fun UserProfileScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         if (selectedPostIndex != null) {
-            val activeList = remember(selectedTabIndex, normalWorks, imagePosts, remixWorks, savedWorks, works) {
+            val activeList = remember(selectedTabIndex, normalWorks, imagePosts, flashDiscoverPosts, remixWorks, savedWorks, works) {
                 when (selectedTabIndex) {
                     0 -> normalWorks
                     1 -> imagePosts
+                    2 -> flashDiscoverPosts
                     3 -> remixWorks
                     4 -> savedWorks
                     else -> works
@@ -2765,10 +2838,27 @@ fun AppleEmptyTabState(
 fun ProfileFlashCard(
     flash: FlashVideo,
     isOwner: Boolean,
+    onClick: () -> Unit = {},
     onDeleteClick: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
     var showMenu by remember { mutableStateOf(false) }
+    val posterUrl = remember(flash.thumbnailUrl, flash.videoUrl) {
+        when {
+            flash.thumbnailUrl.isNotBlank() -> flash.thumbnailUrl
+            flash.videoUrl.contains("/video/upload/") -> {
+                val baseNoQuery = flash.videoUrl.substringBefore("?")
+                val dotIdx = baseNoQuery.lastIndexOf('.')
+                val asJpg = if (dotIdx > baseNoQuery.lastIndexOf('/')) {
+                    baseNoQuery.substring(0, dotIdx) + ".jpg"
+                } else {
+                    "$baseNoQuery.jpg"
+                }
+                asJpg.replace("/video/upload/", "/video/upload/so_0/")
+            }
+            else -> ""
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -2777,10 +2867,11 @@ fun ProfileFlashCard(
             .clip(RectangleShape)
             .background(colors.glassBgHover)
             .border(0.5.dp, colors.glassBorder, RectangleShape)
+            .clickable(onClick = onClick)
     ) {
-        if (flash.thumbnailUrl.isNotBlank()) {
+        if (posterUrl.isNotBlank()) {
             AsyncImage(
-                model = flash.thumbnailUrl,
+                model = posterUrl,
                 contentDescription = flash.caption,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop

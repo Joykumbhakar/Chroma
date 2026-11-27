@@ -68,4 +68,60 @@ class WebRTCCallHelpersTest {
         )
         assertNull(selectCommunicationAudioDeviceType(emptyList(), preferSpeaker = true))
     }
+
+    @Test
+    fun `resolveIncomingCallPresentation enforces full screen vs popup rules across all 4 states`() {
+        // 1. App backgrounded & screen not in use (off or locked) -> FULL_SCREEN
+        assertEquals(
+            CallPresentationMode.FULL_SCREEN,
+            resolveIncomingCallPresentation(
+                isAppForeground = false,
+                isScreenInteractive = false,
+                isDeviceLocked = true,
+                isOnChatScreen = false
+            )
+        )
+        assertEquals(
+            CallPresentationMode.FULL_SCREEN,
+            resolveIncomingCallPresentation(
+                isAppForeground = false,
+                isScreenInteractive = true,
+                isDeviceLocked = true,
+                isOnChatScreen = false
+            )
+        )
+
+        // 2. App backgrounded & screen in use (unlocked, user in another app) -> POPUP_NOTIFICATION
+        assertEquals(
+            CallPresentationMode.POPUP_NOTIFICATION,
+            resolveIncomingCallPresentation(
+                isAppForeground = false,
+                isScreenInteractive = true,
+                isDeviceLocked = false,
+                isOnChatScreen = false
+            )
+        )
+
+        // 3. App in foreground & user is on a Chat -> FULL_SCREEN
+        assertEquals(
+            CallPresentationMode.FULL_SCREEN,
+            resolveIncomingCallPresentation(
+                isAppForeground = true,
+                isScreenInteractive = true,
+                isDeviceLocked = false,
+                isOnChatScreen = true
+            )
+        )
+
+        // 4. App in foreground & user is on other screens/tabs -> POPUP_NOTIFICATION
+        assertEquals(
+            CallPresentationMode.POPUP_NOTIFICATION,
+            resolveIncomingCallPresentation(
+                isAppForeground = true,
+                isScreenInteractive = true,
+                isDeviceLocked = false,
+                isOnChatScreen = false
+            )
+        )
+    }
 }

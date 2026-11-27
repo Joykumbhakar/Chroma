@@ -129,6 +129,82 @@ object NotificationDispatcher {
     }
 
     /**
+     * Dispatches a high-priority DATA-ONLY incoming call push to the callee so
+     * backgrounded, locked, or other-app sessions trigger IncomingCallNotificationManager immediately.
+     */
+    suspend fun sendIncomingCallPush(call: com.chroma.studio.webrtc.CallModel) = withContext(Dispatchers.IO) {
+        if (call.calleeId.isBlank() || call.id.isBlank()) return@withContext
+        try {
+            val calleeDoc = db.collection("users").document(call.calleeId).get().await()
+            val targetFcmToken = calleeDoc.getString("fcmToken").orEmpty()
+            val isBlocked = (calleeDoc.get("blockedUsers") as? List<*>)?.contains(call.callerId) == true
+            if (targetFcmToken.isBlank() || isBlocked) return@withContext
+
+            val callerDoc = if (call.callerId.isNotBlank()) {
+                try { db.collection("users").document(call.callerId).get().await() } catch (_: Exception) { null }
+            } else null
+            val callerVerified = (callerDoc?.getBoolean("verified") == true).toString()
+            val rawHandle = callerDoc?.getString("username").orEmpty().trim()
+            val callerHandle = if (rawHandle.isNotBlank()) {
+                if (rawHandle.startsWith("@")) rawHandle else "@$rawHandle"
+            } else ""
+
+            val result = FcmPushSender.sendCallPushNotification(
+                context = com.chroma.studio.ChromaApp.instance,
+                targetFcmToken = targetFcmToken,
+                ttlSeconds = 45,
+                dataMap = mapOf(
+                    "notificationType" to "INCOMING_CALL",
+                    "callId" to call.id,
+                    "roomId" to call.roomId,
+                    "callerId" to call.callerId,
+                    "callerName" to call.callerName,
+                    "callerAvatar" to call.callerAvatar,
+                    "calleeId" to call.calleeId,
+                    "callType" to call.type,
+                    "callerVerified" to callerVerified,
+                    "callerHandle" to callerHandle,
+                    "timestamp" to call.timestamp.toString()
+                )
+            )
+            if (result == FcmResult.UNREGISTERED) {
+                db.collection("users").document(call.calleeId).update("fcmToken", FieldValue.delete())
+            }
+        } catch (e: Exception) {
+            Log.w("NotificationDispatcher", "Incoming call push failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Signals the remote participant via FCM push to dismiss/cancel an active or ringing incoming call.
+     */
+    suspend fun sendCallEndedPush(
+        targetUserId: String,
+        callId: String,
+        status: String = "ended"
+    ) = withContext(Dispatchers.IO) {
+        if (targetUserId.isBlank() || callId.isBlank()) return@withContext
+        try {
+            val targetDoc = db.collection("users").document(targetUserId).get().await()
+            val targetFcmToken = targetDoc.getString("fcmToken").orEmpty()
+            if (targetFcmToken.isBlank()) return@withContext
+            FcmPushSender.sendCallPushNotification(
+                context = com.chroma.studio.ChromaApp.instance,
+                targetFcmToken = targetFcmToken,
+                ttlSeconds = 30,
+                dataMap = mapOf(
+                    "notificationType" to "CALL_ENDED",
+                    "callId" to callId,
+                    "callStatus" to status,
+                    "timestamp" to System.currentTimeMillis().toString()
+                )
+            )
+        } catch (e: Exception) {
+            Log.w("NotificationDispatcher", "Call ended push failed: ${e.message}")
+        }
+    }
+
+    /**
      * Dispatch an activity notification to a target user.
      * Prevents self-notifications, reads the acting user's profile metadata,
      * and atomically writes the notification payload to `users/{targetUserId}/notifications/{notifId}`.

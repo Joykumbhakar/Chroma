@@ -11,6 +11,17 @@ import org.webrtc.*
 class CallManager(
     context: Context
 ) {
+    companion object {
+        @Volatile
+        private var instance: CallManager? = null
+
+        fun getInstance(context: Context): CallManager {
+            return instance ?: synchronized(this) {
+                instance ?: CallManager(context.applicationContext).also { instance = it }
+            }
+        }
+    }
+
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -76,6 +87,8 @@ class CallManager(
     @Volatile private var hasRemoteDescription: Boolean = false
     @Volatile private var lastAppliedRemoteOfferSdp: String? = null
     @Volatile private var lastAppliedRemoteAnswerSdp: String? = null
+    @Volatile private var lastSentOfferSdp: String? = null
+    @Volatile private var lastSentAnswerSdp: String? = null
     @Volatile private var timerStarted: Boolean = false
     @Volatile private var isCleaningUp: Boolean = false
     private val iceLock = Any()
@@ -105,9 +118,45 @@ class CallManager(
                         }
                     }
                 } else if (_callState.value == CallState.RINGING) {
+                    val prevCallId = _incomingCall.value?.id
                     _incomingCall.value = null
                     _callState.value = CallState.IDLE
+                    CallRingtoneController.stop(prevCallId)
+                    if (!prevCallId.isNullOrBlank()) {
+                        IncomingCallNotificationManager.cancelIncomingCallNotification(appContext, prevCallId)
+                    }
                 }
+            }
+        }
+    }
+
+    /**
+     * Surfaces an incoming call delivered via high-priority FCM push immediately before
+     * Firestore listener catches up (e.g., cold start or app returning from background).
+     */
+    fun presentIncomingCallFromPush(call: CallModel) {
+        if (call.id.isBlank()) return
+        scope.launch {
+            if (_callState.value == CallState.IDLE) {
+                _incomingCall.value = call
+                _callState.value = CallState.RINGING
+            }
+        }
+    }
+
+    /**
+     * Cancels an active or ringing call when remote caller hangs up / cancels via FCM push.
+     */
+    fun handleRemoteCallCancelledFromPush(callId: String, status: String) {
+        if (callId.isBlank()) return
+        scope.launch {
+            if (_incomingCall.value?.id == callId && _callState.value == CallState.RINGING) {
+                _incomingCall.value = null
+                _callState.value = CallState.IDLE
+                CallRingtoneController.stop(callId)
+                IncomingCallNotificationManager.cancelIncomingCallNotification(appContext, callId)
+            } else if (_activeCall.value?.id == callId) {
+                cleanupAndEnd(status)
             }
         }
     }
@@ -152,6 +201,8 @@ class CallManager(
         hasRemoteDescription = false
         lastAppliedRemoteOfferSdp = null
         lastAppliedRemoteAnswerSdp = null
+        lastSentOfferSdp = null
+        lastSentAnswerSdp = null
         timerStarted = false
         synchronized(iceLock) {
             pendingLocalCandidates.clear()
@@ -202,6 +253,7 @@ class CallManager(
                     webRTCClient?.createOffer(
                         isVideo = isVideo,
                         onSuccess = { sdp ->
+                            lastSentOfferSdp = sdp.description
                             scope.launch {
                                 val callWithOffer = call.copy(
                                     offer = mapOf("type" to "OFFER", "sdp" to sdp.description)
@@ -214,6 +266,15 @@ class CallManager(
                                 }
                                 callDocReady = true
                                 _activeCall.value = callWithOffer
+
+                                // Notify callee via high-priority FCM push so locked/background/other-app alerts ring immediately
+                                scope.launch {
+                                    try {
+                                        com.chroma.studio.data.NotificationDispatcher.sendIncomingCallPush(callWithOffer)
+                                    } catch (e: Throwable) {
+                                        Log.w("CallManager", "Incoming call push dispatch warning: ${e.message}")
+                                    }
+                                }
 
                                 webRTCClient?.setLocalDescription(
                                     desc = sdp,
@@ -228,7 +289,7 @@ class CallManager(
                         },
                         onError = { error ->
                             Log.e("CallManager", "Create offer error: $error")
-                            endCall("error")
+                            scope.launch { endCall("error") }
                         }
                     )
                 } catch (e: Throwable) {
@@ -243,6 +304,8 @@ class CallManager(
 
     fun answerCall(call: CallModel) {
         if (_callState.value == CallState.ACTIVE && _activeCall.value?.id == call.id) return
+        CallRingtoneController.stop(call.id)
+        IncomingCallNotificationManager.cancelIncomingCallNotification(appContext, call.id)
         ringingTimeoutJob?.cancel()
         ringingTimeoutJob = null
         isCleaningUp = false
@@ -252,6 +315,8 @@ class CallManager(
         hasRemoteDescription = false
         lastAppliedRemoteOfferSdp = null
         lastAppliedRemoteAnswerSdp = null
+        lastSentOfferSdp = null
+        lastSentAnswerSdp = null
         timerStarted = false
         synchronized(iceLock) {
             pendingLocalCandidates.clear()
@@ -328,6 +393,7 @@ class CallManager(
                     ) {
                         scope.launch {
                             try {
+                                lastSentAnswerSdp = answerSdp.description
                                 signaling.sendAnswer(callId, answerSdp.description)
                                 flushPendingLocalCandidates(callId)
                                 startCallTimerOnce()
@@ -339,7 +405,7 @@ class CallManager(
                 },
                 onError = { error ->
                     Log.e("CallManager", "Create answer error: $error")
-                    endCall("error")
+                    scope.launch { endCall("error") }
                 }
             )
         }
@@ -348,9 +414,18 @@ class CallManager(
     fun rejectCall(call: CallModel) {
         ringingTimeoutJob?.cancel()
         ringingTimeoutJob = null
+        CallRingtoneController.stop(call.id)
+        IncomingCallNotificationManager.cancelIncomingCallNotification(appContext, call.id)
         scope.launch {
             try {
                 signaling.endCall(call.id, "rejected")
+                if (call.callerId.isNotBlank()) {
+                    com.chroma.studio.data.NotificationDispatcher.sendCallEndedPush(
+                        targetUserId = call.callerId,
+                        callId = call.id,
+                        status = "rejected"
+                    )
+                }
             } catch (e: Throwable) {
                 Log.e("CallManager", "Error rejecting call", e)
             }
@@ -383,17 +458,22 @@ class CallManager(
                 }
 
                 val offerSdp = session.offer?.get("sdp")
-                if (!offerSdp.isNullOrBlank() && offerSdp != lastAppliedRemoteOfferSdp && (!isCaller || session.status == "accepted")) {
-                    // Handles initial callee offer as well as mid-call renegotiation offers
+                if (!offerSdp.isNullOrBlank() &&
+                    offerSdp != lastAppliedRemoteOfferSdp &&
+                    offerSdp != lastSentOfferSdp &&
+                    (!isCaller || session.status == "accepted")
+                ) {
+                    // Handles initial callee offer as well as mid-call renegotiation offers from either peer
                     if (!isCaller || session.offer["type"] == "OFFER") {
-                        if (!isCaller) {
-                            applyRemoteOfferAndSendAnswer(callId, offerSdp, session.isVideo)
-                        }
+                        applyRemoteOfferAndSendAnswer(callId, offerSdp, session.isVideo || _isCameraEnabled.value)
                     }
                 }
 
                 val answerSdp = session.answer?.get("sdp")
-                if (!answerSdp.isNullOrBlank() && answerSdp != lastAppliedRemoteAnswerSdp && isCaller) {
+                if (!answerSdp.isNullOrBlank() &&
+                    answerSdp != lastAppliedRemoteAnswerSdp &&
+                    answerSdp != lastSentAnswerSdp
+                ) {
                     lastAppliedRemoteAnswerSdp = answerSdp
                     val sdp = SessionDescription(SessionDescription.Type.ANSWER, answerSdp)
                     webRTCClient?.setRemoteDescription(
@@ -629,13 +709,14 @@ class CallManager(
             }
             _isCameraEnabled.value = true
             _isFrontCamera.value = webRTCClient?.isFrontCamera?.value ?: true
-            // Renegotiate if an active audio-only call is upgrading to video mid-call
+            // Renegotiate if an active audio-only call is upgrading to video mid-call (either peer)
             val activeId = _activeCall.value?.id
             val signalingStable = webRTCClient?.peerConnection?.signalingState() == PeerConnection.SignalingState.STABLE
-            if (!activeId.isNullOrBlank() && _callState.value == CallState.ACTIVE && signalingStable && isCallerRole) {
+            if (!activeId.isNullOrBlank() && _callState.value == CallState.ACTIVE && signalingStable) {
                 webRTCClient?.createOffer(
                     isVideo = true,
                     onSuccess = { offerSdp ->
+                        lastSentOfferSdp = offerSdp.description
                         webRTCClient?.setLocalDescription(offerSdp) {
                             scope.launch { signaling.sendRenegotiationOffer(activeId, offerSdp.description) }
                         }
@@ -649,11 +730,27 @@ class CallManager(
         return next
     }
 
+    fun selectAudioDevice(device: AudioOutputDevice) {
+        _isSpeakerOn.value = device.type == AudioDeviceType.SPEAKER
+        audioManager.selectOutputDevice(device)
+    }
+
     fun toggleSpeaker(): Boolean {
         val next = !_isSpeakerOn.value
         _isSpeakerOn.value = next
         audioManager.setSpeakerphone(next)
         return next
+    }
+
+    fun setAudioRouteSpeaker(speaker: Boolean) {
+        _isSpeakerOn.value = speaker
+        audioManager.setSpeakerphone(speaker)
+    }
+
+    fun setOnHold(onHold: Boolean) {
+        val mutedByHold = onHold || _isMicMuted.value
+        webRTCClient?.setAudioEnabled(!mutedByHold)
+        audioManager.setMicrophoneMute(mutedByHold)
     }
 
     fun switchCamera() {
@@ -670,6 +767,14 @@ class CallManager(
             scope.launch {
                 try {
                     signaling.endCall(currentCall.id, reason)
+                    val peerUid = if (isCallerRole) currentCall.calleeId else currentCall.callerId
+                    if (peerUid.isNotBlank()) {
+                        com.chroma.studio.data.NotificationDispatcher.sendCallEndedPush(
+                            targetUserId = peerUid,
+                            callId = currentCall.id,
+                            status = reason
+                        )
+                    }
                 } catch (e: Throwable) {
                     Log.e("CallManager", "Error ending call", e)
                 }
@@ -681,6 +786,11 @@ class CallManager(
     private fun cleanupAndEnd(reason: String = "ended") {
         if (isCleaningUp) return
         isCleaningUp = true
+        val endedId = _activeCall.value?.id ?: _incomingCall.value?.id
+        CallRingtoneController.stop(endedId)
+        if (!endedId.isNullOrBlank()) {
+            IncomingCallNotificationManager.cancelIncomingCallNotification(appContext, endedId)
+        }
         ringingTimeoutJob?.cancel()
         ringingTimeoutJob = null
         iceDisconnectJob?.cancel()
@@ -695,6 +805,8 @@ class CallManager(
         hasRemoteDescription = false
         lastAppliedRemoteOfferSdp = null
         lastAppliedRemoteAnswerSdp = null
+        lastSentOfferSdp = null
+        lastSentAnswerSdp = null
         timerStarted = false
         synchronized(iceLock) {
             pendingLocalCandidates.clear()

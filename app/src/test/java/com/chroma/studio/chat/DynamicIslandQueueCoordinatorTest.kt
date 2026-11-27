@@ -85,4 +85,25 @@ class DynamicIslandQueueCoordinatorTest {
         coordinator.setSuppressed(false)
         assertEquals("m2", (coordinator.enqueue(chat("r1", "m2"))?.event as? DynamicIslandEvent.ChatMessage)?.messageId)
     }
+
+    @Test
+    fun `incoming call preempts active notification immediately`() {
+        val coordinator = DynamicIslandQueueCoordinator()
+        coordinator.enqueue(chat("r1", "m1", "Hello"))
+
+        val incomingCall = DynamicIslandEvent.IncomingCall(
+            callId = "call_123",
+            roomId = "room_1",
+            callerName = "Joy",
+            isVideo = true,
+            onAccept = {},
+            onDecline = {},
+            onExpand = {}
+        )
+        coordinator.enqueue(incomingCall)
+
+        val current = coordinator.currentPresentation.value?.event as? DynamicIslandEvent.IncomingCall
+        assertEquals("call_123", current?.callId)
+        assertEquals(true, current?.isVideo)
+    }
 }

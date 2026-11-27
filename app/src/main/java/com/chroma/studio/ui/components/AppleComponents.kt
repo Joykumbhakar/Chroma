@@ -1343,7 +1343,10 @@ fun IosDynamicIslandHost(
         dragOffsetX.snapTo(0f)
 
         // Play notification chime strictly once per unique presentation instanceId
-        if (next.event !is DynamicIslandEvent.Status && lastChimedInstanceId != next.instanceId) {
+        if (next.event !is DynamicIslandEvent.Status &&
+            next.event !is DynamicIslandEvent.IncomingCall &&
+            lastChimedInstanceId != next.instanceId
+        ) {
             lastChimedInstanceId = next.instanceId
             try {
                 com.chroma.studio.chat.sound.SoundManager.playDynamicIsland(context)
@@ -1422,6 +1425,11 @@ fun IosDynamicIslandHost(
         val event = presentation.event
         if (isDragging) return@LaunchedEffect
 
+        if (event is DynamicIslandEvent.IncomingCall) {
+            // Live incoming call banner stays docked until answered, declined, expanded, or cancelled
+            return@LaunchedEffect
+        }
+
         if (isExpanded) {
             // Do NOT auto-dismiss while user is typing or focused on inline reply
             if (isComposingReply || replyText.isNotEmpty()) {
@@ -1461,20 +1469,21 @@ fun IosDynamicIslandHost(
                 }
             } else {
                 when (event) {
+                    is DynamicIslandEvent.Status -> if (event.actionLabel != null) 316.dp else if (event.title.length > 22) 292.dp else 252.dp
+                    is DynamicIslandEvent.IncomingCall -> 364.dp
                     is DynamicIslandEvent.ChatMessage -> 344.dp
                     is DynamicIslandEvent.Follow -> 336.dp
                     is DynamicIslandEvent.Comment -> 336.dp
                     is DynamicIslandEvent.StoryReaction -> 330.dp
                     is DynamicIslandEvent.Like -> 320.dp
                     is DynamicIslandEvent.RemixOrDownload -> 326.dp
-                    is DynamicIslandEvent.Status -> if (event.actionLabel != null) 316.dp else if (event.title.length > 22) 292.dp else 252.dp
                 }
             },
             animationSpec = spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow),
             label = "islandWidth"
         )
         val islandCorner by animateDpAsState(
-            targetValue = if (isExpanded) 28.dp else 24.dp,
+            targetValue = if (event is DynamicIslandEvent.IncomingCall) 32.dp else if (isExpanded) 28.dp else 24.dp,
             animationSpec = spring(dampingRatio = 0.66f, stiffness = Spring.StiffnessMediumLow),
             label = "islandCorner"
         )
@@ -1601,7 +1610,11 @@ fun IosDynamicIslandHost(
                     }
                     .clickable(enabled = !isExpanded) {
                         try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
-                        isExpanded = true
+                        if (event is DynamicIslandEvent.IncomingCall) {
+                            event.onExpand()
+                        } else {
+                            isExpanded = true
+                        }
                     }
                     .padding(horizontal = if (isExpanded) 13.dp else 8.dp, vertical = if (isExpanded) 12.dp else 6.dp)
             ) {
@@ -1617,6 +1630,89 @@ fun IosDynamicIslandHost(
                 if (!expandedState) {
                     // COMPACT PILL ALERT WITH QUICK ACTION & DISMISS BUTTONS
                     when (event) {
+                        is DynamicIslandEvent.IncomingCall -> {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                IosAvatarView(
+                                    name = event.callerName,
+                                    avatarUrl = event.callerAvatar,
+                                    size = 38.dp
+                                )
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                                ) {
+                                    Text(
+                                        text = if (event.isVideo) "FaceTime Video" else "Oscellion Audio",
+                                        color = if (event.isVideo) Color(0xFF38BDF8) else Color(0xFF34C759),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = InterFontFamily,
+                                        maxLines = 1
+                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = event.callerName.ifBlank { "Oscellion User" },
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = InterFontFamily,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        if (event.isVerified) {
+                                            com.chroma.studio.webrtc.VerifiedBadgeSeal(
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFF3B30))
+                                        .clickable {
+                                            try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Throwable) {}
+                                            event.onDecline()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    com.chroma.studio.webrtc.HandsetIcon(
+                                        modifier = Modifier.size(18.dp),
+                                        rotationDegrees = 135f
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF34C759))
+                                        .clickable {
+                                            try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Throwable) {}
+                                            event.onAccept()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (event.isVideo) Lucide.Video else Lucide.Phone,
+                                        contentDescription = "Accept",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+
                         is DynamicIslandEvent.ChatMessage -> {
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
@@ -1949,6 +2045,89 @@ fun IosDynamicIslandHost(
                 } else {
                     // EXPANDED INTERACTIVE ALERT WITH FULL ACTION BUTTONS
                     when (event) {
+                        is DynamicIslandEvent.IncomingCall -> {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                IosAvatarView(
+                                    name = event.callerName,
+                                    avatarUrl = event.callerAvatar,
+                                    size = 38.dp
+                                )
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                                ) {
+                                    Text(
+                                        text = if (event.isVideo) "FaceTime Video" else "Oscellion Audio",
+                                        color = if (event.isVideo) Color(0xFF38BDF8) else Color(0xFF34C759),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = InterFontFamily,
+                                        maxLines = 1
+                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = event.callerName.ifBlank { "Oscellion User" },
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontFamily = InterFontFamily,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        if (event.isVerified) {
+                                            com.chroma.studio.webrtc.VerifiedBadgeSeal(
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFF3B30))
+                                        .clickable {
+                                            try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Throwable) {}
+                                            event.onDecline()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    com.chroma.studio.webrtc.HandsetIcon(
+                                        modifier = Modifier.size(18.dp),
+                                        rotationDegrees = 135f
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF34C759))
+                                        .clickable {
+                                            try { haptic.performHapticFeedback(HapticFeedbackType.LongPress) } catch (_: Throwable) {}
+                                            event.onAccept()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (event.isVideo) Lucide.Video else Lucide.Phone,
+                                        contentDescription = "Accept",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+
                         is DynamicIslandEvent.ChatMessage -> {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),

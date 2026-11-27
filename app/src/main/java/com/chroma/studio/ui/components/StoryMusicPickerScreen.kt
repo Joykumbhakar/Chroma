@@ -428,6 +428,8 @@ fun StoryMusicPickerScreen(
 
     val tracks = remember { mutableStateListOf<PickerMusicTrack>() }
     var isCatalogLoading by remember { mutableStateOf(true) }
+    var catalogError by remember { mutableStateOf<String?>(null) }
+    var catalogReloadNonce by remember { mutableIntStateOf(0) }
     var activeTab by remember { mutableStateOf(PickerTab.FOR_YOU) }
     var activeGenre by remember { mutableStateOf("All") }
     var activeCollection by remember { mutableStateOf<MusicMoodCollection?>(null) }
@@ -468,8 +470,23 @@ fun StoryMusicPickerScreen(
             .build()
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                isPlaying = false
+                playheadProgress = 0f
+                showToast("Could not stream preview (${error.errorCodeName})")
+            }
+
+            override fun onIsPlayingChanged(playing: Boolean) {
+                if (playingTrackId != null) {
+                    isPlaying = playing
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
         onDispose {
+            exoPlayer.removeListener(listener)
             try {
                 exoPlayer.stop()
                 exoPlayer.release()
@@ -478,7 +495,8 @@ fun StoryMusicPickerScreen(
     }
 
     fun startPlayback(track: PickerMusicTrack, startFromSec: Int = clipStartSec) {
-        if (track.audioUrl.isBlank()) {
+        val streamUrl = com.chroma.studio.data.normalizeMusicStreamUrl(track.audioUrl)
+        if (streamUrl.isBlank()) {
             showToast("Preview stream unavailable for this track")
             return
         }
@@ -487,9 +505,11 @@ fun StoryMusicPickerScreen(
         playheadProgress = 0f
         try {
             val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString()
-            if (currentUri != track.audioUrl) {
-                exoPlayer.setMediaItem(MediaItem.fromUri(track.audioUrl))
+            if (currentUri != streamUrl) {
+                exoPlayer.setMediaItem(MediaItem.fromUri(streamUrl))
                 exoPlayer.repeatMode = Player.REPEAT_MODE_ONE
+                exoPlayer.prepare()
+            } else if (exoPlayer.playbackState == Player.STATE_IDLE) {
                 exoPlayer.prepare()
             }
             exoPlayer.seekTo((startFromSec.coerceIn(0, track.durationSec)) * 1000L)
@@ -497,6 +517,7 @@ fun StoryMusicPickerScreen(
             exoPlayer.play()
         } catch (_: Throwable) {
             isPlaying = false
+            showToast("Failed to start audio preview")
         }
     }
 
@@ -546,12 +567,13 @@ fun StoryMusicPickerScreen(
     }
 
     // Load live catalog from Firebase Firestore
-    LaunchedEffect(Unit) {
+    LaunchedEffect(catalogReloadNonce) {
         isCatalogLoading = true
-        val remote = repo.fetchActiveCatalog(context)
+        catalogError = null
+        val result = repo.fetchActiveCatalogResult(context)
         tracks.clear()
         tracks.addAll(
-            remote.mapIndexed { idx, t ->
+            result.tracks.mapIndexed { idx, t ->
                 val ratio = t.bestPartStartSec.toFloat() / max(1, t.durationSec).toFloat()
                 PickerMusicTrack(
                     source = t,
@@ -559,6 +581,7 @@ fun StoryMusicPickerScreen(
                 )
             }
         )
+        catalogError = result.errorMessage
         isCatalogLoading = false
         if (!initialTrackId.isNullOrBlank()) {
             tracks.firstOrNull { it.id == initialTrackId }?.let { openTrimmer(it) }
@@ -575,23 +598,28 @@ fun StoryMusicPickerScreen(
         } catch (_: Throwable) {}
     }
 
-    // Smooth 50ms loop progress & segment boundary loop during playback
+    // Sync playhead progress with live ExoPlayer playback position and loop clip window cleanly
     LaunchedEffect(isPlaying, playingTrackId, selectedTrackForTrimmer?.id, clipStartSec, clipDurationSec) {
         if (!isPlaying) return@LaunchedEffect
         val stepMs = 50L
         while (isActive && isPlaying) {
             delay(stepMs)
-            val loopDur = if (selectedTrackForTrimmer != null) clipDurationSec else 20
-            val next = playheadProgress + (stepMs / 1000f) / max(1, loopDur)
-            if (next >= 1f) {
-                playheadProgress = 0f
-                val active = selectedTrackForTrimmer ?: tracks.firstOrNull { it.id == playingTrackId }
-                if (active != null && active.audioUrl.isNotBlank()) {
-                    val seekBack = if (selectedTrackForTrimmer != null) clipStartSec else active.chorusSec
-                    try { exoPlayer.seekTo(seekBack * 1000L) } catch (_: Throwable) {}
+            val active = selectedTrackForTrimmer ?: tracks.firstOrNull { it.id == playingTrackId }
+            val startSec = if (selectedTrackForTrimmer != null) clipStartSec else (active?.chorusSec ?: 0)
+            val loopDur = if (selectedTrackForTrimmer != null) clipDurationSec else min(20, active?.durationSec ?: 20)
+            val safeLoopDurMs = max(1, loopDur) * 1000L
+
+            if (exoPlayer.playbackState == Player.STATE_READY) {
+                val relMs = (exoPlayer.currentPosition - startSec * 1000L).coerceAtLeast(0L)
+                val next = (relMs.toFloat() / safeLoopDurMs.toFloat())
+                if (next >= 1f) {
+                    playheadProgress = 0f
+                    if (active != null && active.audioUrl.isNotBlank()) {
+                        try { exoPlayer.seekTo(startSec * 1000L) } catch (_: Throwable) {}
+                    }
+                } else {
+                    playheadProgress = next.coerceIn(0f, 1f)
                 }
-            } else {
-                playheadProgress = next
             }
         }
     }
@@ -747,12 +775,14 @@ fun StoryMusicPickerScreen(
                         item(key = "empty") {
                             EmptySongsState(
                                 isSavedEmpty = activeTab == PickerTab.SAVED && searchQuery.isBlank(),
+                                errorMessage = if (activeTab != PickerTab.SAVED && tracks.isEmpty()) catalogError else null,
                                 canResetFilters = hasActiveFilters,
                                 onResetFilters = {
                                     searchQuery = ""
                                     activeGenre = "All"
                                     activeCollection = null
-                                }
+                                },
+                                onRetryCatalog = { catalogReloadNonce += 1 }
                             )
                         }
                     } else {
@@ -1635,8 +1665,10 @@ private fun ExplicitBadge() {
 @Composable
 private fun EmptySongsState(
     isSavedEmpty: Boolean,
+    errorMessage: String? = null,
     canResetFilters: Boolean,
-    onResetFilters: () -> Unit
+    onResetFilters: () -> Unit,
+    onRetryCatalog: (() -> Unit)? = null
 ) {
     val colors = LocalMusicPickerColors.current
     Column(
@@ -1655,34 +1687,40 @@ private fun EmptySongsState(
         )
         Spacer(modifier = Modifier.height(14.dp))
         Text(
-            text = if (isSavedEmpty) "No Saved Music Yet" else "No Songs Found",
+            text = when {
+                errorMessage != null -> "Couldn't Load Music"
+                isSavedEmpty -> "No Saved Music Yet"
+                else -> "No Songs Found"
+            },
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             color = colors.textPrimary
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = if (isSavedEmpty) {
-                "Bookmark songs while browsing to access them quickly here."
-            } else {
-                "No uploaded music matches your current filter or search."
+            text = when {
+                errorMessage != null -> errorMessage
+                isSavedEmpty -> "Bookmark songs while browsing to access them quickly here."
+                else -> "No uploaded music matches your current filter or search."
             },
             fontSize = 14.sp,
             color = colors.textTertiary,
             textAlign = TextAlign.Center,
             lineHeight = 20.sp
         )
-        if (canResetFilters) {
+        if (canResetFilters || errorMessage != null || (!isSavedEmpty && onRetryCatalog != null)) {
             Spacer(modifier = Modifier.height(16.dp))
             Box(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(colors.accent.copy(alpha = if (colors.isDark) 0.18f else 0.10f))
-                    .clickable(role = Role.Button, onClick = onResetFilters)
+                    .clickable(role = Role.Button, onClick = {
+                        if (canResetFilters) onResetFilters() else onRetryCatalog?.invoke()
+                    })
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Text(
-                    text = "Reset Filters",
+                    text = if (canResetFilters) "Reset Filters" else "Refresh Library",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.accent
@@ -1940,8 +1978,11 @@ private fun ClipTrimmerBottomSheet(
                             .padding(2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        listOf(15, 30, 60).forEach { preset ->
-                            val active = clipDurationSec == preset
+                        val effectivePresets = listOf(15, 30, 60)
+                        effectivePresets.forEach { preset ->
+                            val targetDuration = preset.coerceAtMost(track.durationSec)
+                            val active = clipDurationSec == targetDuration &&
+                                (preset == effectivePresets.first { it.coerceAtMost(track.durationSec) == clipDurationSec })
                             Box(
                                 modifier = Modifier
                                     .clip(CircleShape)
@@ -1953,7 +1994,7 @@ private fun ClipTrimmerBottomSheet(
                                     .padding(horizontal = 12.dp, vertical = 5.dp)
                             ) {
                                 Text(
-                                    text = "${preset}s",
+                                    text = if (targetDuration < preset && track.durationSec < preset) "${targetDuration}s" else "${preset}s",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (active) colors.textPrimary else colors.textTertiary
@@ -1962,16 +2003,21 @@ private fun ClipTrimmerBottomSheet(
                         }
                     }
 
-                    Text(
-                        text = "Done",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.accent,
+                    Box(
+                        contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(onClick = onDone)
-                            .padding(horizontal = 6.dp, vertical = 4.dp)
-                    )
+                            .clip(CircleShape)
+                            .background(colors.accent)
+                            .clickable(role = Role.Button, onClick = onDone)
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "Done",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                    }
                 }
             }
 
@@ -2033,69 +2079,6 @@ private fun ClipTrimmerBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(colors.secondarySurface)
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = if (track.lyrics.isNotEmpty()) "SYNCED LYRICS" else "BEST PART",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.6.sp,
-                            color = colors.accent
-                        )
-                        Box(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(colors.activeThumb)
-                                .clickable(role = Role.Button, onClick = onJumpToChorus)
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "Jump to Best Part",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = colors.textSecondary
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(3.dp))
-                    AnimatedContent(
-                        targetState = currentLyric,
-                        transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(110)) },
-                        label = "lyricCrossfade"
-                    ) { lyric ->
-                        Text(
-                            text = lyric,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.textBody,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                AppleSwitch(
-                    checked = showLyricsSticker,
-                    onCheckedChange = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onLyricsToggle(it)
-                    }
-                )
-            }
-
             Spacer(modifier = Modifier.height(18.dp))
 
             WaveformTrimmerControl(
@@ -2109,72 +2092,10 @@ private fun ClipTrimmerBottomSheet(
                 onJumpToChorus = onJumpToChorus
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Start Time",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.textTertiary
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    StepCircleButton(
-                        symbol = "−",
-                        contentDesc = "Minus 1 second",
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onClipWindowChange((clampedStart - 1).coerceIn(0, maxStart), clipDurationSec)
-                        }
-                    )
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(7.dp))
-                            .background(colors.secondarySurface)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = formatMusicTime(clampedStart),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textPrimary,
-                            style = TextStyle(fontFeatureSettings = "tnum")
-                        )
-                    }
-                    StepCircleButton(
-                        symbol = "+",
-                        contentDesc = "Plus 1 second",
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onClipWindowChange((clampedStart + 1).coerceIn(0, maxStart), clipDurationSec)
-                        }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            PrecisionNumberRulerSlider(
-                currentSec = clampedStart,
-                maxSec = maxStart,
-                onSecChange = { newSec ->
-                    onClipWindowChange(newSec.coerceIn(0, maxStart), clipDurationSec)
-                },
-                onDragStateChange = { isDraggingAny = it }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Drag handles to extend or cut • Slide dial to fine-tune",
+                text = "Drag handles or selection window to adjust clip",
                 fontSize = 11.sp,
                 color = colors.textTertiary,
                 textAlign = TextAlign.Center,

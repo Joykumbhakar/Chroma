@@ -71,6 +71,22 @@ open class ChromaMessagingService : FirebaseMessagingService() {
             return
         }
 
+        if (pushKind == com.chroma.studio.chat.data.FcmPushKind.CALL_SIGNAL_UPDATE) {
+            val callId = data["callId"].orEmpty()
+            val callStatus = data["callStatus"] ?: "ended"
+            if (callId.isNotBlank()) {
+                com.chroma.studio.webrtc.IncomingCallNotificationManager.cancelIncomingCallNotification(this, callId)
+                com.chroma.studio.webrtc.CallManager.getInstance(this)
+                    .handleRemoteCallCancelledFromPush(callId, callStatus)
+            }
+            return
+        }
+
+        if (pushKind == com.chroma.studio.chat.data.FcmPushKind.INCOMING_CALL) {
+            handleIncomingCallPush(data)
+            return
+        }
+
         val senderId = data["senderId"] ?: data["sender_id"] ?: data["userId"] ?: ""
         val recipientId = data["recipientId"] ?: data["recipient_id"] ?: ""
         val roomId = data["roomId"] ?: data["room_id"] ?: ""
@@ -226,5 +242,62 @@ open class ChromaMessagingService : FirebaseMessagingService() {
             messageType = messageType
         )
         if (roomId.isNotBlank()) runBounded { SupabaseChatRepository().markAsDelivered(roomId, messageId.ifBlank { null }) }
+    }
+
+    private fun handleIncomingCallPush(data: Map<String, String>) {
+        val callId = data["callId"].orEmpty()
+        if (callId.isBlank()) return
+
+        val callerId = data["callerId"] ?: data["senderId"] ?: ""
+        val currentUserId = ChatStateManager.currentUserId.value ?: FirebaseAuth.getInstance().currentUser?.uid
+        if (callerId.isNotBlank() && currentUserId != null && callerId == currentUserId) return
+
+        val pushTs = data["timestamp"]?.toLongOrNull() ?: System.currentTimeMillis()
+        if (System.currentTimeMillis() - pushTs > 55_000L) return
+
+        synchronized(seenMessageIds) {
+            val dedupKey = "call:$callId"
+            if (seenMessageIds.containsKey(dedupKey)) return
+            seenMessageIds[dedupKey] = true
+        }
+
+        val notifPrefs = getSharedPreferences("oscellion_notif_prefs", MODE_PRIVATE)
+        if (notifPrefs.getBoolean("quiet_mode_enabled", false)) return
+
+        // Confirm against Firestore if reachable so already-ended/cancelled calls never ring
+        var remoteCall: com.chroma.studio.webrtc.CallModel? = null
+        runBounded {
+            remoteCall = com.chroma.studio.webrtc.CallSignalingClient().getCall(callId)
+        }
+        if (remoteCall != null && remoteCall!!.status !in listOf("calling", "ringing")) {
+            return
+        }
+
+        val call = remoteCall ?: com.chroma.studio.webrtc.CallModel(
+            id = callId,
+            roomId = data["roomId"].orEmpty(),
+            callerId = callerId,
+            callerName = data["callerName"] ?: data["senderName"] ?: "Oscellion User",
+            callerAvatar = data["callerAvatar"] ?: data["avatarUrl"] ?: "",
+            calleeId = data["calleeId"] ?: currentUserId.orEmpty(),
+            type = data["callType"] ?: "audio",
+            status = "ringing",
+            timestamp = pushTs
+        )
+
+        val callerHandle = data["callerHandle"].orEmpty()
+        val isVerified = data["callerVerified"]?.toBooleanStrictOrNull() ?: false
+
+        val callManager = com.chroma.studio.webrtc.CallManager.getInstance(applicationContext)
+        callManager.presentIncomingCallFromPush(call)
+
+        if (!ChatStateManager.isAppInForeground.value) {
+            com.chroma.studio.webrtc.IncomingCallNotificationManager.showIncomingCallNotification(
+                context = this,
+                call = call,
+                callerHandle = callerHandle,
+                isVerified = isVerified
+            )
+        }
     }
 }

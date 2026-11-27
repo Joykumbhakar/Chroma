@@ -104,7 +104,11 @@ fun StoryEditorModal(
 
     var storyCaption by remember { mutableStateOf("") }
     var selectedLocation by remember { mutableStateOf<String?>(null) }
-    var selectedMusic by remember { mutableStateOf<String?>(null) }
+    var selectedMusicAttachment by remember {
+        mutableStateOf<com.chroma.studio.data.AttachedMusicSelection?>(com.chroma.studio.data.PendingMusicHandoff.peek())
+    }
+    var showMusicPickerModal by remember { mutableStateOf(false) }
+    val selectedMusic: String? = selectedMusicAttachment?.let { "${it.title} · ${it.artist}" }
     var storyPoll by remember { mutableStateOf<PollData?>(null) }
     var isAddingSticker by remember { mutableStateOf(false) }
 
@@ -195,7 +199,7 @@ fun StoryEditorModal(
                         .border(0.5.dp, if (colors.isLight) Color(0xFFE5E5EA) else Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
                         .clickable {
                             SoundManager.playReaction()
-                            selectedMusic = null
+                            selectedMusicAttachment = null
                         }
                         .padding(horizontal = 14.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -686,8 +690,8 @@ fun StoryEditorModal(
                                 .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF2C2C2E))
                                 .clickable {
                                     SoundManager.playReaction()
-                                    selectedMusic = "Odesza • A Moment Apart"
                                     isAddingSticker = false
+                                    showMusicPickerModal = true
                                 }
                                 .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
@@ -875,17 +879,20 @@ fun StoryEditorModal(
                             uri = photoUri,
                             textContent = finalCaption,
                             textFormat = textFormatJson,
-                            backgroundColor = bgColorHex
+                            backgroundColor = bgColorHex,
+                            musicTrack = selectedMusicAttachment
                         )
-                    } else if (storyViewModel != null && finalCaption.isNotBlank()) {
+                    } else if (storyViewModel != null && (finalCaption.isNotBlank() || selectedMusicAttachment != null)) {
                         storyViewModel.publishTextStory(
-                            textContent = finalCaption,
+                            textContent = finalCaption.ifBlank { selectedMusicAttachment?.let { "${it.title} · ${it.artist}" }.orEmpty() },
                             textFormat = textFormatJson,
                             backgroundColor = bgColorHex,
                             audienceType = "public",
-                            customAudienceIds = emptyList()
+                            customAudienceIds = emptyList(),
+                            musicTrack = selectedMusicAttachment
                         )
                     }
+                    com.chroma.studio.data.PendingMusicHandoff.consume()
 
                     val newStory = Story(
                         id = "s_my_${System.currentTimeMillis()}",
@@ -935,6 +942,19 @@ fun StoryEditorModal(
                     )
                 }
             }
+        }
+
+        if (showMusicPickerModal) {
+            com.chroma.studio.ui.components.StoryMusicPickerModal(
+                isOpen = true,
+                initialTrackId = selectedMusicAttachment?.trackId,
+                headerTitle = "Story Music",
+                onDismiss = { showMusicPickerModal = false },
+                onClipConfirmed = { selection ->
+                    selectedMusicAttachment = selection
+                    showMusicPickerModal = false
+                }
+            )
         }
     }
 }

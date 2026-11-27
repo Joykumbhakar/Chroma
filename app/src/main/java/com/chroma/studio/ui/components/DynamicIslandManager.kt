@@ -79,6 +79,19 @@ class DynamicIslandQueueCoordinator(
             }
 
             // Preempt idle Status banners immediately for incoming interactive notifications
+            if (event is DynamicIslandEvent.IncomingCall) {
+                val iter = pendingQueue.iterator()
+                while (iter.hasNext()) {
+                    if (iter.next().event is DynamicIslandEvent.IncomingCall) {
+                        iter.remove()
+                    }
+                }
+                _currentPresentation.value = presentation
+                userInteracting = false
+                return presentation
+            }
+
+            // Preempt idle Status banners immediately for incoming interactive notifications
             if (current.event is DynamicIslandEvent.Status || event is DynamicIslandEvent.Status) {
                 if (current.event is DynamicIslandEvent.Status && event !is DynamicIslandEvent.Status) {
                     _currentPresentation.value = presentation
@@ -249,6 +262,18 @@ sealed class DynamicIslandEvent {
         val secondaryActionLabel: String? = null,
         val onSecondaryAction: (() -> Unit)? = null,
         val onDismiss: (() -> Unit)? = null
+    ) : DynamicIslandEvent()
+
+    data class IncomingCall(
+        val callId: String,
+        val roomId: String,
+        val callerName: String,
+        val callerAvatar: String = "",
+        val isVideo: Boolean = false,
+        val isVerified: Boolean = false,
+        val onAccept: () -> Unit,
+        val onDecline: () -> Unit,
+        val onExpand: () -> Unit
     ) : DynamicIslandEvent()
 }
 
@@ -509,5 +534,44 @@ object DynamicIslandManager {
                 onAction = onAction
             )
         )
+    }
+
+    fun showIncomingCall(
+        callId: String,
+        roomId: String,
+        callerName: String,
+        callerAvatar: String = "",
+        isVideo: Boolean = false,
+        isVerified: Boolean = false,
+        onAccept: () -> Unit,
+        onDecline: () -> Unit,
+        onExpand: () -> Unit
+    ) {
+        val current = currentPresentation.value
+        val activeCall = current?.event as? DynamicIslandEvent.IncomingCall
+        if (activeCall != null && activeCall.callId == callId) {
+            return
+        }
+        post(
+            DynamicIslandEvent.IncomingCall(
+                callId = callId,
+                roomId = roomId,
+                callerName = callerName,
+                callerAvatar = callerAvatar,
+                isVideo = isVideo,
+                isVerified = isVerified,
+                onAccept = onAccept,
+                onDecline = onDecline,
+                onExpand = onExpand
+            )
+        )
+    }
+
+    fun dismissIncomingCall(callId: String? = null) {
+        val current = currentPresentation.value ?: return
+        val incoming = current.event as? DynamicIslandEvent.IncomingCall ?: return
+        if (callId == null || incoming.callId == callId) {
+            coordinator.dismiss(expectedInstanceId = current.instanceId)
+        }
     }
 }

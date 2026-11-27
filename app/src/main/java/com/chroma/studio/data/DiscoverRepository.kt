@@ -793,9 +793,21 @@ class DiscoverRepository {
                 remixedFromAuthorUsername = primaryWork?.remixedFromAuthorUsername,
                 remixedFromAuthorDisplayName = primaryWork?.remixedFromAuthorDisplayName,
                 remixedFromAuthorAvatar = primaryWork?.remixedFromAuthorAvatar,
-                remixedFromAuthorVerified = primaryWork?.remixedFromAuthorVerified ?: false
+                remixedFromAuthorVerified = primaryWork?.remixedFromAuthorVerified ?: false,
+                musicTrackId = musicTrack?.trackId,
+                musicTitle = musicTrack?.title,
+                musicArtist = musicTrack?.artist,
+                musicAlbum = musicTrack?.album,
+                musicCoverUrl = musicTrack?.coverUrl,
+                musicAudioUrl = musicTrack?.audioUrl,
+                musicStartSec = musicTrack?.startSec ?: 0,
+                musicDurationSec = musicTrack?.durationSec ?: 0,
+                musicShowLyrics = musicTrack?.showLyricsSticker ?: false
             )
             collection.document(newWorkId).set(communityWork).await()
+            if (musicTrack != null) {
+                try { MusicRepository.getInstance().incrementTrackUsage(musicTrack.trackId) } catch (_: Exception) {}
+            }
             try {
                 if (pendingCollabIds.isNotEmpty()) {
                     NotificationDispatcher.dispatchCollabInviteNotifications(
