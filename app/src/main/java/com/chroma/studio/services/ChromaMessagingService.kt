@@ -65,6 +65,12 @@ open class ChromaMessagingService : FirebaseMessagingService() {
         val data = remoteMessage.data
         if (data.isEmpty() && remoteMessage.notification == null) return
 
+        val pushType = data["type"] ?: data["messageType"] ?: data["message_type"] ?: ""
+        if (pushType == "app_update") {
+            com.chroma.studio.data.AppUpdateManager.handleRemotePushPayload(applicationContext, data)
+            return
+        }
+
         val senderId = data["senderId"] ?: data["sender_id"] ?: data["userId"] ?: ""
         val recipientId = data["recipientId"] ?: data["recipient_id"] ?: ""
         val roomId = data["roomId"] ?: data["room_id"] ?: ""

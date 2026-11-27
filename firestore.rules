@@ -1025,7 +1025,7 @@ service cloud.firestore {
 
     // 10. App Config Collection (trending config readable by clients; global admin metadata denied)
     match /app_config/{configId} {
-      allow get: if isAuthenticated() && configId == 'trending';
+      allow get: if configId == 'app_release' || (isAuthenticated() && configId == 'trending');
       allow list: if false;
       allow write: if false;
     }

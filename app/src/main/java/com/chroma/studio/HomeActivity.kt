@@ -229,6 +229,10 @@ private fun AuthenticatedRoute(
 
                 LaunchedEffect(Unit) {
                     chatVm.initializeCallManager(this@HomeActivity)
+                    com.chroma.studio.data.AppUpdateManager.startObserving(this@HomeActivity)
+                    if (intent?.getBooleanExtra(com.chroma.studio.data.AppUpdateManager.EXTRA_OPEN_APP_UPDATE, false) == true) {
+                        com.chroma.studio.data.AppUpdateManager.openUpdateSheet(this@HomeActivity)
+                    }
                 }
 
                 val handleLogout: () -> Unit = {
@@ -515,6 +519,9 @@ private fun AuthenticatedRoute(
                             }
                             action == "deeplink_notifications" -> {
                                 navController.navigate("notifications_feed")
+                            }
+                            action == "deeplink_app_update" -> {
+                                com.chroma.studio.data.AppUpdateManager.openUpdateSheet(this@HomeActivity)
                             }
                             action == "deeplink_home" -> {
                                 navigateToTab(0)
@@ -1022,16 +1029,23 @@ private fun AuthenticatedRoute(
                                         com.chroma.studio.model.NotificationActionType.SYSTEM_DROP,
                                         com.chroma.studio.model.NotificationActionType.PROJECT_EXPORT,
                                         com.chroma.studio.model.NotificationActionType.PROJECT_COLLAB -> {
+                                            val isAppUpdateDrop =
+                                                type == com.chroma.studio.model.NotificationActionType.SYSTEM_DROP &&
+                                                    (targetId == "app_update" || targetId.contains("/download"))
                                             com.chroma.studio.ui.components.DynamicIslandManager.showStatus(
                                                 title = actorName.ifBlank { "Chroma Studio" },
                                                 message = actionText.ifBlank { detailText },
-                                                icon = com.composables.icons.lucide.Lucide.Info,
-                                                actionLabel = "View",
+                                                icon = if (isAppUpdateDrop) com.composables.icons.lucide.Lucide.Rocket else com.composables.icons.lucide.Lucide.Info,
+                                                actionLabel = if (isAppUpdateDrop) "Update" else "View",
                                                 secondaryActionLabel = "Mark Read",
                                                 onSecondaryAction = { markRead() },
                                                 onAction = {
                                                     markRead()
-                                                    navController.navigate("notifications_feed")
+                                                    if (isAppUpdateDrop) {
+                                                        com.chroma.studio.data.AppUpdateManager.openUpdateSheet(this@HomeActivity)
+                                                    } else {
+                                                        navController.navigate("notifications_feed")
+                                                    }
                                                 }
                                             )
                                         }
@@ -3013,6 +3027,45 @@ private fun AuthenticatedRoute(
                 )
             }
 
+            // ── In-App App Update Sheet Modal ──
+            val pendingUpdateRelease by com.chroma.studio.data.AppUpdateManager.availableRelease.collectAsState()
+            val showAppUpdateSheet by com.chroma.studio.data.AppUpdateManager.isUpdateSheetVisible.collectAsState()
+            val updateDownloadProgress by com.chroma.studio.data.AppUpdateManager.downloadProgress.collectAsState()
+            val updateDownloadStatus by com.chroma.studio.data.AppUpdateManager.downloadStatusText.collectAsState()
+
+            if (showAppUpdateSheet && pendingUpdateRelease != null) {
+                val activeRelease = pendingUpdateRelease!!
+                val forceRequired = com.chroma.studio.data.AppUpdateCheckerLogic.isForceUpdateRequired(
+                    release = activeRelease,
+                    currentVersionCode = com.chroma.studio.BuildConfig.VERSION_CODE
+                )
+                com.chroma.studio.ui.components.AppUpdateModalSheet(
+                    release = activeRelease,
+                    isForceRequired = forceRequired,
+                    downloadProgress = updateDownloadProgress,
+                    downloadStatusText = updateDownloadStatus,
+                    onDownloadAndInstall = {
+                        com.chroma.studio.data.AppUpdateManager.downloadAndInstallApk(
+                            context = this@HomeActivity,
+                            release = activeRelease
+                        )
+                    },
+                    onOpenDownloadPage = {
+                        com.chroma.studio.data.AppUpdateManager.openDownloadPageInBrowser(
+                            context = this@HomeActivity,
+                            url = activeRelease.pageUrl.ifBlank { activeRelease.directDownloadUrl }
+                        )
+                    },
+                    onDismissLater = {
+                        com.chroma.studio.data.AppUpdateManager.dismissForVersion(
+                            context = this@HomeActivity,
+                            versionCode = activeRelease.latestVersionCode
+                        )
+                    },
+                    isDarkMode = vm.isDarkMode
+                )
+            }
+
             // ── Primary Cinematic Oscellion Logo Reveal Splash Screen ──
             var showComposeSplash by remember { mutableStateOf(true) }
 
@@ -3119,6 +3172,7 @@ private fun AuthenticatedRoute(
         // Refresh when returning from editor (user may have saved a new/updated work)
         vm.refresh()
         com.chroma.studio.security.applock.AppLockerManager.startUsageWatcherIfNeeded(applicationContext)
+        com.chroma.studio.data.AppUpdateManager.startObserving(applicationContext)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -3154,6 +3208,7 @@ private fun AuthenticatedRoute(
             "join" -> (segments.firstOrNull() ?: queryId)?.let { "deeplink_join_group:$it" }
             "story" -> (segments.firstOrNull() ?: queryId)?.let { "deeplink_story:$it" }
             "notifications" -> "deeplink_notifications"
+            "update", "download" -> "deeplink_app_update"
             "home" -> "deeplink_home"
             else -> null
         }
@@ -3173,6 +3228,7 @@ private fun AuthenticatedRoute(
                     "join" -> (segments.getOrNull(1) ?: queryId)?.let { "deeplink_join_group:$it" }
                     "story" -> (segments.getOrNull(1) ?: queryId)?.let { "deeplink_story:$it" }
                     "notifications" -> "deeplink_notifications"
+                    "update", "download" -> "deeplink_app_update"
                     else -> "deeplink_home"
                 }
             }
@@ -3209,6 +3265,11 @@ private fun AuthenticatedRoute(
         val widgetAction = intent.getStringExtra(com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.EXTRA_WIDGET_ACTION)
         if (!widgetAction.isNullOrBlank()) {
             com.chroma.studio.AppIntentManager.dispatchWidgetAction(widgetAction)
+            return
+        }
+
+        if (intent.getBooleanExtra(com.chroma.studio.data.AppUpdateManager.EXTRA_OPEN_APP_UPDATE, false)) {
+            com.chroma.studio.data.AppUpdateManager.openUpdateSheet(this)
             return
         }
 

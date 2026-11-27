@@ -82,6 +82,8 @@ fun ProfileSettingsScreen(
     val colors = LocalChatColors.current
     val context = LocalContext.current
     val settingsManager = remember { SettingsManager.getInstance(context) }
+    val pendingAppUpdate by com.chroma.studio.data.AppUpdateManager.availableRelease.collectAsState()
+    val isCheckingAppUpdate by com.chroma.studio.data.AppUpdateManager.isChecking.collectAsState()
 
     var isEditProfileModalOpen by remember { mutableStateOf(false) }
     var isBlockedUsersModalOpen by remember { mutableStateOf(false) }
@@ -547,6 +549,28 @@ fun ProfileSettingsScreen(
                         title = "Version",
                         value = "v${com.chroma.studio.BuildConfig.VERSION_NAME} (${com.chroma.studio.BuildConfig.VERSION_CODE})",
                         onClick = { isAboutModalOpen = true }
+                    )
+
+                    SettingsDivider()
+
+                    SettingsActionRow(
+                        icon = { Icon(imageVector = Lucide.Rocket, contentDescription = null, tint = Color(0xFF0A84FF), modifier = Modifier.size(18.dp)) },
+                        title = "App Updates",
+                        value = when {
+                            isCheckingAppUpdate -> "Checking…"
+                            pendingAppUpdate != null -> "v${pendingAppUpdate!!.latestVersion} Available"
+                            else -> "Check Now"
+                        },
+                        onClick = {
+                            if (pendingAppUpdate != null) {
+                                com.chroma.studio.data.AppUpdateManager.openUpdateSheet(context)
+                            } else {
+                                com.chroma.studio.data.AppUpdateManager.checkForUpdates(
+                                    context = context,
+                                    forceCheck = true
+                                )
+                            }
+                        }
                     )
 
                     SettingsDivider()
@@ -1310,7 +1334,7 @@ fun AboutAppModal(onDismiss: () -> Unit) {
             )
 
             Text(
-                text = "Version 3.4.0 • Build 2026.10",
+                text = "Version ${com.chroma.studio.BuildConfig.VERSION_NAME} • Build ${com.chroma.studio.BuildConfig.VERSION_CODE}",
                 fontSize = 13.sp,
                 color = colors.textMuted
             )
@@ -1326,6 +1350,21 @@ fun AboutAppModal(onDismiss: () -> Unit) {
             )
 
             Spacer(Modifier.height(20.dp))
+
+            val modalContext = LocalContext.current
+            LiquidGlassSecondaryButton(
+                text = "Check for Updates",
+                onClick = {
+                    onDismiss()
+                    com.chroma.studio.data.AppUpdateManager.checkForUpdates(
+                        context = modalContext,
+                        forceCheck = true
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(10.dp))
 
             LiquidGlassPrimaryButton(
                 text = "OK",

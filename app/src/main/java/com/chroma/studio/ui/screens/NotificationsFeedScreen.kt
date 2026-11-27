@@ -2516,7 +2516,12 @@ fun NotificationsFeedScreen(
 
             NotificationActionType.SYSTEM_DROP -> {
 
-                showToast("System announcement: ${clicked.actionText}")
+                val target = clicked.targetId.orEmpty()
+                if (target == "app_update" || clicked.actionText.contains("Update v", ignoreCase = true)) {
+                    com.chroma.studio.data.AppUpdateManager.openUpdateSheet(context)
+                } else {
+                    showToast("System announcement: ${clicked.actionText}")
+                }
 
             }
 
