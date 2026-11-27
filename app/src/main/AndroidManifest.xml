@@ -236,6 +236,11 @@
                 android:resource="@xml/widget_quick_capture_info" />
         </receiver>
 
+        <!-- Internal App Update PackageInstaller Receiver -->
+        <receiver
+            android:name=".data.UpdateInstallReceiver"
+            android:exported="false" />
+
         <!-- FileProvider for camera photo capture -->
         <provider
             android:name="androidx.core.content.FileProvider"

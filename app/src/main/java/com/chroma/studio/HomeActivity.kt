@@ -3027,11 +3027,16 @@ private fun AuthenticatedRoute(
                 )
             }
 
-            // ── In-App App Update Sheet Modal ──
+            // ── In-App App Update Sheet Modal & Self-Installer ──
             val pendingUpdateRelease by com.chroma.studio.data.AppUpdateManager.availableRelease.collectAsState()
             val showAppUpdateSheet by com.chroma.studio.data.AppUpdateManager.isUpdateSheetVisible.collectAsState()
-            val updateDownloadProgress by com.chroma.studio.data.AppUpdateManager.downloadProgress.collectAsState()
-            val updateDownloadStatus by com.chroma.studio.data.AppUpdateManager.downloadStatusText.collectAsState()
+            val updateInstallStage by com.chroma.studio.data.AppUpdateManager.installStage.collectAsState()
+
+            val unknownSourcesLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+            ) {
+                com.chroma.studio.data.AppUpdateManager.onUnknownSourcesPermissionReturned(this@HomeActivity)
+            }
 
             if (showAppUpdateSheet && pendingUpdateRelease != null) {
                 val activeRelease = pendingUpdateRelease!!
@@ -3041,19 +3046,26 @@ private fun AuthenticatedRoute(
                 )
                 com.chroma.studio.ui.components.AppUpdateModalSheet(
                     release = activeRelease,
+                    stage = updateInstallStage,
                     isForceRequired = forceRequired,
-                    downloadProgress = updateDownloadProgress,
-                    downloadStatusText = updateDownloadStatus,
-                    onDownloadAndInstall = {
-                        com.chroma.studio.data.AppUpdateManager.downloadAndInstallApk(
+                    onDownloadClick = {
+                        com.chroma.studio.data.AppUpdateManager.startInAppDownload(
                             context = this@HomeActivity,
                             release = activeRelease
                         )
                     },
-                    onOpenDownloadPage = {
-                        com.chroma.studio.data.AppUpdateManager.openDownloadPageInBrowser(
+                    onCancelDownload = {
+                        com.chroma.studio.data.AppUpdateManager.cancelDownload()
+                    },
+                    onRequestPermissionClick = {
+                        unknownSourcesLauncher.launch(
+                            com.chroma.studio.data.AppUpdateManager.buildUnknownSourcesPermissionIntent(this@HomeActivity)
+                        )
+                    },
+                    onConfirmInstallClick = { apkPath ->
+                        com.chroma.studio.data.AppUpdateManager.commitInAppPackageInstall(
                             context = this@HomeActivity,
-                            url = activeRelease.pageUrl.ifBlank { activeRelease.directDownloadUrl }
+                            apkPath = apkPath
                         )
                     },
                     onDismissLater = {
@@ -3173,6 +3185,7 @@ private fun AuthenticatedRoute(
         vm.refresh()
         com.chroma.studio.security.applock.AppLockerManager.startUsageWatcherIfNeeded(applicationContext)
         com.chroma.studio.data.AppUpdateManager.startObserving(applicationContext)
+        com.chroma.studio.data.AppUpdateManager.onUnknownSourcesPermissionReturned(applicationContext)
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -41,8 +41,24 @@ class AppUpdateManagerTest {
         assertFalse(AppUpdateCheckerLogic.isUpdateAvailable(newer, currentVersionCode = 12))
         assertFalse(AppUpdateCheckerLogic.isUpdateAvailable(null, currentVersionCode = 10))
 
-        val missingUrls = newer.copy(directDownloadUrl = "", downloadUrl = "", pageUrl = "")
-        assertFalse(AppUpdateCheckerLogic.isUpdateAvailable(missingUrls, currentVersionCode = 10))
+        val missingDirectDownload = newer.copy(directDownloadUrl = "", downloadUrl = "")
+        assertFalse(AppUpdateCheckerLogic.isUpdateAvailable(missingDirectDownload, currentVersionCode = 10))
+    }
+
+    @Test
+    fun `matchesExpectedSha256 validates case-insensitively and formatBytesMb formats cleanly`() {
+        assertTrue(AppUpdateCheckerLogic.matchesExpectedSha256("abcdef1234", "ABCDEF1234"))
+        assertTrue(AppUpdateCheckerLogic.matchesExpectedSha256("", "anything"))
+        assertFalse(AppUpdateCheckerLogic.matchesExpectedSha256("ABCDEF1234", "0000000000"))
+
+        assertEquals("0.0 MB", AppUpdateCheckerLogic.formatBytesMb(0L))
+        assertEquals("108.4 MB", AppUpdateCheckerLogic.formatBytesMb(113_688_502L))
+        assertEquals(
+            "https://cdn.example.com/app.apk",
+            AppUpdateCheckerLogic.resolveDirectDownloadUrl(
+                sampleRelease(directDownloadUrl = "").copy(downloadUrl = "https://cdn.example.com/app.apk")
+            )
+        )
     }
 
     @Test
