@@ -64,10 +64,12 @@ fun AccountScreen(
     var tried by remember { mutableStateOf(false) }
 
     var pendingCropUri by remember { mutableStateOf<Uri?>(null) }
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            pendingCropUri = uri
-        }
+    val galleryLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Profile Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        pendingCropUri = uri
     }
 
     val dobOk = state.dobMillis?.let { it <= latestAllowedBirthMillis() } ?: false

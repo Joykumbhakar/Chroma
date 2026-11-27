@@ -5,10 +5,12 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -27,11 +29,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,6 +63,7 @@ fun ChatInputBar(
     onPollClick: () -> Unit,
     onStickerClick: () -> Unit = {},
     onFlashVideoClick: () -> Unit = {},
+    onMusicClick: () -> Unit = {},
     onVoiceClick: () -> Unit,
     onSendClick: () -> Unit,
     onDictateClick: () -> Unit = {},
@@ -64,11 +72,126 @@ fun ChatInputBar(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalChatColors.current
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var showEmojiPicker by remember { mutableStateOf(false) }
     var showAttachmentMenu by remember { mutableStateOf(false) }
+    var showFormatToolbar by remember { mutableStateOf(false) }
+
+    var textFieldValue by remember {
+        mutableStateOf(TextFieldValue(text = inputText, selection = TextRange(inputText.length)))
+    }
+    LaunchedEffect(inputText) {
+        if (inputText != textFieldValue.text) {
+            textFieldValue = TextFieldValue(text = inputText, selection = TextRange(inputText.length))
+        }
+    }
+
+    val fontTagSpanRegex = remember {
+        Regex("\\[(serif|mono|script|cursive|signature)\\]([\\s\\S]*?)\\[/\\1\\]", RegexOption.IGNORE_CASE)
+    }
+
+    val activeInlineFont = remember(textFieldValue) {
+        val raw = textFieldValue.text
+        val selStart = minOf(textFieldValue.selection.start, textFieldValue.selection.end).coerceIn(0, raw.length)
+        val selEnd = maxOf(textFieldValue.selection.start, textFieldValue.selection.end).coerceIn(0, raw.length)
+        val enclosing = fontTagSpanRegex.findAll(raw).firstOrNull { match ->
+            selStart >= match.range.first && selEnd <= match.range.last + 1
+        }
+        if (enclosing != null) {
+            com.chroma.studio.data.ChatFontStyle.fromKey(enclosing.groupValues[1])
+        } else {
+            com.chroma.studio.data.ChatFontStyle.DEFAULT
+        }
+    }
+
+    fun applyMarkupFormat(prefix: String, suffix: String) {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        val current = textFieldValue
+        val raw = current.text
+        val start = minOf(current.selection.start, current.selection.end).coerceIn(0, raw.length)
+        val end = maxOf(current.selection.start, current.selection.end).coerceIn(0, raw.length)
+        val updated = if (start != end) {
+            val selected = raw.substring(start, end)
+            val newStr = (raw.substring(0, start) + prefix + selected + suffix + raw.substring(end))
+                .take(MAX_MESSAGE_CHARACTERS)
+            val endCaret = (start + prefix.length + selected.length + suffix.length).coerceAtMost(newStr.length)
+            TextFieldValue(newStr, TextRange(endCaret))
+        } else {
+            val newStr = (raw.substring(0, start) + prefix + suffix + raw.substring(end))
+                .take(MAX_MESSAGE_CHARACTERS)
+            val innerCaret = (start + prefix.length).coerceAtMost(newStr.length)
+            TextFieldValue(newStr, TextRange(innerCaret))
+        }
+        textFieldValue = updated
+        onInputTextChange(updated.text)
+        try { focusRequester.requestFocus() } catch (_: Exception) {}
+    }
+
+    fun applyFontStyleToSelection(fontOpt: com.chroma.studio.data.ChatFontStyle) {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        val current = textFieldValue
+        val raw = current.text
+        val start = minOf(current.selection.start, current.selection.end).coerceIn(0, raw.length)
+        val end = maxOf(current.selection.start, current.selection.end).coerceIn(0, raw.length)
+
+        val enclosing = fontTagSpanRegex.findAll(raw).firstOrNull { match ->
+            start > match.range.first && end <= match.range.last + 1 &&
+                start >= match.range.first + "[${match.groupValues[1]}]".length &&
+                end <= match.range.last + 1 - "[/${match.groupValues[1]}]".length
+        }
+
+        val updated = if (fontOpt == com.chroma.studio.data.ChatFontStyle.DEFAULT) {
+            when {
+                enclosing != null -> {
+                    val inner = enclosing.groupValues[2]
+                    val openLen = "[${enclosing.groupValues[1]}]".length
+                    val newStr = raw.substring(0, enclosing.range.first) + inner + raw.substring(enclosing.range.last + 1)
+                    val newCaret = (start - openLen).coerceIn(0, newStr.length)
+                    TextFieldValue(newStr, TextRange(newCaret))
+                }
+                start != end -> {
+                    val clean = com.chroma.studio.data.ChatFontStyle.stripInlineFontMarkup(raw.substring(start, end))
+                    val newStr = raw.substring(0, start) + clean + raw.substring(end)
+                    TextFieldValue(newStr, TextRange(start + clean.length))
+                }
+                else -> current
+            }
+        } else {
+            val openTag = "[${fontOpt.tagName}]"
+            val closeTag = "[/${fontOpt.tagName}]"
+            when {
+                start == end && enclosing != null -> {
+                    val inner = enclosing.groupValues[2]
+                    val prevOpenLen = "[${enclosing.groupValues[1]}]".length
+                    val newBlock = openTag + inner + closeTag
+                    val newStr = (raw.substring(0, enclosing.range.first) + newBlock + raw.substring(enclosing.range.last + 1))
+                        .take(MAX_MESSAGE_CHARACTERS)
+                    val innerOffset = (start - enclosing.range.first - prevOpenLen).coerceIn(0, inner.length)
+                    val newCaret = (enclosing.range.first + openTag.length + innerOffset).coerceAtMost(newStr.length)
+                    TextFieldValue(newStr, TextRange(newCaret))
+                }
+                start != end -> {
+                    val cleanSelected = com.chroma.studio.data.ChatFontStyle.stripInlineFontMarkup(raw.substring(start, end))
+                    val newStr = (raw.substring(0, start) + openTag + cleanSelected + closeTag + raw.substring(end))
+                        .take(MAX_MESSAGE_CHARACTERS)
+                    val endCaret = (start + openTag.length + cleanSelected.length + closeTag.length).coerceAtMost(newStr.length)
+                    TextFieldValue(newStr, TextRange(endCaret))
+                }
+                else -> {
+                    val newStr = (raw.substring(0, start) + openTag + closeTag + raw.substring(end))
+                        .take(MAX_MESSAGE_CHARACTERS)
+                    val innerCaret = (start + openTag.length).coerceAtMost(newStr.length)
+                    TextFieldValue(newStr, TextRange(innerCaret))
+                }
+            }
+        }
+        textFieldValue = updated
+        onInputTextChange(updated.text)
+        try { focusRequester.requestFocus() } catch (_: Exception) {}
+    }
 
     // Focus input immediately when entering Reply or Edit mode
     LaunchedEffect(replyQuote?.messageId, editingPreviewText) {
@@ -123,6 +246,7 @@ fun ChatInputBar(
                             ActionMenuOption.POLL -> onPollClick()
                             ActionMenuOption.STICKER -> onStickerClick()
                             ActionMenuOption.FLASH_VIDEO -> onFlashVideoClick()
+                            ActionMenuOption.MUSIC -> onMusicClick()
                         }
                     }
                 )
@@ -202,7 +326,7 @@ fun ChatInputBar(
                                         lineHeight = 14.sp
                                     )
                                     Text(
-                                        text = editingPreviewText,
+                                        text = com.chroma.studio.data.ChatFontStyle.stripInlineFontMarkup(editingPreviewText),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Normal,
                                         color = colors.textDark,
@@ -255,7 +379,7 @@ fun ChatInputBar(
                                         lineHeight = 14.sp
                                     )
                                     Text(
-                                        text = replyQuote.text,
+                                        text = com.chroma.studio.data.ChatFontStyle.stripInlineFontMarkup(replyQuote.text),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Normal,
                                         color = colors.textDark,
@@ -311,7 +435,13 @@ fun ChatInputBar(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(10.dp))
                                         .clickable {
-                                            onInputTextChange(inputText + emoji)
+                                            val current = textFieldValue
+                                            val raw = current.text
+                                            val caret = current.selection.end.coerceIn(0, raw.length)
+                                            val nextStr = (raw.substring(0, caret) + emoji + raw.substring(caret)).take(MAX_MESSAGE_CHARACTERS)
+                                            val nextCaret = (caret + emoji.length).coerceAtMost(nextStr.length)
+                                            textFieldValue = TextFieldValue(nextStr, TextRange(nextCaret))
+                                            onInputTextChange(nextStr)
                                             showEmojiPicker = false
                                         }
                                         .padding(4.dp),
@@ -319,6 +449,126 @@ fun ChatInputBar(
                                 ) {
                                     Text(emoji, fontSize = 22.sp)
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // ── Quick Markup Formatting & Font Style Toolbar ──────────────────────
+                AnimatedVisibility(
+                    visible = showFormatToolbar,
+                    enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (colors.isLight) Color(0xFFF6F7FB) else Color(0xFF1F2024))
+                            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // Row 1: Markdown Formatting Chips
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            MarkupToolChip(label = "B", weight = FontWeight.ExtraBold, onClick = { applyMarkupFormat("**", "**") })
+                            MarkupToolChip(label = "I", fontStyle = FontStyle.Italic, onClick = { applyMarkupFormat("*", "*") })
+                            MarkupToolChip(label = "S", textDecoration = TextDecoration.LineThrough, onClick = { applyMarkupFormat("~~", "~~") })
+                            MarkupToolChip(label = "</>", isMono = true, onClick = { applyMarkupFormat("`", "`") })
+                            MarkupToolChip(label = "Code Block", isMono = true, onClick = { applyMarkupFormat("```\n", "\n```") })
+                            MarkupToolChip(label = "|| Spoiler ||", onClick = { applyMarkupFormat("||", "||") })
+                        }
+                        // Row 2: Live Font Style Selector (for selected part or current span in this message)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Style:",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textMuted,
+                                modifier = Modifier.padding(end = 2.dp)
+                            )
+                            com.chroma.studio.data.ChatFontStyle.entries.forEach { fontOpt ->
+                                val chipHighlighted = activeInlineFont == fontOpt
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (chipHighlighted) colors.iosBlue.copy(alpha = 0.16f)
+                                            else (if (colors.isLight) Color.White else Color(0xFF2C2C2E))
+                                        )
+                                        .border(
+                                            width = if (chipHighlighted) 1.dp else 0.5.dp,
+                                            color = if (chipHighlighted) colors.iosBlue else colors.borderSubtle,
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        .clickable { applyFontStyleToSelection(fontOpt) }
+                                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = fontOpt.label,
+                                        fontSize = 12.sp,
+                                        fontFamily = fontOpt.fontFamily,
+                                        fontWeight = if (chipHighlighted) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (chipHighlighted) colors.iosBlue else colors.textDark
+                                    )
+                                }
+                            }
+                        }
+
+                        // Compact live rich preview when the draft contains inline font or text styling
+                        val hasInlineFormatting = com.chroma.studio.data.ChatFontStyle.containsInlineFontMarkup(inputText) ||
+                            inputText.contains("**") ||
+                            inputText.contains("~~") ||
+                            inputText.contains("||") ||
+                            inputText.contains("`")
+                        if (hasInlineFormatting && inputText.isNotBlank()) {
+                            val livePreviewAnnotated = remember(inputText, colors.textDark, colors.iosBlue) {
+                                parseMarkdownToAnnotatedString(
+                                    text = inputText,
+                                    textColor = colors.textDark,
+                                    mentionColor = colors.iosBlue,
+                                    baseFontWeight = FontWeight.Normal,
+                                    isOutgoing = false
+                                )
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (colors.isLight) Color.White else Color(0xFF2C2C2E))
+                                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Preview",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.iosBlue
+                                )
+                                Text(
+                                    text = livePreviewAnnotated,
+                                    fontSize = 13.5.sp,
+                                    color = colors.textDark,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
                         }
                     }
@@ -361,14 +611,20 @@ fun ChatInputBar(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         BasicTextField(
-                            value = inputText,
-                            onValueChange = { newText ->
+                            value = textFieldValue,
+                            onValueChange = { newValue ->
                                 if (showAttachmentMenu) showAttachmentMenu = false
-                                if (newText.length <= MAX_MESSAGE_CHARACTERS) {
-                                    onInputTextChange(newText)
+                                val clippedText = if (newValue.text.length <= MAX_MESSAGE_CHARACTERS) {
+                                    newValue.text
                                 } else {
-                                    onInputTextChange(newText.take(MAX_MESSAGE_CHARACTERS))
+                                    newValue.text.take(MAX_MESSAGE_CHARACTERS)
                                 }
+                                textFieldValue = if (clippedText.length == newValue.text.length) {
+                                    newValue
+                                } else {
+                                    newValue.copy(text = clippedText)
+                                }
+                                onInputTextChange(clippedText)
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -395,8 +651,8 @@ fun ChatInputBar(
                                         Text(
                                             text = if (isBlocked) "You can't message this contact"
                                                    else if (isDictating) "Listening... Speak now"
-                                                   else "Type a message...",
-                                            fontSize = 16.sp,
+                                                   else "Message... (**bold**, *italic*)",
+                                            fontSize = 15.5.sp,
                                             fontWeight = if (isDictating) FontWeight.SemiBold else FontWeight.Normal,
                                             color = if (isDictating) colors.iosBlue else colors.textMuted,
                                             maxLines = 1,
@@ -415,6 +671,28 @@ fun ChatInputBar(
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (inputText.length >= MAX_MESSAGE_CHARACTERS) Color(0xFFFF3B30) else colors.textMuted
+                            )
+                        }
+
+                        // Text Formatting & Font Style Toggle Pill ("Aa")
+                        val formatActive = showFormatToolbar || com.chroma.studio.data.ChatFontStyle.containsInlineFontMarkup(inputText)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (showFormatToolbar) colors.iosBlue.copy(alpha = 0.14f) else Color.Transparent)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showFormatToolbar = !showFormatToolbar
+                                    if (showFormatToolbar) showAttachmentMenu = false
+                                }
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Aa",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (formatActive) colors.iosBlue else colors.textMuted
                             )
                         }
 
@@ -541,6 +819,37 @@ fun ChatInputBar(
         }
     }
 }
+}
+
+@Composable
+private fun MarkupToolChip(
+    label: String,
+    weight: FontWeight = FontWeight.SemiBold,
+    fontStyle: FontStyle = FontStyle.Normal,
+    textDecoration: TextDecoration? = null,
+    isMono: Boolean = false,
+    onClick: () -> Unit
+) {
+    val colors = LocalChatColors.current
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(9.dp))
+            .background(if (colors.isLight) Color.White else Color(0xFF2C2C2E))
+            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(9.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = weight,
+            fontStyle = fontStyle,
+            textDecoration = textDecoration,
+            fontFamily = if (isMono) androidx.compose.ui.text.font.FontFamily.Monospace else androidx.compose.ui.text.font.FontFamily.Default,
+            color = colors.textDark
+        )
+    }
 }
 
 

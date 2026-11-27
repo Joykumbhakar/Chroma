@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,6 +52,8 @@ import coil.request.videoFrameMillis
 import coil.request.CachePolicy
 import coil.size.Scale
 import coil.size.Size
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -62,8 +65,13 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import com.chroma.studio.chat.media.GalleryMediaItem
 import com.chroma.studio.chat.media.MediaStoreHelper
@@ -199,9 +207,12 @@ fun OscellionGalleryLayout(
     initialSelectedUris: List<Uri> = emptyList(),
     maxSelection: Int = 10,
     allowedMediaFilter: GalleryMediaTypeFilter = GalleryMediaTypeFilter.ALL,
+    lockMediaFilter: Boolean = false,
+    submitLabel: String? = null,
     showCameraTile: Boolean = true,
     showCaptionInput: Boolean = false,
-    showAlbumsTab: Boolean = (layoutMode == GalleryLayoutMode.FULL_SCREEN),
+    singleTapImmediate: Boolean = (maxSelection == 1 && !showCaptionInput),
+    showAlbumsTab: Boolean = true,
     showHeader: Boolean = true,
     onSelectionChanged: ((List<Uri>) -> Unit)? = null,
     onVideoSelected: ((Uri) -> Unit)? = null,
@@ -237,6 +248,28 @@ fun OscellionGalleryLayout(
     var captionText by remember { mutableStateOf("") }
 
     // Direct native System PhotoPicker fallback (zero permission barrier)
+    val singleSystemPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            SoundManager.playTap(context)
+            val mime = context.contentResolver.getType(uri) ?: ""
+            if (onVideoSelected != null && mime.startsWith("video/")) {
+                onVideoSelected(uri)
+                return@rememberLauncherForActivityResult
+            }
+            selectedUris.clear()
+            selectedUris.add(uri)
+            onSelectionChanged?.invoke(listOf(uri))
+            if (onSendMediaWithCaption != null) {
+                onSendMediaWithCaption(listOf(uri), null)
+                onClose()
+            } else {
+                onPhotosSelected?.invoke(listOf(uri))
+            }
+        }
+    }
+
     val systemPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(maxSelection.coerceAtLeast(2))
     ) { uris: List<Uri> ->
@@ -253,9 +286,10 @@ fun OscellionGalleryLayout(
             selectedUris.addAll(uris.take(maxSelection))
             onSelectionChanged?.invoke(selectedUris.toList())
             if (onSendMediaWithCaption != null) {
-                onSendMediaWithCaption(uris, null)
+                onSendMediaWithCaption(uris.take(maxSelection), null)
+                onClose()
             } else {
-                onPhotosSelected?.invoke(uris)
+                onPhotosSelected?.invoke(uris.take(maxSelection))
             }
         }
     }
@@ -295,7 +329,7 @@ fun OscellionGalleryLayout(
         if (hasPermission) {
             isLoading = true
             allMedia = withContext(Dispatchers.IO) {
-                MediaStoreHelper.loadDeviceMedia(context, maxCount = 2000)
+                MediaStoreHelper.loadDeviceMedia(context, maxCount = 5000)
             }
             isLoading = false
         }
@@ -406,6 +440,48 @@ fun OscellionGalleryLayout(
         }
     }
 
+    fun handleOpenSystemPicker() {
+        val visualType = when (if (lockMediaFilter) allowedMediaFilter else mediaTypeFilter) {
+            GalleryMediaTypeFilter.PHOTOS -> ActivityResultContracts.PickVisualMedia.ImageOnly
+            GalleryMediaTypeFilter.VIDEOS -> ActivityResultContracts.PickVisualMedia.VideoOnly
+            GalleryMediaTypeFilter.ALL -> ActivityResultContracts.PickVisualMedia.ImageAndVideo
+        }
+        val req = PickVisualMediaRequest(visualType)
+        if (maxSelection == 1) {
+            singleSystemPickerLauncher.launch(req)
+        } else {
+            systemPickerLauncher.launch(req)
+        }
+    }
+
+    fun handleMediaClick(item: GalleryMediaItem) {
+        SoundManager.playPop()
+        if (singleTapImmediate) {
+            if (item.isVideo && onVideoSelected != null) {
+                onVideoSelected(item.uri)
+            } else if (onSendMediaWithCaption != null) {
+                onSendMediaWithCaption(listOf(item.uri), captionText.ifBlank { null })
+                onClose()
+            } else {
+                selectedUris.clear()
+                selectedUris.add(item.uri)
+                onSelectionChanged?.invoke(listOf(item.uri))
+                onPhotosSelected?.invoke(listOf(item.uri))
+            }
+            return
+        }
+        if (maxSelection == 1 && item.isVideo && onVideoSelected != null && selectedUris.isEmpty()) {
+            onVideoSelected(item.uri)
+        } else {
+            if (selectedUris.contains(item.uri)) {
+                selectedUris.remove(item.uri)
+            } else if (selectedUris.size < maxSelection) {
+                selectedUris.add(item.uri)
+            }
+            onSelectionChanged?.invoke(selectedUris.toList())
+        }
+    }
+
     fun handleSelectAll() {
         SoundManager.playTap(context)
         val remaining = maxSelection - selectedUris.size
@@ -460,11 +536,7 @@ fun OscellionGalleryLayout(
                     isBottomSheet = true,
                     isSearchVisible = isSearchVisible,
                     onToggleSearch = { isSearchVisible = !isSearchVisible },
-                    onOpenSystemPicker = {
-                        systemPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                        )
-                    },
+                    onOpenSystemPicker = { handleOpenSystemPicker() },
                     onClose = onClose
                 )
 
@@ -519,6 +591,8 @@ fun OscellionGalleryLayout(
                         onCategorySelected = { handleCategorySelect(it) },
                         albumsWithCounts = albumsWithCounts,
                         mediaTypeFilter = mediaTypeFilter,
+                        lockMediaFilter = lockMediaFilter,
+                        submitLabel = submitLabel,
                         sortOrder = sortOrder,
                         isSearchVisible = isSearchVisible,
                         searchQuery = searchQuery,
@@ -527,7 +601,7 @@ fun OscellionGalleryLayout(
                         captionText = captionText,
                         onCaptionChange = { captionText = it },
                         onAlbumChange = { selectedAlbum = it },
-                        onTypeFilterChange = { mediaTypeFilter = it },
+                        onTypeFilterChange = { if (!lockMediaFilter) mediaTypeFilter = it },
                         onSortOrderChange = { sortOrder = it },
                         onToggleColumns = {
                             gridColumns = when (gridColumns) {
@@ -553,19 +627,7 @@ fun OscellionGalleryLayout(
                             selectedUris.addAll(newUris)
                             onSelectionChanged?.invoke(selectedUris.toList())
                         },
-                        onMediaClick = { item ->
-                            SoundManager.playPop()
-                            if (maxSelection == 1 && item.isVideo && onVideoSelected != null && selectedUris.isEmpty()) {
-                                onVideoSelected(item.uri)
-                            } else {
-                                if (selectedUris.contains(item.uri)) {
-                                    selectedUris.remove(item.uri)
-                                } else if (selectedUris.size < maxSelection) {
-                                    selectedUris.add(item.uri)
-                                }
-                                onSelectionChanged?.invoke(selectedUris.toList())
-                            }
-                        },
+                        onMediaClick = { item -> handleMediaClick(item) },
                         onMediaLongClick = { item ->
                             SoundManager.playPop()
                             if (!selectedUris.contains(item.uri) && selectedUris.size < maxSelection) {
@@ -608,11 +670,7 @@ fun OscellionGalleryLayout(
                             }
                             permissionLauncher.launch(perms)
                         },
-                        onOpenSystemPicker = {
-                            systemPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                            )
-                        }
+                        onOpenSystemPicker = { handleOpenSystemPicker() }
                     )
                 }
             }
@@ -641,9 +699,7 @@ fun OscellionGalleryLayout(
                             IconButton(
                                 onClick = {
                                     SoundManager.playTap(context)
-                                    systemPickerLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                                    )
+                                    handleOpenSystemPicker()
                                 },
                                 modifier = Modifier.size(36.dp)
                             ) {
@@ -726,6 +782,8 @@ fun OscellionGalleryLayout(
                     onCategorySelected = { handleCategorySelect(it) },
                     albumsWithCounts = albumsWithCounts,
                     mediaTypeFilter = mediaTypeFilter,
+                    lockMediaFilter = lockMediaFilter,
+                    submitLabel = submitLabel,
                     sortOrder = sortOrder,
                     isSearchVisible = isSearchVisible,
                     searchQuery = searchQuery,
@@ -734,7 +792,7 @@ fun OscellionGalleryLayout(
                     captionText = captionText,
                     onCaptionChange = { captionText = it },
                     onAlbumChange = { selectedAlbum = it },
-                    onTypeFilterChange = { mediaTypeFilter = it },
+                    onTypeFilterChange = { if (!lockMediaFilter) mediaTypeFilter = it },
                     onSortOrderChange = { sortOrder = it },
                     onToggleColumns = {
                         gridColumns = when (gridColumns) {
@@ -760,19 +818,7 @@ fun OscellionGalleryLayout(
                         selectedUris.addAll(newUris)
                         onSelectionChanged?.invoke(selectedUris.toList())
                     },
-                    onMediaClick = { item ->
-                        SoundManager.playPop()
-                        if (maxSelection == 1 && item.isVideo && onVideoSelected != null && selectedUris.isEmpty()) {
-                            onVideoSelected(item.uri)
-                        } else {
-                            if (selectedUris.contains(item.uri)) {
-                                selectedUris.remove(item.uri)
-                            } else if (selectedUris.size < maxSelection) {
-                                selectedUris.add(item.uri)
-                            }
-                            onSelectionChanged?.invoke(selectedUris.toList())
-                        }
-                    },
+                    onMediaClick = { item -> handleMediaClick(item) },
                     onMediaLongClick = { item ->
                         SoundManager.playPop()
                         if (!selectedUris.contains(item.uri) && selectedUris.size < maxSelection) {
@@ -816,11 +862,7 @@ fun OscellionGalleryLayout(
                         }
                         permissionLauncher.launch(perms)
                     },
-                    onOpenSystemPicker = {
-                        systemPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                        )
-                    }
+                    onOpenSystemPicker = { handleOpenSystemPicker() }
                 )
             }
         }
@@ -1264,6 +1306,8 @@ private fun GalleryMainBody(
     onCategorySelected: (String) -> Unit = {},
     albumsWithCounts: List<Pair<String, Int>>,
     mediaTypeFilter: GalleryMediaTypeFilter,
+    lockMediaFilter: Boolean = false,
+    submitLabel: String? = null,
     sortOrder: GallerySortOrder,
     isSearchVisible: Boolean,
     searchQuery: String,
@@ -1308,6 +1352,7 @@ private fun GalleryMainBody(
                 selectedAlbum = selectedAlbum,
                 albumsWithCounts = albumsWithCounts,
                 mediaTypeFilter = mediaTypeFilter,
+                lockMediaFilter = lockMediaFilter,
                 sortOrder = sortOrder,
                 gridColumns = gridColumns,
                 isSearchVisible = isSearchVisible,
@@ -1319,9 +1364,10 @@ private fun GalleryMainBody(
                 onToggleColumns = onToggleColumns
             )
 
-            // Quick Category Filter Chips (Camera, Screenshots, Videos, Photos, Downloads)
+            // Quick Category Filter Chips (usage-aware)
             GalleryQuickCategoryChips(
                 selectedCategory = selectedCategory,
+                lockedFilter = if (lockMediaFilter) mediaTypeFilter else null,
                 onCategorySelected = onCategorySelected
             )
 
@@ -1567,9 +1613,30 @@ private fun GalleryMainBody(
                         }
                     }
 
-                    // 120Hz Floating Month/Year Date Scrubber
+                    val gridTimelineLabels = remember(mediaItems, dateGroups, useDateGrouping, showCameraTile) {
+                        val labels = ArrayList<String>(mediaItems.size + dateGroups.size + 2)
+                        if (showCameraTile) labels.add("Recent")
+                        if (useDateGrouping) {
+                            dateGroups.forEach { grp ->
+                                val grpLabel = grp.title.ifBlank { grp.items.firstOrNull()?.monthYearKey ?: "" }
+                                labels.add(grpLabel)
+                                grp.items.forEach { item ->
+                                    labels.add(item.monthYearKey.ifBlank { grpLabel })
+                                }
+                            }
+                        } else {
+                            mediaItems.forEach { item ->
+                                labels.add(item.monthYearKey.ifBlank { item.name })
+                            }
+                        }
+                        labels
+                    }
+
+                    var isSideScrubbing by remember { mutableStateOf(false) }
+
+                    // 120Hz Floating Month/Year Date Scrubber (hidden during active side drag to avoid duplicate pill)
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = gridState.isScrollInProgress && visibleMonthYear.isNotBlank(),
+                        visible = gridState.isScrollInProgress && !isSideScrubbing && visibleMonthYear.isNotBlank(),
                         enter = fadeIn(animationSpec = tween(100)) + scaleIn(initialScale = 0.88f),
                         exit = fadeOut(animationSpec = tween(250)) + scaleOut(targetScale = 0.88f),
                         modifier = Modifier
@@ -1601,6 +1668,22 @@ private fun GalleryMainBody(
                             }
                         }
                     }
+
+                    val gridGroupSizes = remember(dateGroups) { dateGroups.map { it.items.size } }
+
+                    // Smooth Right-Edge Fast-Scroller Side Slider
+                    GallerySideFastScroller(
+                        gridState = gridState,
+                        timelineLabels = gridTimelineLabels,
+                        groupSizes = gridGroupSizes,
+                        totalMediaCount = mediaItems.size,
+                        useDateGrouping = useDateGrouping,
+                        showCameraTile = showCameraTile,
+                        gridColumns = gridColumns,
+                        bottomClearanceDp = if (selectedUris.isNotEmpty()) 118 else 14,
+                        onScrubStateChange = { isSideScrubbing = it },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    )
                 }
             }
         }
@@ -1622,6 +1705,7 @@ private fun GalleryMainBody(
                 onClear = onClearSelection,
                 onRemoveUri = onRemoveUri,
                 onThumbnailClick = onEditSelection,
+                submitLabel = submitLabel,
                 onEdit = if (onEditSelection != null) { { onEditSelection(0) } } else null,
                 onSubmit = onSubmitSelection
             )
@@ -1635,18 +1719,32 @@ private fun GalleryMainBody(
 @Composable
 private fun GalleryQuickCategoryChips(
     selectedCategory: String,
+    lockedFilter: GalleryMediaTypeFilter? = null,
     onCategorySelected: (String) -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    val categories = remember {
-        listOf(
-            "All" to Lucide.Layers,
-            "Camera" to Lucide.Camera,
-            "Screenshots" to Lucide.Smartphone,
-            "Videos" to Lucide.Film,
-            "Photos" to Lucide.Image,
-            "Downloads" to Lucide.Download
-        )
+    val categories = remember(lockedFilter) {
+        when (lockedFilter) {
+            GalleryMediaTypeFilter.PHOTOS -> listOf(
+                "All" to Lucide.Layers,
+                "Camera" to Lucide.Camera,
+                "Screenshots" to Lucide.Smartphone,
+                "Downloads" to Lucide.Download
+            )
+            GalleryMediaTypeFilter.VIDEOS -> listOf(
+                "Videos" to Lucide.Film,
+                "Camera" to Lucide.Camera,
+                "Downloads" to Lucide.Download
+            )
+            else -> listOf(
+                "All" to Lucide.Layers,
+                "Camera" to Lucide.Camera,
+                "Screenshots" to Lucide.Smartphone,
+                "Videos" to Lucide.Film,
+                "Photos" to Lucide.Image,
+                "Downloads" to Lucide.Download
+            )
+        }
     }
 
     LazyRow(
@@ -1707,6 +1805,7 @@ private fun GalleryControlsBar(
     selectedAlbum: String,
     albumsWithCounts: List<Pair<String, Int>>,
     mediaTypeFilter: GalleryMediaTypeFilter,
+    lockMediaFilter: Boolean = false,
     sortOrder: GallerySortOrder,
     gridColumns: Int,
     isSearchVisible: Boolean = false,
@@ -1820,6 +1919,7 @@ private fun GalleryControlsBar(
             }
 
             // 2. Media Type Filter Dropdown
+            if (!lockMediaFilter) {
             Box {
                 Row(
                     modifier = Modifier
@@ -1895,6 +1995,7 @@ private fun GalleryControlsBar(
                         )
                     }
                 }
+            }
             }
         }
 
@@ -2308,6 +2409,7 @@ private fun GalleryFloatingSelectionDock(
     onSelectAll: (() -> Unit)? = null,
     onClear: () -> Unit,
     onRemoveUri: (Uri) -> Unit,
+    submitLabel: String? = null,
     onThumbnailClick: ((Int) -> Unit)? = null,
     onEdit: (() -> Unit)? = null,
     onSubmit: () -> Unit
@@ -2546,7 +2648,7 @@ private fun GalleryFloatingSelectionDock(
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = if (showCaptionInput) "Send (${selectedUris.size})" else "Confirm (${selectedUris.size})",
+                            text = submitLabel?.let { "$it (${selectedUris.size})" } ?: if (showCaptionInput) "Send (${selectedUris.size})" else "Confirm (${selectedUris.size})",
                             fontSize = 13.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -2567,7 +2669,7 @@ private fun GalleryFloatingSelectionDock(
                         modifier = Modifier.size(15.dp)
                     )
                     Text(
-                        text = if (showCaptionInput) "Send (${selectedUris.size})" else "Confirm (${selectedUris.size})",
+                        text = submitLabel?.let { "$it (${selectedUris.size})" } ?: if (showCaptionInput) "Send (${selectedUris.size})" else "Confirm (${selectedUris.size})",
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -3198,4 +3300,506 @@ private fun GalleryEmptyState(
             }
         }
     }
+}
+
+
+/**
+ * Right-Edge Smooth 120Hz Fast-Scroller Side Slider with Sub-Pixel Row Interpolation & Date Tooltip.
+ * Lets users glide across thousands of photos & videos smoothly in a single swipe without row jumping.
+ */
+@Composable
+private fun GallerySideFastScroller(
+    gridState: LazyGridState,
+    timelineLabels: List<String>,
+    groupSizes: List<Int>,
+    totalMediaCount: Int,
+    useDateGrouping: Boolean,
+    showCameraTile: Boolean,
+    gridColumns: Int,
+    bottomClearanceDp: Int,
+    onScrubStateChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val totalCount = gridState.layoutInfo.totalItemsCount.coerceAtLeast(timelineLabels.size)
+    if (totalCount <= gridColumns * 2) return
+
+    val colors = LocalOscellionColors.current
+    val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
+
+    var trackHeightPx by remember { mutableIntStateOf(0) }
+    var isScrubbing by remember { mutableStateOf(false) }
+    var scrubFraction by remember { mutableFloatStateOf(0f) }
+    var lastHapticLabel by remember { mutableStateOf("") }
+    var showFullThumb by remember { mutableStateOf(true) }
+
+    val layoutInfo = gridState.layoutInfo
+    val viewportWidthPx = layoutInfo.viewportSize.width.toFloat().coerceAtLeast(300f)
+    val viewportHeightPx = layoutInfo.viewportSize.height.toFloat().coerceAtLeast(trackHeightPx.toFloat().coerceAtLeast(400f))
+    val gridSidePaddingPx = with(density) { 8.dp.toPx() }
+    val gridSpacingPx = with(density) { 3.dp.toPx() }
+    val mediaRowHeightPx = remember(viewportWidthPx, gridColumns, gridSidePaddingPx, gridSpacingPx) {
+        val cols = gridColumns.coerceAtLeast(1)
+        val cellSize = ((viewportWidthPx - gridSidePaddingPx - (gridSpacingPx * (cols - 1))) / cols).coerceAtLeast(40f)
+        cellSize + gridSpacingPx
+    }
+    var measuredHeaderHeightPx by remember { mutableFloatStateOf(with(density) { 52.dp.toPx() }) }
+    LaunchedEffect(layoutInfo.visibleItemsInfo, isScrubbing) {
+        if (!isScrubbing) {
+            val hdr = layoutInfo.visibleItemsInfo.firstOrNull { it.key.toString().startsWith("header_") }
+            if (hdr != null && hdr.size.height > 0) {
+                measuredHeaderHeightPx = hdr.size.height.toFloat() + gridSpacingPx
+            }
+        }
+    }
+
+    val topPaddingPx = with(density) { 4.dp.toPx() }
+    val bottomPaddingPx = with(density) { (bottomClearanceDp + 12).dp.toPx() }
+
+    val virtualLayout = remember(
+        groupSizes,
+        totalMediaCount,
+        useDateGrouping,
+        showCameraTile,
+        gridColumns,
+        mediaRowHeightPx,
+        measuredHeaderHeightPx,
+        viewportHeightPx,
+        topPaddingPx,
+        bottomPaddingPx
+    ) {
+        buildGalleryVirtualLayout(
+            groupSizes = groupSizes,
+            totalMediaCount = totalMediaCount,
+            useDateGrouping = useDateGrouping,
+            showCameraTile = showCameraTile,
+            gridColumns = gridColumns,
+            mediaRowHeightPx = mediaRowHeightPx,
+            headerRowHeightPx = measuredHeaderHeightPx,
+            viewportHeightPx = viewportHeightPx,
+            topPaddingPx = topPaddingPx,
+            bottomPaddingPx = bottomPaddingPx
+        )
+    }
+
+    if (virtualLayout.maxScrollPx <= 1f) return
+
+    val scrollFraction by remember(virtualLayout) {
+        derivedStateOf {
+            virtualLayout.computeScrollFraction(
+                firstVisibleItemIndex = gridState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset
+            )
+        }
+    }
+
+    LaunchedEffect(gridState.isScrollInProgress, isScrubbing) {
+        if (gridState.isScrollInProgress || isScrubbing) {
+            showFullThumb = true
+        } else {
+            delay(1100L)
+            showFullThumb = false
+        }
+    }
+
+    // Drive grid scroll cleanly once per display frame (120Hz/60Hz) instead of launching per-move coroutines
+    LaunchedEffect(isScrubbing, virtualLayout) {
+        if (!isScrubbing) return@LaunchedEffect
+        var lastItemIndex = -1
+        var lastScrollOffset = -1
+        while (isScrubbing) {
+            withFrameNanos {
+                // Synchronized frame tick
+            }
+            val target = virtualLayout.resolveTargetForFraction(scrubFraction)
+            if (target.itemIndex != lastItemIndex || target.scrollOffsetPx != lastScrollOffset) {
+                lastItemIndex = target.itemIndex
+                lastScrollOffset = target.scrollOffsetPx
+                gridState.scrollToItem(target.itemIndex, target.scrollOffsetPx)
+            }
+        }
+    }
+
+    val minThumbPx = with(density) { 42.dp.toPx() }
+    val maxThumbPx = with(density) { 82.dp.toPx() }
+    val thumbHeightPx = if (trackHeightPx > 0 && virtualLayout.totalContentHeightPx > 0f) {
+        (trackHeightPx.toFloat() * (viewportHeightPx / virtualLayout.totalContentHeightPx))
+            .coerceIn(minThumbPx, maxThumbPx)
+    } else {
+        minThumbPx
+    }
+    val travelPx = (trackHeightPx.toFloat() - thumbHeightPx).coerceAtLeast(1f)
+
+    val latestTravelPx by rememberUpdatedState(travelPx)
+    val latestThumbHeightPx by rememberUpdatedState(thumbHeightPx)
+    val latestScrollFraction by rememberUpdatedState(scrollFraction)
+    val latestTimelineLabels by rememberUpdatedState(timelineLabels)
+
+    val activeFraction by remember {
+        derivedStateOf { if (isScrubbing) scrubFraction else scrollFraction }
+    }
+    val currentItemIdx by remember(totalCount, timelineLabels) {
+        derivedStateOf {
+            (activeFraction * (totalCount - 1).coerceAtLeast(0))
+                .roundToInt()
+                .coerceIn(0, (timelineLabels.size - 1).coerceAtLeast(0))
+        }
+    }
+    val activeDateLabel = timelineLabels.getOrNull(currentItemIdx).orEmpty()
+
+    val handleWidth by animateDpAsState(
+        targetValue = when {
+            isScrubbing -> 24.dp
+            showFullThumb -> 14.dp
+            else -> 7.dp
+        },
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "sliderWidth"
+    )
+    val trackAlpha by animateFloatAsState(
+        targetValue = if (isScrubbing) 0.35f else if (showFullThumb) 0.16f else 0.06f,
+        animationSpec = tween(200),
+        label = "sliderTrackAlpha"
+    )
+    val thumbAlpha by animateFloatAsState(
+        targetValue = if (isScrubbing || showFullThumb) 1f else 0.58f,
+        animationSpec = tween(220),
+        label = "sliderThumbAlpha"
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .padding(top = 8.dp, bottom = bottomClearanceDp.dp, end = 2.dp)
+    ) {
+        // Right-edge touch strip (keyed on Unit so layout updates mid-drag NEVER cancel active gesture)
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .width(38.dp)
+                .onSizeChanged { trackHeightPx = it.height }
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        down.consume()
+                        val startTravel = latestTravelPx
+                        val thumbH = latestThumbHeightPx
+                        val currentThumbTop = latestScrollFraction * startTravel
+                        val grabOffset = computeGalleryThumbGrabOffsetPx(
+                            pointerY = down.position.y,
+                            currentThumbTopPx = currentThumbTop,
+                            thumbHeightPx = thumbH
+                        )
+
+                        isScrubbing = true
+                        showFullThumb = true
+                        onScrubStateChange(true)
+
+                        fun updateFromY(yPx: Float) {
+                            val frac = computeGalleryTrackFraction(
+                                pointerY = yPx,
+                                grabOffsetPx = grabOffset,
+                                travelPx = latestTravelPx
+                            )
+                            scrubFraction = frac
+                            val labels = latestTimelineLabels
+                            if (labels.isNotEmpty()) {
+                                val labelIdx = (frac * (labels.size - 1))
+                                    .roundToInt()
+                                    .coerceIn(0, labels.lastIndex)
+                                val lbl = labels[labelIdx]
+                                if (lbl.isNotBlank() && lbl != lastHapticLabel) {
+                                    lastHapticLabel = lbl
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                            }
+                        }
+
+                        updateFromY(down.position.y)
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            if (!change.pressed) {
+                                change.consume()
+                                break
+                            }
+                            if (change.position != change.previousPosition) {
+                                change.consume()
+                                updateFromY(change.position.y)
+                            }
+                        }
+
+                        isScrubbing = false
+                        onScrubStateChange(false)
+                    }
+                }
+        ) {
+            // Subtle vertical track rail
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 3.dp)
+                    .fillMaxHeight()
+                    .width(if (isScrubbing) 5.dp else 3.dp)
+                    .clip(CircleShape)
+                    .background(colors.textMain.copy(alpha = trackAlpha))
+            )
+
+            // Draggable Thumb Pill (positioned directly in graphicsLayer for zero-recomposition 120Hz glide)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .graphicsLayer {
+                        translationY = activeFraction * travelPx
+                        alpha = thumbAlpha
+                    }
+                    .padding(end = 2.dp)
+                    .width(handleWidth)
+                    .height(with(density) { thumbHeightPx.toDp() })
+                    .shadow(if (isScrubbing) 10.dp else 2.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(
+                        if (isScrubbing) Color(0xFF0381FE)
+                        else if (colors.isDark) Color(0xFFE5E5EA)
+                        else Color(0xFF3A3A3C)
+                    )
+                    .border(
+                        width = if (isScrubbing) 1.dp else 0.5.dp,
+                        color = Color.White.copy(alpha = if (isScrubbing) 0.55f else 0.25f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isScrubbing || showFullThumb) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(2.5.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        repeat(3) {
+                            Box(
+                                modifier = Modifier
+                                    .size(width = if (isScrubbing) 10.dp else 6.dp, height = 1.5.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isScrubbing) Color.White
+                                        else if (colors.isDark) Color(0xFF1C1C1E)
+                                        else Color.White
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Floating Date + Index Callout Bubble next to thumb while dragging
+        AnimatedVisibility(
+            visible = isScrubbing && activeDateLabel.isNotBlank(),
+            enter = fadeIn(tween(80)) + scaleIn(initialScale = 0.86f),
+            exit = fadeOut(tween(150)) + scaleOut(targetScale = 0.86f),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .graphicsLayer {
+                    translationY = ((activeFraction * travelPx) - 4f).coerceAtLeast(0f)
+                }
+                .padding(end = 38.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = if (colors.isDark) Color(0xF21C1C1E) else Color(0xF5FFFFFF),
+                border = BorderStroke(0.75.dp, Color(0xFF0381FE).copy(alpha = 0.4f)),
+                shadowElevation = 10.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Lucide.Calendar,
+                        contentDescription = null,
+                        tint = Color(0xFF0381FE),
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Column {
+                        Text(
+                            text = activeDateLabel,
+                            color = colors.textMain,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "${currentItemIdx + 1} / $totalCount",
+                            color = colors.textMuted,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Drop-in Dialog Presentation of the Unified Enhanced Oscellion Gallery.
+ * Ideal for replacing raw OS pickers across Editors, Profile Settings, Stickers, Wallpapers, and Stories.
+ */
+@Composable
+fun OscellionGalleryModal(
+    isOpen: Boolean,
+    title: String = "Choose Media",
+    allowedMediaFilter: GalleryMediaTypeFilter = GalleryMediaTypeFilter.PHOTOS,
+    lockMediaFilter: Boolean = (allowedMediaFilter != GalleryMediaTypeFilter.ALL),
+    maxSelection: Int = 1,
+    showCameraTile: Boolean = false,
+    showCaptionInput: Boolean = false,
+    singleTapImmediate: Boolean = (maxSelection == 1 && !showCaptionInput),
+    showAlbumsTab: Boolean = true,
+    submitLabel: String? = null,
+    layoutMode: GalleryLayoutMode = GalleryLayoutMode.BOTTOM_SHEET,
+    onLaunchCamera: (() -> Unit)? = null,
+    onMediaSelected: (List<Uri>, String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (!isOpen) return
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        BackHandler { onDismiss() }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    if (layoutMode == GalleryLayoutMode.BOTTOM_SHEET) Color.Transparent
+                    else LocalOscellionColors.current.bg
+                )
+        ) {
+            OscellionGalleryLayout(
+                layoutMode = layoutMode,
+                title = title,
+                badgeText = "",
+                maxSelection = maxSelection,
+                allowedMediaFilter = allowedMediaFilter,
+                lockMediaFilter = lockMediaFilter,
+                singleTapImmediate = singleTapImmediate,
+                submitLabel = submitLabel,
+                showCameraTile = showCameraTile,
+                showCaptionInput = showCaptionInput,
+                showAlbumsTab = showAlbumsTab,
+                onVideoSelected = { uri ->
+                    onMediaSelected(listOf(uri), null)
+                    onDismiss()
+                },
+                onPhotosSelected = { uris ->
+                    if (uris.isNotEmpty()) {
+                        onMediaSelected(uris, null)
+                        onDismiss()
+                    }
+                },
+                onSendMediaWithCaption = { uris, caption ->
+                    if (uris.isNotEmpty()) {
+                        onMediaSelected(uris, caption)
+                        onDismiss()
+                    }
+                },
+                onLaunchCamera = onLaunchCamera,
+                onClose = onDismiss
+            )
+        }
+    }
+}
+
+class OscellionGalleryLauncher(private val onOpen: () -> Unit) {
+    operator fun invoke() = onOpen()
+    fun launch() = onOpen()
+    fun launch(@Suppress("UNUSED_PARAMETER") input: String) = onOpen()
+    fun launch(@Suppress("UNUSED_PARAMETER") request: PickVisualMediaRequest) = onOpen()
+}
+
+/**
+ * Ergonomic hook returning [OscellionGalleryLauncher] for picking a single image or video
+ * using the enhanced Oscellion Gallery (with side fast-scroller & album tabs).
+ */
+@Composable
+fun rememberOscellionMediaPicker(
+    title: String = "Choose Photo",
+    mediaFilter: GalleryMediaTypeFilter = GalleryMediaTypeFilter.PHOTOS,
+    showCameraTile: Boolean = false,
+    showAlbumsTab: Boolean = true,
+    lockMediaFilter: Boolean = (mediaFilter != GalleryMediaTypeFilter.ALL),
+    layoutMode: GalleryLayoutMode = GalleryLayoutMode.BOTTOM_SHEET,
+    onLaunchCamera: (() -> Unit)? = null,
+    onMediaPicked: (Uri) -> Unit
+): OscellionGalleryLauncher {
+    var isOpen by remember { mutableStateOf(false) }
+
+    OscellionGalleryModal(
+        isOpen = isOpen,
+        title = title,
+        allowedMediaFilter = mediaFilter,
+        lockMediaFilter = lockMediaFilter,
+        maxSelection = 1,
+        singleTapImmediate = true,
+        showCameraTile = showCameraTile,
+        showCaptionInput = false,
+        showAlbumsTab = showAlbumsTab,
+        layoutMode = layoutMode,
+        onLaunchCamera = onLaunchCamera,
+        onMediaSelected = { uris, _ ->
+            uris.firstOrNull()?.let(onMediaPicked)
+        },
+        onDismiss = { isOpen = false }
+    )
+
+    return remember { OscellionGalleryLauncher { isOpen = true } }
+}
+
+/**
+ * Ergonomic hook returning [OscellionGalleryLauncher] for multi-selecting photos/videos
+ * using the enhanced Oscellion Gallery (with side fast-scroller & selection dock).
+ */
+@Composable
+fun rememberOscellionMultiMediaPicker(
+    title: String = "Import Media",
+    mediaFilter: GalleryMediaTypeFilter = GalleryMediaTypeFilter.ALL,
+    maxSelection: Int = 20,
+    showCameraTile: Boolean = false,
+    showAlbumsTab: Boolean = true,
+    showCaptionInput: Boolean = false,
+    lockMediaFilter: Boolean = (mediaFilter != GalleryMediaTypeFilter.ALL),
+    submitLabel: String? = "Import",
+    layoutMode: GalleryLayoutMode = GalleryLayoutMode.BOTTOM_SHEET,
+    onMediaPicked: (List<Uri>, String?) -> Unit
+): OscellionGalleryLauncher {
+    var isOpen by remember { mutableStateOf(false) }
+
+    OscellionGalleryModal(
+        isOpen = isOpen,
+        title = title,
+        allowedMediaFilter = mediaFilter,
+        lockMediaFilter = lockMediaFilter,
+        maxSelection = maxSelection,
+        singleTapImmediate = false,
+        showCameraTile = showCameraTile,
+        showCaptionInput = showCaptionInput,
+        showAlbumsTab = showAlbumsTab,
+        submitLabel = submitLabel,
+        layoutMode = layoutMode,
+        onMediaSelected = { uris, caption ->
+            if (uris.isNotEmpty()) {
+                onMediaPicked(uris, caption)
+            }
+        },
+        onDismiss = { isOpen = false }
+    )
+
+    return remember { OscellionGalleryLauncher { isOpen = true } }
 }

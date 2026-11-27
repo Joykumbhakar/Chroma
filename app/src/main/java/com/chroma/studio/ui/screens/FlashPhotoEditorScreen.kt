@@ -12,7 +12,7 @@ enum class PhotoAspectRatio(val label: String, val ratio: Float?, val subtitle: 
     FREE("Original", null, "Uncropped Native"),
     SQUARE("1:1", 1f, "Square Feed Post"),
     PORTRAIT_4_5("4:5", 4f / 5f, "Instagram Portrait"),
-    STORY_9_16("9:16", 9f / 16f, "Story / Reel Fullscreen"),
+    STORY_9_16("9:16", 9f / 16f, "Story / Flash Fullscreen"),
     LANDSCAPE_16_9("16:9", 16f / 9f, "Widescreen / Banner"),
     PORTRAIT_3_4("3:4", 3f / 4f, "Classic Social Post")
 }

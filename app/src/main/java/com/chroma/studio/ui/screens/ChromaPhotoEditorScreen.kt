@@ -1145,23 +1145,24 @@ fun ChromaPhotoEditorScreen(
     var showLayersSheet by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showResetConfirmDialog by remember { mutableStateOf(false) }
+    var showDeleteSelectedConfirm by remember { mutableStateOf(false) }
     var activeToolSheet by remember { mutableStateOf<PhotoEditorTool?>(null) }
     var isExporting by remember { mutableStateOf(false) }
     var isExportCompleted by remember { mutableStateOf(false) }
 
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            viewModel.addClip(MediaType.IMAGE, "Image", 2, Color(0xFF064E3B), uri.toString())
-        }
+    val photoPickerLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Open Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        viewModel.addClip(MediaType.IMAGE, "Image", 2, Color(0xFF064E3B), uri.toString())
     }
-    val stickerPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            viewModel.addClip(MediaType.STICKER, "Sticker", 5, Color(0xFFB45309), uri.toString())
-        }
+    val stickerPickerLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Add Sticker Image",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        viewModel.addClip(MediaType.STICKER, "Sticker", 5, Color(0xFFB45309), uri.toString())
     }
 
     val selectedClip = state.clips.find { it.id == state.selectedClipId } ?: state.clips.firstOrNull()
@@ -1261,6 +1262,21 @@ fun ChromaPhotoEditorScreen(
         completedText = if (exportButtonLabel != "Export") "Photo Ready" else "Saved to Gallery"
     )
 
+    if (showDeleteSelectedConfirm) {
+        IosAlertDialog(
+            title = "Delete Selected Layer?",
+            message = "Remove the selected layer or overlay from your photo project?",
+            confirmText = "Delete",
+            isDestructive = true,
+            onConfirm = {
+                showDeleteSelectedConfirm = false
+                viewModel.deleteSelected()
+            },
+            dismissText = "Cancel",
+            onDismiss = { showDeleteSelectedConfirm = false }
+        )
+    }
+
     if (showResetConfirmDialog) {
         IosAlertDialog(
             title = "Reset Adjustments?",
@@ -1326,8 +1342,7 @@ fun ChromaPhotoEditorScreen(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(CircleShape)
-                        .background(topBtnBg)
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1335,7 +1350,7 @@ fun ChromaPhotoEditorScreen(
                         imageVector = Lucide.ChevronLeft,
                         contentDescription = "Back",
                         tint = editorColors.textMain,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
 
@@ -1418,8 +1433,7 @@ fun ChromaPhotoEditorScreen(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(CircleShape)
-                            .background(topBtnBg)
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable { showLayersSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
@@ -1427,7 +1441,7 @@ fun ChromaPhotoEditorScreen(
                             imageVector = Lucide.Layers,
                             contentDescription = "Layers",
                             tint = editorColors.textMain,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
@@ -1650,7 +1664,7 @@ fun ChromaPhotoEditorScreen(
                 },
                 onAddMedia = { showAddSheet = true },
                 onRotate = { viewModel.rotate90Degrees() },
-                onDelete = { viewModel.deleteSelected() },
+                onDelete = { if (selectedClip != null) showDeleteSelectedConfirm = true },
                 onDuplicate = { viewModel.duplicateSelected() }
             )
         }
@@ -4531,9 +4545,7 @@ private fun PhotoLayerManagerPanel(
                     Box(
                         modifier = Modifier
                             .size(34.dp)
-                            .clip(CircleShape)
-                            .background(controlBg)
-                            .border(0.5.dp, rowBorder, CircleShape)
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable { onToggleVisibility(trackId) },
                         contentAlignment = Alignment.Center
                     ) {
@@ -4541,7 +4553,7 @@ private fun PhotoLayerManagerPanel(
                             imageVector = if (visible) Lucide.Eye else Lucide.EyeOff,
                             contentDescription = "Toggle Visibility",
                             tint = if (visible) colors.textMain else colors.textMuted,
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
 

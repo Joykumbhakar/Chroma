@@ -101,17 +101,20 @@ fun OscellionLockScreen(
     var lockBannerMessage by remember { mutableStateOf<String?>(null) }
     val shakeAnim = remember { Animatable(0f) }
 
-    // Failed attempts counter and lockout timer
-    var failedAttempts by remember { mutableIntStateOf(0) }
-    var lockoutSecondsRemaining by remember { mutableIntStateOf(0) }
+    // Failed attempts counter and lockout timer synced with persistent SecurityPinManager storage
+    var failedAttempts by remember { mutableIntStateOf(SecurityPinManager.getFailedAttempts(context)) }
+    var lockoutSecondsRemaining by remember {
+        mutableIntStateOf(SecurityPinManager.getRemainingLockoutSeconds(context))
+    }
 
-    // Lockout countdown timer
+    // Lockout countdown timer synced against wall clock so closing the activity cannot reset cooldown
     LaunchedEffect(lockoutSecondsRemaining) {
         if (lockoutSecondsRemaining > 0) {
             delay(1000)
-            lockoutSecondsRemaining -= 1
-            if (lockoutSecondsRemaining == 0) {
-                failedAttempts = 0
+            val remaining = SecurityPinManager.getRemainingLockoutSeconds(context)
+            lockoutSecondsRemaining = remaining
+            if (remaining == 0) {
+                failedAttempts = SecurityPinManager.getFailedAttempts(context)
             }
         }
     }
@@ -126,6 +129,7 @@ fun OscellionLockScreen(
     var pendingWallpaperUri by remember { mutableStateOf(wallpaperUri) }
     var pendingDimming by remember { mutableFloatStateOf(wallpaperDimming) }
     var customWallpapers by remember { mutableStateOf(SecurityPinManager.getCustomWallpapers(context)) }
+    var pendingDeleteWallpaperUri by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(isWallpaperEditing) {
         if (isWallpaperEditing) {
@@ -134,31 +138,31 @@ fun OscellionLockScreen(
     }
 
     // Gallery Custom Photo Picker
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    val inputStream = context.contentResolver.openInputStream(uri)
-                    val targetFile = File(context.filesDir, "custom_wallpaper_${System.currentTimeMillis()}.jpg")
-                    inputStream?.use { input ->
-                        targetFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
+    val galleryLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Lock Wallpaper",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        scope.launch(Dispatchers.IO) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val targetFile = File(context.filesDir, "custom_wallpaper_${System.currentTimeMillis()}.jpg")
+                inputStream?.use { input ->
+                    targetFile.outputStream().use { output ->
+                        input.copyTo(output)
                     }
-                    val localUri = Uri.fromFile(targetFile).toString()
-                    SecurityPinManager.addCustomWallpaper(context, localUri)
-                    val updatedList = SecurityPinManager.getCustomWallpapers(context)
-                    withContext(Dispatchers.Main) {
-                        customWallpapers = updatedList
-                        pendingWallpaperUri = localUri
-                        lockBannerMessage = "Custom wallpaper added"
-                    }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        lockBannerMessage = "Failed to load photo: ${e.message}"
-                    }
+                }
+                val localUri = Uri.fromFile(targetFile).toString()
+                SecurityPinManager.addCustomWallpaper(context, localUri)
+                val updatedList = SecurityPinManager.getCustomWallpapers(context)
+                withContext(Dispatchers.Main) {
+                    customWallpapers = updatedList
+                    pendingWallpaperUri = localUri
+                    lockBannerMessage = "Custom wallpaper added"
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    lockBannerMessage = "Failed to load photo: ${e.message}"
                 }
             }
         }
@@ -212,8 +216,10 @@ fun OscellionLockScreen(
             subtitle = "Verify your identity to access the app",
             onSuccess = {
                 SecurityPinManager.markUnlocked()
+                SecurityPinManager.resetFailedPinAttempts(context)
                 SoundManager.playLockSuccess(context)
                 failedAttempts = 0
+                lockoutSecondsRemaining = 0
                 lockBannerMessage = null
                 currentView = LockScreenView.UNLOCKED_CONFIRMATION
             },
@@ -244,7 +250,8 @@ fun OscellionLockScreen(
 
     fun triggerPinError() {
         scope.launch {
-            failedAttempts += 1
+            val nextState = SecurityPinManager.recordFailedPinAttempt(context)
+            failedAttempts = nextState.failedAttempts
             isPinError = true
             SoundManager.playLockError()
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -269,8 +276,8 @@ fun OscellionLockScreen(
                 shakeAnim.snapTo(0f)
             }
 
-            if (failedAttempts >= 5) {
-                lockoutSecondsRemaining = 30
+            if (nextState.lockoutSeconds > 0) {
+                lockoutSecondsRemaining = nextState.lockoutSeconds
             }
 
             delay(350)
@@ -297,9 +304,11 @@ fun OscellionLockScreen(
                 val isValid = SecurityPinManager.verifyPin(context, newPin)
                 if (isValid) {
                     SecurityPinManager.markUnlocked()
+                    SecurityPinManager.resetFailedPinAttempts(context)
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     SoundManager.playLockSuccess(context)
                     failedAttempts = 0
+                    lockoutSecondsRemaining = 0
                     lockBannerMessage = null
                     currentView = LockScreenView.UNLOCKED_CONFIRMATION
                 } else {
@@ -433,7 +442,7 @@ fun OscellionLockScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Top row: Back/Close button (when triggered via AppLockActivity) + Wallpaper hint
+                            // Top row: Borderless Back/Close button + Wallpaper hint
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -443,10 +452,7 @@ fun OscellionLockScreen(
                                     Box(
                                         modifier = Modifier
                                             .align(Alignment.CenterStart)
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.Black.copy(alpha = 0.40f))
-                                            .border(0.75.dp, Color.White.copy(alpha = 0.16f), CircleShape)
+                                            .size(40.dp)
                                             .clickable { onBack() },
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -454,27 +460,19 @@ fun OscellionLockScreen(
                                             imageVector = Lucide.X,
                                             contentDescription = "Exit to Home",
                                             tint = Color.White,
-                                            modifier = Modifier.size(16.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                 }
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.Center)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.35f))
-                                        .border(0.75.dp, Color.White.copy(alpha = 0.12f), CircleShape)
-                                        .padding(horizontal = 14.dp, vertical = 5.dp)
-                                ) {
-                                    Text(
-                                        text = "Hold wallpaper to customize",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Color.White.copy(alpha = 0.75f),
-                                        fontFamily = InterFontFamily,
-                                        letterSpacing = 0.4.sp
-                                    )
-                                }
+                                Text(
+                                    text = "Hold wallpaper to customize",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White.copy(alpha = 0.65f),
+                                    fontFamily = InterFontFamily,
+                                    letterSpacing = 0.3.sp,
+                                    modifier = Modifier.align(Alignment.Center)
+                                )
                             }
 
                             // Centered Main Content Stack
@@ -580,21 +578,20 @@ fun OscellionLockScreen(
                                         label = "bioScale"
                                     )
 
-                                    Box(
+                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(58.dp)
+                                            .height(54.dp)
                                             .graphicsLayer {
                                                 scaleX = bioScale
                                                 scaleY = bioScale
                                             }
-                                            .clip(CircleShape)
+                                            .clip(RoundedCornerShape(14.dp))
                                             .background(
                                                 brush = Brush.horizontalGradient(
                                                     listOf(Color(0xFF0381FE), Color(0xFF0072DE))
                                                 )
                                             )
-                                            .border(0.75.dp, Color.White.copy(alpha = 0.35f), CircleShape)
                                             .clickable(
                                                 interactionSource = bioInteraction,
                                                 indication = null
@@ -645,17 +642,17 @@ fun OscellionLockScreen(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(58.dp)
+                                            .height(54.dp)
                                             .graphicsLayer {
                                                 scaleX = pinScale
                                                 scaleY = pinScale
                                             }
-                                            .clip(CircleShape)
+                                            .clip(RoundedCornerShape(14.dp))
                                             .background(
                                                 if (pinPressed) Color(0xFF222834).copy(alpha = 0.85f)
                                                 else Color(0xFF141822).copy(alpha = 0.72f)
                                             )
-                                            .border(0.75.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+                                            .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(14.dp))
                                             .clickable(
                                                 interactionSource = pinInteraction,
                                                 indication = null
@@ -795,7 +792,7 @@ fun OscellionLockScreen(
                 Box(
                     modifier = Modifier
                         .size(width = 40.dp, height = 4.dp)
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(2.dp))
                         .background(Color.White.copy(alpha = 0.25f))
                         .align(Alignment.CenterHorizontally)
                 )
@@ -824,12 +821,16 @@ fun OscellionLockScreen(
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Cancel Button
-                        Box(
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // Borderless Cancel Action
+                        Text(
+                            text = "Cancel",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White.copy(alpha = 0.80f),
+                            fontFamily = InterFontFamily,
                             modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.10f))
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable {
                                     SoundManager.playTap(context)
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -837,22 +838,14 @@ fun OscellionLockScreen(
                                     pendingDimming = wallpaperDimming
                                     isWallpaperEditing = false
                                 }
-                                .padding(horizontal = 14.dp, vertical = 7.dp)
-                        ) {
-                            Text(
-                                text = "Cancel",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontFamily = InterFontFamily
-                            )
-                        }
+                                .padding(horizontal = 10.dp, vertical = 7.dp)
+                        )
 
-                        // Set Button
+                        // Set Action Button
                         Box(
                             modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Color(0xFF167EFF))
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF0381FE))
                                 .clickable {
                                     try {
                                         SoundManager.playReaction()
@@ -880,11 +873,11 @@ fun OscellionLockScreen(
                                         lockBannerMessage = "Failed to save wallpaper: ${e.message}"
                                     }
                                 }
-                                .padding(horizontal = 18.dp, vertical = 7.dp)
+                                .padding(horizontal = 16.dp, vertical = 7.dp)
                         ) {
                             Text(
                                 text = "Set",
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White,
                                 fontFamily = InterFontFamily
@@ -895,14 +888,12 @@ fun OscellionLockScreen(
 
                 Spacer(Modifier.height(14.dp))
 
-                // Real-Time Wallpaper Dimming Slider
+                // Real-Time Wallpaper Dimming Row (borderless hairline section)
+                HorizontalDivider(color = Color.White.copy(alpha = 0.10f), thickness = 0.5.dp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.06f))
-                        .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        .padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -975,20 +966,12 @@ fun OscellionLockScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.10f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Plus,
-                                    contentDescription = "Add Photo",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = Lucide.Plus,
+                                contentDescription = "Add Photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
                             Spacer(Modifier.height(6.dp))
                             Text(
                                 text = "Add Photo",
@@ -1055,31 +1038,23 @@ fun OscellionLockScreen(
                                 )
                             }
 
-                            // Quick delete badge (Top Right)
+                            // Quick delete action (Top Right) - borderless icon, asks confirmation before deleting
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(4.dp)
-                                    .size(20.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.65f))
+                                    .size(24.dp)
                                     .clickable {
                                         SoundManager.playTap(context)
-                                        SecurityPinManager.deleteCustomWallpaper(context, customUri)
-                                        val updated = SecurityPinManager.getCustomWallpapers(context)
-                                        customWallpapers = updated
-                                        if (pendingWallpaperUri == customUri) {
-                                            pendingWallpaperUri = updated.firstOrNull() ?: SecurityPinManager.DEFAULT_WALLPAPER
-                                        }
-                                        android.widget.Toast.makeText(context, "Wallpaper removed", android.widget.Toast.LENGTH_SHORT).show()
+                                        pendingDeleteWallpaperUri = customUri
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Lucide.X,
+                                    imageVector = Lucide.Trash2,
                                     contentDescription = "Delete wallpaper",
-                                    tint = Color.White.copy(alpha = 0.9f),
-                                    modifier = Modifier.size(11.dp)
+                                    tint = Color.White.copy(alpha = 0.92f),
+                                    modifier = Modifier.size(13.dp)
                                 )
                             }
                         }
@@ -1149,6 +1124,32 @@ fun OscellionLockScreen(
                 lockBannerMessage = null
                 currentView = LockScreenView.PIN_ENTRY
                 enteredPin = ""
+            }
+        )
+    }
+
+    // Confirmation dialog before deleting a custom wallpaper
+    pendingDeleteWallpaperUri?.let { targetUri ->
+        IosAlertDialog(
+            title = "Delete Custom Wallpaper?",
+            message = "This removes the selected custom wallpaper from your lock screen gallery.",
+            confirmText = "Delete",
+            isDestructive = true,
+            onConfirm = {
+                pendingDeleteWallpaperUri = null
+                SecurityPinManager.deleteCustomWallpaper(context, targetUri)
+                val updated = SecurityPinManager.getCustomWallpapers(context)
+                customWallpapers = updated
+                if (pendingWallpaperUri == targetUri) {
+                    pendingWallpaperUri = updated.firstOrNull() ?: SecurityPinManager.DEFAULT_WALLPAPER
+                }
+                if (wallpaperUri == targetUri) {
+                    wallpaperUri = SecurityPinManager.DEFAULT_WALLPAPER
+                }
+                ToastManager.showToast("Wallpaper removed")
+            },
+            onDismiss = {
+                pendingDeleteWallpaperUri = null
             }
         )
     }

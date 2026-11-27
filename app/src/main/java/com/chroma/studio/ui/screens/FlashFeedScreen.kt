@@ -69,7 +69,8 @@ fun FlashFeedScreen(
     emptyContent: (@Composable () -> Unit)? = null,
     initialVideoId: String? = null,
     onRemixVideo: ((FlashVideo) -> Unit)? = null,
-    chatViewModel: com.chroma.studio.viewmodel.ChatViewModel? = null
+    chatViewModel: com.chroma.studio.viewmodel.ChatViewModel? = null,
+    onNavigateToPost: ((String) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
     val context = LocalContext.current
@@ -286,6 +287,7 @@ fun FlashFeedScreen(
                         onNavigateToFlashPicker = {
                             if (requireSignedIn()) onNavigateToFlashPicker()
                         },
+                        onNavigateToPost = onNavigateToPost,
                         onRemixVideo = onRemixVideo
                     )
                 }
@@ -314,8 +316,7 @@ fun FlashFeedScreen(
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.28f))
+                    .clip(RoundedCornerShape(8.dp))
                     .clickable { onNavigateToOldHome() },
                 contentAlignment = Alignment.Center
             ) {
@@ -323,7 +324,7 @@ fun FlashFeedScreen(
                     imageVector = Lucide.ArrowLeft,
                     contentDescription = "Back",
                     tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
 
@@ -365,8 +366,7 @@ fun FlashFeedScreen(
                 Box(
                     modifier = Modifier
                         .size(34.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.28f))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable { isMuted = !isMuted },
                     contentAlignment = Alignment.Center
                 ) {
@@ -374,7 +374,7 @@ fun FlashFeedScreen(
                         imageVector = if (isMuted) Lucide.VolumeX else Lucide.Volume2,
                         contentDescription = if (isMuted) "Unmute" else "Mute",
                         tint = Color.White,
-                        modifier = Modifier.size(17.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
 
@@ -382,12 +382,11 @@ fun FlashFeedScreen(
                     Box(
                         modifier = Modifier
                             .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.18f))
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable { showDraftSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Lucide.FileVideo, "Drafts", tint = Color.White, modifier = Modifier.size(17.dp))
+                        Icon(Lucide.FileVideo, "Drafts", tint = Color.White, modifier = Modifier.size(19.dp))
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
@@ -522,6 +521,7 @@ private fun FlashVideoItem(
     commentVm: com.chroma.studio.viewmodel.FlashCommentViewModel,
     onRemixRequested: (Uri, String, String) -> Unit,
     onNavigateToFlashPicker: () -> Unit = {},
+    onNavigateToPost: ((String) -> Unit)? = null,
     onRemixVideo: ((FlashVideo) -> Unit)? = null,
     onRequireLogin: () -> Unit = {}
 ) {
@@ -583,7 +583,21 @@ private fun FlashVideoItem(
     var is2xSpeed by remember(video.id, isActive) { mutableStateOf(false) }
     var showMoreOptionsSheet by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
-    val isOwner = auth.currentUser?.uid == video.creatorId
+    val currentUserUid = auth.currentUser?.uid
+    val isOwner = currentUserUid == video.creatorId
+    var localCollabs by remember(video.id, video.collaborators) { mutableStateOf(video.collaborators) }
+    var localPendingCollabIds by remember(video.id, video.pendingCollaboratorIds) { mutableStateOf(video.pendingCollaboratorIds) }
+    var localAcceptedCollabIds by remember(video.id, video.collaboratorIds) { mutableStateOf(video.collaboratorIds) }
+    var isRespondingCollab by remember(video.id) { mutableStateOf(false) }
+    var showCollabSheet by remember(video.id) { mutableStateOf(false) }
+    var showStopSharingConfirm by remember(video.id) { mutableStateOf(false) }
+    var showManageCollabPicker by remember(video.id) { mutableStateOf(false) }
+    var showAudioDetailModal by remember(video.id) { mutableStateOf(false) }
+    val acceptedCollaborators = remember(localCollabs, localAcceptedCollabIds) {
+        com.chroma.studio.model.resolveAcceptedCollaborators(localCollabs, localAcceptedCollabIds)
+    }
+    val isPendingInvitee = !currentUserUid.isNullOrBlank() && localPendingCollabIds.contains(currentUserUid)
+    val isAcceptedCollaborator = !currentUserUid.isNullOrBlank() && localAcceptedCollabIds.contains(currentUserUid)
     var currentPosition by remember(video.id) { mutableLongStateOf(0L) }
     var videoDuration by remember(video.id) { mutableLongStateOf(video.duration.coerceAtLeast(1L)) }
     var isScrubbing by remember { mutableStateOf(false) }
@@ -894,6 +908,64 @@ private fun FlashVideoItem(
             }
         }
 
+        // Pending Collaborator Invite Banner
+        if (isPendingInvitee && currentUserUid != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 56.dp)
+            ) {
+                com.chroma.studio.ui.components.PendingCollabReviewStrip(
+                    creatorHandle = resolvedCreatorUsername,
+                    isProcessing = isRespondingCollab,
+                    darkSurface = true,
+                    onAccept = {
+                        isRespondingCollab = true
+                        coroutineScope.launch {
+                            val ok = discoverRepo.respondToCollabInvite(video.id, accept = true)
+                            if (ok) {
+                                val nextState = com.chroma.studio.model.applyCollabInviteResponse(
+                                    participants = localCollabs,
+                                    pendingIds = localPendingCollabIds,
+                                    acceptedIds = localAcceptedCollabIds,
+                                    responderUid = currentUserUid,
+                                    accept = true
+                                )
+                                localCollabs = nextState.collaborators
+                                localPendingCollabIds = nextState.pendingCollaboratorIds
+                                localAcceptedCollabIds = nextState.collaboratorIds
+                                ToastManager.showToast("Joined collaboration!")
+                            } else {
+                                ToastManager.showToast("Could not accept invite")
+                            }
+                            isRespondingCollab = false
+                        }
+                    },
+                    onDecline = {
+                        isRespondingCollab = true
+                        coroutineScope.launch {
+                            val ok = discoverRepo.respondToCollabInvite(video.id, accept = false)
+                            if (ok) {
+                                val nextState = com.chroma.studio.model.applyCollabInviteResponse(
+                                    participants = localCollabs,
+                                    pendingIds = localPendingCollabIds,
+                                    acceptedIds = localAcceptedCollabIds,
+                                    responderUid = currentUserUid,
+                                    accept = false
+                                )
+                                localCollabs = nextState.collaborators
+                                localPendingCollabIds = nextState.pendingCollaboratorIds
+                                localAcceptedCollabIds = nextState.collaboratorIds
+                                ToastManager.showToast("Invite declined")
+                            }
+                            isRespondingCollab = false
+                        }
+                    }
+                )
+            }
+        }
+
         // 2x Speed indicator during long-press
         AnimatedVisibility(
             visible = is2xSpeed,
@@ -906,7 +978,7 @@ private fun FlashVideoItem(
         ) {
             Row(
                 modifier = Modifier
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color.Black.copy(alpha = 0.72f))
                     .padding(horizontal = 12.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -927,18 +999,16 @@ private fun FlashVideoItem(
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(64.dp)
+                    .size(56.dp)
                     .scale(playPauseScale)
-                    .graphicsLayer { alpha = playPauseAlpha }
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.56f)),
+                    .graphicsLayer { alpha = playPauseAlpha },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (overlayShowsPauseIcon) Lucide.Pause else Lucide.Play,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(38.dp)
                 )
             }
         }
@@ -1046,18 +1116,21 @@ private fun FlashVideoItem(
                 )
             }
 
-            // Audio Disc Squircle (Borderless, clean contrast)
+            // Audio Disc Squircle (Borderless, clean contrast — tappable when curated track is attached)
+            val hasAttachedTrack = !video.musicTrackId.isNullOrBlank() || !video.musicTitle.isNullOrBlank()
+            val discImageUrl = video.musicCoverUrl?.takeIf { it.isNotBlank() } ?: resolvedCreatorAvatar
             Box(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(RoundedCornerShape(9.dp))
                     .background(Color(0xFF1B1B22))
+                    .clickable(enabled = hasAttachedTrack) { showAudioDetailModal = true }
                     .rotate(if (isPlaying && isActive) discRotation else 0f),
                 contentAlignment = Alignment.Center
             ) {
-                if (resolvedCreatorAvatar.isNotBlank()) {
+                if (discImageUrl.isNotBlank()) {
                     AsyncImage(
-                        model = resolvedCreatorAvatar,
+                        model = discImageUrl,
                         contentDescription = "Audio Art",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -1084,53 +1157,82 @@ private fun FlashVideoItem(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                IosAvatarView(
-                    name = resolvedCreatorDisplayName.ifBlank { resolvedCreatorUsername },
-                    avatarUrl = resolvedCreatorAvatar,
-                    size = 36.dp,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .clickable { onAuthorClick() }
-                )
+                val firstCollab = acceptedCollaborators.firstOrNull()
+                if (firstCollab != null) {
+                    com.chroma.studio.ui.components.CollabStackedAvatars(
+                        primaryName = resolvedCreatorDisplayName.ifBlank { resolvedCreatorUsername },
+                        primaryAvatarUrl = resolvedCreatorAvatar,
+                        secondaryName = firstCollab.displayName.ifBlank { firstCollab.username },
+                        secondaryAvatarUrl = firstCollab.avatarUrl,
+                        cutoutRingColor = Color(0xFF141418),
+                        size = 32.dp,
+                        onClick = { showCollabSheet = true }
+                    )
+                } else {
+                    IosAvatarView(
+                        name = resolvedCreatorDisplayName.ifBlank { resolvedCreatorUsername },
+                        avatarUrl = resolvedCreatorAvatar,
+                        size = 36.dp,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable { onAuthorClick() }
+                    )
+                }
 
                 Column(
                     modifier = Modifier
                         .weight(1f, fill = false)
-                        .clickable { onAuthorClick() }
+                        .clickable {
+                            if (acceptedCollaborators.isNotEmpty()) showCollabSheet = true else onAuthorClick()
+                        }
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = resolvedCreatorDisplayName.ifBlank { resolvedCreatorUsername.ifBlank { "Creator" } },
-                            color = Color.White,
+                    if (acceptedCollaborators.isNotEmpty()) {
+                        com.chroma.studio.ui.components.CollabCoAuthorTitleRow(
+                            primaryLabel = resolvedCreatorUsername.ifBlank { resolvedCreatorDisplayName.ifBlank { "Creator" } },
+                            primaryVerified = resolvedCreatorVerified,
+                            primaryVerifiedTone = resolvedCreatorVerifiedTone,
+                            acceptedCollaborators = acceptedCollaborators,
+                            textColor = Color.White,
+                            mutedColor = Color.White.copy(alpha = 0.80f),
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = androidx.compose.ui.text.TextStyle(
-                                shadow = androidx.compose.ui.graphics.Shadow(
-                                    color = Color.Black.copy(alpha = 0.75f),
-                                    blurRadius = 4f
+                            onPrimaryClick = onAuthorClick,
+                            onCollaboratorClick = { showCollabSheet = true }
+                        )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = resolvedCreatorDisplayName.ifBlank { resolvedCreatorUsername.ifBlank { "Creator" } },
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = androidx.compose.ui.text.TextStyle(
+                                    shadow = androidx.compose.ui.graphics.Shadow(
+                                        color = Color.Black.copy(alpha = 0.75f),
+                                        blurRadius = 4f
+                                    )
                                 )
                             )
-                        )
-                        if (resolvedCreatorVerified) {
-                            VerifiedBadge(
-                                size = 13.dp,
-                                tone = resolvedCreatorVerifiedTone
-                            )
+                            if (resolvedCreatorVerified) {
+                                VerifiedBadge(
+                                    size = 13.dp,
+                                    tone = resolvedCreatorVerifiedTone
+                                )
+                            }
                         }
+                        Text(
+                            text = "@${resolvedCreatorUsername.ifBlank { "creator" }}",
+                            color = Color.White.copy(alpha = 0.82f),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                    Text(
-                        text = "@${resolvedCreatorUsername.ifBlank { "creator" }}",
-                        color = Color.White.copy(alpha = 0.82f),
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                 }
 
                 if (auth.currentUser?.uid != video.creatorId && !isFollowing) {
@@ -1163,9 +1265,20 @@ private fun FlashVideoItem(
 
             Spacer(Modifier.height(9.dp))
 
+            val hasCuratedTrack = !video.musicTrackId.isNullOrBlank() || !video.musicTitle.isNullOrBlank()
+            val audioLabelText = if (!video.musicTitle.isNullOrBlank()) {
+                val artistLabel = video.musicArtist?.takeIf { it.isNotBlank() } ?: "Chroma Music"
+                "${video.musicTitle} · $artistLabel"
+            } else {
+                "${video.authorDisplayName.ifBlank { video.authorUsername.ifBlank { "Creator" } }} · Original audio"
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .clickable(enabled = hasCuratedTrack) { showAudioDetailModal = true }
+                    .padding(vertical = 2.dp, horizontal = 2.dp)
             ) {
                 Icon(
                     imageVector = Lucide.Music,
@@ -1174,12 +1287,20 @@ private fun FlashVideoItem(
                     modifier = Modifier.size(13.dp)
                 )
                 Text(
-                    text = "${video.authorDisplayName.ifBlank { video.authorUsername.ifBlank { "Creator" } }} · Original audio",
+                    text = audioLabelText,
                     color = Color.White.copy(alpha = 0.9f),
                     fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (hasCuratedTrack) {
+                    Icon(
+                        imageVector = Lucide.ChevronRight,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.72f),
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
             }
 
             if (video.caption.isNotBlank()) {
@@ -1372,10 +1493,19 @@ private fun FlashVideoItem(
             FlashMoreOptionsSheet(
                 video = video,
                 isOwner = isOwner,
+                isAcceptedCollaborator = isAcceptedCollaborator,
                 onDismiss = { showMoreOptionsSheet = false },
                 onDeleteClick = {
                     showMoreOptionsSheet = false
                     showDeleteConfirmDialog = true
+                },
+                onManageCollaboratorsClick = {
+                    showMoreOptionsSheet = false
+                    showManageCollabPicker = true
+                },
+                onStopSharingClick = {
+                    showMoreOptionsSheet = false
+                    showStopSharingConfirm = true
                 },
                 onShareClick = {
                     showMoreOptionsSheet = false
@@ -1441,6 +1571,124 @@ private fun FlashVideoItem(
                 onDismiss = { showDeleteConfirmDialog = false }
             )
         }
+
+        if (showCollabSheet) {
+            com.chroma.studio.ui.components.CollaboratorsDetailSheet(
+                creatorUid = video.creatorId,
+                creatorDisplayName = resolvedCreatorDisplayName.ifBlank { resolvedCreatorUsername },
+                creatorUsername = resolvedCreatorUsername,
+                creatorAvatarUrl = resolvedCreatorAvatar,
+                creatorVerified = resolvedCreatorVerified,
+                creatorVerifiedTone = resolvedCreatorVerifiedTone,
+                collaborators = acceptedCollaborators,
+                isCurrentUserCollaborator = isAcceptedCollaborator,
+                onStopSharing = { showStopSharingConfirm = true },
+                onAuthorClick = { uid ->
+                    if (uid == video.creatorId) onAuthorClick()
+                    else com.chroma.studio.ui.components.ToastManager.showToast("Viewing collaborator profile")
+                },
+                onDismiss = { showCollabSheet = false }
+            )
+        }
+
+        if (showStopSharingConfirm && currentUserUid != null) {
+            com.chroma.studio.ui.components.IosAlertDialog(
+                title = "Stop Sharing Flash?",
+                message = "This removes you as a collaborator and hides this Flash from your profile while keeping @${resolvedCreatorUsername}'s original video intact.",
+                confirmText = "Stop Sharing",
+                isDestructive = true,
+                onConfirm = {
+                    showStopSharingConfirm = false
+                    coroutineScope.launch {
+                        val ok = discoverRepo.leaveCollab(video.id)
+                        if (ok) {
+                            val nextState = com.chroma.studio.model.removeCollabParticipant(
+                                participants = localCollabs,
+                                pendingIds = localPendingCollabIds,
+                                acceptedIds = localAcceptedCollabIds,
+                                targetUid = currentUserUid
+                            )
+                            localCollabs = nextState.collaborators
+                            localAcceptedCollabIds = nextState.collaboratorIds
+                            ToastManager.showToast("Removed from your profile")
+                        } else {
+                            ToastManager.showToast("Could not update collaboration")
+                        }
+                    }
+                },
+                onDismiss = { showStopSharingConfirm = false }
+            )
+        }
+
+        if (showManageCollabPicker && isOwner && currentUserUid != null) {
+            com.chroma.studio.ui.components.CollabPickerModalSheet(
+                currentUserUid = currentUserUid,
+                initialSelection = localCollabs,
+                repository = discoverRepo,
+                onDone = { picked ->
+                    showManageCollabPicker = false
+                    val pickedUids = picked.map { it.uid }.toSet()
+                    val existingUids = localCollabs.map { it.uid }.toSet()
+                    val added = picked.filter { it.uid !in existingUids }
+                    val removed = localCollabs.filter { it.uid !in pickedUids }.map { it.uid }
+                    if (added.isNotEmpty() || removed.isNotEmpty()) {
+                        coroutineScope.launch {
+                            val ok = discoverRepo.updateCollaboratorsAsCreator(
+                                postId = video.id,
+                                addedCollaborators = added,
+                                removedUids = removed
+                            )
+                            if (ok) {
+                                ToastManager.showToast("Collaborators updated")
+                                flashVm.loadFeed(isRefresh = true)
+                            } else {
+                                ToastManager.showToast("Failed to update collaborators")
+                            }
+                        }
+                    }
+                },
+                onDismiss = { showManageCollabPicker = false }
+            )
+        }
+
+        if (showAudioDetailModal && !video.musicTrackId.isNullOrBlank()) {
+            com.chroma.studio.ui.components.AudioDetailModal(
+                trackId = video.musicTrackId,
+                fallbackTitle = video.musicTitle,
+                fallbackArtist = video.musicArtist,
+                fallbackCoverUrl = video.musicCoverUrl,
+                fallbackAudioUrl = video.musicAudioUrl,
+                onDismiss = { showAudioDetailModal = false },
+                onUseAudio = { track ->
+                    showAudioDetailModal = false
+                    if (requireSignedIn()) {
+                        com.chroma.studio.data.PendingMusicHandoff.set(
+                            com.chroma.studio.data.AttachedMusicSelection(
+                                trackId = track.id,
+                                title = track.title,
+                                artist = track.artist,
+                                album = track.album,
+                                coverUrl = track.coverUrl,
+                                audioUrl = track.audioUrl,
+                                startSec = track.bestPartStartSec,
+                                durationSec = (track.bestPartEndSec - track.bestPartStartSec).coerceIn(5, maxOf(5, track.durationSec)),
+                                totalTrackSec = track.durationSec,
+                                showLyricsSticker = true
+                            )
+                        )
+                        onNavigateToFlashPicker()
+                    }
+                },
+                onFlashClick = { clickedFlash ->
+                    showAudioDetailModal = false
+                    flashVm.ensureFlashInFeed(clickedFlash.id, null)
+                },
+                onPostClick = { clickedPost ->
+                    showAudioDetailModal = false
+                    onNavigateToPost?.invoke(clickedPost.id)
+                }
+            )
+        }
     }
 }
 
@@ -1456,8 +1704,11 @@ private fun formatFlashTime(ms: Long): String {
 private fun FlashMoreOptionsSheet(
     video: FlashVideo,
     isOwner: Boolean,
+    isAcceptedCollaborator: Boolean = false,
     onDismiss: () -> Unit,
     onDeleteClick: () -> Unit,
+    onManageCollaboratorsClick: () -> Unit = {},
+    onStopSharingClick: () -> Unit = {},
     onShareClick: () -> Unit,
     onNotInterestedClick: () -> Unit,
     onDownloadClick: () -> Unit
@@ -1525,17 +1776,14 @@ private fun FlashMoreOptionsSheet(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(if (danger) dangerBg else iconChipBg),
+                        modifier = Modifier.size(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = icon,
                             contentDescription = label,
                             tint = if (danger) dangerColor else colors.textMain,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(19.dp)
                         )
                     }
                     Text(
@@ -1560,8 +1808,12 @@ private fun FlashMoreOptionsSheet(
             OptionRow(Lucide.Download, "Save to device", onClick = onDownloadClick)
 
             if (isOwner) {
+                OptionRow(Lucide.Users, "Manage Collaborators", onClick = onManageCollaboratorsClick)
                 OptionRow(Lucide.Trash2, "Delete Flash video", danger = true, onClick = onDeleteClick)
             } else {
+                if (isAcceptedCollaborator) {
+                    OptionRow(Lucide.UserMinus, "Stop sharing", danger = true, onClick = onStopSharingClick)
+                }
                 OptionRow(Lucide.EyeOff, "Not interested", onClick = onNotInterestedClick)
                 OptionRow(Lucide.Flag, "Report video", danger = true) {
                     val reporterUid = FirebaseAuth.getInstance().currentUser?.uid
@@ -1661,20 +1913,12 @@ private fun FlashEmptyState(onUpload: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF181820)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Lucide.Film,
-                contentDescription = null,
-                tint = Color(0xFF38BDF8),
-                modifier = Modifier.size(28.dp)
-            )
-        }
+        Icon(
+            imageVector = Lucide.Film,
+            contentDescription = null,
+            tint = Color(0xFF38BDF8),
+            modifier = Modifier.size(40.dp)
+        )
         Spacer(Modifier.height(18.dp))
         Text("No Flash Videos Yet", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
@@ -1686,7 +1930,7 @@ private fun FlashEmptyState(onUpload: () -> Unit) {
         Spacer(Modifier.height(24.dp))
         Row(
             modifier = Modifier
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(10.dp))
                 .background(Color(0xFF0381FE))
                 .clickable(onClick = onUpload)
                 .padding(horizontal = 22.dp, vertical = 12.dp),
@@ -1712,20 +1956,12 @@ private fun FollowingFlashEmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF181820)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Lucide.Users,
-                contentDescription = null,
-                tint = Color(0xFF38BDF8),
-                modifier = Modifier.size(26.dp)
-            )
-        }
+        Icon(
+            imageVector = Lucide.Users,
+            contentDescription = null,
+            tint = Color(0xFF38BDF8),
+            modifier = Modifier.size(38.dp)
+        )
         Spacer(Modifier.height(18.dp))
         Text("No Following Flash Yet", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))

@@ -7,28 +7,28 @@ import android.os.Vibrator
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.theme.LocalOscellionColors
@@ -48,7 +48,7 @@ fun IncomingCallOverlay(
 
     // Continuous ringing sound & vibration loop
     LaunchedEffect(call.id) {
-        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        val vibrator = resolveVibrator(context)
         while (true) {
             SoundManager.playRing()
             try {
@@ -66,232 +66,206 @@ fun IncomingCallOverlay(
     DisposableEffect(Unit) {
         onDispose {
             try {
-                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                vibrator?.cancel()
+                resolveVibrator(context)?.cancel()
             } catch (_: Exception) {}
         }
     }
 
-    // Pulse animation for avatar rings
-    val infiniteTransition = rememberInfiniteTransition(label = "ringPulse")
-    val ringScale by infiniteTransition.animateFloat(
+    val infiniteTransition = rememberInfiniteTransition(label = "acceptPulse")
+    val acceptScale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.35f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = EaseOutQuad),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ringScale"
-    )
-    val ringAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.55f,
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = EaseOutQuad),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ringAlpha"
-    )
-
-    // Breathing scale for Accept button
-    val acceptPulse by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.08f,
+        targetValue = 1.03f,
         animationSpec = infiniteRepeatable(
             animation = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "acceptPulse"
+        label = "acceptScale"
     )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.88f))
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
+            .background(Color(0xFF06080C))
     ) {
+        if (call.callerAvatar.isNotBlank()) {
+            AsyncImage(
+                model = call.callerAvatar,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(56.dp)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xFF0B0E15).copy(alpha = 0.78f),
+                            Color(0xFF06080C).copy(alpha = 0.90f),
+                            Color(0xFF030406).copy(alpha = 0.96f)
+                        )
+                    )
+                )
+        )
+
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(horizontal = 24.dp, vertical = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top Section: Call Type Badge
+            // Apple FaceTime / iOS Contact Poster Header (Status above large Contact Name)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(top = 28.dp)
+                modifier = Modifier.padding(top = 24.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(9999.dp))
-                        .background(colors.primary.copy(alpha = 0.20f))
-                        .border(1.dp, colors.primary.copy(alpha = 0.40f), RoundedCornerShape(9999.dp))
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (call.isVideo) Lucide.Video else Lucide.PhoneCall,
-                            contentDescription = null,
-                            tint = colors.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = if (call.isVideo) "Incoming Video Call" else "Incoming Audio Call",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White
-                        )
-                    }
+                    Icon(
+                        imageVector = if (call.isVideo) Lucide.Video else Lucide.PhoneCall,
+                        contentDescription = null,
+                        tint = if (call.isVideo) Color(0xFF0381FE) else Color(0xFF30D158),
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = if (call.isVideo) "FaceTime Video" else "Oscellion Audio",
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White.copy(alpha = 0.80f)
+                    )
                 }
 
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(10.dp))
 
                 Text(
                     text = call.callerName.ifBlank { "Oscellion User" },
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = Color.White,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
 
-                Text(
-                    text = "Oscellion WebRTC Call",
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.60f)
-                )
-            }
-
-            // Center Section: Avatar with Pulsing Halo Rings
-            Box(
-                modifier = Modifier.size(240.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // Expanding pulsing halo ring 1
-                Box(
-                    modifier = Modifier
-                        .size(170.dp)
-                        .scale(ringScale)
-                        .background(
-                            (if (call.isVideo) colors.primary else colors.onlineStatus).copy(alpha = ringAlpha),
-                            CircleShape
-                        )
-                )
-                // Expanding pulsing halo ring 2
-                Box(
-                    modifier = Modifier
-                        .size(140.dp)
-                        .scale(ringScale * 0.85f)
-                        .background(
-                            (if (call.isVideo) colors.primary else colors.onlineStatus).copy(alpha = ringAlpha * 0.7f),
-                            CircleShape
-                        )
-                )
-
-                // Avatar
-                Box(
-                    modifier = Modifier
-                        .size(130.dp)
-                        .shadow(24.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.6f))
-                        .border(3.dp, Color.White.copy(alpha = 0.85f), CircleShape)
-                        .padding(3.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    IosAvatarView(
-                        name = call.callerName,
-                        avatarUrl = call.callerAvatar,
-                        size = 124.dp,
-                        isOnline = true
+                    Icon(
+                        imageVector = Lucide.Lock,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.50f),
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = "End-to-end encrypted",
+                        fontSize = 12.5.sp,
+                        color = Color.White.copy(alpha = 0.55f)
                     )
                 }
             }
 
-            // Bottom Section: Decline and Accept Circular Buttons
+            // Center Peer Avatar (legitimate avatar, no artificial halos or boxes)
+            Box(
+                modifier = Modifier.size(144.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                IosAvatarView(
+                    name = call.callerName,
+                    avatarUrl = call.callerAvatar,
+                    size = 136.dp,
+                    isOnline = true
+                )
+            }
+
+            // Clean Action Dock (Rounded rectangles, no circular icon backgrounds or pills)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 24.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Decline Button (Red)
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .shadow(12.dp, CircleShape, spotColor = Color(0xFFFF3B30).copy(alpha = 0.5f))
-                            .clip(CircleShape)
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(Color(0xFFFF453A), Color(0xFFFF3B30))
-                                )
-                            )
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = onDecline
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Lucide.PhoneOff,
-                            contentDescription = "Decline Call",
-                            tint = Color.White,
-                            modifier = Modifier.size(30.dp)
-                        )
-                    }
-                    Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFFFF3B30))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDecline
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.PhoneOff,
+                        contentDescription = "Decline Call",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
                     Text(
                         text = "Decline",
-                        color = Color.White.copy(alpha = 0.75f),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
+                        color = Color.White,
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
-                // Accept Button (Green with breathing pulse)
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .scale(acceptPulse)
-                            .shadow(16.dp, CircleShape, spotColor = Color(0xFF34C759).copy(alpha = 0.6f))
-                            .clip(CircleShape)
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(Color(0xFF30D158), Color(0xFF34C759))
-                                )
-                            )
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = onAccept
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (call.isVideo) Lucide.Video else Lucide.Phone,
-                            contentDescription = "Accept Call",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                    Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(54.dp)
+                        .scale(acceptScale)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF34C759))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onAccept
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = if (call.isVideo) Lucide.Video else Lucide.Phone,
+                        contentDescription = "Accept Call",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
                     Text(
                         text = "Accept",
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = 15.5.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
         }
+    }
+}
+
+private fun resolveVibrator(context: Context): Vibrator? {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+        manager?.defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
     }
 }

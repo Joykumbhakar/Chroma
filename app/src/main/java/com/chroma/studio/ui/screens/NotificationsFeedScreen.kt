@@ -87,18 +87,25 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 import coil.compose.AsyncImage
 
 import com.chroma.studio.chat.sound.SoundManager
 
 import com.chroma.studio.data.NotificationDispatcher
+import com.chroma.studio.data.StoryRepository
 
 import com.chroma.studio.data.mutation.OptimisticFollowManager
 
 import com.chroma.studio.model.ChromaNotification
 
 import com.chroma.studio.model.NotificationActionType
+import com.chroma.studio.model.Story
+import com.chroma.studio.model.UserProfile
+import com.chroma.studio.model.extractMentionedStoryId
+import com.chroma.studio.model.isStoryMentionNotification
 
 import com.chroma.studio.ui.components.ChromaScreenHeader
 
@@ -107,6 +114,7 @@ import com.chroma.studio.ui.components.DefaultGenderAvatar
 import com.chroma.studio.ui.components.GlassIconButton
 
 import com.chroma.studio.ui.components.IosAlertDialog
+import com.chroma.studio.ui.components.IosAvatarView
 
 import com.chroma.studio.ui.components.AppleNotificationGraphic
 
@@ -335,17 +343,11 @@ private fun NotifAvatarWithBadge(
 
             modifier = Modifier
 
-                .size(16.dp)
+                .size(14.dp)
 
                 .align(Alignment.BottomEnd)
 
-                .offset(x = (-1).dp, y = (-1).dp)
-
-                .clip(CircleShape)
-
-                .background(badgeBgColor)
-
-                .border(1.5.dp, colors.bg, CircleShape),
+                .offset(x = 1.dp, y = 1.dp),
 
             contentAlignment = Alignment.Center
 
@@ -359,7 +361,7 @@ private fun NotifAvatarWithBadge(
 
                 tint = badgeIconColor,
 
-                modifier = Modifier.size(9.dp)
+                modifier = Modifier.size(12.dp)
 
             )
 
@@ -615,8 +617,7 @@ private fun SwipeableNotificationCard(
                 Box(
                     modifier = Modifier
                         .size(34.dp)
-                        .clip(CircleShape)
-                        .background(if (colors.isDark) Color(0xFF2C2C30) else Color(0xFFE5E7EB))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable { onToggleRead(notification) },
                     contentAlignment = Alignment.Center
                 ) {
@@ -624,18 +625,17 @@ private fun SwipeableNotificationCard(
                         imageVector = if (notification.isUnread) Lucide.CheckCheck else Lucide.Mail,
                         contentDescription = "Toggle Read",
                         tint = colors.primary,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
 
                 Spacer(Modifier.width(8.dp))
 
-                // Delete action button - Borderless compact capsule
+                // Delete action button - Borderless
                 Box(
                     modifier = Modifier
                         .size(34.dp)
-                        .clip(CircleShape)
-                        .background(colors.error.copy(alpha = 0.16f))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable { onSwipeRightRemove(notification) },
                     contentAlignment = Alignment.Center
                 ) {
@@ -643,7 +643,7 @@ private fun SwipeableNotificationCard(
                         imageVector = Lucide.Trash2,
                         contentDescription = "Delete",
                         tint = colors.error,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                 }
 
@@ -1027,6 +1027,59 @@ private fun SwipeableNotificationCard(
                         }
                     }
 
+                    NotificationActionType.PROJECT_COLLAB -> {
+                        val isInvite = notification.actionText.contains("invited you", ignoreCase = true)
+                        if (isInvite && !notification.likedBack) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .height(30.dp)
+                                        .clip(CircleShape)
+                                        .background(Brush.horizontalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE))))
+                                        .clickable { onPrimaryAction(notification) }
+                                        .padding(horizontal = 13.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Accept",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .height(30.dp)
+                                        .clip(CircleShape)
+                                        .background(if (colors.isDark) Color(0xFF26262B) else Color(0xFFF1F3F7))
+                                        .clickable { onSwipeRightRemove(notification) }
+                                        .padding(horizontal = 11.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Decline",
+                                        color = colors.textMuted,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        } else if (!notification.targetPreviewUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = notification.targetPreviewUrl,
+                                contentDescription = "Collab Post",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
+                        }
+                    }
+
                     NotificationActionType.STORY_REACTION -> {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -1182,6 +1235,73 @@ private fun SwipeableNotificationCard(
 
                         }
 
+                    }
+
+                    NotificationActionType.MENTION -> {
+                        val isStoryMention = isStoryMentionNotification(notification) &&
+                            extractMentionedStoryId(notification.targetId) != null
+                        if (isStoryMention) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .height(30.dp)
+                                        .clip(CircleShape)
+                                        .then(
+                                            if (notification.likedBack) {
+                                                Modifier.background(if (colors.isDark) Color(0xFF26262B) else Color(0xFFF1F3F7))
+                                            } else {
+                                                Modifier.background(Brush.horizontalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE))))
+                                            }
+                                        )
+                                        .clickable(enabled = !notification.likedBack) { onPrimaryAction(notification) }
+                                        .padding(horizontal = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (notification.likedBack) Lucide.Check else Lucide.Plus,
+                                            contentDescription = null,
+                                            tint = if (notification.likedBack) Color(0xFF34C759) else Color.White,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Text(
+                                            text = if (notification.likedBack) "Added" else "Add to Story",
+                                            color = if (notification.likedBack) colors.textMain else Color.White,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+
+                                if (!notification.targetPreviewUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = notification.targetPreviewUrl,
+                                        contentDescription = "Story Preview",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { onCardClick(notification) }
+                                    )
+                                }
+                            }
+                        } else if (!notification.targetPreviewUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = notification.targetPreviewUrl,
+                                contentDescription = "Preview",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable { onCardClick(notification) }
+                            )
+                        }
                     }
 
                     else -> {
@@ -1639,6 +1759,12 @@ fun NotificationsFeedScreen(
     var isMoreMenuOpen by remember { mutableStateOf(false) }
 
     var showClearConfirmDialog by remember { mutableStateOf(false) }
+    var notificationPendingDelete by remember { mutableStateOf<ChromaNotification?>(null) }
+    val storyRepo = remember { StoryRepository() }
+    var storyRepostPendingId by remember { mutableStateOf<String?>(null) }
+    var mentionedStoryDialogNotif by remember { mutableStateOf<ChromaNotification?>(null) }
+    var mentionedStoryPreview by remember { mutableStateOf<Pair<Story, UserProfile?>?>(null) }
+    var mentionedStoryPreviewLoading by remember { mutableStateOf(false) }
 
 
 
@@ -1945,6 +2071,16 @@ fun NotificationsFeedScreen(
                             requesterUid = removed.actorUid,
                             currentUserId = currentUid
                         )
+                    } else if (removed.type == NotificationActionType.PROJECT_COLLAB &&
+                        removed.actionText.contains("invited you", ignoreCase = true)
+                    ) {
+                        val collabPostId = removed.targetId.orEmpty()
+                            .removePrefix("collab_flash:")
+                            .removePrefix("collab:")
+                        if (collabPostId.isNotBlank()) {
+                            com.chroma.studio.data.DiscoverRepository.getInstance()
+                                .respondToCollabInvite(postId = collabPostId, accept = false)
+                        }
                     }
                     NotificationDispatcher.deleteNotification(currentUid, removed.id)
                 }
@@ -2123,6 +2259,59 @@ fun NotificationsFeedScreen(
 
             }
 
+            NotificationActionType.PROJECT_COLLAB -> {
+                val postId = item.targetId.orEmpty()
+                    .removePrefix("collab_flash:")
+                    .removePrefix("collab:")
+                if (postId.isNotBlank()) {
+                    SoundManager.playTap(context)
+                    notificationsList = notificationsList.map {
+                        if (it.id == item.id) {
+                            it.copy(
+                                likedBack = true,
+                                isRead = true,
+                                actionText = "Accepted collaboration"
+                            )
+                        } else it
+                    }
+                    scope.launch {
+                        val ok = com.chroma.studio.data.DiscoverRepository.getInstance()
+                            .respondToCollabInvite(postId = postId, accept = true)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            showToast(if (ok) "Accepted collaboration! Shared to your profile." else "Could not accept collaboration.")
+                        }
+                    }
+                }
+            }
+
+            NotificationActionType.MENTION -> {
+                val storyId = extractMentionedStoryId(item.targetId)
+                if (isStoryMentionNotification(item) && storyId != null && !item.likedBack && storyRepostPendingId != item.id) {
+                    SoundManager.playTap(context)
+                    storyRepostPendingId = item.id
+                    notificationsList = notificationsList.map {
+                        if (it.id == item.id) it.copy(likedBack = true, isRead = true) else it
+                    }
+                    scope.launch {
+                        val result = storyRepo.repostMentionedStory(sourceStoryId = storyId)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            if (storyRepostPendingId == item.id) storyRepostPendingId = null
+                            result.fold(
+                                onSuccess = {
+                                    showToast("Added to your story! Live on your profile.")
+                                },
+                                onFailure = { err ->
+                                    notificationsList = notificationsList.map {
+                                        if (it.id == item.id) it.copy(likedBack = false) else it
+                                    }
+                                    showToast(err.message ?: "Could not add story.")
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             NotificationActionType.COMMENT,
 
             NotificationActionType.LIKE_COMMENT -> {
@@ -2234,36 +2423,78 @@ fun NotificationsFeedScreen(
             NotificationActionType.LIKE_COMMENT,
 
             NotificationActionType.MENTION -> {
-
-                if (!clicked.targetId.isNullOrBlank() || clicked.actorUid.isNotBlank()) {
-
-                    if (onNavigateToPost != null) {
-
-                        // Open the post on its owner's profile (currentUid for own post likes/comments; actorUid for mentions)
-                        val targetOwnerUid = if (clicked.type == NotificationActionType.MENTION) {
-                            clicked.actorUid.ifBlank { currentUid }
+                val rawTarget = clicked.targetId.orEmpty()
+                when {
+                    rawTarget.startsWith("profile:") || clicked.actionText.contains("profile", ignoreCase = true) -> {
+                        val profileUid = rawTarget.removePrefix("profile:").ifBlank { clicked.actorUid }
+                        if (profileUid.isNotBlank() && onNavigateToProfile != null) {
+                            onNavigateToProfile(profileUid)
                         } else {
-                            currentUid ?: clicked.actorUid.ifBlank { null }
+                            showToast("Viewed ${clicked.actorName}")
                         }
-                        onNavigateToPost(clicked.targetId ?: "", targetOwnerUid)
-
-                    } else {
-
-                        showToast("Opening post...")
-
                     }
-
-                } else {
-
-                    showToast("Viewed ${clicked.actorName}")
-
+                    rawTarget.startsWith("chat:") || clicked.actionText.contains("chat", ignoreCase = true) -> {
+                        val chatRoomId = rawTarget.removePrefix("chat:")
+                        if (chatRoomId.isNotBlank() && onNavigateToChat != null) {
+                            onNavigateToChat(chatRoomId)
+                        } else if (clicked.actorUid.isNotBlank() && onNavigateToProfile != null) {
+                            onNavigateToProfile(clicked.actorUid)
+                        } else {
+                            showToast("Opening mention...")
+                        }
+                    }
+                    rawTarget.startsWith("story:") || clicked.actionText.contains("story", ignoreCase = true) -> {
+                        val storyId = extractMentionedStoryId(clicked.targetId)
+                        if (storyId != null) {
+                            mentionedStoryDialogNotif = clicked
+                            mentionedStoryPreview = null
+                            mentionedStoryPreviewLoading = true
+                            scope.launch {
+                                val loaded = storyRepo.fetchStoryById(storyId)
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                    mentionedStoryPreview = loaded
+                                    mentionedStoryPreviewLoading = false
+                                }
+                            }
+                        } else if (clicked.actorUid.isNotBlank() && onNavigateToProfile != null) {
+                            onNavigateToProfile(clicked.actorUid)
+                        } else {
+                            showToast("Opening story mention...")
+                        }
+                    }
+                    !clicked.targetId.isNullOrBlank() || clicked.actorUid.isNotBlank() -> {
+                        if (onNavigateToPost != null) {
+                            val targetOwnerUid = clicked.actorUid.ifBlank { currentUid }
+                            onNavigateToPost(clicked.targetId ?: "", targetOwnerUid)
+                        } else {
+                            showToast("Opening post...")
+                        }
+                    }
+                    else -> showToast("Viewed ${clicked.actorName}")
                 }
+            }
 
+            NotificationActionType.PROJECT_COLLAB -> {
+                val rawTarget = clicked.targetId.orEmpty()
+                if (rawTarget.startsWith("collab:") || rawTarget.startsWith("collab_flash:")) {
+                    val actualPostId = rawTarget.removePrefix("collab_flash:").removePrefix("collab:")
+                    if (actualPostId.isNotBlank() && onNavigateToPost != null) {
+                        onNavigateToPost(actualPostId, clicked.actorUid.ifBlank { currentUid })
+                    } else if (clicked.actorUid.isNotBlank() && onNavigateToProfile != null) {
+                        onNavigateToProfile(clicked.actorUid)
+                    } else {
+                        showToast("Opening collaboration...")
+                    }
+                } else if (onNavigateToProject != null) {
+                    onNavigateToProject(clicked.targetId)
+                } else if (!clicked.targetId.isNullOrBlank() && onNavigateToPost != null) {
+                    onNavigateToPost(clicked.targetId, clicked.actorUid.ifBlank { null })
+                } else {
+                    showToast("Opening project ${clicked.detailText ?: ""}")
+                }
             }
 
             NotificationActionType.PROJECT_EXPORT,
-
-            NotificationActionType.PROJECT_COLLAB,
 
             NotificationActionType.REMIX -> {
 
@@ -2853,7 +3084,7 @@ fun NotificationsFeedScreen(
 
                                         },
 
-                                        onSwipeRightRemove = { removeNotification(it) },
+                                        onSwipeRightRemove = { notificationPendingDelete = it },
 
                                         onPrimaryAction = { handlePrimaryAction(it) },
 
@@ -2919,7 +3150,7 @@ fun NotificationsFeedScreen(
 
                                             },
 
-                                            onSwipeRightRemove = { removeNotification(it) },
+                                            onSwipeRightRemove = { notificationPendingDelete = it },
 
                                             onPrimaryAction = { handlePrimaryAction(it) },
 
@@ -2946,6 +3177,31 @@ fun NotificationsFeedScreen(
         }
 
 
+
+        // Confirmation Dialog for Single Notification Delete
+        notificationPendingDelete?.let { pendingItem ->
+            val isFollowReq = pendingItem.type == NotificationActionType.FOLLOW_REQUEST
+            IosAlertDialog(
+                title = if (isFollowReq) "Delete Follow Request?" else "Delete Notification?",
+                message = if (isFollowReq) {
+                    "Decline and remove this follow request from ${pendingItem.actorName}?"
+                } else {
+                    "Are you sure you want to remove this notification?"
+                },
+                confirmText = "Delete",
+                isDestructive = true,
+                onConfirm = {
+                    val toRemove = pendingItem
+                    notificationPendingDelete = null
+                    removeNotification(toRemove)
+                },
+                dismissText = "Cancel",
+                onDismiss = {
+                    notificationPendingDelete = null
+                    openSwipeCardId = null
+                }
+            )
+        }
 
         // Confirmation Dialog for Clear All
 
@@ -2975,6 +3231,209 @@ fun NotificationsFeedScreen(
 
             )
 
+        }
+
+        // Mentioned Story Preview & Quick Repost Dialog
+        mentionedStoryDialogNotif?.let { dialogNotif ->
+            val currentLiveNotif = notificationsList.find { it.id == dialogNotif.id } ?: dialogNotif
+            val isReposting = storyRepostPendingId == currentLiveNotif.id
+            val isAdded = currentLiveNotif.likedBack
+            val showAddButton = isStoryMentionNotification(currentLiveNotif) && extractMentionedStoryId(currentLiveNotif.targetId) != null
+
+            Dialog(
+                onDismissRequest = {
+                    mentionedStoryDialogNotif = null
+                    mentionedStoryPreview = null
+                },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 24.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White)
+                        .border(0.75.dp, colors.glassBorder, RoundedCornerShape(22.dp))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(enabled = currentLiveNotif.actorUid.isNotBlank() && onNavigateToProfile != null) {
+                                    mentionedStoryDialogNotif = null
+                                    onNavigateToProfile?.invoke(currentLiveNotif.actorUid)
+                                }
+                        ) {
+                            IosAvatarView(
+                                name = currentLiveNotif.actorName,
+                                avatarUrl = currentLiveNotif.actorAvatarUrl.orEmpty(),
+                                size = 34.dp,
+                                gender = currentLiveNotif.actorGender
+                            )
+                            Column {
+                                Text(
+                                    text = currentLiveNotif.actorName.ifBlank { "Story" },
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textMain,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = currentLiveNotif.actionText,
+                                    fontSize = 11.5.sp,
+                                    color = colors.textMuted,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                mentionedStoryDialogNotif = null
+                                mentionedStoryPreview = null
+                            },
+                            modifier = Modifier.size(30.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.X,
+                                contentDescription = "Close",
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(340.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0xFF0F0F12)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when {
+                            mentionedStoryPreviewLoading -> {
+                                CircularProgressIndicator(
+                                    color = Color(0xFF0381FE),
+                                    modifier = Modifier.size(28.dp),
+                                    strokeWidth = 2.5.dp
+                                )
+                            }
+                            mentionedStoryPreview != null -> {
+                                val previewStory = mentionedStoryPreview!!.first
+                                if (StoryRepository.isStoryActiveInFeed(previewStory)) {
+                                    StorySlideContent(
+                                        story = previewStory,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Text(
+                                        text = "This story has expired (24h limit reached).",
+                                        color = Color.White.copy(alpha = 0.72f),
+                                        fontSize = 13.sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(20.dp)
+                                    )
+                                }
+                            }
+                            else -> {
+                                Text(
+                                    text = "This story is no longer available.",
+                                    color = Color.White.copy(alpha = 0.72f),
+                                    fontSize = 13.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(20.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (currentLiveNotif.actorUid.isNotBlank() && onNavigateToProfile != null) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(42.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7))
+                                    .clickable {
+                                        mentionedStoryDialogNotif = null
+                                        mentionedStoryPreview = null
+                                        onNavigateToProfile.invoke(currentLiveNotif.actorUid)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "View Profile",
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textMain
+                                )
+                            }
+                        }
+
+                        if (showAddButton && mentionedStoryPreview != null && StoryRepository.isStoryActiveInFeed(mentionedStoryPreview!!.first)) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1.2f)
+                                    .height(42.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .then(
+                                        if (isAdded) {
+                                            Modifier.background(Color(0xFF34C759).copy(alpha = 0.16f))
+                                        } else {
+                                            Modifier.background(Brush.horizontalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE))))
+                                        }
+                                    )
+                                    .clickable(enabled = !isAdded && !isReposting) {
+                                        handlePrimaryAction(currentLiveNotif)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isReposting) {
+                                    CircularProgressIndicator(
+                                        color = Color.White,
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                } else {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isAdded) Lucide.Check else Lucide.Plus,
+                                            contentDescription = null,
+                                            tint = if (isAdded) Color(0xFF34C759) else Color.White,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Text(
+                                            text = if (isAdded) "Added to Story" else "Add to Your Story",
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isAdded) Color(0xFF34C759) else Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
 

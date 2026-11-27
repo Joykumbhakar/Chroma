@@ -93,13 +93,13 @@ fun StoryEditorModal(
     var selectedPhotoUrl by remember { mutableStateOf<String?>(null) }
     var selectedPhotoUri by remember { mutableStateOf<Uri?>(null) }
 
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            selectedPhotoUri = uri
-            selectedPhotoUrl = uri.toString()
-        }
+    val photoPickerLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Story Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        selectedPhotoUri = uri
+        selectedPhotoUrl = uri.toString()
     }
 
     var storyCaption by remember { mutableStateOf("") }

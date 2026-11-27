@@ -15,9 +15,11 @@ fun WebRTCVideoView(
     modifier: Modifier = Modifier,
     scalingType: RendererCommon.ScalingType = RendererCommon.ScalingType.SCALE_ASPECT_FILL
 ) {
-    val eglContext = remember(callManager) {
+    val activeClient by callManager.webRTCClientFlow.collectAsState()
+    val isFrontCamera by callManager.isFrontCamera.collectAsState()
+    val eglContext = remember(activeClient) {
         try {
-            callManager.webRTCClient?.eglBaseContext
+            activeClient?.eglBaseContext
         } catch (e: Throwable) {
             Log.e("WebRTCVideoView", "Error getting EGL context", e)
             null
@@ -26,45 +28,51 @@ fun WebRTCVideoView(
 
     if (eglContext == null) return
 
-    AndroidView(
-        modifier = modifier,
-        factory = { ctx ->
-            SurfaceViewRenderer(ctx).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                try {
-                    init(eglContext, null)
-                    setScalingType(scalingType)
-                    setEnableHardwareScaler(true)
-                    if (isLocal) {
-                        setMirror(true)
-                        setZOrderMediaOverlay(true)
-                        callManager.attachLocalSurface(this)
-                    } else {
-                        setMirror(false)
-                        callManager.attachRemoteSurface(this)
+    key(activeClient, isLocal) {
+        AndroidView(
+            modifier = modifier,
+            factory = { ctx ->
+                SurfaceViewRenderer(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    try {
+                        init(eglContext, null)
+                        setScalingType(scalingType)
+                        setEnableHardwareScaler(true)
+                        if (isLocal) {
+                            setMirror(isFrontCamera)
+                            setZOrderMediaOverlay(true)
+                            callManager.attachLocalSurface(this)
+                        } else {
+                            setMirror(false)
+                            setZOrderMediaOverlay(false)
+                            callManager.attachRemoteSurface(this)
+                        }
+                    } catch (e: Throwable) {
+                        Log.e("WebRTCVideoView", "Error initializing SurfaceViewRenderer", e)
                     }
-                } catch (e: Throwable) {
-                    Log.e("WebRTCVideoView", "Error initializing SurfaceViewRenderer", e)
                 }
+            },
+            update = { renderer ->
+                try {
+                    renderer.setScalingType(scalingType)
+                    if (isLocal) {
+                        renderer.setMirror(isFrontCamera)
+                    }
+                } catch (_: Throwable) {}
+            },
+            onRelease = { renderer ->
+                try {
+                    if (isLocal) {
+                        callManager.detachLocalSurface(renderer)
+                    } else {
+                        callManager.detachRemoteSurface(renderer)
+                    }
+                    renderer.release()
+                } catch (_: Throwable) {}
             }
-        },
-        update = { renderer ->
-            try {
-                renderer.setScalingType(scalingType)
-            } catch (_: Throwable) {}
-        },
-        onRelease = { renderer ->
-            try {
-                if (isLocal) {
-                    callManager.detachLocalSurface(renderer)
-                } else {
-                    callManager.detachRemoteSurface(renderer)
-                }
-                renderer.release()
-            } catch (_: Throwable) {}
-        }
-    )
+        )
+    }
 }

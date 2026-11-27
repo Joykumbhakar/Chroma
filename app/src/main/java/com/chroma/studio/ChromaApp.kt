@@ -75,6 +75,12 @@ class ChromaApp : Application(), ImageLoaderFactory {
         }
 
         try {
+            com.chroma.studio.ui.components.OscellionLuxuryBrandController.warmup(this)
+        } catch (e: Exception) {
+            Log.w("ChromaApp", "Luxury brand warmup error: ${e.message}")
+        }
+
+        try {
             // Initialize Firebase (with offline-safe default app fallback if google-services.json is absent)
             if (FirebaseApp.getApps(this).isEmpty()) {
                 val initialized = FirebaseApp.initializeApp(this)
@@ -148,6 +154,14 @@ class ChromaApp : Application(), ImageLoaderFactory {
                 com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
             } catch (e: Exception) {
                 Log.w("ChromaApp", "FCM init or token sync error: ${e.message}")
+            }
+            try {
+                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (!uid.isNullOrBlank()) {
+                    com.chroma.studio.chat.data.ChatLocalCacheManager.warmupOnStartup(this@ChromaApp, uid)
+                }
+            } catch (e: Exception) {
+                Log.w("ChromaApp", "Chat warmup error: ${e.message}")
             }
         }
     }

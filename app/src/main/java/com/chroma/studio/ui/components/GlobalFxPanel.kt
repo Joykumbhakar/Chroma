@@ -86,18 +86,21 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) {
-            val usageManager = com.chroma.studio.data.UsageManager(context)
-            if (!usageManager.canGenerate()) {
-                android.widget.Toast.makeText(context, "Daily generation limit reached", android.widget.Toast.LENGTH_SHORT).show()
-                return@rememberLauncherForActivityResult
-            }
-            if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
-                android.widget.Toast.makeText(context, "Please login to generate", android.widget.Toast.LENGTH_SHORT).show()
-                return@rememberLauncherForActivityResult
-            }
-            scope.launch(Dispatchers.IO) {
+    val pickMedia = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Style Image",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        val usageManager = com.chroma.studio.data.UsageManager(context)
+        if (!usageManager.canGenerate()) {
+            android.widget.Toast.makeText(context, "Daily generation limit reached", android.widget.Toast.LENGTH_SHORT).show()
+            return@rememberOscellionMediaPicker
+        }
+        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+            android.widget.Toast.makeText(context, "Please login to generate", android.widget.Toast.LENGTH_SHORT).show()
+            return@rememberOscellionMediaPicker
+        }
+        scope.launch(Dispatchers.IO) {
                 val bitmap = com.chroma.studio.utils.DevicePerformanceManager.decodeSampledBitmap(
                     context = context,
                     uri = uri,
@@ -132,7 +135,6 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                     }
                 }
             }
-        }
     }
 
     GlassPanel(modifier = modifier.fillMaxSize(), cornerRadius = 16) {

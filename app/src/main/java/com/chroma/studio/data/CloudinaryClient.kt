@@ -542,5 +542,80 @@ object CloudinaryClient {
             }
         }
     }
+
+    /**
+     * Uploads arbitrary documents/files (PDF, DOCX, ZIP, APK, etc.) using Cloudinary's `raw` endpoint
+     * with real byte-chunk upload progress [0..100].
+     */
+    suspend fun uploadRawFile(
+        fileBytes: ByteArray,
+        fileName: String,
+        folder: String = "chat_files",
+        onProgress: ((Int) -> Unit)? = null
+    ): String? {
+        return withContext(Dispatchers.IO) {
+            if (failureCount.get() >= MAX_FAILURES) {
+                if (System.currentTimeMillis() - circuitOpenTime.get() < COOLDOWN_MS) {
+                    Log.e("CloudinaryClient", "Circuit breaker OPEN — raw file upload fast-failed.")
+                    return@withContext null
+                }
+            }
+            try {
+                if (cloudName.isBlank()) {
+                    Log.e("CloudinaryClient", "Cloudinary credentials not set")
+                    return@withContext null
+                }
+
+                val uploadUrl = "https://api.cloudinary.com/v1_1/$cloudName/raw/upload"
+                val cleanName = com.chroma.studio.chat.data.sanitizeStorageFileName(fileName)
+                val mime = com.chroma.studio.chat.data.resolveMimeTypeForFileName(cleanName)
+                val mediaType = (if (mime == "*/*") "application/octet-stream" else mime).toMediaTypeOrNull()
+
+                val presetsToTry = listOfNotNull(
+                    uploadPreset.takeIf { it.isNotBlank() },
+                    videoUploadPreset.takeIf { it.isNotBlank() && it != uploadPreset }
+                ).ifEmpty { listOf("oscellion_posts", "flash_videos") }
+
+                for (preset in presetsToTry) {
+                    val requestBody = MultipartBody.Builder()
+                        .setType(MultipartBody.FORM)
+                        .addFormDataPart(
+                            "file",
+                            cleanName,
+                            progressByteArrayRequestBody(fileBytes, mediaType, onProgress)
+                        )
+                        .addFormDataPart("upload_preset", preset)
+                        .addFormDataPart("folder", folder)
+                        .addFormDataPart("resource_type", "raw")
+                        .build()
+
+                    val request = Request.Builder()
+                        .url(uploadUrl)
+                        .post(requestBody)
+                        .build()
+
+                    val response = client.newCall(request).execute()
+                    val responseBody = response.body?.string()
+                    if (response.isSuccessful && responseBody != null) {
+                        val json = JSONObject(responseBody)
+                        val secureUrl = json.optString("secure_url", "")
+                        if (secureUrl.isNotBlank()) {
+                            onProgress?.invoke(100)
+                            recordSuccess()
+                            return@withContext secureUrl
+                        }
+                    }
+                    Log.w("CloudinaryClient", "uploadRawFile with preset '$preset' failed: HTTP ${response.code}")
+                }
+                recordFailure()
+                null
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("CloudinaryClient", "Raw file upload exception", e)
+                recordFailure()
+                null
+            }
+        }
+    }
 }
 

@@ -239,10 +239,12 @@ fun UserProfileScreen(
         ?: com.chroma.studio.data.SavedAccountManager.getActiveAccount(context)?.uid
     val isCurrentUser = currentUserId == userId
     val scope = rememberCoroutineScope()
-    val storyMediaPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        uri?.let { storyVm.uploadStory(context, it) }
+    val storyMediaPicker = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Story Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        storyVm.uploadStory(context, uri)
     }
 
     var isWorksLoading by remember { mutableStateOf(true) }
@@ -271,22 +273,22 @@ fun UserProfileScreen(
     var pendingEditorUri by remember { mutableStateOf<Uri?>(null) }
     var pendingEditorTarget by remember { mutableStateOf(ProfileCropTarget.AVATAR) }
 
-    val bannerGalleryLauncher = rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    val bannerGalleryLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Cover Banner",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
     ) { uri ->
-        if (uri != null) {
-            pendingEditorUri = uri
-            pendingEditorTarget = ProfileCropTarget.BANNER
-        }
+        pendingEditorUri = uri
+        pendingEditorTarget = ProfileCropTarget.BANNER
     }
 
-    val avatarGalleryLauncher = rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    val avatarGalleryLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Profile Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
     ) { uri ->
-        if (uri != null) {
-            pendingEditorUri = uri
-            pendingEditorTarget = ProfileCropTarget.AVATAR
-        }
+        pendingEditorUri = uri
+        pendingEditorTarget = ProfileCropTarget.AVATAR
     }
 
 
@@ -1515,6 +1517,13 @@ fun UserProfileScreen(
     // Unified In-App Oscellion Gallery for Stories
     if (showStoryGalleryPicker) {
         com.chroma.studio.chat.ui.components.CustomGalleryPickerModal(
+            title = "Choose Story Photo",
+            maxSelection = 1,
+            allowedMediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+            showCaptionInput = false,
+            showAlbumsTab = true,
+            lockMediaFilter = true,
+            singleTapImmediate = true,
             onDismiss = { showStoryGalleryPicker = false },
             onLaunchCamera = {
                 showStoryGalleryPicker = false
@@ -2238,6 +2247,7 @@ private fun UserProfileModalsAndSheets(
             windowInsets = WindowInsets(0.dp)
         ) {
             var libraryTab by remember { mutableIntStateOf(0) }
+            var showResetBannerConfirm by remember { mutableStateOf(false) }
             val myWorksWithImages = remember(works) { works.filter { !it.imageUrl.isNullOrBlank() } }
             val wavePresets = remember { AllBannerPresets.filter { it.id.startsWith("preset:wave_") } }
 
@@ -2299,19 +2309,7 @@ private fun UserProfileModalsAndSheets(
 
                     if (!profile?.bannerUrl.isNullOrBlank()) {
                         ChromaPillButton(
-                            onClick = {
-                                val uid = currentUserId ?: return@ChromaPillButton
-                                scope.launch {
-                                    try {
-                                        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(uid).update("bannerUrl", "").await()
-                                        onBannerUrlUpdated("")
-                                        ToastManager.showToast("Banner removed")
-                                    } catch (e: Exception) {
-                                        ToastManager.showToast("Failed to remove banner")
-                                    }
-                                    onDismissBannerLibrary()
-                                }
-                            },
+                            onClick = { showResetBannerConfirm = true },
                             variant = ChromaPillVariant.Rose,
                             modifier = Modifier.height(40.dp),
                             enabled = !isUploadingBanner
@@ -2321,6 +2319,31 @@ private fun UserProfileModalsAndSheets(
                             Text("Reset", color = Color(0xFFFF3B30), fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
                         }
                     }
+                }
+
+                if (showResetBannerConfirm) {
+                    IosAlertDialog(
+                        title = "Remove Profile Banner?",
+                        message = "Are you sure you want to remove your current profile banner?",
+                        confirmText = "Remove",
+                        isDestructive = true,
+                        onConfirm = {
+                            showResetBannerConfirm = false
+                            val uid = currentUserId ?: return@IosAlertDialog
+                            scope.launch {
+                                try {
+                                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(uid).update("bannerUrl", "").await()
+                                    onBannerUrlUpdated("")
+                                    ToastManager.showToast("Banner removed")
+                                } catch (e: Exception) {
+                                    ToastManager.showToast("Failed to remove banner")
+                                }
+                                onDismissBannerLibrary()
+                            }
+                        },
+                        dismissText = "Cancel",
+                        onDismiss = { showResetBannerConfirm = false }
+                    )
                 }
 
                 Spacer(Modifier.height(14.dp))
@@ -2778,7 +2801,19 @@ fun ProfileFlashCard(
             }
         }
 
-        // Top Reel Header Bar
+        if (flash.collaboratorIds.isNotEmpty()) {
+            Icon(
+                imageVector = Lucide.Users,
+                contentDescription = "Collaboration",
+                tint = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .size(13.dp)
+            )
+        }
+
+        // Top Flash Header Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2794,7 +2829,7 @@ fun ProfileFlashCard(
                 border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.25f))
             ) {
                 Text(
-                    text = "REEL",
+                    text = "FLASH",
                     fontSize = 8.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -2955,6 +2990,18 @@ fun ProfileWorkCard(
                     .size(14.dp)
             )
         }
+
+        if (work.collaboratorIds.isNotEmpty()) {
+            Icon(
+                imageVector = Lucide.Users,
+                contentDescription = "Collaboration",
+                tint = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .size(13.dp)
+            )
+        }
     }
 }
 
@@ -3046,8 +3093,7 @@ fun UserProfileErrorState(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(CircleShape)
-                            .background(if (isDark) Color(0xFF1E222A) else Color(0xFFEFF2F6))
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable(onClick = onBack),
                         contentAlignment = Alignment.Center
                     ) {
@@ -3055,7 +3101,7 @@ fun UserProfileErrorState(
                             imageVector = Lucide.ChevronLeft,
                             contentDescription = "Back",
                             tint = colors.textMain,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }
@@ -3074,20 +3120,12 @@ fun UserProfileErrorState(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(68.dp)
-                        .clip(CircleShape)
-                        .background(if (isDark) Color(0xFF1E222A) else Color(0xFFEFF4F9)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Lucide.WifiOff,
-                        contentDescription = null,
-                        tint = colors.textMuted,
-                        modifier = Modifier.size(30.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Lucide.WifiOff,
+                    contentDescription = null,
+                    tint = colors.textMuted,
+                    modifier = Modifier.size(36.dp)
+                )
 
                 Text(
                     text = "Profile Unavailable",
@@ -3445,8 +3483,7 @@ fun SkeletonUserProfile(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.22f))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center
                 ) {
@@ -3454,7 +3491,7 @@ fun SkeletonUserProfile(
                         imageVector = Lucide.ChevronLeft,
                         contentDescription = "Back",
                         tint = Color.White,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             } else {

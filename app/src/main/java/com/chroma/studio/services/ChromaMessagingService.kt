@@ -124,6 +124,40 @@ open class ChromaMessagingService : FirebaseMessagingService() {
         val isLocked = (roomId.isNotBlank() && (roomId in lockedIds || roomId in hiddenIds)) ||
             (senderId.isNotBlank() && (senderId in lockedIds || senderId in hiddenIds))
 
+        // Pre-write incoming push message & room preview into local SQLite + L1 RAM
+        // so opening the app or tapping the notification shows the message on Frame 0.
+        if (!isLocked && currentUserId != null && roomId.isNotBlank()) {
+            try {
+                val pushTs = data["timestamp"]?.toLongOrNull() ?: System.currentTimeMillis()
+                if (messageId.isNotBlank()) {
+                    val cachedMsg = com.chroma.studio.model.ChatMessage(
+                        id = messageId,
+                        senderId = senderId,
+                        text = body,
+                        messageType = messageType,
+                        timestamp = pushTs,
+                        isDelivered = true
+                    )
+                    com.chroma.studio.chat.data.ChatLocalCacheManager.appendOrUpdateMessage(
+                        context = applicationContext,
+                        roomId = roomId,
+                        message = cachedMsg,
+                        userId = currentUserId
+                    )
+                }
+                com.chroma.studio.chat.data.ChatLocalCacheManager.updateRoomOnIncomingPush(
+                    context = applicationContext,
+                    roomId = roomId,
+                    senderId = senderId,
+                    lastMessagePreview = body,
+                    timestamp = pushTs,
+                    messageId = messageId.ifBlank { null },
+                    incrementUnread = !(isForeground && isUserInActiveChat),
+                    userId = currentUserId
+                )
+            } catch (_: Exception) {}
+        }
+
         if (quietMode || !masterPushEnabled || !dmPushEnabled) {
             if (roomId.isNotBlank()) runBounded { SupabaseChatRepository().markAsDelivered(roomId, messageId.ifBlank { null }) }
             return

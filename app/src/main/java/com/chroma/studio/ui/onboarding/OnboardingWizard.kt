@@ -188,10 +188,12 @@ fun OnboardingWizard(
         )
     }
 
-    val avatarGalleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            pendingCropUri = uri
-        }
+    val avatarGalleryLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Profile Avatar",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        pendingCropUri = uri
     }
 
     fun verifyUsername(candidate: String) {

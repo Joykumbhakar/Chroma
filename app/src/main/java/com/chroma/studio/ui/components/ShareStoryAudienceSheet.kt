@@ -123,28 +123,12 @@ fun ShareStoryAudienceSheet(
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF0381FE)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Globe,
-                                    contentDescription = null,
-                                    tint = if (colors.isDark) Color.White else Color(0xFF0381FE),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
+                        Icon(
+                            imageVector = Lucide.Globe,
+                            contentDescription = null,
+                            tint = Color(0xFF0381FE),
+                            modifier = Modifier.size(22.dp)
+                        )
 
                         Column {
                             Text(
@@ -204,20 +188,12 @@ fun ShareStoryAudienceSheet(
                         horizontalArrangement = Arrangement.spacedBy(14.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(OnlyFriendEmerald),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Star,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Lucide.Star,
+                            contentDescription = null,
+                            tint = OnlyFriendEmerald,
+                            modifier = Modifier.size(22.dp)
+                        )
 
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

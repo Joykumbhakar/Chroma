@@ -73,6 +73,8 @@ fun PostDetailsScreen(
     var mentionInput by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf(listOf<String>()) }
     var mentions by remember { mutableStateOf(listOf<String>()) }
+    var selectedMusic by remember { mutableStateOf<com.chroma.studio.data.AttachedMusicSelection?>(null) }
+    var showMusicPickerSheet by remember { mutableStateOf(false) }
     var isPosting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -139,7 +141,8 @@ fun PostDetailsScreen(
                         work = modifiedWork,
                         aspectRatio = work.canvasShape,
                         tags = tags,
-                        mentions = mentions
+                        mentions = mentions,
+                        musicTrack = selectedMusic
                     )
                 }
                 SoundManager.playSend()
@@ -158,7 +161,8 @@ fun PostDetailsScreen(
                         description = if (selectedTemplate == "None") "" else "Template: $selectedTemplate",
                         aspectRatio = aspectRatio,
                         tags = tags,
-                        mentions = mentions
+                        mentions = mentions,
+                        musicTrack = selectedMusic
                     )
                 }
                 if (success) {
@@ -670,6 +674,87 @@ fun PostDetailsScreen(
                         }
                     }
                 }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // ── 3B. Soundtrack / Music Attachment ─────────────────────────────
+            Text(
+                text = "SOUNDTRACK / MUSIC",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textMuted,
+                letterSpacing = 0.5.sp
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(surfaceColor)
+                    .border(0.75.dp, colors.glassBorder, RoundedCornerShape(14.dp))
+                    .clickable { showMusicPickerSheet = true }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFFA2D48).copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val coverUrl = selectedMusic?.coverUrl
+                    if (!coverUrl.isNullOrBlank()) {
+                        coil.compose.AsyncImage(
+                            model = coverUrl,
+                            contentDescription = "Album Cover",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(Lucide.Music, null, tint = Color(0xFFFA2D48), modifier = Modifier.size(18.dp))
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = selectedMusic?.title ?: "Add Music",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textMain,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = selectedMusic?.let { "${it.artist} · ${it.durationSec}s" }
+                            ?: "Attach an Apple-curated track from Music Library",
+                        fontSize = 12.sp,
+                        color = colors.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (selectedMusic != null) {
+                    IconButton(onClick = { selectedMusic = null }, modifier = Modifier.size(28.dp)) {
+                        Icon(Lucide.X, contentDescription = "Clear music", tint = colors.textMuted, modifier = Modifier.size(16.dp))
+                    }
+                } else {
+                    Icon(Lucide.ChevronRight, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            if (showMusicPickerSheet) {
+                com.chroma.studio.ui.components.StoryMusicPickerModal(
+                    isOpen = true,
+                    initialTrackId = selectedMusic?.trackId,
+                    headerTitle = "Add Music",
+                    onDismiss = { showMusicPickerSheet = false },
+                    onClipConfirmed = { picked ->
+                        selectedMusic = picked
+                        showMusicPickerSheet = false
+                    }
+                )
             }
 
             Spacer(Modifier.height(32.dp))

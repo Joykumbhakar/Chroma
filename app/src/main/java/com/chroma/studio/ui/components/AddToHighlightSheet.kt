@@ -134,7 +134,7 @@ fun AddToHighlightSheet(
             ) {
                 Column {
                     Text(
-                        text = "Save this story permanently to your profile highlights reel.",
+                        text = "Save this story permanently to your profile highlights flash.",
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 13.sp,
                         modifier = Modifier.padding(bottom = 20.dp)
@@ -159,7 +159,7 @@ fun AddToHighlightSheet(
                                 Box(
                                     modifier = Modifier
                                         .size(64.dp)
-                                        .clip(CircleShape)
+                                        .clip(RoundedCornerShape(16.dp))
                                         .background(Color(0xFF23252B)),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -238,8 +238,8 @@ fun AddToHighlightSheet(
                                         Box(
                                             modifier = Modifier
                                                 .align(Alignment.BottomEnd)
-                                                .size(22.dp)
-                                                .clip(CircleShape)
+                                                .size(20.dp)
+                                                .clip(RoundedCornerShape(6.dp))
                                                 .background(Color(0xFF10B981)),
                                             contentAlignment = Alignment.Center
                                         ) {

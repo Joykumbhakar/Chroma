@@ -344,7 +344,7 @@ fun UserProfileHeroSection(
                 }
 
                 // Online Status Indicator with Theme Border (Live RTDB Presence)
-                if (isUserOnline) {
+                if (isUserOnline && (profile?.showOnlineStatus != false)) {
                     com.chroma.studio.ui.components.OnlineStatusDot(
                         isOnline = true,
                         size = 18.dp,
@@ -352,30 +352,16 @@ fun UserProfileHeroSection(
                         ringColor = colors.bg,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .offset(x = (-2).dp, y = (-2).dp)
+                            .offset(x = (-3).dp, y = (-3).dp)
                     )
                 }
             }
 
-            // 3. Stats Card — Apple / One UI Frosted Blur Background Card
+            // 3. Stats Row — Open Borderless Apple Layout with Subtle Vertical Dividers
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 14.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .hazeChild(
-                        state = heroHazeState,
-                        shape = RoundedCornerShape(16.dp),
-                        style = HazeDefaults.style(
-                            tint = Color.Transparent,
-                            blurRadius = 24.dp,
-                            noiseFactor = 0f
-                        )
-                    )
-                    .background(
-                        if (colors.isDark) Color(0xFF1C1C1E).copy(alpha = 0.55f)
-                        else Color.White.copy(alpha = 0.70f)
-                    )
+                    .padding(start = 12.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -715,13 +701,13 @@ fun UserProfileBioDetailsSection(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Role Pill
+                // Role Tag (Borderless 8.dp)
                 if (roleText != null) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (colors.isDark) Color(0xFF0381FE).copy(alpha = 0.18f) else Color(0xFFF1F5FE))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.primary.copy(alpha = 0.10f))
+                            .padding(horizontal = 9.dp, vertical = 4.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -730,12 +716,12 @@ fun UserProfileBioDetailsSection(
                             Icon(
                                 imageVector = Lucide.Code,
                                 contentDescription = null,
-                                tint = Color(0xFF0062FF),
+                                tint = colors.primary,
                                 modifier = Modifier.size(12.dp)
                             )
                             Text(
                                 text = roleText,
-                                color = Color(0xFF0062FF),
+                                color = colors.primary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 letterSpacing = (-0.01).em,
@@ -746,13 +732,13 @@ fun UserProfileBioDetailsSection(
                     }
                 }
 
-                // Other Metadata Pills
+                // Metadata Items (Borderless 8.dp)
                 metadataItems.forEach { (icon, text) ->
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFEFF4F9))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.inputBg)
+                            .padding(horizontal = 9.dp, vertical = 4.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -805,13 +791,8 @@ fun UserProfileBioDetailsSection(
 
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (colors.isDark) Color(0xFF0381FE).copy(alpha = 0.15f) else Color(0xFFEFF5FF))
-                            .border(
-                                width = 0.5.dp,
-                                color = if (colors.isDark) Color(0xFF0381FE).copy(alpha = 0.30f) else Color(0xFF0381FE).copy(alpha = 0.20f),
-                                shape = RoundedCornerShape(999.dp)
-                            )
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.primary.copy(alpha = 0.10f))
                             .clickable {
                                 try {
                                     val target = if (webUrl.startsWith("http://") || webUrl.startsWith("https://")) webUrl else "https://$webUrl"

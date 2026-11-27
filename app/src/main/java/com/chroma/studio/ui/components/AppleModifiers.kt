@@ -54,33 +54,14 @@ import com.composables.icons.lucide.Users
 import kotlin.math.abs
 
 fun Modifier.spatialCard(
-    cornerRadius: Dp = 20.dp,
-    elevation: Dp = 8.dp,
-    borderAlpha: Float = 0.6f
+    cornerRadius: Dp = 12.dp,
+    elevation: Dp = 0.dp,
+    borderAlpha: Float = 0f
 ) = composed {
+    val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
     this
-        .shadow(
-            elevation = elevation,
-            shape = RoundedCornerShape(cornerRadius),
-            ambientColor = Color.Black.copy(alpha = 0.04f),
-            spotColor = Color.Black.copy(alpha = 0.06f)
-        )
         .clip(RoundedCornerShape(cornerRadius))
-        .background(
-            Brush.linearGradient(
-                colors = listOf(
-                    Color(0xF2FFFFFF), // rgba(255,255,255,0.95) for crisp contrast
-                    Color(0xD9FFFFFF)  // rgba(255,255,255,0.85)
-                ),
-                start = Offset(0f, 0f),
-                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-            )
-        )
-        .border(
-            width = 1.dp,
-            color = Color.White.copy(alpha = borderAlpha),
-            shape = RoundedCornerShape(cornerRadius)
-        )
+        .background(colors.cardSurface)
 }
 
 @Composable
@@ -328,7 +309,8 @@ fun IosAvatarView(
         // Universal Atomic Online Status Dot with Live Pulse
         if (!isGroup && isOnline) {
             val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
-            val dotSize = (size.value * 0.23f).coerceIn(10f, 24f).dp
+            val dotSize = (size.value * 0.25f).coerceIn(10f, 20f).dp
+            val rimOffset = ((dotSize.value / 2f) - (size.value * 0.146f)).coerceIn(-5f, 0f).dp
             OnlineStatusDot(
                 isOnline = true,
                 size = dotSize,
@@ -336,7 +318,7 @@ fun IosAvatarView(
                 ringColor = statusRingColor ?: colors.statusRingBorder,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .offset(x = (-1).dp, y = (-1).dp)
+                    .offset(x = rimOffset, y = rimOffset)
             )
         }
     }
@@ -688,7 +670,8 @@ fun AppleStatusAvatar(
                 )
             }
         } else if (isOnline) {
-            val dotSize = (size.value * 0.23f).coerceIn(12f, 18f).dp
+            val dotSize = (size.value * 0.24f).coerceIn(11f, 18f).dp
+            val rimOffset = ((dotSize.value / 2f) - (size.value * 0.146f)).coerceIn(-5f, 0f).dp
             OnlineStatusDot(
                 isOnline = true,
                 size = dotSize,
@@ -696,7 +679,7 @@ fun AppleStatusAvatar(
                 ringColor = gapColor,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .offset(x = 0.dp, y = 0.dp)
+                    .offset(x = rimOffset, y = rimOffset)
             )
         }
     }

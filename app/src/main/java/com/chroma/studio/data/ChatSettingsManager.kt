@@ -37,6 +37,46 @@ enum class BubbleStyle {
     MINIMAL     // No tails, subtle margins
 }
 
+enum class ChatFontStyle(
+    val key: String,
+    val label: String,
+    val fontFamily: androidx.compose.ui.text.font.FontFamily,
+    val tagName: String = key
+) {
+    DEFAULT("default", "Default", androidx.compose.ui.text.font.FontFamily.SansSerif, "default"),
+    SERIF("serif", "Serif", androidx.compose.ui.text.font.FontFamily.Serif, "serif"),
+    MONO("mono", "Mono", androidx.compose.ui.text.font.FontFamily.Monospace, "mono"),
+    CURSIVE("cursive", "Script", androidx.compose.ui.text.font.FontFamily.Cursive, "script"),
+    SIGNATURE("signature", "Signature", com.chroma.studio.ui.theme.TheSignatureFontFamily, "signature");
+
+    companion object {
+        private val INLINE_FONT_TAG_REGEX = Regex(
+            "\\[(serif|mono|script|cursive|signature)\\]([\\s\\S]*?)\\[/\\1\\]",
+            RegexOption.IGNORE_CASE
+        )
+
+        fun fromKey(key: String?): ChatFontStyle {
+            if (key.isNullOrBlank()) return DEFAULT
+            if (key.equals("script", ignoreCase = true)) return CURSIVE
+            return entries.firstOrNull {
+                it.key.equals(key, ignoreCase = true) || it.tagName.equals(key, ignoreCase = true)
+            } ?: DEFAULT
+        }
+
+        fun stripInlineFontMarkup(text: String): String {
+            var current = text
+            while (INLINE_FONT_TAG_REGEX.containsMatchIn(current)) {
+                current = INLINE_FONT_TAG_REGEX.replace(current) { it.groupValues[2] }
+            }
+            return current
+        }
+
+        fun containsInlineFontMarkup(text: String): Boolean {
+            return INLINE_FONT_TAG_REGEX.containsMatchIn(text)
+        }
+    }
+}
+
 data class WallpaperConfig(
     val type: WallpaperType = WallpaperType.AURORA,
     val value: String = "",         // Hex color code, gradient key, or photo URI string
@@ -85,6 +125,37 @@ object ChatWallpaperPresets {
 class ChatSettingsManager(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("chat_settings_prefs", Context.MODE_PRIVATE)
 
+    companion object {
+        private val sharedFontStyle = MutableStateFlow<ChatFontStyle?>(null)
+
+        fun observeSharedFontStyle(context: Context): StateFlow<ChatFontStyle> {
+            val flow = sharedFontStyle
+            if (flow.value == null) {
+                val p = context.applicationContext.getSharedPreferences("chat_settings_prefs", Context.MODE_PRIVATE)
+                flow.value = ChatFontStyle.fromKey(p.getString("chat_font_style", ChatFontStyle.DEFAULT.key))
+            }
+            @Suppress("UNCHECKED_CAST")
+            return flow as StateFlow<ChatFontStyle>
+        }
+
+        fun getSharedFontStyle(context: Context): ChatFontStyle {
+            return sharedFontStyle.value ?: ChatFontStyle.fromKey(
+                context.applicationContext
+                    .getSharedPreferences("chat_settings_prefs", Context.MODE_PRIVATE)
+                    .getString("chat_font_style", ChatFontStyle.DEFAULT.key)
+            ).also { sharedFontStyle.value = it }
+        }
+
+        fun setSharedFontStyle(context: Context, style: ChatFontStyle) {
+            sharedFontStyle.value = style
+            context.applicationContext
+                .getSharedPreferences("chat_settings_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putString("chat_font_style", style.key)
+                .apply()
+        }
+    }
+
     private val _theme = MutableStateFlow(
         try {
             ChatTheme.valueOf(prefs.getString("theme", ChatTheme.DEFAULT.name) ?: ChatTheme.DEFAULT.name)
@@ -102,6 +173,15 @@ class ChatSettingsManager(context: Context) {
         }
     )
     val textSize: StateFlow<ChatTextSize> = _textSize.asStateFlow()
+
+    private val _fontStyle = MutableStateFlow(getSharedFontStyle(context))
+    val fontStyle: StateFlow<ChatFontStyle> = _fontStyle.asStateFlow()
+
+    fun setFontStyle(style: ChatFontStyle) {
+        _fontStyle.value = style
+        sharedFontStyle.value = style
+        prefs.edit().putString("chat_font_style", style.key).apply()
+    }
 
     private val _globalWallpaper = MutableStateFlow(loadWallpaper(null))
     val globalWallpaper: StateFlow<WallpaperConfig> = _globalWallpaper.asStateFlow()

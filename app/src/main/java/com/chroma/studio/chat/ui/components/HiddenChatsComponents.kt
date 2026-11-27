@@ -376,15 +376,7 @@ fun HiddenChatsVaultModal(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF0381FE).copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        LucideLock(tint = Color(0xFF0381FE), size = 17.dp)
-                    }
+                    LucideLock(tint = Color(0xFF0381FE), size = 20.dp)
 
                     Column {
                         Text(
@@ -500,15 +492,7 @@ fun HiddenChatsVaultModal(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.padding(horizontal = 32.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(70.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF0381FE).copy(alpha = 0.1f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LucideLock(tint = Color(0xFF0381FE), size = 32.dp)
-                        }
+                        LucideLock(tint = Color(0xFF0381FE), size = 36.dp)
                         Text(
                             text = if (searchQuery.isNotBlank()) "No Matching Hidden Chats" else "No Hidden Chats Yet",
                             fontSize = 17.sp,

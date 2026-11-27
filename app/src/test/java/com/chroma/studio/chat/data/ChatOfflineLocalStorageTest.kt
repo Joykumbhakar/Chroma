@@ -89,8 +89,8 @@ class ChatOfflineLocalStorageTest {
     @Test
     fun testRecentChatsOfflineStorage() {
         val sampleRooms = listOf(
-            ChatRoom(id = "room_1", lastMessage = "Hey there", lastMessageTime = 3000L),
-            ChatRoom(id = "room_2", lastMessage = "Photo sent", lastMessageTime = 4000L)
+            ChatRoom(id = "room_1", participants = listOf("test_user"), lastMessage = "Hey there", lastMessageTime = 3000L),
+            ChatRoom(id = "room_2", participants = listOf("test_user"), lastMessage = "Photo sent", lastMessageTime = 4000L)
         )
 
         ChatLocalCacheManager.saveRecentChats(dummyContext, sampleRooms)

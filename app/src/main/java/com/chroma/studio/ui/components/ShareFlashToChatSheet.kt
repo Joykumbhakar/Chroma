@@ -147,21 +147,14 @@ fun ShareFlashToChatSheet(
                             modifier = Modifier.fillMaxSize()
                         )
                     }
-                    Box(
+                    Icon(
+                        imageVector = Lucide.Play,
+                        contentDescription = null,
+                        tint = Color.White,
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .size(20.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.5f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Lucide.Play,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(10.dp).offset(x = 0.5.dp)
-                        )
-                    }
+                            .size(16.dp)
+                    )
                 }
 
                 Column(
@@ -197,7 +190,11 @@ fun ShareFlashToChatSheet(
                             fontWeight = FontWeight.Medium
                         )
                         if (flashVideo.authorVerified) {
-                            VerifiedBadge(size = 11.dp)
+                            VerifiedBadge(
+                                size = 11.dp,
+                                tone = flashVideo.authorVerifiedTone,
+                                userId = flashVideo.creatorId
+                            )
                         }
                     }
 
@@ -263,9 +260,8 @@ fun ShareFlashToChatSheet(
                     if (searchQuery.isNotEmpty()) {
                         Box(
                             modifier = Modifier
-                                .size(18.dp)
-                                .clip(CircleShape)
-                                .background(colors.textMuted.copy(alpha = 0.25f))
+                                .size(20.dp)
+                                .clip(RoundedCornerShape(6.dp))
                                 .clickable { searchQuery = "" },
                             contentAlignment = Alignment.Center
                         ) {
@@ -273,7 +269,7 @@ fun ShareFlashToChatSheet(
                                 imageVector = Lucide.X,
                                 contentDescription = "Clear search",
                                 tint = colors.textMain,
-                                modifier = Modifier.size(11.dp)
+                                modifier = Modifier.size(13.dp)
                             )
                         }
                     }
@@ -436,17 +432,16 @@ private fun ShareRoomItem(
     val colors = LocalOscellionColors.current
     val displayName = getRoomDisplayName(room, currentUserId, userProfiles)
     val avatarUrl = getRoomAvatarUrl(room, currentUserId, userProfiles)
-    val isVerified = if (!room.isGroup) {
-        val otherUid = room.participants.firstOrNull { it != currentUserId }
-        otherUid?.let { userProfiles[it]?.verified } == true
-    } else false
+    val otherPeerUid = if (!room.isGroup) room.participants.firstOrNull { it != currentUserId } else null
+    val otherPeerProfile = otherPeerUid?.let { userProfiles[it] }
+    val isVerified = otherPeerProfile?.verified == true
 
     val subtitle = if (room.isGroup) {
         "${room.participants.size} members"
     } else {
         val otherUid = room.participants.firstOrNull { it != currentUserId }
         val prof = otherUid?.let { userProfiles[it] }
-        if (!prof?.username.isNullOrBlank()) "@${prof?.username}" else "Direct Message"
+        if (!prof?.username.isNullOrBlank()) "@${prof.username}" else "Direct Message"
     }
 
     val buttonBg by animateColorAsState(
@@ -523,7 +518,11 @@ private fun ShareRoomItem(
                         overflow = TextOverflow.Ellipsis
                     )
                     if (isVerified) {
-                        VerifiedBadge(size = 11.dp)
+                        VerifiedBadge(
+                            size = 11.dp,
+                            tone = otherPeerProfile.verifiedTone,
+                            userId = otherPeerUid
+                        )
                     }
                 }
 

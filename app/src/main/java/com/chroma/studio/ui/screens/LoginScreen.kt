@@ -557,10 +557,12 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
             pendingCropUri = cameraImageUri
         }
     }
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            pendingCropUri = uri
-        }
+    val galleryLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Profile Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        pendingCropUri = uri
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(

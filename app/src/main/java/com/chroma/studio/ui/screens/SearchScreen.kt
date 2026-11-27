@@ -340,21 +340,16 @@ fun GalaxyAiAuroraSearchBar(
         }
     }
 
-    val containerBg = if (isFocused || query.isNotEmpty()) colors.cardSurface else colors.inputBg
+    val containerBg = if (isFocused || query.isNotEmpty()) colors.cardSurfaceElevated else colors.inputBg
     val textColor = colors.textMain
     val placeholderColor = colors.textMuted.copy(alpha = 0.78f)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(46.dp)
-            .clip(CircleShape)
+            .height(42.dp)
+            .clip(RoundedCornerShape(10.dp))
             .background(containerBg)
-            .border(
-                width = if (isFocused || query.isNotEmpty()) 1.2.dp else 0.6.dp,
-                brush = shellGradient,
-                shape = CircleShape
-            )
     ) {
         Row(
             modifier = Modifier
@@ -415,8 +410,7 @@ fun GalaxyAiAuroraSearchBar(
                 Box(
                     modifier = Modifier
                         .size(28.dp)
-                        .clip(CircleShape)
-                        .background(colors.textMain.copy(alpha = 0.09f))
+                        .clip(RoundedCornerShape(6.dp))
                         .clickable { onQueryChange("") },
                     contentAlignment = Alignment.Center
                 ) {
@@ -495,18 +489,13 @@ fun OneUiSearchBarPill(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(46.dp)
+            .height(42.dp)
             .graphicsLayer {
                 scaleX = pillScale
                 scaleY = pillScale
             }
-            .clip(CircleShape)
+            .clip(RoundedCornerShape(10.dp))
             .background(pillBgColor)
-            .border(
-                width = if (hasFocus) 1.dp else 0.5.dp,
-                color = borderColor,
-                shape = CircleShape
-            )
             .padding(start = 12.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -589,8 +578,7 @@ fun OneUiSearchBarPill(
             Box(
                 modifier = Modifier
                     .size(28.dp)
-                    .clip(CircleShape)
-                    .background(colors.textMain.copy(alpha = 0.10f))
+                    .clip(RoundedCornerShape(6.dp))
                     .clickable { onQueryChange("") },
                 contentAlignment = Alignment.Center
             ) {
@@ -604,7 +592,7 @@ fun OneUiSearchBarPill(
         } else if (onQuickAiToggle != null) {
             Row(
                 modifier = Modifier
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(accentColor.copy(alpha = 0.12f))
                     .clickable { onQuickAiToggle() }
                     .padding(horizontal = 10.dp, vertical = 5.dp),
@@ -827,6 +815,7 @@ fun SearchScreen(
         )
     }
     var showMoreOptionsMenu by remember { mutableStateOf(false) }
+    var showClearHistoryConfirmDialog by remember { mutableStateOf(false) }
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearchFieldFocused by remember { mutableStateOf(false) }
@@ -1331,8 +1320,7 @@ fun SearchScreen(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(if (showMoreOptionsMenu) colors.inputBg else Color.Transparent)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .clickable { showMoreOptionsMenu = true },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1444,8 +1432,7 @@ fun SearchScreen(
                                         },
                                         onClick = {
                                             showMoreOptionsMenu = false
-                                            historyManager.clearHistory()
-                                            searchHistory = emptyList()
+                                            showClearHistoryConfirmDialog = true
                                         }
                                     )
                                 }
@@ -1555,14 +1542,9 @@ fun SearchScreen(
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(36.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isSelected) activeAccent else cardBgColor)
-                                        .border(
-                                            width = 0.5.dp,
-                                            color = if (isSelected) Color.Transparent else dividerColor,
-                                            shape = CircleShape
-                                        )
+                                        .height(34.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) activeAccent else colors.inputBg)
                                         .clickable { selectedScope = scope },
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -1578,16 +1560,13 @@ fun SearchScreen(
                         }
                     }
 
-                    // ── Search Mode: Recent Searches & Suggested Prompts (One UI 26.dp Focus Block) ──
+                    // ── Search Mode: Open Borderless Recent Searches & Suggested Prompts ──
                     if (searchQuery.isBlank()) {
                         item(span = StaggeredGridItemSpan.FullLine) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(colors.sheetCornerRadius))
-                                    .background(cardBgColor)
-                                    .border(0.5.dp, dividerColor, RoundedCornerShape(colors.sheetCornerRadius))
-                                    .padding(16.dp)
+                                    .padding(vertical = 8.dp)
                             ) {
                                 if (searchHistory.isNotEmpty()) {
                                     Row(
@@ -1609,8 +1588,7 @@ fun SearchScreen(
                                             color = activeAccent,
                                             fontFamily = InterFontFamily,
                                             modifier = Modifier.clickable {
-                                                historyManager.clearHistory()
-                                                searchHistory = emptyList()
+                                                showClearHistoryConfirmDialog = true
                                             }
                                         )
                                     }
@@ -1904,19 +1882,14 @@ fun SearchScreen(
                                 val isSelected = filter == selectedCategory
                                 Box(
                                     modifier = Modifier
-                                        .height(36.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isSelected) activeAccent else cardBgColor)
-                                        .border(
-                                            width = 0.5.dp,
-                                            color = if (isSelected) Color.Transparent else dividerColor,
-                                            shape = CircleShape
-                                        )
+                                        .height(34.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) activeAccent else colors.inputBg)
                                         .clickable {
                                             selectedCategory = filter
                                             SoundManager.playTap(context)
                                         }
-                                        .padding(horizontal = 16.dp),
+                                        .padding(horizontal = 14.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Row(
@@ -2129,6 +2102,22 @@ fun SearchScreen(
             }
         }
 
+        if (showClearHistoryConfirmDialog) {
+            com.chroma.studio.ui.components.IosAlertDialog(
+                title = "Clear Search History?",
+                message = "Remove all recent searches from this device?",
+                confirmText = "Clear History",
+                isDestructive = true,
+                onConfirm = {
+                    showClearHistoryConfirmDialog = false
+                    historyManager.clearHistory()
+                    searchHistory = emptyList()
+                },
+                dismissText = "Cancel",
+                onDismiss = { showClearHistoryConfirmDialog = false }
+            )
+        }
+
         // ── Artwork Quick Look & Action Sheet Modal ────────────────────────────
         if (selectedPreviewPost != null) {
             val post = selectedPreviewPost!!
@@ -2229,7 +2218,14 @@ private fun CreatorSearchResultCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                IosAvatarView(name = user.displayName, avatarUrl = user.avatarUrl, size = 44.dp)
+                val searchUserPresence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(user.uid)
+                val searchUserIsOnline = searchUserPresence.online && user.showOnlineStatus
+                IosAvatarView(
+                    name = user.displayName,
+                    avatarUrl = user.avatarUrl,
+                    size = 44.dp,
+                    isOnline = searchUserIsOnline
+                )
 
                 Column(verticalArrangement = Arrangement.spacedBy((-2).dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2275,10 +2271,10 @@ private fun CreatorSearchResultCard(
 
             Box(
                 modifier = Modifier
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(accentColor)
                     .clickable { onClick() }
-                    .padding(horizontal = 15.dp, vertical = 7.dp)
+                    .padding(horizontal = 14.dp, vertical = 7.dp)
             ) {
                 Text(
                     text = "View",
@@ -2292,7 +2288,7 @@ private fun CreatorSearchResultCard(
     }
 }
 
-// ── Spotlight Creator Banner (One UI 26.dp Focus Block) ────────────────
+// ── Spotlight Creator Banner (Borderless Flat Apple Section) ────────────────
 @Composable
 private fun SpotlightCreatorBanner(
     post: DiscoverPost,
@@ -2300,27 +2296,16 @@ private fun SpotlightCreatorBanner(
     accentColor: Color = OneUiBlueLight,
     onClick: () -> Unit
 ) {
-    val bannerShape = RoundedCornerShape(colors.sheetCornerRadius)
-    val bannerBgBrush = remember(colors.cardSurface, accentColor, colors.isDark) {
-        Brush.linearGradient(
-            colors = listOf(
-                colors.cardSurface,
-                colors.cardSurface,
-                accentColor.copy(alpha = if (colors.isDark) 0.14f else 0.08f)
-            ),
-            start = Offset(0f, 0f),
-            end = Offset(900f, 350f)
-        )
-    }
+    val bannerShape = RoundedCornerShape(colors.cardCornerRadius)
+    val bannerBg = colors.cardSurface
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(bannerShape)
-            .background(bannerBgBrush)
-            .border(0.5.dp, colors.cardBorderSubtle, bannerShape)
+            .background(bannerBg)
             .clickable { onClick() }
-            .padding(16.dp)
+            .padding(14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -3013,7 +2998,7 @@ fun ExploreQuickLookSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Like Pill
+                        // Clean borderless Like action
                         Row(
                             modifier = Modifier
                                 .height(46.dp)
@@ -3021,24 +3006,16 @@ fun ExploreQuickLookSheet(
                                     scaleX = likeScale
                                     scaleY = likeScale
                                 }
-                                .clip(CircleShape)
-                                .background(
-                                    if (localIsLiked) Color(0xFFFF2D55).copy(alpha = 0.22f)
-                                    else Color.White.copy(alpha = 0.14f)
-                                )
-                                .border(
-                                    width = 0.5.dp,
-                                    color = if (localIsLiked) Color(0xFFFF2D55).copy(alpha = 0.45f)
-                                    else Color.White.copy(alpha = 0.20f),
-                                    shape = CircleShape
-                                )
-                                .clickable {
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     localIsLiked = !localIsLiked
                                     likeBounced = true
                                     onToggleLike?.invoke()
                                 }
-                                .padding(horizontal = 15.dp),
+                                .padding(horizontal = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
@@ -3046,12 +3023,12 @@ fun ExploreQuickLookSheet(
                                 imageVector = ChromaIcons.HeartFilled,
                                 contentDescription = "Like",
                                 tint = if (localIsLiked) Color(0xFFFF2D55) else Color.White,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                             Text(
                                 text = effectiveLikes.toString(),
-                                color = Color.White,
-                                fontSize = 13.sp,
+                                color = if (localIsLiked) Color(0xFFFF2D55) else Color.White,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 fontFamily = InterFontFamily
                             )
@@ -3168,8 +3145,7 @@ fun ExploreQuickLookSheet(
                                 modifier = Modifier
                                     .align(Alignment.CenterEnd)
                                     .size(30.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.inputBg)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .clickable { showDetailsDrawer = false },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -3583,8 +3559,8 @@ fun ExploreWorkGridCard(
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
                         .size(26.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.54f)),
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.45f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -3600,8 +3576,8 @@ fun ExploreWorkGridCard(
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
                         .size(26.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.54f)),
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.45f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -3680,14 +3656,7 @@ fun ExploreWorkGridCard(
             }
             if (effectiveLikes > 0 || localIsLiked) {
                 Row(
-                    modifier = Modifier
-                        .padding(start = 4.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (localIsLiked) Color(0xFFFF2D55).copy(alpha = 0.14f)
-                            else colors.inputBg
-                        )
-                        .padding(horizontal = 7.dp, vertical = 2.5.dp),
+                    modifier = Modifier.padding(start = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
@@ -3695,7 +3664,7 @@ fun ExploreWorkGridCard(
                         imageVector = ChromaIcons.HeartFilled,
                         contentDescription = null,
                         tint = if (localIsLiked) Color(0xFFFF2D55) else colors.textMuted,
-                        modifier = Modifier.size(10.5.dp)
+                        modifier = Modifier.size(11.dp)
                     )
                     Text(
                         text = effectiveLikes.toString(),

@@ -32,11 +32,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 import kotlin.math.*
 
 // ============================================================================
-// STUDIO DESIGN SYSTEM: PROFESSIONAL SOLID & GRADIENT PALETTES WITH BEVEL EDGES
+// STUDIO DESIGN SYSTEM: APPLE HIG LIGHT & DARK ADAPTIVE SURFACES
 // ============================================================================
 
 object StudioDesignTokens {
@@ -177,6 +178,7 @@ fun FcpAudioWaveformVisualizer(
     onSeekProgress: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
     val barCount = 44
 
@@ -207,8 +209,9 @@ fun FcpAudioWaveformVisualizer(
         modifier = modifier
             .fillMaxWidth()
             .height(58.dp)
-            .studioBevel(cornerRadius = 10.dp)
-            .background(StudioDesignTokens.TrackBg, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(10.dp))
+            .background(colors.inputBg, RoundedCornerShape(10.dp))
+            .border(0.5.dp, colors.cardBorder, RoundedCornerShape(10.dp))
             .pointerInput(barCount) {
                 detectTapGestures { offset ->
                     val frac = (offset.x / size.width).coerceIn(0f, 1f)
@@ -249,17 +252,13 @@ fun FcpAudioWaveformVisualizer(
                 val x = i * (barWidth + gap) + gap / 2f
 
                 val barBrush = when {
-                    !isInsideTrim -> SolidColor(Color(0xFF333846).copy(alpha = 0.45f))
+                    !isInsideTrim -> SolidColor(colors.textMuted.copy(alpha = 0.18f))
                     isPlayed -> Brush.verticalGradient(
-                        listOf(Color(0xFF00F5FF), Color(0xFF0284C7)),
+                        listOf(colors.primary, colors.primaryDark),
                         startY = centerY - barH / 2f,
                         endY = centerY + barH / 2f
                     )
-                    else -> Brush.verticalGradient(
-                        listOf(Color(0xFF64748B), Color(0xFF334155)),
-                        startY = centerY - barH / 2f,
-                        endY = centerY + barH / 2f
-                    )
+                    else -> SolidColor(colors.textMuted.copy(alpha = 0.42f))
                 }
 
                 drawRoundRect(
@@ -273,14 +272,14 @@ fun FcpAudioWaveformVisualizer(
             // Playhead Cursor Needle
             val playheadX = audioProgressFrac.coerceIn(0f, 1f) * totalWidth
             drawLine(
-                brush = Brush.verticalGradient(listOf(Color.White, Color(0xFF00E5FF))),
+                color = colors.primary,
                 start = Offset(playheadX, 0f),
                 end = Offset(playheadX, totalHeight),
                 strokeWidth = 2.dp.toPx(),
                 cap = StrokeCap.Round
             )
             drawCircle(
-                color = Color.White,
+                color = colors.textMain,
                 radius = 3.5.dp.toPx(),
                 center = Offset(playheadX, 3.5.dp.toPx())
             )
@@ -298,58 +297,63 @@ fun FcpStereoVuMeter(
     volumeNormalized: Float = 1.0f,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalOscellionColors.current
     val infiniteTransition = rememberInfiniteTransition(label = "VuMeterAnim")
     val decayOscillator by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(120, easing = LinearEasing),
+            animation = tween(140, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "VuDecay"
     )
 
+    val segments = 20
     val activeSegmentsLeft = remember(isPlaying, decayOscillator, volumeNormalized) {
-        if (!isPlaying) 2
+        if (!isPlaying) 0
         else {
-            val base = (volumeNormalized.coerceIn(0f, 1.5f) / 1.5f * 9).toInt()
-            val jitter = ((sin(decayOscillator * 8f) + 1f) * 1.5f).toInt()
-            (base + jitter).coerceIn(1, 12)
+            val base = (volumeNormalized.coerceIn(0f, 1.5f) / 1.5f * 15).toInt()
+            val jitter = ((sin(decayOscillator * 8f) + 1f) * 2.2f).toInt()
+            (base + jitter).coerceIn(2, segments)
         }
     }
 
     val activeSegmentsRight = remember(isPlaying, decayOscillator, volumeNormalized) {
-        if (!isPlaying) 2
+        if (!isPlaying) 0
         else {
-            val base = (volumeNormalized.coerceIn(0f, 1.5f) / 1.5f * 8).toInt()
-            val jitter = ((cos(decayOscillator * 7f) + 1f) * 1.5f).toInt()
-            (base + jitter).coerceIn(1, 12)
+            val base = (volumeNormalized.coerceIn(0f, 1.5f) / 1.5f * 14).toInt()
+            val jitter = ((cos(decayOscillator * 7f) + 1f) * 2.2f).toInt()
+            (base + jitter).coerceIn(2, segments)
         }
     }
 
     Column(
         modifier = modifier
-            .studioBevel(cornerRadius = 8.dp)
-            .background(StudioDesignTokens.TrackBg, RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(colors.inputBg, RoundedCornerShape(10.dp))
+            .border(0.5.dp, colors.cardBorder, RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        VuChannelBar("L", activeSegmentsLeft)
-        VuChannelBar("R", activeSegmentsRight)
+        VuChannelBar("L", activeSegmentsLeft, segments)
+        VuChannelBar("R", activeSegmentsRight, segments)
     }
 }
 
 @Composable
-private fun VuChannelBar(channelLabel: String, activeSegments: Int) {
+private fun VuChannelBar(channelLabel: String, activeSegments: Int, totalSegments: Int) {
+    val colors = LocalOscellionColors.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Text(
             text = channelLabel,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF94A3B8),
+            fontSize = 9.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = colors.textMuted,
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.width(10.dp)
         )
@@ -357,18 +361,19 @@ private fun VuChannelBar(channelLabel: String, activeSegments: Int) {
             modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            for (seg in 1..12) {
+            for (seg in 1..totalSegments) {
                 val isLit = seg <= activeSegments
                 val segColor = when {
-                    seg <= 7 -> if (isLit) Color(0xFF10B981) else Color(0xFF064E3B).copy(alpha = 0.35f)
-                    seg <= 10 -> if (isLit) Color(0xFFF59E0B) else Color(0xFF78350F).copy(alpha = 0.35f)
-                    else -> if (isLit) Color(0xFFEF4444) else Color(0xFF7F1D1D).copy(alpha = 0.35f)
+                    !isLit -> colors.cardBorder.copy(alpha = 0.65f)
+                    seg <= (totalSegments * 0.65f).toInt() -> colors.primary
+                    seg <= (totalSegments * 0.85f).toInt() -> colors.warning
+                    else -> colors.error
                 }
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(1.dp))
+                        .height(3.5.dp)
+                        .clip(RoundedCornerShape(2.dp))
                         .background(segColor)
                 )
             }
@@ -407,16 +412,21 @@ fun FcpStudioSfxSoundboard(
     onInsertSfx: (FcpStudioSfxItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
     var playingSfxId by remember { mutableStateOf<String?>(null) }
+    val cardBg = colors.cardSurface
+    val padBg = colors.inputBg
+    val borderColor = colors.cardBorder
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .studioBevel(cornerRadius = 12.dp)
-            .background(StudioDesignTokens.CardBg, RoundedCornerShape(12.dp))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(cardBg, RoundedCornerShape(16.dp))
+            .border(0.75.dp, borderColor, RoundedCornerShape(16.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -425,12 +435,12 @@ fun FcpStudioSfxSoundboard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Lucide.Zap, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(15.dp))
-                Text("STUDIO SOUND EFFECTS (SFX)", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Icon(Lucide.Zap, contentDescription = "Sound Effects", tint = colors.primary, modifier = Modifier.size(16.dp))
+                Text("Sound Effects", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
             }
-            Text("6 Presets", fontSize = 10.sp, color = Color(0xFF94A3B8))
+            Text("Tap to audition", fontSize = 10.5.sp, color = colors.textMuted)
         }
 
         LazyRow(
@@ -440,82 +450,78 @@ fun FcpStudioSfxSoundboard(
             items(BuiltInStudioSfxPresets) { sfx ->
                 val isPlayingThis = playingSfxId == sfx.id
 
-                Box(
+                Column(
                     modifier = Modifier
-                        .width(135.dp)
-                        .studioBevel(
-                            cornerRadius = 10.dp,
-                            isPressed = isPlayingThis,
-                            accentBorder = if (isPlayingThis) Brush.verticalGradient(StudioDesignTokens.CobaltGradient) else null
+                        .width(114.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isPlayingThis) colors.primary.copy(alpha = 0.08f) else padBg)
+                        .border(
+                            width = if (isPlayingThis) 1.dp else 0.5.dp,
+                            color = if (isPlayingThis) colors.primary else borderColor,
+                            shape = RoundedCornerShape(12.dp)
                         )
-                        .background(StudioDesignTokens.ElevatedBg, RoundedCornerShape(10.dp))
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             playingSfxId = sfx.id
                             onPreviewSfx(sfx)
                         }
-                        .padding(10.dp)
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isPlayingThis) Color(0xFF00E5FF).copy(alpha = 0.25f)
-                                        else Color.White.copy(alpha = 0.08f)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = sfx.icon,
-                                    contentDescription = sfx.title,
-                                    tint = if (isPlayingThis) Color(0xFF00E5FF) else Color(0xFFCBD5E1),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                            Text(sfx.durationText, fontSize = 9.sp, color = Color(0xFF94A3B8), fontFamily = FontFamily.Monospace)
-                        }
-
-                        Text(
-                            text = sfx.title,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = sfx.description,
-                            fontSize = 8.5.sp,
-                            color = Color(0xFF94A3B8),
-                            maxLines = 1
-                        )
-
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        // Quick Add Action
-                        Row(
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color.White.copy(alpha = 0.06f))
+                                .size(26.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.primary.copy(alpha = if (isPlayingThis) 0.20f else 0.10f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = sfx.icon,
+                                contentDescription = sfx.title,
+                                tint = colors.primary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(colors.primary.copy(alpha = 0.14f))
                                 .clickable {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     onInsertSfx(sfx)
-                                }
-                                .padding(vertical = 3.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(Lucide.Plus, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(11.dp))
-                            Spacer(Modifier.width(3.dp))
-                            Text("Use SFX", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00E5FF))
+                            Icon(
+                                imageVector = Lucide.Plus,
+                                contentDescription = "Add ${sfx.title}",
+                                tint = colors.primary,
+                                modifier = Modifier.size(12.dp)
+                            )
                         }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = sfx.title,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textMain,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = sfx.durationText,
+                            fontSize = 10.sp,
+                            color = colors.textMuted,
+                            fontFamily = FontFamily.Monospace
+                        )
                     }
                 }
             }
@@ -596,11 +602,15 @@ fun FcpErgonomicSpeedSelector(
     onSpeedChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
     val scrubbingState = LocalSliderScrubbingState.current
     val speedSliderKey = remember { java.util.UUID.randomUUID().toString() }
+    val baseCardBg = colors.cardSurface
+    val chipNeutralBg = colors.cardSurfaceElevated
+    val borderColor = colors.cardBorder
     val cardBg by androidx.compose.animation.animateColorAsState(
-        targetValue = if (scrubbingState.isScrubbing) Color.Transparent else StudioDesignTokens.CardBg,
+        targetValue = if (scrubbingState.isScrubbing) Color.Transparent else baseCardBg,
         animationSpec = tween(180),
         label = "speedCardBg"
     )
@@ -610,25 +620,18 @@ fun FcpErgonomicSpeedSelector(
         label = "speedCardBorder"
     )
     val primaryPresets = listOf(
-        Pair(0.5f, "0.5x Slow"),
-        Pair(1.0f, "1.0x Normal"),
-        Pair(1.5f, "1.5x Fast"),
-        Pair(2.0f, "2.0x Hyper")
+        Pair(0.5f, "0.5x"),
+        Pair(1.0f, "1.0x"),
+        Pair(1.5f, "1.5x"),
+        Pair(2.0f, "2.0x")
     )
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .studioBevel(
-                cornerRadius = 12.dp,
-                accentBorder = Brush.verticalGradient(
-                    listOf(
-                        StudioDesignTokens.BevelHighlightTop.copy(alpha = StudioDesignTokens.BevelHighlightTop.alpha * cardBorderAlpha),
-                        StudioDesignTokens.BevelBorderDefault.copy(alpha = StudioDesignTokens.BevelBorderDefault.alpha * cardBorderAlpha)
-                    )
-                )
-            )
-            .background(cardBg, RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(14.dp))
+            .background(cardBg, RoundedCornerShape(14.dp))
+            .border(0.75.dp, borderColor.copy(alpha = borderColor.alpha * cardBorderAlpha), RoundedCornerShape(14.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -643,15 +646,14 @@ fun FcpErgonomicSpeedSelector(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(Lucide.Activity, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(15.dp))
-                Text("PLAYBACK SPEED & TEMPO", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Icon(Lucide.Activity, contentDescription = "Playback Speed", tint = colors.primary, modifier = Modifier.size(15.dp))
+                Text("Playback Speed", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
             }
 
-            // Real-time badge
             Box(
                 modifier = Modifier
-                    .studioBevel(cornerRadius = 6.dp)
-                    .background(Color(0xFF00E5FF).copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.primary.copy(alpha = 0.12f))
                     .padding(horizontal = 8.dp, vertical = 2.dp)
             ) {
                 Text(
@@ -659,12 +661,11 @@ fun FcpErgonomicSpeedSelector(
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
-                    color = Color(0xFF00E5FF)
+                    color = colors.primary
                 )
             }
         }
 
-        // Primary 4 Presets (Roomy, perfectly proportioned, never cramped)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -677,16 +678,9 @@ fun FcpErgonomicSpeedSelector(
                     modifier = Modifier
                         .weight(1f)
                         .height(34.dp)
-                        .studioBevel(
-                            cornerRadius = 8.dp,
-                            isPressed = isSelected,
-                            accentBorder = if (isSelected) Brush.verticalGradient(StudioDesignTokens.CobaltGradient) else null
-                        )
-                        .background(
-                            if (isSelected) Brush.verticalGradient(StudioDesignTokens.CobaltGradient)
-                            else Brush.verticalGradient(StudioDesignTokens.TitaniumGradient),
-                            RoundedCornerShape(8.dp)
-                        )
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(if (isSelected) colors.primary else chipNeutralBg)
+                        .border(0.75.dp, if (isSelected) colors.primary else borderColor, RoundedCornerShape(9.dp))
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onSpeedChange(spd)
@@ -695,22 +689,21 @@ fun FcpErgonomicSpeedSelector(
                 ) {
                     Text(
                         text = label,
-                        fontSize = 11.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) Color.White else Color(0xFFCBD5E1)
+                        color = if (isSelected) colors.onPrimary else colors.textMain
                     )
                 }
             }
         }
 
-        // Continuous Slider for Fine Tuning
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .focusSliderContainer(
                     sliderId = speedSliderKey,
-                    isDark = true,
-                    cornerRadius = 14.dp,
+                    isDark = colors.isDark,
+                    cornerRadius = 12.dp,
                     horizontalPadding = 8.dp,
                     verticalPadding = 4.dp
                 ),
@@ -721,15 +714,14 @@ fun FcpErgonomicSpeedSelector(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Precision Smooth Ramping", fontSize = 10.sp, color = Color(0xFF94A3B8))
-                Text("${String.format("%.2f", currentSpeed)}x", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = Color(0xFF00E5FF))
+                Text("Fine Speed", fontSize = 10.5.sp, color = colors.textMuted)
+                Text("${String.format("%.2f", currentSpeed)}x", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = colors.primary)
             }
 
             AppleSlider(
                 value = currentSpeed,
                 sliderId = speedSliderKey,
                 onValueChange = { newVal ->
-                    // Snap with haptic detent near common multiples
                     val snapped = when {
                         abs(newVal - 1.0f) < 0.04f -> 1.0f
                         abs(newVal - 0.5f) < 0.04f -> 0.5f
@@ -743,7 +735,7 @@ fun FcpErgonomicSpeedSelector(
                     onSpeedChange(snapped)
                 },
                 valueRange = 0.25f..3.0f,
-                gradientColors = listOf(Color(0xFF00E5FF), Color(0xFF38BDF8)),
+                gradientColors = listOf(colors.primary, colors.primary),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -784,36 +776,26 @@ fun FcpTextTimelineRangeCard(
     onRangeChange: (startSec: Float, endSec: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
     val scrubbingState = LocalSliderScrubbingState.current
-    val rangeSliderKey = remember { java.util.UUID.randomUUID().toString() }
+    val startSliderKey = remember { java.util.UUID.randomUUID().toString() }
+    val endSliderKey = remember { java.util.UUID.randomUUID().toString() }
     val cardBg by androidx.compose.animation.animateColorAsState(
-        targetValue = if (scrubbingState.isScrubbing) Color.Transparent else StudioDesignTokens.CardBg,
+        targetValue = if (scrubbingState.isScrubbing) Color.Transparent else colors.cardSurface.copy(alpha = if (colors.isDark) 0.72f else 0.88f),
         animationSpec = tween(180),
         label = "rangeCardBg"
     )
-    val cardBorderAlpha by animateFloatAsState(
-        targetValue = if (scrubbingState.isScrubbing) 0f else 1f,
-        animationSpec = tween(180),
-        label = "rangeCardBorder"
-    )
     val effectiveTotal = totalDurationSec.coerceAtLeast(1.0f)
-    val effectiveEnd = if (timelineEndSec > timelineStartSec) timelineEndSec else effectiveTotal
+    val effectiveEnd = if (timelineEndSec > timelineStartSec) timelineEndSec.coerceAtMost(effectiveTotal) else effectiveTotal
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .studioBevel(
-                cornerRadius = 12.dp,
-                accentBorder = Brush.verticalGradient(
-                    listOf(
-                        StudioDesignTokens.BevelHighlightTop.copy(alpha = StudioDesignTokens.BevelHighlightTop.alpha * cardBorderAlpha),
-                        StudioDesignTokens.BevelBorderDefault.copy(alpha = StudioDesignTokens.BevelBorderDefault.alpha * cardBorderAlpha)
-                    )
-                )
-            )
-            .background(cardBg, RoundedCornerShape(12.dp))
-            .padding(12.dp),
+            .clip(RoundedCornerShape(12.dp))
+            .background(cardBg)
+            .border(0.5.dp, if (scrubbingState.isScrubbing) Color.Transparent else colors.glassBorder, RoundedCornerShape(12.dp))
+            .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
@@ -827,22 +809,22 @@ fun FcpTextTimelineRangeCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(Lucide.Clock, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(15.dp))
-                Text("TITLE TIMELINE DURATION", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Icon(Lucide.Clock, contentDescription = null, tint = colors.primary, modifier = Modifier.size(14.dp))
+                Text("Title Timing", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
             }
 
             Box(
                 modifier = Modifier
-                    .studioBevel(cornerRadius = 6.dp)
-                    .background(Color(0xFFF59E0B).copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(colors.primary.copy(alpha = 0.12f))
                     .padding(horizontal = 8.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = "${String.format("%.1fs", timelineStartSec)} - ${String.format("%.1fs", effectiveEnd)}",
+                    text = "${String.format("%.1fs", timelineStartSec)} – ${String.format("%.1fs", effectiveEnd)}",
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.Monospace,
-                    color = Color(0xFFF59E0B)
+                    color = colors.primary
                 )
             }
         }
@@ -855,9 +837,9 @@ fun FcpTextTimelineRangeCard(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             val presets = listOf(
-                Pair("Entire Video", 0f to 0f),
-                Pair("Intro (0-3s)", 0f to 3f.coerceAtMost(effectiveTotal)),
-                Pair("Outro (Last 3s)", (effectiveTotal - 3f).coerceAtLeast(0f) to effectiveTotal)
+                Pair("Full Clip", 0f to 0f),
+                Pair("Intro 3s", 0f to 3f.coerceAtMost(effectiveTotal)),
+                Pair("Outro 3s", (effectiveTotal - 3f).coerceAtLeast(0f) to effectiveTotal)
             )
 
             presets.forEach { (label, range) ->
@@ -867,16 +849,16 @@ fun FcpTextTimelineRangeCard(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(30.dp)
-                        .studioBevel(
-                            cornerRadius = 6.dp,
-                            isPressed = isActive,
-                            accentBorder = if (isActive) Brush.verticalGradient(StudioDesignTokens.AmberGoldGradient) else null
-                        )
+                        .height(28.dp)
+                        .clip(RoundedCornerShape(8.dp))
                         .background(
-                            if (isActive) Brush.verticalGradient(StudioDesignTokens.AmberGoldGradient)
-                            else Brush.verticalGradient(StudioDesignTokens.TitaniumGradient),
-                            RoundedCornerShape(6.dp)
+                            if (isActive) colors.primary
+                            else colors.glassBg.copy(alpha = if (colors.isDark) 0.55f else 0.9f)
+                        )
+                        .border(
+                            0.5.dp,
+                            if (isActive) colors.primary else colors.glassBorder,
+                            RoundedCornerShape(8.dp)
                         )
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -887,8 +869,8 @@ fun FcpTextTimelineRangeCard(
                     Text(
                         text = label,
                         fontSize = 10.5.sp,
-                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isActive) Color.White else Color(0xFFCBD5E1)
+                        fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
+                        color = if (isActive) Color.White else colors.textMuted
                     )
                 }
             }
@@ -899,9 +881,9 @@ fun FcpTextTimelineRangeCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .focusSliderContainer(
-                    sliderId = rangeSliderKey,
-                    isDark = true,
-                    cornerRadius = 14.dp,
+                    sliderId = startSliderKey,
+                    isDark = colors.isDark,
+                    cornerRadius = 10.dp,
                     horizontalPadding = 8.dp,
                     verticalPadding = 4.dp
                 ),
@@ -911,19 +893,54 @@ fun FcpTextTimelineRangeCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("In-Point: ${String.format("%.1fs", timelineStartSec)}", fontSize = 10.sp, color = Color(0xFF94A3B8))
-                Text("Out-Point: ${String.format("%.1fs", effectiveEnd)}", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                Text("In-Point", fontSize = 10.sp, color = colors.textMuted)
+                Text(String.format("%.1fs", timelineStartSec), fontSize = 10.sp, fontFamily = FontFamily.Monospace, color = colors.textMain)
             }
 
             AppleSlider(
-                value = timelineStartSec,
-                sliderId = rangeSliderKey,
+                value = timelineStartSec.coerceIn(0f, (effectiveEnd - 0.5f).coerceAtLeast(0f)),
+                sliderId = startSliderKey,
                 onValueChange = { newSt ->
                     val clampedSt = newSt.coerceIn(0f, (effectiveEnd - 0.5f).coerceAtLeast(0f))
                     onRangeChange(clampedSt, effectiveEnd)
                 },
                 valueRange = 0f..effectiveTotal,
-                gradientColors = listOf(Color(0xFFF59E0B), Color(0xFFFBBF24)),
+                gradientColors = listOf(colors.primary, colors.primary),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusSliderContainer(
+                    sliderId = endSliderKey,
+                    isDark = colors.isDark,
+                    cornerRadius = 10.dp,
+                    horizontalPadding = 8.dp,
+                    verticalPadding = 4.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Out-Point", fontSize = 10.sp, color = colors.textMuted)
+                Text(String.format("%.1fs", effectiveEnd), fontSize = 10.sp, fontFamily = FontFamily.Monospace, color = colors.textMain)
+            }
+
+            AppleSlider(
+                value = effectiveEnd.coerceIn((timelineStartSec + 0.5f).coerceAtMost(effectiveTotal), effectiveTotal),
+                sliderId = endSliderKey,
+                onValueChange = { newEnd ->
+                    val minEnd = (timelineStartSec + 0.5f).coerceAtMost(effectiveTotal)
+                    val clampedEnd = newEnd.coerceIn(minEnd, effectiveTotal)
+                    val outVal = if (timelineStartSec <= 0.05f && abs(clampedEnd - effectiveTotal) < 0.15f) 0f else clampedEnd
+                    onRangeChange(timelineStartSec, outVal)
+                },
+                valueRange = 0f..effectiveTotal,
+                gradientColors = listOf(colors.primary, colors.primary),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -931,22 +948,21 @@ fun FcpTextTimelineRangeCard(
 }
 
 /**
- * Quick Sticker & Graphic Badge Strip for instant insertion onto Timeline
+ * Clean Quick Badges Strip (borderless flat Apple list strip, zero nested card boxes or pills)
  */
 @Composable
 fun FcpQuickStickerStrip(
     onAddSticker: (FcpGraphicStickerPreset) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = com.chroma.studio.ui.theme.LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .editorChromeFadeOnScrub()
-            .studioBevel(cornerRadius = 12.dp)
-            .background(StudioDesignTokens.CardBg, RoundedCornerShape(12.dp))
-            .padding(12.dp),
+            .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
@@ -958,10 +974,10 @@ fun FcpQuickStickerStrip(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(Lucide.Sparkles, contentDescription = null, tint = Color(0xFFE11D48), modifier = Modifier.size(15.dp))
-                Text("GRAPHIC BADGES & TIMELINE STICKERS", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Icon(Lucide.Sparkles, contentDescription = null, tint = colors.primary, modifier = Modifier.size(13.dp))
+                Text("Quick Badges", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
             }
-            Text("Tap to Add", fontSize = 10.sp, color = Color(0xFF94A3B8))
+            Text("Tap to add", fontSize = 10.5.sp, color = colors.textMuted)
         }
 
         LazyRow(
@@ -969,38 +985,27 @@ fun FcpQuickStickerStrip(
             modifier = Modifier.fillMaxWidth()
         ) {
             items(BuiltInGraphicStickers) { sticker ->
-                Box(
+                Row(
                     modifier = Modifier
-                        .studioBevel(cornerRadius = 8.dp)
-                        .background(StudioDesignTokens.ElevatedBg, RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.inputBg)
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onAddSticker(sticker)
                         }
-                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(sticker.badgeColor.copy(alpha = 0.22f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = sticker.icon,
-                                contentDescription = sticker.label,
-                                tint = sticker.badgeColor,
-                                modifier = Modifier.size(11.dp)
-                            )
-                        }
-                        Column {
-                            Text(sticker.label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text(sticker.subtitle, fontSize = 8.sp, color = sticker.badgeColor, fontWeight = FontWeight.Bold)
-                        }
+                    Icon(
+                        imageVector = sticker.icon,
+                        contentDescription = sticker.label,
+                        tint = sticker.badgeColor,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Column {
+                        Text(sticker.label, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                        Text(sticker.subtitle, fontSize = 9.5.sp, color = colors.textMuted, fontWeight = FontWeight.Medium)
                     }
                 }
             }

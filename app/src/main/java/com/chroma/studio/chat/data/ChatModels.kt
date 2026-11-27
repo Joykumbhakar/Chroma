@@ -146,7 +146,18 @@ data class ChatMessage(
     val flashVideoCaption: String? = null,
     val flashVideoAuthorUsername: String? = null,
     val flashVideoAuthorAvatarUrl: String? = null,
-    val flashVideoDurationMs: Long? = null
+    val flashVideoDurationMs: Long? = null,
+    val musicTrackId: String? = null,
+    val musicTitle: String? = null,
+    val musicArtist: String? = null,
+    val musicAlbum: String? = null,
+    val musicCoverUrl: String? = null,
+    val musicAudioUrl: String? = null,
+    val musicStartSec: Int = 0,
+    val musicDurationSec: Int = 15,
+    val deliveredTo: Map<String, Long> = emptyMap(),
+    val readBy: Map<String, Long> = emptyMap(),
+    val fontStyle: String? = null
 )
 
 @Immutable
@@ -172,7 +183,11 @@ data class ChatConversation(
     val otherUserId: String? = null,
     val participantUids: List<String> = emptyList(),
     val admins: List<String> = emptyList(),
-    val onlyAdminsCanPost: Boolean = false
+    val onlyAdminsCanPost: Boolean = false,
+    val disappearingHours: Int = 0,
+    val inviteCode: String? = null,
+    val isPublicGroup: Boolean = false,
+    val editInfoAdminsOnly: Boolean = true
 ) {
     val isGroup: Boolean get() = type.equals("group", ignoreCase = true) || !members.isNullOrEmpty()
 }

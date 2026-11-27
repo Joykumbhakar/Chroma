@@ -396,47 +396,25 @@ fun EditHighlightSheet(
 
             // Delete Confirmation Alert
             if (showDeleteConfirmDialog) {
-                AlertDialog(
-                    onDismissRequest = { showDeleteConfirmDialog = false },
-                    containerColor = Color(0xFF1E2127),
-                    title = {
-                        Text(
-                            text = "Delete Highlight?",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = "This will remove the highlight from your profile. All stories will still remain saved in your archive.",
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontSize = 14.sp
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                showDeleteConfirmDialog = false
-                                storyViewModel.deleteHighlight(highlight.id) { success ->
-                                    if (success) {
-                                        ToastManager.showToast("Highlight deleted")
-                                        onHighlightDeleted()
-                                        onDismiss()
-                                    } else {
-                                        ToastManager.showToast("Failed to delete highlight")
-                                    }
-                                }
+                IosAlertDialog(
+                    title = "Delete Highlight?",
+                    message = "This will remove the highlight from your profile. All stories will still remain saved in your archive.",
+                    confirmText = "Delete",
+                    isDestructive = true,
+                    onConfirm = {
+                        showDeleteConfirmDialog = false
+                        storyViewModel.deleteHighlight(highlight.id) { success ->
+                            if (success) {
+                                ToastManager.showToast("Highlight deleted")
+                                onHighlightDeleted()
+                                onDismiss()
+                            } else {
+                                ToastManager.showToast("Failed to delete highlight")
                             }
-                        ) {
-                            Text("Delete", color = Color(0xFFFF453A), fontWeight = FontWeight.Bold)
                         }
                     },
-                    dismissButton = {
-                        TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                            Text("Cancel", color = Color.White.copy(alpha = 0.7f))
-                        }
-                    }
+                    dismissText = "Cancel",
+                    onDismiss = { showDeleteConfirmDialog = false }
                 )
             }
         }

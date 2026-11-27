@@ -98,14 +98,13 @@ object LiquidGlassTokens {
 
     val SecondarySpecularBorder = SolidColor(Color.Black)
 
-    val CardCornerRadius = 22.dp
-    val PillCornerRadius = 9999.dp
-    val DialogCornerRadius = 24.dp
+    val CardCornerRadius = 12.dp
+    val PillCornerRadius = 10.dp
+    val DialogCornerRadius = 18.dp
 }
 
 /**
- * Liquid Glass Card (ds-card)
- * Pure white card surface, crisp 1.dp border #DFE8F3, corner radius 22.dp, zero heavy shadow.
+ * Clean Apple HIG Grouped Surface Container (borderless, zero heavy card outline).
  */
 @Composable
 fun LiquidGlassCard(
@@ -119,15 +118,13 @@ fun LiquidGlassCard(
 ) {
     val colors = LocalOscellionColors.current
     val resolvedBg = if (backgroundColor != Color.Unspecified) backgroundColor else colors.cardSurface
-    val resolvedBorder = if (borderColor != Color.Unspecified) borderColor else colors.cardBorder
     val resolvedRadius = if (cornerRadius != Dp.Unspecified) cornerRadius else colors.cardCornerRadius
     val resolvedShape = shape ?: RoundedCornerShape(resolvedRadius)
 
     Surface(
         modifier = modifier,
         shape = resolvedShape,
-        color = resolvedBg,
-        border = BorderStroke(1.dp, resolvedBorder)
+        color = resolvedBg
     ) {
         Column(
             modifier = Modifier.padding(contentPadding),
@@ -193,11 +190,6 @@ fun LiquidGlassPrimaryButton(
             .defaultMinSize(minHeight = height)
             .clip(resolvedShape)
             .background(bgColor)
-            .border(
-                width = 0.5.dp,
-                brush = if (enabled) thinAppleBorder else SolidColor(Color.White.copy(alpha = 0.12f)),
-                shape = resolvedShape
-            )
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
@@ -223,7 +215,7 @@ fun LiquidGlassPrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isSmall: Boolean = false,
-    shape: Shape = CircleShape,
+    shape: Shape = RoundedCornerShape(10.dp),
     leadingIcon: ImageVector? = null,
     trailingIcon: ImageVector? = null
 ) {
@@ -324,11 +316,6 @@ fun LiquidGlassSecondaryButton(
             .defaultMinSize(minHeight = height)
             .clip(resolvedShape)
             .background(secBg)
-            .border(
-                width = 0.5.dp,
-                brush = thinBorderBrush,
-                shape = resolvedShape
-            )
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
@@ -358,7 +345,7 @@ fun LiquidGlassSecondaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isSmall: Boolean = false,
-    shape: Shape = CircleShape,
+    shape: Shape = RoundedCornerShape(10.dp),
     leadingIcon: ImageVector? = null,
     trailingIcon: ImageVector? = null
 ) {
@@ -411,9 +398,10 @@ fun LiquidGlassPillChip(
     leadingIcon: ImageVector? = null,
     trailingText: String? = null,
     isSmall: Boolean = false,
-    activeColor: Color = LiquidGlassTokens.AppleSystemBlue
+    activeColor: Color = LocalOscellionColors.current.primary
 ) {
-    val shape = RoundedCornerShape(LiquidGlassTokens.PillCornerRadius)
+    val palette = LocalOscellionColors.current
+    val shape = RoundedCornerShape(palette.chipCornerRadius)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -423,9 +411,7 @@ fun LiquidGlassPillChip(
         label = "chipScale"
     )
 
-    val isDark = isAppInDark
-    val unselectedBg = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
-    val unselectedBorder = if (isDark) Color(0x33FFFFFF) else Color(0x18000000)
+    val unselectedBg = palette.glassBg
 
     val bgColor by animateColorAsState(
         targetValue = if (isSelected) activeColor else unselectedBg,
@@ -434,7 +420,7 @@ fun LiquidGlassPillChip(
     )
 
     val textColor by animateColorAsState(
-        targetValue = if (isSelected) Color.White else (if (isDark) Color(0xFFE2E8F0) else Color(0xFF334155)),
+        targetValue = if (isSelected) Color.White else palette.textMuted,
         animationSpec = tween(180),
         label = "chipText"
     )
@@ -536,10 +522,11 @@ fun LiquidGlassPillBar(
     modifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit
 ) {
+    val palette = LocalOscellionColors.current
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(LiquidGlassTokens.PillCornerRadius))
-            .background(LiquidGlassTokens.CanvasBg)
+            .clip(RoundedCornerShape(palette.buttonCornerRadius))
+            .background(palette.glassBg)
             .padding(horizontal = 4.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -558,8 +545,9 @@ fun LiquidGlassPillItem(
     icon: ImageVector? = null,
     modifier: Modifier = Modifier
 ) {
+    val palette = LocalOscellionColors.current
     val textColor by animateColorAsState(
-        if (isSelected) LiquidGlassTokens.AccentBlue else LiquidGlassTokens.TextSecondary,
+        if (isSelected) palette.primary else palette.textMuted,
         label = "pillTextColor"
     )
     val indicatorWidth by animateFloatAsState(
@@ -570,7 +558,7 @@ fun LiquidGlassPillItem(
 
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(LiquidGlassTokens.PillCornerRadius))
+            .clip(RoundedCornerShape(palette.chipCornerRadius))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -602,8 +590,7 @@ fun LiquidGlassPillItem(
             modifier = Modifier
                 .height(2.dp)
                 .fillMaxWidth(indicatorWidth * 0.7f)
-                .clip(RoundedCornerShape(9999.dp))
-                .background(if (isSelected) LiquidGlassTokens.AccentBlue else Color.Transparent)
+                .background(if (isSelected) palette.primary else Color.Transparent)
         )
     }
 }
@@ -861,24 +848,16 @@ fun LiquidGlassInput(
     leadingIcon: ImageVector? = null,
     trailingIcon: @Composable (() -> Unit)? = null
 ) {
-    val shape = if (isPill) RoundedCornerShape(9999.dp) else RoundedCornerShape(14.dp)
+    val palette = LocalOscellionColors.current
+    val shape = RoundedCornerShape(palette.buttonCornerRadius)
     var isFocused by remember { mutableStateOf(false) }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(if (isFocused) Color.White else LiquidGlassTokens.CanvasBg)
-            .then(
-                if (!isPill) {
-                    Modifier.border(
-                        1.dp,
-                        if (isFocused) LiquidGlassTokens.AccentBlue else LiquidGlassTokens.BorderFlat,
-                        shape
-                    )
-                } else Modifier
-            )
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .background(if (isFocused) palette.cardSurfaceElevated else palette.inputBg)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -886,7 +865,7 @@ fun LiquidGlassInput(
             Icon(
                 imageVector = leadingIcon,
                 contentDescription = null,
-                tint = if (isFocused) LiquidGlassTokens.AccentBlue else LiquidGlassTokens.TextSecondary,
+                tint = if (isFocused) palette.primary else palette.textMuted,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -895,7 +874,7 @@ fun LiquidGlassInput(
             if (value.isEmpty()) {
                 Text(
                     text = placeholder,
-                    color = Color(0xFF94A3B8),
+                    color = palette.textMuted,
                     fontSize = 13.sp
                 )
             }
@@ -904,10 +883,10 @@ fun LiquidGlassInput(
                 onValueChange = onValueChange,
                 singleLine = true,
                 textStyle = TextStyle(
-                    color = LiquidGlassTokens.TextPrimary,
+                    color = palette.textMain,
                     fontSize = 13.sp
                 ),
-                cursorBrush = SolidColor(LiquidGlassTokens.AccentBlue),
+                cursorBrush = SolidColor(palette.primary),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -917,27 +896,27 @@ fun LiquidGlassInput(
 }
 
 /**
- * Three Dots Trigger & Panel (Liquid Glass Dots Menu)
+ * Clean Apple HIG Three Dots Action Button
  */
 @Composable
 fun LiquidGlassThreeDotsMenu(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: Dp = 36.dp
+    size: Dp = 34.dp
 ) {
+    val palette = LocalOscellionColors.current
     Box(
         modifier = modifier
             .size(size)
-            .clip(CircleShape)
-            .background(Color(0xFFF4F7FB))
-            .border(1.dp, Color(0xFFDFE8F3), CircleShape)
+            .clip(RoundedCornerShape(8.dp))
+            .background(palette.glassBg)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Lucide.Ellipsis,
             contentDescription = "Options",
-            tint = Color(0xFF0381FE),
+            tint = palette.primary,
             modifier = Modifier.size(18.dp)
         )
     }

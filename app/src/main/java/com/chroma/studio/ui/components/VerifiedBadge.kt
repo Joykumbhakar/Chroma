@@ -245,6 +245,32 @@ val IosBadgeGradients = listOf(
 private const val SEAL_PATH_STRING =
     "M22.5 12.5c0-1.58-.875-2.95-2.148-3.6.154-.435.238-.905.238-1.4 0-2.21-1.71-3.998-3.918-3.998-.47 0-.92.084-1.336.25C14.818 2.415 13.51 1.5 12 1.5s-2.816.917-3.337 2.25c-.416-.165-.866-.25-1.336-.25-2.21 0-3.918 1.79-3.918 4 0 .495.084.965.238 1.4-1.273.65-2.148 2.02-2.148 3.6 0 1.46.74 2.746 1.865 3.45-.06.31-.09.63-.09.95 0 2.21 1.71 4 3.918 4 .47 0 .92-.085 1.336-.25.52 1.335 1.826 2.25 3.337 2.25s2.816-.915 3.337-2.25c.416.165.866.25 1.336.25 2.21 0 3.918-1.79 3.918-4 0-.32-.03-.64-.09-.95 1.125-.705 1.865-1.99 1.865-3.45z"
 
+object VerifiedBadgeRegistry {
+    private val _tones = kotlinx.coroutines.flow.MutableStateFlow<Map<String, String>>(emptyMap())
+    val tones: kotlinx.coroutines.flow.StateFlow<Map<String, String>> = _tones
+
+    fun register(uid: String?, tone: String?) {
+        val cleanUid = uid?.trim()?.takeIf { it.isNotBlank() } ?: return
+        val cleanTone = tone?.trim()?.takeIf { it.isNotBlank() } ?: return
+        if (_tones.value[cleanUid] != cleanTone) {
+            _tones.value = _tones.value + (cleanUid to cleanTone)
+        }
+    }
+
+    fun register(profile: com.chroma.studio.model.UserProfile?) {
+        if (profile != null && profile.verified) {
+            register(profile.uid, profile.verifiedTone)
+        }
+    }
+
+    fun resolveTone(userId: String?, explicitTone: String?): String? {
+        val explicit = explicitTone?.trim()?.takeIf { it.isNotBlank() }
+        if (explicit != null) return explicit
+        val uid = userId?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return _tones.value[uid]
+    }
+}
+
 /**
  * Universal Designed Verified Badge used across all screens in Oscellion Android.
  * Supports all 20 Admin-controlled styled badge palettes with vertical specular gradients,
@@ -261,8 +287,14 @@ fun VerifiedBadge(
     animated: Boolean = false,
     showGlow: Boolean = false
 ) {
-    val resolvedStyle = remember(tone, tier) {
-        resolveVerifiedBadgeStyle(tone = tone, tier = tier)
+    val registryTones = if (tone.isNullOrBlank() && !userId.isNullOrBlank()) {
+        VerifiedBadgeRegistry.tones.collectAsState().value
+    } else {
+        emptyMap()
+    }
+    val effectiveTone = tone?.trim()?.takeIf { it.isNotBlank() } ?: userId?.let { registryTones[it] }
+    val resolvedStyle = remember(effectiveTone, tier) {
+        resolveVerifiedBadgeStyle(tone = effectiveTone, tier = tier)
     }
     val shouldAnimate = animated || resolvedStyle.autoShimmer
 

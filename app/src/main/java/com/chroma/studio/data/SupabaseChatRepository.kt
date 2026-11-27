@@ -54,6 +54,7 @@ class SupabaseChatRepository {
     private val userPublicKeyCache = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val decryptedMessageCache = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val roomDeletedAtCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private val roomDisappearingHoursCache = java.util.concurrent.ConcurrentHashMap<String, Int>()
     @Volatile
     private var syncedPublicKeyUserId: String? = null
 
@@ -64,6 +65,7 @@ class SupabaseChatRepository {
         userPublicKeyCache.clear()
         decryptedMessageCache.clear()
         roomDeletedAtCache.clear()
+        roomDisappearingHoursCache.clear()
         syncedPublicKeyUserId = null
         NotificationDispatcher.clearPushCaches()
     }
@@ -76,7 +78,7 @@ class SupabaseChatRepository {
                 ?: roomParticipantsCache[roomId]
                 ?: run {
                     val snap = chatsCollection.document(roomId).get().await()
-                    val room = snap.toObject(ChatRoom::class.java)
+                    val room = snap.toChatRoomSafe()
                     if (room != null) {
                         roomParticipantsCache[roomId] = room.participants
                         roomIsGroupCache[roomId] = room.isGroup
@@ -127,7 +129,7 @@ class SupabaseChatRepository {
         try {
             val doc = chatsCollection.document(roomId).get().await()
             if (doc.exists()) {
-                val room = doc.toObject(ChatRoom::class.java)
+                val room = doc.toChatRoomSafe()
                 // If the current user previously deleted this chat, un-delete so it reappears
                 // but keep the deletedAt timestamp so old messages remain hidden
                 if (room != null && room.deletedBy.contains(currentUser.uid)) {
@@ -181,16 +183,23 @@ class SupabaseChatRepository {
         participantIds: List<String>,
         imageUrl: String? = null,
         preGeneratedId: String? = null,
-        onlyAdminsCanPost: Boolean = false
+        onlyAdminsCanPost: Boolean = false,
+        coAdminIds: List<String> = emptyList(),
+        disappearingHours: Int = 0,
+        inviteCode: String? = null,
+        isPublicGroup: Boolean = false,
+        editInfoAdminsOnly: Boolean = true,
+        welcomeMessage: String? = null
     ): ChatRoom? = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext null
         val roomId = preGeneratedId ?: "group_${java.util.UUID.randomUUID()}"
 
         try {
-            val allUsers = participantIds.toMutableList()
-            if (!allUsers.contains(currentUser.uid)) allUsers.add(currentUser.uid)
-
+            val allUsers = (participantIds + currentUser.uid).filter { it.isNotBlank() }.distinct()
+            val allAdmins = (listOf(currentUser.uid) + coAdminIds).filter { it in allUsers }.distinct()
             val unreadMap = allUsers.associateWith { 0 }
+            val cleanWelcome = welcomeMessage?.trim()?.takeIf { it.isNotBlank() }
+            val initMsgText = cleanWelcome?.let { "👋 Welcome to $groupName! $it" } ?: "Group created"
 
             val newRoom = ChatRoom(
                 id = roomId,
@@ -199,16 +208,21 @@ class SupabaseChatRepository {
                 isGroup = true,
                 avatarUrl = imageUrl,
                 participants = allUsers,
-                admins = listOf(currentUser.uid),
+                admins = allAdmins,
                 createdBy = currentUser.uid,
-                lastMessage = "Group created",
+                lastMessage = initMsgText,
                 lastMessageTime = System.currentTimeMillis(),
                 unreadCount = unreadMap,
-                onlyAdminsCanPost = onlyAdminsCanPost
+                onlyAdminsCanPost = onlyAdminsCanPost,
+                disappearingHours = disappearingHours,
+                inviteCode = inviteCode,
+                isPublicGroup = isPublicGroup,
+                editInfoAdminsOnly = editInfoAdminsOnly
             )
             chatsCollection.document(roomId).set(newRoom).await()
             roomParticipantsCache[newRoom.id] = newRoom.participants
-            sendMessage(roomId, "Group created", messageType = "system")
+            if (disappearingHours > 0) roomDisappearingHoursCache[newRoom.id] = disappearingHours
+            sendMessage(roomId, initMsgText, messageType = "system")
             newRoom
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error creating group", e)
@@ -251,7 +265,7 @@ class SupabaseChatRepository {
             // Retrieve room participants using high-speed in-memory cache
             val participants = roomParticipantsCache[roomId] ?: run {
                 val roomSnapshot = chatsCollection.document(roomId).get().await()
-                val room = roomSnapshot.toObject(ChatRoom::class.java)
+                val room = roomSnapshot.toChatRoomSafe()
                 if (room != null) {
                     roomParticipantsCache[roomId] = room.participants
                     roomIsGroupCache[roomId] = room.isGroup
@@ -317,14 +331,26 @@ class SupabaseChatRepository {
         isForwarded: Boolean = false,
         callDuration: String? = null,
         callType: String? = null,
-        mediaType: String? = null
+        mediaType: String? = null,
+        fontStyle: String? = null,
+        fileName: String? = null,
+        fileSizeBytes: Long? = null,
+        fileExtension: String? = null,
+        musicTrackId: String? = null,
+        musicTitle: String? = null,
+        musicArtist: String? = null,
+        musicAlbum: String? = null,
+        musicCoverUrl: String? = null,
+        musicAudioUrl: String? = null,
+        musicStartSec: Int = 0,
+        musicDurationSec: Int = 15
     ): Boolean = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext false
         try {
             val messageId = preGeneratedId ?: java.util.UUID.randomUUID().toString()
             val minTimestamp = (roomDeletedAtCache[roomId] ?: 0L) + 1L
             val timestamp = maxOf(System.currentTimeMillis(), minTimestamp)
-            val (finalMessageText, finalIv, finalEncryptedKeys) = if (messageType != "system" && messageType != "flash_video" && messageType != "call" && text.isNotBlank()) {
+            val (finalMessageText, finalIv, finalEncryptedKeys) = if (messageType != "system" && messageType != "flash_video" && messageType != "music" && messageType != "call" && text.isNotBlank()) {
                 encryptPayload(roomId, text, currentUser.uid)
             } else {
                 Triple(text, "", emptyMap<String, String>())
@@ -360,7 +386,19 @@ class SupabaseChatRepository {
                 flashVideoDurationMs = flashVideoDurationMs,
                 isForwarded = isForwarded,
                 callDuration = callDuration,
-                callType = callType
+                callType = callType,
+                fontStyle = fontStyle,
+                fileName = fileName,
+                fileSizeBytes = fileSizeBytes,
+                fileExtension = fileExtension,
+                musicTrackId = musicTrackId,
+                musicTitle = musicTitle,
+                musicArtist = musicArtist,
+                musicAlbum = musicAlbum,
+                musicCoverUrl = musicCoverUrl,
+                musicAudioUrl = musicAudioUrl,
+                musicStartSec = musicStartSec,
+                musicDurationSec = musicDurationSec
             )
 
             val roomRef = chatsCollection.document(roomId)
@@ -370,7 +408,7 @@ class SupabaseChatRepository {
             val cachedParticipants = roomParticipantsCache[roomId]
             val participants: List<String> = cachedParticipants ?: run {
                 val roomSnap = try { roomRef.get().await() } catch (_: Exception) { null }
-                val room = roomSnap?.toObject(ChatRoom::class.java)
+                val room = roomSnap?.toChatRoomSafe()
                 if (room != null) {
                     roomParticipantsCache[roomId] = room.participants
                     roomIsGroupCache[roomId] = room.isGroup
@@ -383,10 +421,14 @@ class SupabaseChatRepository {
                 val type = callType ?: "Audio"
                 val dur = if (!callDuration.isNullOrBlank()) " • $callDuration" else ""
                 "$type call$dur"
+            } else if (messageType == "music" || musicTrackId != null) {
+                "🎵 ${musicTitle?.takeIf { it.isNotBlank() } ?: "Shared a song"}"
             } else if (messageType == "flash_video" || flashVideoId != null) {
                 "⚡ Shared a Flash video"
             } else if (storyThumbnailUrl != null || storyId != null) {
                 "Replied to story: $text"
+            } else if (messageType == "file") {
+                com.chroma.studio.chat.data.formatFileRoomPreview(fileName, text)
             } else if (imageUrl != null) {
                 if (messageType == "video") "Sent a video" else if (messageType == "audio") "Voice message" else "Sent an image"
             } else if (workId != null) {
@@ -443,6 +485,7 @@ class SupabaseChatRepository {
                     messageType == "audio" || messageType == "voice" -> "🎤 Voice message"
                     messageType == "video" -> "🎥 Sent a video"
                     messageType == "image" || (imageUrl != null && messageType == "text") -> "📷 Sent a photo"
+                    messageType == "file" -> com.chroma.studio.chat.data.formatFileRoomPreview(fileName, text)
                     imageUrl != null && messageType == "audio" -> "🎤 Voice message"
                     imageUrl != null -> "📎 Sent a file"
                     workId != null -> "🎨 Shared a work"
@@ -465,6 +508,25 @@ class SupabaseChatRepository {
                             messageId = messageId
                         )
                     } catch (_: Exception) {}
+
+                    if (messageType != "system" && messageType != "call" && text.isNotBlank() && !text.startsWith("[POLL]:")) {
+                        try {
+                            val surface = if (storyId != null) MentionSurface.STORY_REPLY else MentionSurface.CHAT
+                            val customAction = if (surface == MentionSurface.CHAT && isGroup && !groupName.isNullOrBlank()) {
+                                "mentioned you in $groupName"
+                            } else {
+                                surface.actionText
+                            }
+                            NotificationDispatcher.dispatchMentionNotifications(
+                                texts = listOf(text),
+                                surface = surface,
+                                targetId = roomId,
+                                targetPreviewUrl = storyThumbnailUrl ?: imageUrl,
+                                customActionText = customAction,
+                                detailSnippet = text
+                            )
+                        } catch (_: Exception) {}
+                    }
                 }
             }
 
@@ -512,10 +574,14 @@ class SupabaseChatRepository {
                 emptyList()
             }
 
+            val now = System.currentTimeMillis()
             val docsToUpdate = recentDocs.filter { doc ->
                 val senderId = doc.getString("senderId")
+                @Suppress("UNCHECKED_CAST")
+                val readByMap = doc.get("readBy") as? Map<String, Any?>
+                val userAlreadyRead = readByMap?.containsKey(currentUser.uid) == true
                 val isRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: false
-                !isRead && senderId != null && senderId != currentUser.uid
+                senderId != null && senderId != currentUser.uid && (!userAlreadyRead || !isRead)
             }
 
             val batch = firestore.batch()
@@ -538,7 +604,9 @@ class SupabaseChatRepository {
                         "isRead" to true,
                         "read" to true,
                         "isDelivered" to true,
-                        "delivered" to true
+                        "delivered" to true,
+                        "readBy.${currentUser.uid}" to now,
+                        "deliveredTo.${currentUser.uid}" to now
                     )
                 )
             }
@@ -550,6 +618,7 @@ class SupabaseChatRepository {
 
     suspend fun markAsDelivered(roomId: String, targetMessageId: String? = null) = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext
+        val now = System.currentTimeMillis()
         try {
             val roomRef = chatsCollection.document(roomId)
 
@@ -560,7 +629,11 @@ class SupabaseChatRepository {
                     batch.update(roomRef, "lastMessageIsDelivered", true)
                     batch.update(
                         roomRef.collection("messages").document(targetMessageId),
-                        mapOf("isDelivered" to true, "delivered" to true)
+                        mapOf(
+                            "isDelivered" to true,
+                            "delivered" to true,
+                            "deliveredTo.${currentUser.uid}" to now
+                        )
                     )
                     batch.commit().await()
                     return@withContext
@@ -582,8 +655,11 @@ class SupabaseChatRepository {
 
             val docsToUpdate = recentMessages.filter { doc ->
                 val senderId = doc.getString("senderId")
+                @Suppress("UNCHECKED_CAST")
+                val deliveredMap = doc.get("deliveredTo") as? Map<String, Any?>
+                val userAlreadyDelivered = deliveredMap?.containsKey(currentUser.uid) == true
                 val isDelivered = doc.getBoolean("isDelivered") ?: doc.getBoolean("delivered") ?: false
-                !isDelivered && senderId != null && senderId != currentUser.uid
+                senderId != null && senderId != currentUser.uid && (!userAlreadyDelivered || !isDelivered)
             }
 
             val batch = firestore.batch()
@@ -596,7 +672,11 @@ class SupabaseChatRepository {
             for (doc in docsToUpdate) {
                 batch.update(
                     doc.reference,
-                    mapOf("isDelivered" to true, "delivered" to true)
+                    mapOf(
+                        "isDelivered" to true,
+                        "delivered" to true,
+                        "deliveredTo.${currentUser.uid}" to now
+                    )
                 )
                 hasWrites = true
             }
@@ -631,7 +711,7 @@ class SupabaseChatRepository {
                     return@addSnapshotListener
                 }
 
-                val rawChats = snapshot?.documents?.mapNotNull { it.toObject(ChatRoom::class.java) }
+                val rawChats = snapshot?.documents?.mapNotNull { it.toChatRoomSafe() }
                     ?.filter { uid in it.participants }
                     ?: emptyList()
                 for (chat in rawChats) {
@@ -640,6 +720,7 @@ class SupabaseChatRepository {
                     if (!chat.name.isNullOrBlank()) roomGroupNameCache[chat.id] = chat.name
                     val dAt = chat.deletedAt[uid] ?: 0L
                     roomDeletedAtCache[chat.id] = dAt
+                    roomDisappearingHoursCache[chat.id] = chat.disappearingHours
                 }
                 val activeChats = rawChats.filter { !it.deletedBy.contains(uid) && !it.archivedBy.contains(uid) }
                 trySend(activeChats.sortedByDescending { it.lastMessageTime })
@@ -688,7 +769,7 @@ class SupabaseChatRepository {
                         val messages = coroutineScope {
                             snapshot.documents.map { doc ->
                                 async {
-                                    val rawMsg = doc.toObject(ChatMessage::class.java) ?: return@async null
+                                    val rawMsg = doc.toChatMessageSafe() ?: return@async null
                                     val docIsRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: rawMsg.isRead
                                     val docIsDelivered = doc.getBoolean("isDelivered") ?: doc.getBoolean("delivered") ?: rawMsg.isDelivered
                                     val msg = rawMsg.copy(
@@ -702,6 +783,14 @@ class SupabaseChatRepository {
                                         return@async null
                                     }
 
+                                    val disappearingHours = roomDisappearingHoursCache[roomId] ?: 0
+                                    if (disappearingHours > 0 && msg.messageType != "system") {
+                                        val cutoffMs = System.currentTimeMillis() - (disappearingHours.toLong() * 3600_000L)
+                                        if (msg.timestamp < cutoffMs) {
+                                            return@async null
+                                        }
+                                    }
+
                                     if (msg.messageType == "system" || msg.iv.isEmpty() || msg.text.isEmpty()) {
                                         return@async msg
                                     }
@@ -710,6 +799,18 @@ class SupabaseChatRepository {
                                     val cached = decryptedMessageCache[cacheKey]
                                     if (cached != null) {
                                         return@async msg.copy(text = cached)
+                                    }
+
+                                    if (activeUid != null) {
+                                        val persisted = com.chroma.studio.chat.data.ChatLocalCacheManager.getPersistedPlaintext(
+                                            com.chroma.studio.ChromaApp.instance,
+                                            cacheKey,
+                                            activeUid
+                                        )
+                                        if (persisted != null) {
+                                            decryptedMessageCache[cacheKey] = persisted
+                                            return@async msg.copy(text = persisted)
+                                        }
                                     }
 
                                     var decryptedText = msg.text
@@ -772,7 +873,17 @@ class SupabaseChatRepository {
                                         }
                                     }
 
-                                    decryptedMessageCache[cacheKey] = decryptedText
+                                    if (isDecrypted) {
+                                        decryptedMessageCache[cacheKey] = decryptedText
+                                        if (activeUid != null) {
+                                            com.chroma.studio.chat.data.ChatLocalCacheManager.savePersistedPlaintext(
+                                                com.chroma.studio.ChromaApp.instance,
+                                                cacheKey,
+                                                decryptedText,
+                                                activeUid
+                                            )
+                                        }
+                                    }
                                     msg.copy(text = decryptedText)
                                 }
                             }.awaitAll().filterNotNull()
@@ -832,7 +943,7 @@ class SupabaseChatRepository {
             var demotedName = "Someone"
 
             firestore.runTransaction { transaction ->
-                val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
+                val room = transaction.get(roomRef).toChatRoomSafe()
                 if (room != null) {
                     if (!room.admins.contains(currentUser.uid)) {
                         throw Exception("Only admins can change admin permissions")
@@ -865,7 +976,7 @@ class SupabaseChatRepository {
             var updatedParticipants = emptyList<String>()
 
             firestore.runTransaction { transaction ->
-                val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
+                val room = transaction.get(roomRef).toChatRoomSafe()
                 if (room != null) {
                     if (!room.admins.contains(currentUser.uid)) {
                         throw Exception("Only admins can add participants")
@@ -916,7 +1027,7 @@ class SupabaseChatRepository {
             var updatedParticipants = emptyList<String>()
 
             firestore.runTransaction { transaction ->
-                val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
+                val room = transaction.get(roomRef).toChatRoomSafe()
                 if (room != null) {
                     if (!room.admins.contains(currentUser.uid)) {
                         throw Exception("Only admins can remove participants")
@@ -959,7 +1070,7 @@ class SupabaseChatRepository {
             var adminName = "Someone"
 
             firestore.runTransaction { transaction ->
-                val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
+                val room = transaction.get(roomRef).toChatRoomSafe()
                 if (room != null) {
                     if (!room.admins.contains(currentUser.uid)) {
                         throw Exception("Only admins can make other users admin")
@@ -1004,7 +1115,7 @@ class SupabaseChatRepository {
             var updatedParticipants = emptyList<String>()
 
             firestore.runTransaction { transaction ->
-                val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
+                val room = transaction.get(roomRef).toChatRoomSafe()
                 if (room != null) {
                     val newParticipants = room.participants.filter { it != currentUser.uid }
                     updatedParticipants = newParticipants
@@ -1034,7 +1145,7 @@ class SupabaseChatRepository {
             val roomRef = chatsCollection.document(roomId)
             var adminName = "Admin"
             firestore.runTransaction { transaction ->
-                val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
+                val room = transaction.get(roomRef).toChatRoomSafe()
                 if (room != null) {
                     if (!room.admins.contains(currentUser.uid)) {
                         throw Exception("Only admins can modify group posting permissions")
@@ -1060,13 +1171,117 @@ class SupabaseChatRepository {
         }
     }
 
+    suspend fun updateDisappearingHours(roomId: String, hours: Int) = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext
+        try {
+            val roomRef = chatsCollection.document(roomId)
+            firestore.runTransaction { transaction ->
+                val room = transaction.get(roomRef).toChatRoomSafe()
+                if (room != null) {
+                    if (room.isGroup && !room.admins.contains(currentUser.uid)) {
+                        throw Exception("Only admins can change disappearing messages timer")
+                    }
+                    transaction.update(roomRef, "disappearingHours", hours)
+                }
+            }.await()
+            roomDisappearingHoursCache[roomId] = hours
+            val label = when (hours) {
+                24 -> "24 hours"
+                168 -> "7 days"
+                2160 -> "90 days"
+                0 -> "Off"
+                else -> "${hours}h"
+            }
+            sendMessage(roomId, "Disappearing messages timer set to $label", messageType = "system")
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error updating disappearingHours", e)
+        }
+    }
+
+    suspend fun updateEditInfoAdminsOnly(roomId: String, adminsOnly: Boolean) = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext
+        try {
+            val roomRef = chatsCollection.document(roomId)
+            firestore.runTransaction { transaction ->
+                val room = transaction.get(roomRef).toChatRoomSafe()
+                if (room != null) {
+                    if (!room.admins.contains(currentUser.uid)) {
+                        throw Exception("Only admins can modify group edit permissions")
+                    }
+                    transaction.update(roomRef, "editInfoAdminsOnly", adminsOnly)
+                }
+            }.await()
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error updating editInfoAdminsOnly", e)
+        }
+    }
+
+    suspend fun updateInviteCode(roomId: String, inviteCode: String?) = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext
+        try {
+            val roomRef = chatsCollection.document(roomId)
+            firestore.runTransaction { transaction ->
+                val room = transaction.get(roomRef).toChatRoomSafe()
+                if (room != null) {
+                    if (!room.admins.contains(currentUser.uid)) {
+                        throw Exception("Only admins can manage invite link")
+                    }
+                    transaction.update(roomRef, "inviteCode", inviteCode)
+                }
+            }.await()
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error updating inviteCode", e)
+        }
+    }
+
+    suspend fun joinGroupByInviteCode(codeOrRoomId: String): ChatRoom? = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext null
+        try {
+            val clean = codeOrRoomId.trim()
+            if (clean.isBlank()) return@withContext null
+            val byCodeSnap = chatsCollection
+                .whereEqualTo("inviteCode", clean)
+                .limit(1)
+                .get()
+                .await()
+            val doc = byCodeSnap.documents.firstOrNull()
+                ?: chatsCollection.document(clean).get().await().takeIf { it.exists() }
+                ?: return@withContext null
+
+            val initialRoom = doc.toChatRoomSafe() ?: return@withContext null
+            if (!initialRoom.isGroup) return@withContext null
+            // Direct room ID access is allowed for public groups or when inviteCode matches cleanly
+            if (!initialRoom.isPublicGroup && initialRoom.inviteCode != clean && !initialRoom.participants.contains(currentUser.uid)) {
+                return@withContext null
+            }
+
+            if (!initialRoom.participants.contains(currentUser.uid)) {
+                chatsCollection.document(initialRoom.id).update(
+                    mapOf(
+                        "participants" to FieldValue.arrayUnion(currentUser.uid),
+                        "unreadCount.${currentUser.uid}" to 0
+                    )
+                ).await()
+                val joinedName = usersCollection.document(currentUser.uid).get().await().getString("displayName")
+                    ?.takeIf { it.isNotBlank() } ?: "Someone"
+                roomParticipantsCache[initialRoom.id] = (initialRoom.participants + currentUser.uid).distinct()
+                sendMessage(initialRoom.id, "$joinedName joined via invite link", messageType = "system")
+            }
+            chatsCollection.document(initialRoom.id).get().await().toChatRoomSafe()
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error joining group via invite link", e)
+            null
+        }
+    }
+
     suspend fun getRoom(roomId: String): ChatRoom? = withContext(Dispatchers.IO) {
         try {
             val doc = chatsCollection.document(roomId).get().await()
             if (doc.exists()) {
-                val room = doc.toObject(ChatRoom::class.java)
+                val room = doc.toChatRoomSafe()
                 if (room != null) {
                     roomParticipantsCache[room.id] = room.participants
+                    roomDisappearingHoursCache[room.id] = room.disappearingHours
                 }
                 room
             } else null
@@ -1135,7 +1350,7 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
             firestore.runTransaction { tx ->
                 val snap = tx.get(msgRef)
                 if (snap.exists()) {
-                    val msg = snap.toObject(ChatMessage::class.java)
+                    val msg = snap.toChatMessageSafe()
                     if (msg != null) {
                         val updatedReactions = msg.reactions.toMutableMap()
                         if (updatedReactions[currentUser.uid] == emoji) {
@@ -1162,7 +1377,7 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
             firestore.runTransaction { tx ->
                 val snap = tx.get(msgRef)
                 if (snap.exists()) {
-                    val msg = snap.toObject(ChatMessage::class.java)
+                    val msg = snap.toChatMessageSafe()
                     if (msg != null) {
                         val updatedReactions = msg.reactions.toMutableMap()
                         if (updatedReactions[currentUser.uid] != emoji) {
@@ -1188,7 +1403,7 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
                     mapOf(
                         "pinnedMessageId" to messageId,
                         "pinnedMessageText" to messageText,
-                        "pinnedBy" to currentUser.uid,
+                        "pinnedMessageBy" to currentUser.uid,
                         "pinnedAt" to System.currentTimeMillis()
                     )
                 ).await()
@@ -1197,7 +1412,7 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
                     mapOf(
                         "pinnedMessageId" to null,
                         "pinnedMessageText" to null,
-                        "pinnedBy" to null,
+                        "pinnedMessageBy" to null,
                         "pinnedAt" to 0L
                     )
                 ).await()
@@ -1279,7 +1494,7 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
                     .await()
                 val latestMsgDoc = latestDocs.documents.firstOrNull()
                 val (newLastMessage, newLastMessageTime) = if (latestMsgDoc != null) {
-                    val msg = latestMsgDoc.toObject(ChatMessage::class.java)
+                    val msg = latestMsgDoc.toChatMessageSafe()
                     val text = when {
                         msg == null -> ""
                         msg.messageType == "video" -> "Sent a video"
@@ -1385,7 +1600,7 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
             // Use a transaction to atomically mark deletion and check if all users deleted
             firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(roomRef)
-                val room = snapshot.toObject(ChatRoom::class.java) ?: return@runTransaction
+                val room = snapshot.toChatRoomSafe() ?: return@runTransaction
 
                 // Add to deletedBy and set deletion timestamp
                 val updatedDeletedBy = room.deletedBy.toMutableList()
@@ -1403,7 +1618,7 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
 
             // After the transaction, check if all participants have deleted
             val roomDoc = roomRef.get().await()
-            val room = roomDoc.toObject(ChatRoom::class.java)
+            val room = roomDoc.toChatRoomSafe()
             if (room != null) {
                 val allDeleted = room.participants.all { room.deletedBy.contains(it) }
                 if (allDeleted) {
@@ -1524,7 +1739,7 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
             val msgRef = chatsCollection.document(roomId).collection("messages").document(messageId)
             firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(msgRef)
-                val msg = snapshot.toObject(ChatMessage::class.java) ?: return@runTransaction
+                val msg = snapshot.toChatMessageSafe() ?: return@runTransaction
                 val currentVotes = msg.pollVotes.toMutableMap()
                 val userCurrentVote = currentVotes[currentUser.uid] ?: ""
                 val userIndices = if (userCurrentVote.isEmpty()) mutableListOf() else userCurrentVote.split(",").filter { it.isNotBlank() }.toMutableList()
@@ -1563,7 +1778,7 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
             val msgRef = chatsCollection.document(roomId).collection("messages").document(messageId)
             firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(msgRef)
-                val msg = snapshot.toObject(ChatMessage::class.java) ?: return@runTransaction
+                val msg = snapshot.toChatMessageSafe() ?: return@runTransaction
                 val currentVotes = msg.pollVotes.toMutableMap()
                 currentVotes.remove(currentUser.uid)
                 transaction.update(msgRef, "pollVotes", currentVotes)

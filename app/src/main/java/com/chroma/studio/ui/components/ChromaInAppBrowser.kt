@@ -467,20 +467,12 @@ fun ChromaInAppBrowser(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(CircleShape)
-                                    .background(if (colors.isDark) Color(0x18FFFFFF) else Color(0xFFF2F2F7)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Globe,
-                                    contentDescription = null,
-                                    tint = Color(0xFF8E8E93),
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = Lucide.Globe,
+                                contentDescription = null,
+                                tint = Color(0xFF8E8E93),
+                                modifier = Modifier.size(34.dp)
+                            )
                             Text(
                                 text = "Unable to load page",
                                 color = colors.textMain,

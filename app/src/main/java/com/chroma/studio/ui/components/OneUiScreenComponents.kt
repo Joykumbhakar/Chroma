@@ -107,25 +107,23 @@ fun OneUiViewingArea(
             verticalArrangement = Arrangement.Center
         ) {
             if (showBadge) {
-                Surface(
-                    onClick = onCycleGradient,
-                    shape = RoundedCornerShape(999.dp),
-                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f),
-                    border = BorderStroke(
-                        1.dp,
-                        if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
-                    ),
-                    modifier = Modifier.height(26.dp)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+                        .clickable(onClick = onCycleGradient)
+                        .height(26.dp)
+                        .padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
+                                .size(6.dp)
+                                .clip(RoundedCornerShape(2.dp))
                                 .background(if (isDark) Color.White else Color.Black)
                         )
                         Text(

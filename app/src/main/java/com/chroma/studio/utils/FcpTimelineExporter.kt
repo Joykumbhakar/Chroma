@@ -346,7 +346,8 @@ object FcpTimelineExporter {
         context: Context,
         textLayers: List<FcpTextLayer>,
         width: Int,
-        height: Int
+        height: Int,
+        previewWidthDp: Float = 360f
     ): Bitmap? {
         val visibleLayers = textLayers.filter {
             it.isVisible && (it.primaryText.isNotBlank() || it.scriptText.isNotBlank())
@@ -356,7 +357,7 @@ object FcpTimelineExporter {
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             visibleLayers.forEach { layer ->
-                drawTextLayerOnCanvas(context, canvas, layer, width, height)
+                drawTextLayerOnCanvas(context, canvas, layer, width, height, previewWidthDp)
             }
             bitmap
         } catch (t: Throwable) {
@@ -370,13 +371,14 @@ object FcpTimelineExporter {
         layer: FcpTextLayer,
         width: Int,
         height: Int,
+        previewWidthDp: Float,
         tempFiles: MutableList<File>
     ): File? {
         var bitmap: Bitmap? = null
         return try {
             bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-            drawTextLayerOnCanvas(context, canvas, layer, width, height)
+            drawTextLayerOnCanvas(context, canvas, layer, width, height, previewWidthDp)
             val f = File(context.cacheDir, "fcp_text_${UUID.randomUUID().toString().take(8)}.png")
             FileOutputStream(f).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
@@ -401,9 +403,10 @@ object FcpTimelineExporter {
         canvas: Canvas,
         layer: FcpTextLayer,
         width: Int,
-        height: Int
+        height: Int,
+        previewWidthDp: Float = 360f
     ) {
-        val scale = width / 360f
+        val scale = width / previewWidthDp.coerceAtLeast(120f)
         canvas.save()
         val cx = width / 2f + (layer.offsetX * scale)
         val cy = height / 2f + (layer.offsetY * scale)
@@ -414,7 +417,7 @@ object FcpTimelineExporter {
         val primaryTf = getTypeface(context, layer.primaryFontAsset)
         val scriptTf = getTypeface(context, layer.scriptFontAsset)
 
-        val primarySizePx = layer.fontSizeSp * scale * 0.95f
+        val primarySizePx = layer.fontSizeSp * scale
         val primaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             typeface = primaryTf
             textSize = primarySizePx
@@ -766,6 +769,10 @@ object FcpTimelineExporter {
         fps: String,
         previewWidthPx: Int = 0,
         previewHeightPx: Int = 0,
+        dialogueGainDb: Float = 0f,
+        voiceIsolation: Boolean = false,
+        aiMaskEnabled: Boolean = false,
+        bokehAperture: Float = 2.8f,
         onProgress: (Float, String) -> Unit
     ): File? = exportMutex.withLock {
         withContext(Dispatchers.IO) {
@@ -844,8 +851,19 @@ object FcpTimelineExporter {
                     val ext = resolveExtension(uri, isAudio)
                     val tempFile = File(context.cacheDir, "fcp_input_${UUID.randomUUID().toString().take(8)}$ext")
                     return try {
-                        context.contentResolver.openInputStream(uri)?.use { input ->
-                            FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                        if (uri.scheme == "http" || uri.scheme == "https") {
+                            val connection = (java.net.URL(uri.toString()).openConnection() as java.net.HttpURLConnection).apply {
+                                connectTimeout = 15_000
+                                readTimeout = 30_000
+                                instanceFollowRedirects = true
+                            }
+                            connection.inputStream.use { input ->
+                                FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                            }
+                        } else {
+                            context.contentResolver.openInputStream(uri)?.use { input ->
+                                FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                            }
                         }
                         if (tempFile.exists() && tempFile.length() > 0L) {
                             localFileCache[key] = tempFile
@@ -955,13 +973,17 @@ object FcpTimelineExporter {
                     prepareCanvasBackdropImage(context, canvasBackground, finalW, finalH, tempFiles)
                 } else null
 
-                // 4. Render per-layer text overlays
+                // 4. Render per-layer text overlays matching exact preview viewport proportions
                 reportProgress(0.18f, "Rendering title layers...")
+                val displayDensity = context.resources.displayMetrics.density.coerceAtLeast(1f)
+                val previewWidthDp = if (previewWidthPx > 0) {
+                    (previewWidthPx.toFloat() / displayDensity).coerceAtLeast(120f)
+                } else 360f
                 val visibleTextLayers = textLayers.filter {
                     it.isVisible && (it.primaryText.isNotBlank() || it.scriptText.isNotBlank())
                 }
                 val textOverlaySpecs = visibleTextLayers.mapNotNull { layer ->
-                    val png = renderSingleTextLayerToPng(context, layer, finalW, finalH, tempFiles)
+                    val png = renderSingleTextLayerToPng(context, layer, finalW, finalH, previewWidthDp, tempFiles)
                         ?: return@mapNotNull null
                     val st = layer.timelineStartSec.coerceIn(0f, totalTimelineDurationSec)
                     val en = if (layer.timelineEndSec > st + 0.05f) {
@@ -1025,7 +1047,7 @@ object FcpTimelineExporter {
                         }
                     }
 
-                    val customAudioInputIndex = if (customAudioFile != null && customAudio != null) {
+                    val customAudioInputIndex = if (customAudioFile != null) {
                         cmdArgs.add("-i")
                         cmdArgs.add(customAudioFile.absolutePath)
                         nextInputIdx++
@@ -1170,10 +1192,10 @@ object FcpTimelineExporter {
                         // Stage C: Post-composition Color, LUT, VFX, Motion Animations & Transitions
                         val postFilter = StringBuilder("setsar=1,format=yuv420p")
 
-                        // Color adjustments
+                        // Color adjustments (identical linear brightness math to Android ColorMatrix preview)
                         if (clip.exposure != 0f || clip.contrast != 100f || clip.saturation != 100f) {
-                            val b = String.format(Locale.US, "%.3f", (clip.exposure / 100f).coerceIn(-0.9f, 0.9f))
-                            val c = String.format(Locale.US, "%.3f", (clip.contrast / 100f).coerceIn(0.1f, 3.0f))
+                            val b = String.format(Locale.US, "%.3f", FcpStudioAudioSynth.ffmpegExposureBrightness(clip.exposure))
+                            val c = String.format(Locale.US, "%.3f", (clip.contrast / 100f).coerceIn(0.3f, 2.2f))
                             val s = String.format(Locale.US, "%.3f", (clip.saturation / 100f).coerceIn(0f, 3.0f))
                             postFilter.append(",eq=brightness=$b:contrast=$c:saturation=$s")
                         }
@@ -1189,10 +1211,15 @@ object FcpTimelineExporter {
                         }
 
                         if (!compatibilityMode) {
-                            // Vignette & Sharpen
+                            // Vignette, Smart Subject Depth & Sharpen
                             if (clip.vignette > 0.01f) {
                                 val angle = String.format(Locale.US, "%.3f", (clip.vignette / 100f) * (Math.PI.toFloat() / 3f))
                                 postFilter.append(",vignette=angle=$angle")
+                            }
+                            if (aiMaskEnabled) {
+                                val depthFactor = ((16f - bokehAperture.coerceIn(1.4f, 16f)) / 14.6f).coerceIn(0.25f, 1.0f)
+                                val aiAngle = String.format(Locale.US, "%.3f", (Math.PI.toFloat() / 3.8f) * depthFactor)
+                                postFilter.append(",vignette=angle=$aiAngle")
                             }
                             if (clip.sharpen > 0.01f) {
                                 val lAmount = String.format(Locale.US, "%.2f", (clip.sharpen / 100f) * 1.5f)
@@ -1211,11 +1238,11 @@ object FcpTimelineExporter {
                                 FcpLutPreset.NONE -> {}
                             }
 
-                            // Visual Effects
+                            // Visual Effects (calibrated to match live preview overlay)
                             val effInt = clip.effectIntensity.coerceIn(0.1f, 1.0f)
                             when (clip.effect) {
                                 FcpVisualEffect.VIGNETTE_MOOD -> {
-                                    val angle = String.format(Locale.US, "%.3f", (Math.PI / 4.0) * effInt)
+                                    val angle = String.format(Locale.US, "%.3f", (Math.PI / 3.4) * effInt)
                                     postFilter.append(",vignette=angle=$angle")
                                 }
                                 FcpVisualEffect.FILM_GRAIN -> {
@@ -1226,22 +1253,42 @@ object FcpTimelineExporter {
                                     postFilter.append(",eq=contrast=1.15:saturation=1.25,noise=c0s=16:allf=t,colorbalance=rs=0.08:bs=-0.06")
                                 }
                                 FcpVisualEffect.GLITCH -> {
-                                    postFilter.append(",noise=c0s=32:c1s=22:allf=t,hue=H=PI/16,eq=contrast=1.25:saturation=1.35")
+                                    val barH = (finalH * 0.03f).toInt().coerceAtLeast(8)
+                                    val barAlpha = String.format(Locale.US, "%.2f", (0.28f * effInt).coerceIn(0.08f, 0.45f))
+                                    postFilter.append(
+                                        ",noise=c0s=28:c1s=18:allf=t,hue=H=PI/18,eq=contrast=1.20:saturation=1.30" +
+                                            ",drawbox=x=0:y=${(finalH * 0.28f).toInt()}:w=$finalW:h=$barH:color=#00F0FF@$barAlpha:t=fill" +
+                                            ",drawbox=x=0:y=${(finalH * 0.62f).toInt()}:w=$finalW:h=$barH:color=#FF0055@$barAlpha:t=fill"
+                                    )
                                 }
                                 FcpVisualEffect.CINEMA_BLOOM -> {
-                                    postFilter.append(",eq=brightness=0.08:contrast=1.15:saturation=1.12")
+                                    val bright = String.format(Locale.US, "%.2f", 0.08f * effInt)
+                                    postFilter.append(",eq=brightness=$bright:contrast=1.12:saturation=1.10")
                                 }
                                 FcpVisualEffect.PRISM_SPLIT -> {
-                                    postFilter.append(",colorbalance=rs=0.15:gs=-0.05:bs=0.20:rm=0.10:bm=-0.10,eq=contrast=1.18:saturation=1.28")
+                                    val edgeW = (finalW * 0.22f).toInt().coerceAtLeast(16)
+                                    val pAlpha = String.format(Locale.US, "%.2f", (0.20f * effInt).coerceIn(0.06f, 0.35f))
+                                    postFilter.append(
+                                        ",colorbalance=rs=0.12:gs=-0.04:bs=0.18:rm=0.08:bm=-0.08,eq=contrast=1.15:saturation=1.22" +
+                                            ",drawbox=x=0:y=0:w=$edgeW:h=$finalH:color=#FF0055@$pAlpha:t=fill" +
+                                            ",drawbox=x=${finalW - edgeW}:y=0:w=$edgeW:h=$finalH:color=#00E5FF@$pAlpha:t=fill"
+                                    )
                                 }
                                 FcpVisualEffect.NOIR_CONTRAST -> {
                                     postFilter.append(",hue=s=0,eq=contrast=1.38:brightness=-0.04")
                                 }
                                 FcpVisualEffect.ANAMORPHIC_FLARE -> {
-                                    postFilter.append(",colorbalance=rh=-0.05:gh=0.02:bh=0.26:rm=-0.02:bm=0.16,eq=contrast=1.15:saturation=1.18")
+                                    val flareH = (finalH * 0.018f).toInt().coerceAtLeast(8)
+                                    val flareY = ((finalH * 0.45f) - flareH / 2f).toInt().coerceAtLeast(0)
+                                    val fAlpha = String.format(Locale.US, "%.2f", (0.45f * effInt).coerceIn(0.15f, 0.70f))
+                                    postFilter.append(
+                                        ",colorbalance=rh=-0.04:gh=0.02:bh=0.22:rm=-0.02:bm=0.14,eq=contrast=1.12:saturation=1.14" +
+                                            ",drawbox=x=0:y=$flareY:w=$finalW:h=$flareH:color=#00E5FF@$fAlpha:t=fill"
+                                    )
                                 }
                                 FcpVisualEffect.CYBER_SCANLINE -> {
-                                    postFilter.append(",colorbalance=gs=0.08:bs=0.15,noise=c0s=12:allf=t")
+                                    val cAlpha = String.format(Locale.US, "%.2f", (0.14f * effInt).coerceIn(0.05f, 0.25f))
+                                    postFilter.append(",colorbalance=gs=0.08:bs=0.14,noise=c0s=10:allf=t,drawgrid=w=$finalW:h=8:t=1:c=#00FFCC@$cAlpha")
                                 }
                                 FcpVisualEffect.NONE -> {}
                             }
@@ -1323,6 +1370,13 @@ object FcpTimelineExporter {
                                         effectiveDur
                                     )
                                 )
+                                if (voiceIsolation) {
+                                    aFilter.append(",highpass=f=110,lowpass=f=7000")
+                                }
+                                val totalGainDb = dialogueGainDb + (if (voiceIsolation) 3.0f else 0f)
+                                if (kotlin.math.abs(totalGainDb) > 0.25f) {
+                                    aFilter.append(String.format(Locale.US, ",volume=%.1fdB", totalGainDb.coerceIn(-20f, 20f)))
+                                }
                                 filterGraph.append("[$inIdx:a]$aFilter[a_clip_$i];")
                                 concatAudioLabels.add("[a_clip_$i]")
                             } else {

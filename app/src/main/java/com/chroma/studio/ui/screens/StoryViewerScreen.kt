@@ -68,6 +68,8 @@ import com.chroma.studio.model.NotificationActionType
 import com.chroma.studio.model.Story
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.model.UserStoryGroup
+import com.chroma.studio.model.formatStoryRepostCredit
+import com.chroma.studio.model.isViewerMentionedInStory
 import com.chroma.studio.chat.ui.components.StoryAnalyticsModal
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.components.MarkdownText
@@ -94,7 +96,7 @@ data class FlatStoryItem(
 )
 
 @Composable
-private fun StorySlideContent(
+internal fun StorySlideContent(
     story: Story,
     modifier: Modifier = Modifier
 ) {
@@ -332,28 +334,23 @@ private fun StorySlideContent(
                     Spacer(Modifier.height(10.dp))
                 }
 
-                // Body Content / Quote
+                // Body Content / Quote (Clean Borderless Editorial Accent Bar)
                 if (formatState.isQuote) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(textColor.copy(alpha = 0.08f))
-                            .border(
-                                1.dp,
-                                Brush.verticalGradient(listOf(Color(0xFF0381FE), Color(0xFF0072DE))),
-                                RoundedCornerShape(8.dp)
-                            )
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.Top
+                            .height(IntrinsicSize.Min)
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "\"",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black,
-                            color = textColor
+                        Box(
+                            modifier = Modifier
+                                .width(3.dp)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color(0xFF0A84FF))
                         )
-                        Spacer(Modifier.width(5.dp))
+                        Spacer(Modifier.width(10.dp))
                         Text(
                             text = bodyOnly,
                             style = bodyTextStyle.copy(fontStyle = FontStyle.Italic),
@@ -523,6 +520,7 @@ fun StoryViewerScreen(
     var showHighlightSaveDialog by remember { mutableStateOf(false) }
     var showOnlyFriendsSheet by remember { mutableStateOf(false) }
     var showOnlyFriendsInfoDialog by remember { mutableStateOf(false) }
+    var audioDetailStoryTarget by remember { mutableStateOf<Story?>(null) }
     var quickReplyText by remember { mutableStateOf("") }
     var showQuickReactions by remember { mutableStateOf(false) }
     var isReplyInputFocused by remember { mutableStateOf(false) }
@@ -541,7 +539,7 @@ fun StoryViewerScreen(
     }
 
     val scope = rememberCoroutineScope()
-    val storyDurationMs = 5000L
+    val isLifecycleResumed = rememberStoryLifecycleResumed()
 
     val currentStoryItem = allFlatStories.getOrNull(pagerState.currentPage)
     val currentGroup = currentStoryItem?.group
@@ -550,35 +548,104 @@ fun StoryViewerScreen(
     val storiesForCurrentGroup = currentGroup?.stories ?: emptyList()
     val isOwner = currentStory != null && (currentStory.userId == currentUserId || currentGroup?.userId == currentUserId)
     val vmLikedStoryIds by storyViewModel.likedStoryIds.collectAsState()
+    val repostingStoryId by storyViewModel.repostingStoryId.collectAsState()
+    val repostedSourceStoryIds by storyViewModel.repostedSourceStoryIds.collectAsState()
     val isLiked = currentStory != null && (vmLikedStoryIds.contains(currentStory.id) || currentStory.likedBy.contains(currentUserId))
+    val isViewerMentioned = currentStory != null && isViewerMentionedInStory(
+        story = currentStory,
+        viewerUid = currentUserId,
+        viewerUsername = currentUserProfile?.username
+    )
+    val alreadyRepostedThisStory = currentStory != null && (
+        currentStory.id in repostedSourceStoryIds ||
+            effectiveMyStories.any { it.repostedFromStoryId == currentStory.id }
+        )
 
     val isCurrentStoryUploading = currentStory != null && (currentStory.isUploading || (currentStory.id.startsWith("temp_") && !currentStory.isFailed))
     val isCurrentStoryFailed = currentStory != null && currentStory.isFailed
+
+    val storyDurationMs = remember(
+        currentStory?.id,
+        currentStory?.mediaUrl,
+        currentStory?.textContent,
+        currentStory?.decompressedTextFormat
+    ) {
+        if (currentStory == null) {
+            StoryAutoAdvanceDefaults.DEFAULT_MEDIA_DURATION_MS
+        } else {
+            val hasVisualMedia = currentStory.mediaUrl.isNotBlank() && currentStory.mediaUrl != "text:story"
+            val hasWidgets = hasInteractiveStoryWidgets(currentStory.decompressedTextFormat)
+            computeStoryAutoAdvanceDurationMs(
+                hasVisualMedia = hasVisualMedia,
+                textContent = currentStory.textContent,
+                hasInteractiveWidgets = hasWidgets
+            )
+        }
+    }
 
     var doubleTapHeartVisible by remember { mutableStateOf(false) }
     val doubleTapHeartScale = remember { Animatable(0.2f) }
     val doubleTapHeartAlpha = remember { Animatable(0f) }
 
     val isScrollInProgress = pagerState.isScrollInProgress
-    val effectivePaused = isPaused || isScrollInProgress || showViewers || showDeleteConfirm || showHighlightSaveDialog || showOnlyFriendsSheet || showOnlyFriendsInfoDialog || isReplying || isCurrentStoryUploading || isCurrentStoryFailed
+    val effectivePaused = isPaused || isScrollInProgress || showViewers || showDeleteConfirm ||
+        showHighlightSaveDialog || showOnlyFriendsSheet || showOnlyFriendsInfoDialog ||
+        audioDetailStoryTarget != null ||
+        isReplying || isCurrentStoryUploading || isCurrentStoryFailed ||
+        (repostingStoryId != null) || !isLifecycleResumed
 
-    val progress = remember(pagerState.currentPage) { Animatable(0f) }
+    val viewerContext = LocalContext.current
+    val storyMusicPlayer = remember {
+        androidx.media3.exoplayer.ExoPlayer.Builder(viewerContext).build().apply {
+            repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+            volume = 1f
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { storyMusicPlayer.release() }
+    }
+    LaunchedEffect(currentStory?.id, currentStory?.musicAudioUrl, currentStory?.musicStartSec) {
+        val audioUrl = currentStory?.musicAudioUrl?.takeIf { it.isNotBlank() }
+        if (audioUrl != null) {
+            storyMusicPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(audioUrl))
+            storyMusicPlayer.prepare()
+            storyMusicPlayer.seekTo((currentStory.musicStartSec * 1000L).coerceAtLeast(0L))
+        } else {
+            storyMusicPlayer.stop()
+            storyMusicPlayer.clearMediaItems()
+        }
+    }
+    LaunchedEffect(currentStory?.id, effectivePaused) {
+        val hasAudio = !currentStory?.musicAudioUrl.isNullOrBlank()
+        if (hasAudio && !effectivePaused) {
+            storyMusicPlayer.playWhenReady = true
+            if (!storyMusicPlayer.isPlaying) storyMusicPlayer.play()
+        } else {
+            storyMusicPlayer.playWhenReady = false
+            if (storyMusicPlayer.isPlaying) storyMusicPlayer.pause()
+        }
+    }
 
-    LaunchedEffect(pagerState.currentPage) {
+    val progress = remember(pagerState.currentPage, currentStory?.id) { Animatable(0f) }
+
+    LaunchedEffect(pagerState.currentPage, currentStory?.id) {
         progress.snapTo(0f)
     }
 
-    LaunchedEffect(pagerState.currentPage, effectivePaused) {
+    LaunchedEffect(pagerState.currentPage, currentStory?.id, effectivePaused, storyDurationMs) {
         if (!effectivePaused && allFlatStories.isNotEmpty()) {
-            val currentFraction = progress.value.coerceIn(0f, 1f)
-            val remainingFraction = 1f - currentFraction
-            val remainingDuration = kotlin.math.round(storyDurationMs * remainingFraction).toInt().coerceAtLeast(50)
-
-            val result = progress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = remainingDuration, easing = LinearEasing)
-            )
-            if (result.endReason == AnimationEndReason.Finished && progress.value >= 0.999f) {
+            val remainingDuration = computeRemainingStoryDurationMs(progress.value, storyDurationMs)
+            val completed = if (remainingDuration <= 0) {
+                progress.snapTo(1f)
+                true
+            } else {
+                val result = progress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = remainingDuration, easing = LinearEasing)
+                )
+                result.endReason == AnimationEndReason.Finished && isStoryProgressComplete(progress.value)
+            }
+            if (completed) {
                 // Auto advance with smooth 3D animation
                 if (pagerState.currentPage < allFlatStories.size - 1) {
                     pagerState.animateScrollToPage(
@@ -747,133 +814,169 @@ fun StoryViewerScreen(
                 ) {
                     StorySlideContent(story = storyItem.story)
 
-                    // WhatsApp-style Floating In-Story Status Card with Micro-Bevel Edge
+                    com.chroma.studio.ui.storystudio.StoryInteractiveWidgetsOverlay(
+                        storyId = storyItem.story.id,
+                        storyAuthorId = storyItem.story.userId.ifBlank { storyItem.group.userId },
+                        currentUserId = currentUserId,
+                        decompressedTextFormat = storyItem.story.decompressedTextFormat,
+                        onPauseChanged = { paused -> isPaused = paused },
+                        onWidgetReply = { summary ->
+                            val authorId = storyItem.story.userId.ifBlank { storyItem.group.userId }
+                            val storyId = storyItem.story.id
+                            val mediaUrl = storyItem.story.mediaUrl
+                            val thumbUrl = if (mediaUrl.isNotBlank() && mediaUrl != "text:story") mediaUrl else null
+                            if (authorId.isNotBlank() && authorId != currentUserId) {
+                                onReplySend?.invoke(authorId, summary, storyId, thumbUrl)
+                                scope.launch {
+                                    NotificationDispatcher.sendNotification(
+                                        targetUserId = authorId,
+                                        type = NotificationActionType.STORY_REPLY,
+                                        actionText = "interacted with your story",
+                                        detailText = summary,
+                                        targetPreviewUrl = thumbUrl,
+                                        targetId = storyId
+                                    )
+                                }
+                            }
+                        },
+                        onMentionClick = { handle ->
+                            val clean = handle.trim().trimStart('@')
+                            scope.launch {
+                                try {
+                                    val matches = withContext(Dispatchers.IO) {
+                                        DiscoverRepository().searchUsers(clean)
+                                    }
+                                    val exact = matches.firstOrNull {
+                                        it.username.equals(clean, ignoreCase = true)
+                                    }
+                                    if (exact != null) {
+                                        onClose()
+                                        onAuthorClick(exact.uid)
+                                    } else {
+                                        ToastManager.showToast(handle)
+                                    }
+                                } catch (_: Exception) {
+                                    ToastManager.showToast(handle)
+                                }
+                            }
+                        }
+                    )
+
+                    // Clean Compact Upload / Failure Overlay (zero heavy bevels or pill buttons)
                     val isSlideUploading = storyItem.story.isUploading || (storyItem.story.id.startsWith("temp_") && !storyItem.story.isFailed)
                     val isSlideFailed = storyItem.story.isFailed
 
                     if (isSlideUploading) {
-                        Box(
+                        Row(
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .padding(horizontal = 24.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(Color.Black.copy(alpha = 0.78f))
-                                .studioBevel(cornerRadius = 20.dp, borderWidth = 1.dp)
-                                .padding(horizontal = 20.dp, vertical = 14.dp),
-                            contentAlignment = Alignment.Center
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.Black.copy(alpha = 0.72f))
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                androidx.compose.material3.CircularProgressIndicator(
-                                    strokeWidth = 2.4.dp,
-                                    color = Color(0xFF0381FE),
-                                    modifier = Modifier.size(24.dp)
+                            androidx.compose.material3.CircularProgressIndicator(
+                                strokeWidth = 2.2.dp,
+                                color = Color(0xFF0A84FF),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Sending story...",
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 )
-                                Column {
-                                    Text(
-                                        text = "Sending story...",
-                                        color = Color.White,
-                                        fontSize = 13.5.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    val percent = (storyItem.story.uploadProgress.coerceIn(0.1f, 1f) * 100).toInt()
-                                    Text(
-                                        text = if (percent > 15) "Uploading image • $percent%" else "Optimizing image...",
-                                        color = Color.White.copy(alpha = 0.75f),
-                                        fontSize = 11.sp
-                                    )
-                                }
+                                val percent = (storyItem.story.uploadProgress.coerceIn(0.1f, 1f) * 100).toInt()
+                                Text(
+                                    text = if (percent > 15) "Uploading • $percent%" else "Optimizing...",
+                                    color = Color.White.copy(alpha = 0.72f),
+                                    fontSize = 11.sp
+                                )
                             }
                         }
                     } else if (isSlideFailed) {
-                        Box(
+                        Column(
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .padding(horizontal = 24.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(Color(0xFF241416).copy(alpha = 0.88f))
-                                .border(1.dp, Color(0xFFFF453A).copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                                .studioBevel(cornerRadius = 20.dp, borderWidth = 1.dp)
-                                .padding(horizontal = 20.dp, vertical = 16.dp),
-                            contentAlignment = Alignment.Center
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xD91C1C1E))
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.ShieldAlert,
-                                        contentDescription = null,
-                                        tint = Color(0xFFFF453A),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = "Upload failed",
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = "Couldn't send story. Check connection.",
-                                    color = Color.White.copy(alpha = 0.75f),
-                                    fontSize = 11.5.sp
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.ShieldAlert,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFF453A),
+                                    modifier = Modifier.size(18.dp)
                                 )
-                                Spacer(Modifier.height(12.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Box(
-                                        modifier = Modifier
-                                            .height(36.dp)
-                                            .clip(RoundedCornerShape(18.dp))
-                                            .background(Brush.linearGradient(listOf(Color(0xFF0381FE), Color(0xFF0051D5))))
-                                            .studioBevel(cornerRadius = 18.dp, borderWidth = 1.dp)
-                                            .clickable {
-                                                storyViewModel.retryFailedUpload(context)
-                                            }
-                                            .padding(horizontal = 16.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Lucide.RotateCw,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(13.dp)
-                                            )
-                                            Text(
-                                                text = "Retry",
-                                                color = Color.White,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                Text(
+                                    text = "Upload failed",
+                                    color = Color.White,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "Couldn't send story. Check connection.",
+                                color = Color.White.copy(alpha = 0.72f),
+                                fontSize = 11.5.sp
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .height(34.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF0A84FF))
+                                        .clickable {
+                                            storyViewModel.retryFailedUpload(context)
                                         }
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .height(36.dp)
-                                            .clip(RoundedCornerShape(18.dp))
-                                            .background(Color.White.copy(alpha = 0.12f))
-                                            .clickable {
-                                                storyViewModel.discardFailedUpload(storyItem.story.id)
-                                            }
-                                            .padding(horizontal = 14.dp),
-                                        contentAlignment = Alignment.Center
+                                        .padding(horizontal = 14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                                     ) {
+                                        Icon(
+                                            imageVector = Lucide.RotateCw,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(13.dp)
+                                        )
                                         Text(
-                                            text = "Discard",
-                                            color = Color.White.copy(alpha = 0.85f),
+                                            text = "Retry",
+                                            color = Color.White,
                                             fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium
+                                            fontWeight = FontWeight.SemiBold
                                         )
                                     }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .height(34.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.14f))
+                                        .clickable { showDeleteConfirm = true }
+                                        .padding(horizontal = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Discard",
+                                        color = Color.White.copy(alpha = 0.85f),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 }
                             }
                         }
@@ -1082,8 +1185,8 @@ fun StoryViewerScreen(
                                         Spacer(Modifier.width(6.dp))
                                         Box(
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(99.dp))
-                                                .background(Color(0xFF00C853))
+                                                .clip(RoundedCornerShape(5.dp))
+                                                .background(Color(0xFF34C759))
                                                 .clickable {
                                                     if (isOwner) {
                                                         showOnlyFriendsSheet = true
@@ -1104,12 +1207,80 @@ fun StoryViewerScreen(
                                                     modifier = Modifier.size(9.5.dp)
                                                 )
                                                 Text(
-                                                    text = "Only Friend",
-                                                    fontSize = 10.5.sp,
-                                                    fontWeight = FontWeight.Bold,
+                                                    text = "Only Friends",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.SemiBold,
                                                     color = Color.White
                                                 )
                                             }
+                                        }
+                                    }
+                                    val repostCredit = formatStoryRepostCredit(
+                                        repostedFromUsername = story.repostedFromUsername,
+                                        repostedFromDisplayName = story.repostedFromDisplayName
+                                    )
+                                    if (repostCredit != null) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(5.dp))
+                                                .background(Color.White.copy(alpha = 0.16f))
+                                                .clickable(enabled = story.repostedFromUserId.isNotBlank()) {
+                                                    onAuthorClick(story.repostedFromUserId)
+                                                }
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Lucide.AtSign,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                            Text(
+                                                text = repostCredit,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                    if (!story.musicTitle.isNullOrBlank() || !story.musicTrackId.isNullOrBlank()) {
+                                        Spacer(Modifier.width(6.dp))
+                                        val musicChipLabel = buildString {
+                                            append(story.musicTitle?.takeIf { it.isNotBlank() } ?: "Soundtrack")
+                                            if (!story.musicArtist.isNullOrBlank()) {
+                                                append(" · ").append(story.musicArtist)
+                                            }
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(999.dp))
+                                                .background(Color.White.copy(alpha = 0.18f))
+                                                .clickable(enabled = !story.musicTrackId.isNullOrBlank()) {
+                                                    audioDetailStoryTarget = story
+                                                }
+                                                .padding(horizontal = 7.dp, vertical = 2.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Lucide.Music,
+                                                contentDescription = "Story Music",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                            Text(
+                                                text = musicChipLabel,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
                                     }
                                 }
@@ -1117,7 +1288,7 @@ fun StoryViewerScreen(
                         }
 
                         // Owner Delete Action
-                        if (isOwner && currentStory != null) {
+                        if (isOwner) {
                             Icon(
                                 Lucide.Trash2,
                                 contentDescription = "Delete Story",
@@ -1142,15 +1313,20 @@ fun StoryViewerScreen(
                 }
             }
 
-            // ── Bottom Controls ───────────────────────────────────────────────────────
+            // ── Compact Bottom Controls Over Subtle Scrim (Zero Box Cards or Pills) ─────────
             if (currentStory != null) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.62f))
+                            )
+                        )
                         .imePadding()
                         .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 18.dp)
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
                 ) {
                     if (isOwner) {
                         val userHighlights by storyViewModel.highlights.collectAsState()
@@ -1162,28 +1338,23 @@ fun StoryViewerScreen(
                             )
                         }
 
-                        // Admin Action Row: Viewers & Instagram-style Highlight Button
+                        // Compact Borderless Admin Action Bar: Viewers/Insights + Highlight
                         Row(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             if (isCurrentStoryUploading) {
                                 Row(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(24.dp))
-                                        .background(Color.Black.copy(alpha = 0.65f))
-                                        .studioBevel(cornerRadius = 24.dp, borderWidth = 1.dp)
-                                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                                    modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
+                                    horizontalArrangement = Arrangement.Start
                                 ) {
                                     androidx.compose.material3.CircularProgressIndicator(
                                         strokeWidth = 2.dp,
-                                        color = Color(0xFF0381FE),
+                                        color = Color(0xFF0A84FF),
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(Modifier.width(8.dp))
@@ -1198,14 +1369,9 @@ fun StoryViewerScreen(
                                 Row(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clip(RoundedCornerShape(24.dp))
-                                        .background(Color(0xFF2E1719).copy(alpha = 0.85f))
-                                        .border(1.dp, Color(0xFFFF453A).copy(alpha = 0.4f), RoundedCornerShape(24.dp))
-                                        .studioBevel(cornerRadius = 24.dp, borderWidth = 1.dp)
                                         .clickable { storyViewModel.retryFailedUpload(context) }
-                                        .padding(horizontal = 14.dp, vertical = 11.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
+                                        .padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(Lucide.RotateCw, contentDescription = null, tint = Color(0xFFFF453A), modifier = Modifier.size(14.dp))
                                     Spacer(Modifier.width(6.dp))
@@ -1217,12 +1383,10 @@ fun StoryViewerScreen(
                                     )
                                 }
                             } else {
-                                // Viewers & Likes pill button (tap or swipe up to open insights)
+                                // Clean open metrics trigger (tap or swipe up to open insights)
                                 Row(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.65f))
                                         .pointerInput(isOwner) {
                                             detectVerticalDragGestures { _, dragAmount ->
                                                 if (dragAmount < -15f && isOwner && !showViewers) {
@@ -1231,16 +1395,16 @@ fun StoryViewerScreen(
                                             }
                                         }
                                         .clickable { showViewers = true }
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        .padding(vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceAround
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                                         Icon(Lucide.Eye, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
                                         Text(
-                                            text = "${maxOf(currentStory.views, currentStory.viewedBy.size)} views",
+                                            text = "${maxOf(currentStory.views, currentStory.viewedBy.size)}",
                                             color = Color.White,
-                                            fontSize = 12.5.sp,
+                                            fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     }
@@ -1249,45 +1413,45 @@ fun StoryViewerScreen(
                                         Text(
                                             text = "${maxOf(currentStory.likes, currentStory.likedBy.size)}",
                                             color = Color.White,
-                                            fontSize = 12.5.sp,
+                                            fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     }
-                                    Icon(Lucide.ChevronUp, contentDescription = "Swipe up for insights", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = "Insights",
+                                            color = Color.White.copy(alpha = 0.8f),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Icon(Lucide.ChevronUp, contentDescription = "Swipe up for insights", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(14.dp))
+                                    }
                                 }
                             }
 
-                            // Instagram Highlight Button (Save to Highlights - Lives Forever)
+                            // Compact Highlight Toggle
                             if (!isCurrentStoryUploading && !isCurrentStoryFailed && !currentStory.id.startsWith("temp_")) {
-                                Box(
+                                Row(
                                     modifier = Modifier
-                                        .height(44.dp)
-                                        .clip(RoundedCornerShape(22.dp))
-                                        .background(
-                                            if (isCurrentStoryHighlighted) Brush.linearGradient(listOf(Color(0xFF059669), Color(0xFF10B981)))
-                                            else SolidColor(Color.Black.copy(alpha = 0.65f))
-                                        )
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isCurrentStoryHighlighted) Color(0xFF34C759).copy(alpha = 0.24f) else Color.White.copy(alpha = 0.14f))
                                         .clickable { showHighlightSaveDialog = true }
-                                        .padding(horizontal = 14.dp),
-                                    contentAlignment = Alignment.Center
+                                        .padding(horizontal = 11.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isCurrentStoryHighlighted) Lucide.BookmarkCheck else Lucide.Bookmark,
-                                            contentDescription = "Save to Highlights",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                        Text(
-                                            text = if (isCurrentStoryHighlighted) "Highlighted" else "Highlight",
-                                            color = Color.White,
-                                            fontSize = 12.5.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = if (isCurrentStoryHighlighted) Lucide.BookmarkCheck else Lucide.Bookmark,
+                                        contentDescription = "Save to Highlights",
+                                        tint = if (isCurrentStoryHighlighted) Color(0xFF30D158) else Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = if (isCurrentStoryHighlighted) "Highlighted" else "Highlight",
+                                        color = if (isCurrentStoryHighlighted) Color(0xFF30D158) else Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 }
                             }
                         }
@@ -1304,19 +1468,111 @@ fun StoryViewerScreen(
                             )
                         }
                     } else {
-                        // Viewer: Quick Message & Like Bar
+                        // Viewer: Mention Reshare CTA + Compact Borderless Reply & Like Bar
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            if (isViewerMentioned && currentStory != null) {
+                                val isRepostingCurrent = repostingStoryId == currentStory.id
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color.Black.copy(alpha = 0.52f))
+                                        .border(
+                                            width = 0.75.dp,
+                                            color = Color.White.copy(alpha = 0.22f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.AtSign,
+                                            contentDescription = null,
+                                            tint = Color(0xFF0A84FF),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = if (alreadyRepostedThisStory) {
+                                                "Added to your story"
+                                            } else {
+                                                "Mentioned you in this story"
+                                            },
+                                            color = Color.White,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    Spacer(Modifier.width(8.dp))
+
+                                    Box(
+                                        modifier = Modifier
+                                            .height(32.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (alreadyRepostedThisStory) {
+                                                    Color(0xFF30D158).copy(alpha = 0.22f)
+                                                } else {
+                                                    Color(0xFF0381FE)
+                                                }
+                                            )
+                                            .clickable(enabled = !alreadyRepostedThisStory && !isRepostingCurrent) {
+                                                storyViewModel.repostMentionedStory(currentStory.id) { ok, err ->
+                                                    if (ok) {
+                                                        ToastManager.showToast("Added to your story!")
+                                                    } else {
+                                                        ToastManager.showToast(err ?: "Could not add story")
+                                                    }
+                                                }
+                                            }
+                                            .padding(horizontal = 12.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isRepostingCurrent) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(14.dp),
+                                                strokeWidth = 2.dp,
+                                                color = Color.White
+                                            )
+                                        } else {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (alreadyRepostedThisStory) Lucide.Check else Lucide.Plus,
+                                                    contentDescription = null,
+                                                    tint = if (alreadyRepostedThisStory) Color(0xFF30D158) else Color.White,
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                                Text(
+                                                    text = if (alreadyRepostedThisStory) "Added" else "Add to Story",
+                                                    color = if (alreadyRepostedThisStory) Color(0xFF30D158) else Color.White,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             if (showQuickReactions) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(20.dp))
-                                        .background(Color.Black.copy(alpha = 0.65f))
-                                                                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceAround,
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     listOf("🔥", "❤️", "😂", "😍", "😮", "👏").forEach { emoji ->
@@ -1324,12 +1580,11 @@ fun StoryViewerScreen(
                                             text = emoji,
                                             fontSize = 22.sp,
                                             modifier = Modifier
-                                                .clip(CircleShape)
                                                 .clickable {
-                                                    val authorId = currentStory?.userId ?: currentGroup?.userId ?: ""
-                                                    val storyId = currentStory?.id ?: ""
-                                                    val mediaUrl = currentStory?.mediaUrl
-                                                    val thumbUrl = if (!mediaUrl.isNullOrBlank() && mediaUrl != "text:story") mediaUrl else if (!currentStory?.textContent.isNullOrBlank()) "text:${currentStory?.textContent}" else mediaUrl
+                                                    val authorId = currentStory.userId
+                                                    val storyId = currentStory.id
+                                                    val mediaUrl = currentStory.mediaUrl
+                                                    val thumbUrl = if (!mediaUrl.isNullOrBlank() && mediaUrl != "text:story") mediaUrl else if (!currentStory.textContent.isNullOrBlank()) "text:${currentStory.textContent}" else mediaUrl
                                                     if (authorId.isNotBlank()) {
                                                         onReplySend?.invoke(authorId, emoji, storyId, thumbUrl)
                                                         scope.launch {
@@ -1363,10 +1618,10 @@ fun StoryViewerScreen(
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(44.dp)
-                                        .clip(RoundedCornerShape(22.dp))
-                                        .background(Color.White.copy(alpha = 0.18f))
-                                                                                .padding(horizontal = 14.dp),
+                                        .height(40.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color.White.copy(alpha = 0.16f))
+                                        .padding(horizontal = 12.dp),
                                     contentAlignment = Alignment.CenterStart
                                 ) {
                                     Row(
@@ -1398,10 +1653,10 @@ fun StoryViewerScreen(
                                             IconButton(
                                                 onClick = {
                                                     val reply = quickReplyText.trim()
-                                                    val authorId = currentStory?.userId ?: currentGroup?.userId ?: ""
-                                                    val storyId = currentStory?.id ?: ""
-                                                    val mediaUrl = currentStory?.mediaUrl
-                                                    val thumbUrl = if (!mediaUrl.isNullOrBlank() && mediaUrl != "text:story") mediaUrl else if (!currentStory?.textContent.isNullOrBlank()) "text:${currentStory?.textContent}" else mediaUrl
+                                                    val authorId = currentStory.userId
+                                                    val storyId = currentStory.id
+                                                    val mediaUrl = currentStory.mediaUrl
+                                                    val thumbUrl = if (!mediaUrl.isNullOrBlank() && mediaUrl != "text:story") mediaUrl else if (!currentStory.textContent.isNullOrBlank()) "text:${currentStory.textContent}" else mediaUrl
                                                     if (authorId.isNotBlank() && reply.isNotBlank()) {
                                                         onReplySend?.invoke(authorId, reply, storyId, thumbUrl)
                                                         scope.launch {
@@ -1424,7 +1679,7 @@ fun StoryViewerScreen(
                                                 },
                                                 modifier = Modifier.size(28.dp)
                                             ) {
-                                                Icon(Lucide.Send, contentDescription = "Send", tint = Color(0xFF0381FE), modifier = Modifier.size(16.dp))
+                                                Icon(Lucide.Send, contentDescription = "Send", tint = Color(0xFF0A84FF), modifier = Modifier.size(16.dp))
                                             }
                                         } else {
                                             IconButton(
@@ -1437,18 +1692,11 @@ fun StoryViewerScreen(
                                     }
                                 }
 
-                                // Filled Heart Like Button
+                                // Clean Borderless Like Heart Button
                                 Box(
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(38.dp)
                                         .scale(likeScale.value)
-                                        .clip(CircleShape)
-                                        .background(if (isLiked) Color(0xFFFF2D55).copy(alpha = 0.2f) else Color.White.copy(alpha = 0.18f))
-                                        .border(
-                                            0.5.dp,
-                                            if (isLiked) Color(0xFFFF2D55).copy(alpha = 0.6f) else Color.White.copy(alpha = 0.35f),
-                                            CircleShape
-                                        )
                                         .clickable {
                                             currentStory.let { storyViewModel.toggleLike(it.id) }
                                         },
@@ -1526,19 +1774,52 @@ fun StoryViewerScreen(
                     dismissText = null,
                     onDismiss = { showOnlyFriendsInfoDialog = false },
                     customContent = {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF00C853)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Star,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
+                        Icon(
+                            imageVector = Lucide.Star,
+                            contentDescription = null,
+                            tint = Color(0xFF00C853),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                )
+            }
+
+            audioDetailStoryTarget?.let { targetStory ->
+                com.chroma.studio.ui.components.AudioDetailModal(
+                    trackId = targetStory.musicTrackId,
+                    fallbackTitle = targetStory.musicTitle,
+                    fallbackArtist = targetStory.musicArtist,
+                    fallbackCoverUrl = targetStory.musicCoverUrl,
+                    fallbackAudioUrl = targetStory.musicAudioUrl,
+                    onDismiss = { audioDetailStoryTarget = null },
+                    onUseAudio = { track ->
+                        audioDetailStoryTarget = null
+                        com.chroma.studio.data.PendingMusicHandoff.set(
+                            com.chroma.studio.data.AttachedMusicSelection(
+                                trackId = track.id,
+                                title = track.title,
+                                artist = track.artist,
+                                album = track.album,
+                                coverUrl = track.coverUrl,
+                                audioUrl = track.audioUrl,
+                                startSec = track.bestPartStartSec,
+                                durationSec = (track.bestPartEndSec - track.bestPartStartSec).coerceIn(5, maxOf(5, track.durationSec)),
+                                totalTrackSec = track.durationSec,
+                                showLyricsSticker = true
                             )
+                        )
+                        ToastManager.showToast("Audio selected: ${track.title}")
+                        onClose()
+                    },
+                    onFlashClick = {
+                        audioDetailStoryTarget = null
+                        onClose()
+                    },
+                    onPostClick = { clickedPost ->
+                        audioDetailStoryTarget = null
+                        if (clickedPost.creatorId.isNotBlank()) {
+                            onClose()
+                            onAuthorClick(clickedPost.creatorId)
                         }
                     }
                 )

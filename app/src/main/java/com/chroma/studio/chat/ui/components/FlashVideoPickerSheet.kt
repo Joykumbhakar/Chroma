@@ -144,8 +144,7 @@ fun FlashVideoPickerSheet(
                 Box(
                     modifier = Modifier
                         .size(30.dp)
-                        .clip(CircleShape)
-                        .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable { onDismissRequest() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -153,7 +152,7 @@ fun FlashVideoPickerSheet(
                         imageVector = Lucide.X,
                         contentDescription = "Close",
                         tint = colors.textMain,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -205,9 +204,8 @@ fun FlashVideoPickerSheet(
                     if (searchQuery.isNotEmpty()) {
                         Box(
                             modifier = Modifier
-                                .size(16.dp)
-                                .clip(CircleShape)
-                                .background(colors.textMuted.copy(alpha = 0.25f))
+                                .size(18.dp)
+                                .clip(RoundedCornerShape(6.dp))
                                 .clickable { searchQuery = "" },
                             contentAlignment = Alignment.Center
                         ) {
@@ -215,7 +213,7 @@ fun FlashVideoPickerSheet(
                                 imageVector = Lucide.X,
                                 contentDescription = "Clear search",
                                 tint = colors.textMain,
-                                modifier = Modifier.size(10.dp)
+                                modifier = Modifier.size(12.dp)
                             )
                         }
                     }
@@ -327,21 +325,14 @@ private fun FlashGridCard(
         }
 
         // Center Play Icon
-        Box(
+        Icon(
+            imageVector = Lucide.Play,
+            contentDescription = null,
+            tint = Color.White,
             modifier = Modifier
                 .align(Alignment.Center)
-                .size(28.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.5f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Lucide.Play,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(14.dp).offset(x = 1.dp)
-            )
-        }
+                .size(20.dp)
+        )
 
         // Bottom Gradient with Author & Caption
         Box(

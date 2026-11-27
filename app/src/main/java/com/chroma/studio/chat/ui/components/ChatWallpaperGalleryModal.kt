@@ -95,18 +95,18 @@ fun ChatWallpaperGalleryModal(
         "Custom Photos"
     )
 
-    // Device gallery launcher for importing custom user photos
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            val uriStr = uri.toString()
-            manager.addCustomWallpaper(uriStr)
-            customWallpapers = manager.getCustomWallpapers()
-            previewCustomUri = uriStr
-            SoundManager.playReaction()
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-        }
+    // Enhanced Oscellion Gallery for importing custom user wallpapers
+    val galleryLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Chat Wallpaper",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        val uriStr = uri.toString()
+        manager.addCustomWallpaper(uriStr)
+        customWallpapers = manager.getCustomWallpapers()
+        previewCustomUri = uriStr
+        SoundManager.playReaction()
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
     }
 
     val builtInWallpapers = remember { WallpaperType.entries }
@@ -185,8 +185,7 @@ fun ChatWallpaperGalleryModal(
                 Box(
                     modifier = Modifier
                         .size(32.dp)
-                        .clip(CircleShape)
-                        .background(if (colors.isLight) Color(0xFFE5E7EB) else Color.White.copy(alpha = 0.10f))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable { onClose() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -194,7 +193,7 @@ fun ChatWallpaperGalleryModal(
                         imageVector = Lucide.X,
                         contentDescription = "Close",
                         tint = if (colors.isLight) Color(0xFF374151) else Color.White,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -456,20 +455,12 @@ fun ChatWallpaperGalleryModal(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF0381FE).copy(alpha = 0.16f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.ImagePlus,
-                                        contentDescription = "Add custom photo",
-                                        tint = Color(0xFF0381FE),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Lucide.ImagePlus,
+                                    contentDescription = "Add custom photo",
+                                    tint = Color(0xFF0381FE),
+                                    modifier = Modifier.size(22.dp)
+                                )
                                 Spacer(Modifier.height(6.dp))
                                 Text(
                                     text = "Add Photo",
@@ -551,9 +542,9 @@ fun ChatWallpaperGalleryModal(
                                         .align(Alignment.TopEnd)
                                         .padding(6.dp)
                                         .size(20.dp)
-                                        .clip(CircleShape)
+                                        .clip(RoundedCornerShape(6.dp))
                                         .background(OscellionGreenCheck)
-                                        .border(1.dp, Color.White, CircleShape),
+                                        .border(1.dp, Color.White, RoundedCornerShape(6.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
@@ -571,7 +562,7 @@ fun ChatWallpaperGalleryModal(
                                     .align(Alignment.TopStart)
                                     .padding(6.dp)
                                     .size(20.dp)
-                                    .clip(CircleShape)
+                                    .clip(RoundedCornerShape(6.dp))
                                     .background(Color.Black.copy(alpha = 0.65f))
                                     .clickable {
                                         SoundManager.playTap(context)
@@ -670,9 +661,9 @@ fun ChatWallpaperGalleryModal(
                                     .align(Alignment.TopEnd)
                                     .padding(6.dp)
                                     .size(20.dp)
-                                    .clip(CircleShape)
+                                    .clip(RoundedCornerShape(6.dp))
                                     .background(OscellionGreenCheck)
-                                    .border(1.dp, Color.White, CircleShape),
+                                    .border(1.dp, Color.White, RoundedCornerShape(6.dp)),
                                     contentAlignment = Alignment.Center
                             ) {
                                 Icon(

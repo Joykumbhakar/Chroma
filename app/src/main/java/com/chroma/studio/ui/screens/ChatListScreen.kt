@@ -253,9 +253,9 @@ fun ChatListScreen(
                                         .size(16.dp)
                                         .align(Alignment.BottomEnd)
                                         .offset(x = (-1).dp, y = (-1).dp)
-                                        .background(sidebarBg, CircleShape)
+                                        .background(sidebarBg, RoundedCornerShape(5.dp))
                                         .padding(1.5.dp)
-                                        .clip(CircleShape)
+                                        .clip(RoundedCornerShape(4.dp))
                                         .background(iosBlue),
                                     contentAlignment = Alignment.Center
                                 ) {

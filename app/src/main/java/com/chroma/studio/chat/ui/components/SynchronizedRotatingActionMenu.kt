@@ -141,6 +141,20 @@ enum class ActionMenuOption(
             Color(0xFFF43F5E)
         ),
         shadowColor = Color(0x29E11D48)
+    ),
+    MUSIC(
+        label = "Music",
+        bgStops = listOf(
+            Color(0xFAFFFFFF),
+            Color(0xFFFFF1F2),
+            Color(0xFFFCE7F3)
+        ),
+        borderStops = listOf(
+            Color(0xFFFFFFFF),
+            Color(0xFFFA2D48),
+            Color(0xFFFB233B)
+        ),
+        shadowColor = Color(0x29FA2D48)
     )
 }
 
@@ -350,6 +364,7 @@ private fun StaggeredActionNodeItem(
                 ActionMenuOption.POLL -> drawPoll3DGraphic()
                 ActionMenuOption.STICKER -> drawSticker3DGraphic()
                 ActionMenuOption.FLASH_VIDEO -> drawFlash3DGraphic()
+                ActionMenuOption.MUSIC -> drawMusic3DGraphic()
             }
         }
     }
@@ -920,4 +935,23 @@ private fun DrawScope.drawFlash3DGraphic() {
         close()
     }
     drawPath(zapPath, Color.White)
+}
+
+private fun DrawScope.drawMusic3DGraphic() {
+    val s = size.width / 24f
+    drawRoundRect(
+        brush = Brush.linearGradient(
+            colors = listOf(Color(0xFFFA233B), Color(0xFFFB5C74)),
+            start = Offset(3.5f * s, 3.5f * s),
+            end = Offset(20.5f * s, 20.5f * s)
+        ),
+        topLeft = Offset(3.5f * s, 3.5f * s),
+        size = Size(17.0f * s, 17.0f * s),
+        cornerRadius = CornerRadius(5.0f * s, 5.0f * s)
+    )
+    drawCircle(Color.White, radius = 2.1f * s, center = Offset(8.6f * s, 16.0f * s))
+    drawCircle(Color.White, radius = 2.1f * s, center = Offset(15.2f * s, 14.5f * s))
+    drawLine(Color.White, Offset(10.3f * s, 16.0f * s), Offset(10.3f * s, 8.2f * s), 1.8f * s, androidx.compose.ui.graphics.StrokeCap.Round)
+    drawLine(Color.White, Offset(16.9f * s, 14.5f * s), Offset(16.9f * s, 6.8f * s), 1.8f * s, androidx.compose.ui.graphics.StrokeCap.Round)
+    drawLine(Color.White, Offset(10.3f * s, 8.2f * s), Offset(16.9f * s, 6.8f * s), 2.2f * s, androidx.compose.ui.graphics.StrokeCap.Round)
 }

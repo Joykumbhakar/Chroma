@@ -17,9 +17,38 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.auth.FirebaseAuth
 
-import com.chroma.studio.model.UserProfile
-import com.chroma.studio.model.DiscoverPost
+import com.chroma.studio.model.*
 import com.chroma.studio.data.CloudinaryClient
+
+/** Returns true for admin/staff account roles that client profile edits must never alter. */
+fun isPrivilegedAccountRole(role: String?): Boolean {
+    return role?.trim() in setOf("Admin", "Moderator", "SuperAdmin")
+}
+
+/** Resolves the safe persisted role during client profile identity updates. */
+fun resolveSafeProfileRole(existingRole: String?, requestedRole: String?): String {
+    val current = existingRole?.trim().orEmpty()
+    if (isPrivilegedAccountRole(current)) return current
+    val requested = requestedRole?.trim().orEmpty()
+    val allowedCreatorRoles = setOf(
+        "", "Creator", "Developer", "Designer", "Photographer",
+        "Video Editor", "Manager", "Student", "Artist", "Other"
+    )
+    return if (requested in allowedCreatorRoles) requested else current.ifBlank { "Creator" }
+}
+
+/** Validates handle format for Profile Identity edits. */
+fun validateProfileHandleUpdate(displayName: String, username: String): String? {
+    val cleanName = displayName.trim()
+    val cleanUser = username.trim().lowercase()
+    return when {
+        cleanName.isBlank() -> "Display name cannot be empty"
+        cleanUser.length !in 3..30 -> "Username must be between 3 and 30 characters"
+        !cleanUser.matches(Regex("^[a-z0-9._]+$")) ->
+            "Username can only contain lowercase letters, numbers, periods, and underscores"
+        else -> null
+    }
+}
 
 class DiscoverRepository {
     companion object {
@@ -57,6 +86,9 @@ class DiscoverRepository {
             postType = "video",
             tags = fv.hashtags,
             mentions = fv.mentions,
+            collaborators = fv.collaborators,
+            pendingCollaboratorIds = fv.pendingCollaboratorIds,
+            collaboratorIds = fv.collaboratorIds,
             likesCount = fv.likesCount,
             likedBy = fv.likedBy,
             remixCount = fv.remixCount,
@@ -85,21 +117,51 @@ class DiscoverRepository {
 
     private suspend fun hydrateAuthorProfiles(posts: List<DiscoverPost>): List<DiscoverPost> {
         if (posts.isEmpty()) return posts
-        val creatorIds = posts.map { it.creatorId }.filter { it.isNotBlank() }.distinct()
-        if (creatorIds.isEmpty()) return posts
+        val creatorIds = posts.map { it.creatorId }
+        val collabIds = posts.flatMap { it.collaborators.map { c -> c.uid } }
+        val allUserIds = (creatorIds + collabIds).filter { it.isNotBlank() }.distinct()
+        if (allUserIds.isEmpty()) return posts
         return try {
-            val profilesMap = getProfilesByIds(creatorIds, limit = creatorIds.size).associateBy { it.uid }
+            val profilesMap = getProfilesByIds(allUserIds, limit = allUserIds.size).associateBy { it.uid }
             posts.map { post ->
                 val profile = profilesMap[post.creatorId]
+                val hydratedCollabs = if (post.collaborators.isEmpty()) {
+                    post.collaborators
+                } else {
+                    post.collaborators.map { collab ->
+                        val cProf = profilesMap[collab.uid]
+                        if (cProf != null) {
+                            com.chroma.studio.ui.components.VerifiedBadgeRegistry.register(cProf)
+                            com.chroma.studio.data.OnlineStatusManager.seedProfilePresence(cProf)
+                            collab.copy(
+                                username = cProf.username.ifBlank { collab.username },
+                                displayName = cProf.displayName.ifBlank { collab.displayName },
+                                avatarUrl = cProf.avatarUrl.ifBlank { collab.avatarUrl },
+                                verified = cProf.verified,
+                                verifiedTone = cProf.verifiedTone ?: collab.verifiedTone
+                            )
+                        } else {
+                            collab
+                        }
+                    }
+                }
                 if (profile != null) {
+                    com.chroma.studio.ui.components.VerifiedBadgeRegistry.register(profile)
+                    com.chroma.studio.data.OnlineStatusManager.seedProfilePresence(profile)
                     post.copy(
                         authorUsername = profile.username.ifBlank { post.authorUsername },
                         authorDisplayName = profile.displayName.ifBlank { post.authorDisplayName },
                         authorAvatarUrl = profile.avatarUrl.ifBlank { post.authorAvatarUrl },
                         authorVerified = profile.verified,
-                        authorVerifiedTone = profile.verifiedTone ?: post.authorVerifiedTone
+                        authorVerifiedTone = profile.verifiedTone ?: post.authorVerifiedTone,
+                        collaborators = hydratedCollabs
                     )
-                } else post
+                } else {
+                    if (post.authorVerified && !post.authorVerifiedTone.isNullOrBlank()) {
+                        com.chroma.studio.ui.components.VerifiedBadgeRegistry.register(post.creatorId, post.authorVerifiedTone)
+                    }
+                    post.copy(collaborators = hydratedCollabs)
+                }
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -107,7 +169,7 @@ class DiscoverRepository {
         }
     }
 
-    suspend fun getRecentWorks(limit: Long = 10, lastTimestamp: Long? = null): List<DiscoverPost> {
+    suspend fun getRecentWorks(limit: Long = 30, lastTimestamp: Long? = null): List<DiscoverPost> {
         return try {
             var query = collection.orderBy("timestamp", Query.Direction.DESCENDING).limit(limit)
             if (lastTimestamp != null) {
@@ -143,18 +205,138 @@ class DiscoverRepository {
                 .sortedByDescending { it.timestamp }
                 .take(limit.toInt())
 
-            hydrateAuthorProfiles(combined)
+            val finalRecent = hydrateAuthorProfiles(combined)
+            if (lastTimestamp == null && finalRecent.isNotEmpty()) {
+                OfflineDataCacheManager.saveRecentPosts(com.chroma.studio.ChromaApp.instance, finalRecent)
+            }
+            finalRecent
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error fetching community works", e)
-            emptyList()
+            if (lastTimestamp == null) {
+                OfflineDataCacheManager.getRecentPosts(com.chroma.studio.ChromaApp.instance)
+            } else emptyList()
         }
     }
 
-    suspend fun publishWork(work: ChromaWork, aspectRatio: String = "4:3", tags: List<String> = emptyList(), mentions: List<String> = emptyList()) {
+    /**
+     * Fetches a diverse multi-source candidate pool (latest creations, top-liked evergreen posts,
+     * Flash videos, and a seed-rotated older window slice) so the Community discovery ranker can
+     * surface varied content rather than returning only the newest 10 chronological posts.
+     */
+    suspend fun getDiscoveryWorks(limit: Long = 45, rotationSeed: Long = 0L): List<DiscoverPost> {
+        return try {
+            coroutineScope {
+                val recentPostsDef = async {
+                    try {
+                        collection.orderBy("timestamp", Query.Direction.DESCENDING).limit(25).get().await()
+                            .documents.mapNotNull { doc ->
+                                val obj = doc.toObject(DiscoverPost::class.java)
+                                val cCount = (doc.getLong("commentsCount") ?: doc.getLong("commentCount") ?: obj?.commentsCount?.toLong() ?: 0L).toInt()
+                                obj?.copy(
+                                    id = if (doc.id.isNotBlank()) doc.id else obj.id,
+                                    commentsCount = cCount,
+                                    commentCount = cCount
+                                )
+                            }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        emptyList()
+                    }
+                }
+
+                val recentFlashesDef = async {
+                    try {
+                        db.collection("flash_videos").orderBy("timestamp", Query.Direction.DESCENDING).limit(15).get().await()
+                            .documents.mapNotNull { doc ->
+                                val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
+                                if (fv != null) mapFlashToDiscoverPost(fv, doc.id) else null
+                            }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        emptyList()
+                    }
+                }
+
+                val popularPostsDef = async {
+                    try {
+                        collection.orderBy("likesCount", Query.Direction.DESCENDING).limit(20).get().await()
+                            .documents.mapNotNull { doc ->
+                                val obj = doc.toObject(DiscoverPost::class.java)
+                                val cCount = (doc.getLong("commentsCount") ?: doc.getLong("commentCount") ?: obj?.commentsCount?.toLong() ?: 0L).toInt()
+                                obj?.copy(
+                                    id = if (doc.id.isNotBlank()) doc.id else obj.id,
+                                    commentsCount = cCount,
+                                    commentCount = cCount
+                                )
+                            }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        emptyList()
+                    }
+                }
+
+                val archiveSliceDef = async {
+                    try {
+                        // Rotate an older cursor cutoff between 1 and 28 days back using rotationSeed
+                        val windowDays = ((kotlin.math.abs(rotationSeed) % 27L) + 1L)
+                        val cutoffMs = System.currentTimeMillis() - (windowDays * 86_400_000L)
+                        collection.orderBy("timestamp", Query.Direction.DESCENDING)
+                            .startAfter(cutoffMs)
+                            .limit(15)
+                            .get().await()
+                            .documents.mapNotNull { doc ->
+                                val obj = doc.toObject(DiscoverPost::class.java)
+                                val cCount = (doc.getLong("commentsCount") ?: doc.getLong("commentCount") ?: obj?.commentsCount?.toLong() ?: 0L).toInt()
+                                obj?.copy(
+                                    id = if (doc.id.isNotBlank()) doc.id else obj.id,
+                                    commentsCount = cCount,
+                                    commentCount = cCount
+                                )
+                            }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        emptyList()
+                    }
+                }
+
+                val combined = (
+                    recentPostsDef.await() +
+                        recentFlashesDef.await() +
+                        popularPostsDef.await() +
+                        archiveSliceDef.await()
+                    )
+                    .distinctBy { it.id }
+                    .filter { !it.isArchived && !it.isTakedown }
+                    .take(limit.toInt())
+
+                val hydrated = hydrateAuthorProfiles(combined)
+                if (hydrated.isNotEmpty()) {
+                    OfflineDataCacheManager.saveRecentPosts(com.chroma.studio.ChromaApp.instance, hydrated)
+                }
+                hydrated
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "Error fetching discovery pool", e)
+            OfflineDataCacheManager.getRecentPosts(com.chroma.studio.ChromaApp.instance)
+        }
+    }
+
+    suspend fun publishWork(
+        work: ChromaWork,
+        aspectRatio: String = "4:3",
+        tags: List<String> = emptyList(),
+        mentions: List<String> = emptyList(),
+        collaborators: List<CollabParticipant> = emptyList(),
+        musicTrack: AttachedMusicSelection? = null
+    ) {
         val user = auth.currentUser ?: throw Exception("User not authenticated")
         val userProfile = getUserProfile(user.uid) ?: throw Exception("User profile not found")
-        
+
+        val normalizedCollabs = normalizeInvitedCollaborators(user.uid, collaborators)
+        val pendingCollabIds = normalizedCollabs.map { it.uid }
+
         val newWorkId = collection.document().id
         val communityWork = DiscoverPost(
             id = newWorkId,
@@ -164,6 +346,9 @@ class DiscoverRepository {
             postType = "work",
             tags = tags,
             mentions = mentions,
+            collaborators = normalizedCollabs,
+            pendingCollaboratorIds = pendingCollabIds,
+            collaboratorIds = emptyList(),
             creatorId = user.uid,
             authorUsername = userProfile.username,
             authorDisplayName = userProfile.displayName,
@@ -178,10 +363,42 @@ class DiscoverRepository {
             remixedFromAuthorUsername = work.remixedFromAuthorUsername,
             remixedFromAuthorDisplayName = work.remixedFromAuthorDisplayName,
             remixedFromAuthorAvatar = work.remixedFromAuthorAvatar,
-            remixedFromAuthorVerified = work.remixedFromAuthorVerified
+            remixedFromAuthorVerified = work.remixedFromAuthorVerified,
+            musicTrackId = musicTrack?.trackId,
+            musicTitle = musicTrack?.title,
+            musicArtist = musicTrack?.artist,
+            musicAlbum = musicTrack?.album,
+            musicCoverUrl = musicTrack?.coverUrl,
+            musicAudioUrl = musicTrack?.audioUrl,
+            musicStartSec = musicTrack?.startSec ?: 0,
+            musicDurationSec = musicTrack?.durationSec ?: 0,
+            musicShowLyrics = musicTrack?.showLyricsSticker ?: false
         )
         collection.document(newWorkId).set(communityWork).await()
-        
+        if (musicTrack != null) {
+            try { MusicRepository.getInstance().incrementTrackUsage(musicTrack.trackId) } catch (_: Exception) {}
+        }
+
+        try {
+            if (pendingCollabIds.isNotEmpty()) {
+                NotificationDispatcher.dispatchCollabInviteNotifications(
+                    invitedUids = pendingCollabIds,
+                    postId = newWorkId,
+                    isFlash = false,
+                    titleSnippet = work.name
+                )
+            }
+            NotificationDispatcher.dispatchMentionNotifications(
+                texts = listOf(work.name, work.description),
+                explicitMentions = mentions,
+                surface = MentionSurface.POST,
+                targetId = newWorkId,
+                detailSnippet = work.description.ifBlank { work.name }
+            )
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+        }
+
         // Increment remix count on the original post if this is a remix (1 count per user)
         if (!work.remixedFromPostId.isNullOrEmpty()) {
             incrementRemixCount(work.remixedFromPostId, user.uid)
@@ -193,10 +410,14 @@ class DiscoverRepository {
         remixTitle: String,
         remixDescription: String,
         tags: List<String> = emptyList(),
-        mentions: List<String> = emptyList()
+        mentions: List<String> = emptyList(),
+        collaborators: List<CollabParticipant> = emptyList()
     ): DiscoverPost {
         val user = auth.currentUser ?: throw Exception("User not authenticated")
         val userProfile = getUserProfile(user.uid) ?: throw Exception("User profile not found")
+
+        val normalizedCollabs = normalizeInvitedCollaborators(user.uid, collaborators)
+        val pendingCollabIds = normalizedCollabs.map { it.uid }
 
         val newWorkId = collection.document().id
         val remixedPost = DiscoverPost(
@@ -213,6 +434,9 @@ class DiscoverRepository {
             aspectRatio = originalPost.aspectRatio,
             tags = if (tags.isNotEmpty()) tags else originalPost.tags,
             mentions = mentions,
+            collaborators = normalizedCollabs,
+            pendingCollaboratorIds = pendingCollabIds,
+            collaboratorIds = emptyList(),
             creatorId = user.uid,
             authorUsername = userProfile.username,
             authorDisplayName = userProfile.displayName,
@@ -240,7 +464,8 @@ class DiscoverRepository {
 
         collection.document(newWorkId).set(remixedPost).await()
 
-        if (originalPost.postType == "video" || !originalPost.videoUrl.isNullOrBlank()) {
+        val isFlashRemix = originalPost.postType == "video" || !originalPost.videoUrl.isNullOrBlank()
+        if (isFlashRemix) {
             try {
                 val flashDoc = db.collection("flash_videos").document(newWorkId)
                 val flashVideo = com.chroma.studio.model.FlashVideo(
@@ -256,6 +481,9 @@ class DiscoverRepository {
                     caption = "${remixTitle.ifBlank { "Remix" }}: $remixDescription".trim(),
                     hashtags = if (tags.isNotEmpty()) tags else originalPost.tags,
                     mentions = mentions,
+                    collaborators = normalizedCollabs,
+                    pendingCollaboratorIds = pendingCollabIds,
+                    collaboratorIds = emptyList(),
                     likesCount = 0,
                     likedBy = emptyList(),
                     commentCount = 0,
@@ -293,6 +521,28 @@ class DiscoverRepository {
             Log.w("DiscoverRepository", "Failed to dispatch remix notification: ${e.message}")
         }
 
+        try {
+            if (pendingCollabIds.isNotEmpty()) {
+                NotificationDispatcher.dispatchCollabInviteNotifications(
+                    invitedUids = pendingCollabIds,
+                    postId = newWorkId,
+                    isFlash = isFlashRemix,
+                    previewUrl = remixedPost.thumbnailUrl ?: remixedPost.imageUrl ?: originalPost.imageUrl,
+                    titleSnippet = remixTitle.ifBlank { originalPost.title }
+                )
+            }
+            NotificationDispatcher.dispatchMentionNotifications(
+                texts = listOf(remixTitle, remixDescription),
+                explicitMentions = mentions,
+                surface = MentionSurface.POST,
+                targetId = newWorkId,
+                targetPreviewUrl = remixedPost.imageUrl ?: originalPost.imageUrl,
+                detailSnippet = remixDescription.ifBlank { remixTitle }
+            )
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+        }
+
         return remixedPost
     }
 
@@ -302,12 +552,16 @@ class DiscoverRepository {
         description: String,
         aspectRatio: String,
         tags: List<String>,
-        mentions: List<String>
+        mentions: List<String>,
+        collaborators: List<CollabParticipant> = emptyList(),
+        musicTrack: AttachedMusicSelection? = null
     ): Boolean {
         return try {
             val user = auth.currentUser ?: throw Exception("User not authenticated")
             val userProfile = getUserProfile(user.uid) ?: throw Exception("User profile not found")
-            
+            val normalizedCollabs = normalizeInvitedCollaborators(user.uid, collaborators)
+            val pendingCollabIds = normalizedCollabs.map { it.uid }
+
             // Upload image to Cloudinary CDN
             val imageUrl = CloudinaryClient.uploadImage(imageBytes, folder = user.uid)
                 ?: throw Exception("Image upload to Cloudinary failed. Check your cloud name and upload preset in local.properties.")
@@ -321,6 +575,9 @@ class DiscoverRepository {
                 postType = "image",
                 tags = tags,
                 mentions = mentions,
+                collaborators = normalizedCollabs,
+                pendingCollaboratorIds = pendingCollabIds,
+                collaboratorIds = emptyList(),
                 creatorId = user.uid,
                 authorUsername = userProfile.username,
                 authorDisplayName = userProfile.displayName,
@@ -329,9 +586,42 @@ class DiscoverRepository {
                 authorVerifiedTone = userProfile.verifiedTone,
                 aspectRatio = aspectRatio,
                 timestamp = System.currentTimeMillis(),
-                likesCount = 0
+                likesCount = 0,
+                musicTrackId = musicTrack?.trackId,
+                musicTitle = musicTrack?.title,
+                musicArtist = musicTrack?.artist,
+                musicAlbum = musicTrack?.album,
+                musicCoverUrl = musicTrack?.coverUrl,
+                musicAudioUrl = musicTrack?.audioUrl,
+                musicStartSec = musicTrack?.startSec ?: 0,
+                musicDurationSec = musicTrack?.durationSec ?: 0,
+                musicShowLyrics = musicTrack?.showLyricsSticker ?: false
             )
             collection.document(newWorkId).set(communityWork).await()
+            if (musicTrack != null) {
+                try { MusicRepository.getInstance().incrementTrackUsage(musicTrack.trackId) } catch (_: Exception) {}
+            }
+            try {
+                if (pendingCollabIds.isNotEmpty()) {
+                    NotificationDispatcher.dispatchCollabInviteNotifications(
+                        invitedUids = pendingCollabIds,
+                        postId = newWorkId,
+                        isFlash = false,
+                        previewUrl = imageUrl,
+                        titleSnippet = caption.ifBlank { description }
+                    )
+                }
+                NotificationDispatcher.dispatchMentionNotifications(
+                    texts = listOf(caption, description),
+                    explicitMentions = mentions,
+                    surface = MentionSurface.POST,
+                    targetId = newWorkId,
+                    targetPreviewUrl = imageUrl,
+                    detailSnippet = description.ifBlank { caption }
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
             Log.d("DiscoverRepository", "Image post created with Cloudinary URL: $imageUrl")
             true
         } catch (e: Exception) {
@@ -351,11 +641,15 @@ class DiscoverRepository {
         categoryTag: String? = null,
         hideLikesCount: Boolean = false,
         turnOffComments: Boolean = false,
-        turnOffRemix: Boolean = false
+        turnOffRemix: Boolean = false,
+        collaborators: List<CollabParticipant> = emptyList(),
+        musicTrack: AttachedMusicSelection? = null
     ): Boolean {
         return try {
             val user = auth.currentUser ?: throw Exception("User not authenticated")
             val userProfile = getUserProfile(user.uid) ?: throw Exception("User profile not found")
+            val normalizedCollabs = normalizeInvitedCollaborators(user.uid, collaborators)
+            val pendingCollabIds = normalizedCollabs.map { it.uid }
 
             val uploadedUrls = mutableListOf<String>()
             for (bytes in imageBytesList) {
@@ -379,6 +673,9 @@ class DiscoverRepository {
                 postType = "image",
                 tags = allTags,
                 mentions = mentions,
+                collaborators = normalizedCollabs,
+                pendingCollaboratorIds = pendingCollabIds,
+                collaboratorIds = emptyList(),
                 creatorId = user.uid,
                 authorUsername = userProfile.username,
                 authorDisplayName = userProfile.displayName,
@@ -392,9 +689,42 @@ class DiscoverRepository {
                 hideLikesCount = hideLikesCount,
                 hideRemixesCount = turnOffRemix,
                 turnOffComments = turnOffComments,
-                turnOffRemix = turnOffRemix
+                turnOffRemix = turnOffRemix,
+                musicTrackId = musicTrack?.trackId,
+                musicTitle = musicTrack?.title,
+                musicArtist = musicTrack?.artist,
+                musicAlbum = musicTrack?.album,
+                musicCoverUrl = musicTrack?.coverUrl,
+                musicAudioUrl = musicTrack?.audioUrl,
+                musicStartSec = musicTrack?.startSec ?: 0,
+                musicDurationSec = musicTrack?.durationSec ?: 0,
+                musicShowLyrics = musicTrack?.showLyricsSticker ?: false
             )
             collection.document(newWorkId).set(communityWork).await()
+            if (musicTrack != null) {
+                try { MusicRepository.getInstance().incrementTrackUsage(musicTrack.trackId) } catch (_: Exception) {}
+            }
+            try {
+                if (pendingCollabIds.isNotEmpty()) {
+                    NotificationDispatcher.dispatchCollabInviteNotifications(
+                        invitedUids = pendingCollabIds,
+                        postId = newWorkId,
+                        isFlash = false,
+                        previewUrl = uploadedUrls.firstOrNull(),
+                        titleSnippet = caption.ifBlank { description }
+                    )
+                }
+                NotificationDispatcher.dispatchMentionNotifications(
+                    texts = listOf(caption, description),
+                    explicitMentions = mentions,
+                    surface = MentionSurface.POST,
+                    targetId = newWorkId,
+                    targetPreviewUrl = uploadedUrls.firstOrNull(),
+                    detailSnippet = description.ifBlank { caption }
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
             Log.d("DiscoverRepository", "Multi-image post created: $newWorkId with ${uploadedUrls.size} images")
             true
         } catch (e: Exception) {
@@ -414,11 +744,15 @@ class DiscoverRepository {
         categoryTag: String? = null,
         hideLikesCount: Boolean = false,
         turnOffComments: Boolean = false,
-        turnOffRemix: Boolean = false
+        turnOffRemix: Boolean = false,
+        collaborators: List<CollabParticipant> = emptyList(),
+        musicTrack: AttachedMusicSelection? = null
     ): Boolean {
         return try {
             val user = auth.currentUser ?: throw Exception("User not authenticated")
             val userProfile = getUserProfile(user.uid) ?: throw Exception("User profile not found")
+            val normalizedCollabs = normalizeInvitedCollaborators(user.uid, collaborators)
+            val pendingCollabIds = normalizedCollabs.map { it.uid }
 
             val compressedJsonList = works.map { work ->
                 com.chroma.studio.utils.DataCompressionUtils.compressText(work.layersJson)
@@ -427,15 +761,19 @@ class DiscoverRepository {
             val newWorkId = collection.document().id
             val allTags = if (!categoryTag.isNullOrBlank()) (tags + categoryTag).distinct() else tags
             val primaryWork = works.firstOrNull()
+            val resolvedTitle = if (caption.isNotBlank()) caption else (primaryWork?.name ?: "Untitled Work")
             val communityWork = DiscoverPost(
                 id = newWorkId,
-                title = if (caption.isNotBlank()) caption else (primaryWork?.name ?: "Untitled Work"),
+                title = resolvedTitle,
                 description = if (description.isNotBlank()) description else (primaryWork?.description ?: ""),
                 jsonUrl = compressedJsonList.firstOrNull() ?: "",
                 workUrls = compressedJsonList,
                 postType = "work",
                 tags = allTags,
                 mentions = mentions,
+                collaborators = normalizedCollabs,
+                pendingCollaboratorIds = pendingCollabIds,
+                collaboratorIds = emptyList(),
                 creatorId = user.uid,
                 authorUsername = userProfile.username,
                 authorDisplayName = userProfile.displayName,
@@ -458,6 +796,25 @@ class DiscoverRepository {
                 remixedFromAuthorVerified = primaryWork?.remixedFromAuthorVerified ?: false
             )
             collection.document(newWorkId).set(communityWork).await()
+            try {
+                if (pendingCollabIds.isNotEmpty()) {
+                    NotificationDispatcher.dispatchCollabInviteNotifications(
+                        invitedUids = pendingCollabIds,
+                        postId = newWorkId,
+                        isFlash = false,
+                        titleSnippet = resolvedTitle
+                    )
+                }
+                NotificationDispatcher.dispatchMentionNotifications(
+                    texts = listOf(caption, description, primaryWork?.name, primaryWork?.description),
+                    explicitMentions = mentions,
+                    surface = MentionSurface.POST,
+                    targetId = newWorkId,
+                    detailSnippet = description.ifBlank { caption }.ifBlank { primaryWork?.name }
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
             if (!primaryWork?.remixedFromPostId.isNullOrEmpty()) {
                 incrementRemixCount(primaryWork.remixedFromPostId!!, user.uid)
             }
@@ -487,11 +844,14 @@ class DiscoverRepository {
         hideLikesCount: Boolean = false,
         turnOffComments: Boolean = false,
         turnOffRemix: Boolean = false,
-        hideDownloadsCount: Boolean = false
+        hideDownloadsCount: Boolean = false,
+        collaborators: List<CollabParticipant> = emptyList()
     ): Boolean {
         return try {
             val user = auth.currentUser ?: throw Exception("User not authenticated")
             val userProfile = getUserProfile(user.uid) ?: throw Exception("User profile not found")
+            val normalizedCollabs = normalizeInvitedCollaborators(user.uid, collaborators)
+            val pendingCollabIds = normalizedCollabs.map { it.uid }
 
             val newWorkId = collection.document().id
             val communityWork = DiscoverPost(
@@ -503,6 +863,9 @@ class DiscoverRepository {
                 postType = "video",
                 tags = tags,
                 mentions = mentions,
+                collaborators = normalizedCollabs,
+                pendingCollaboratorIds = pendingCollabIds,
+                collaboratorIds = emptyList(),
                 creatorId = user.uid,
                 authorUsername = userProfile.username,
                 authorDisplayName = userProfile.displayName,
@@ -520,6 +883,27 @@ class DiscoverRepository {
                 turnOffRemix = turnOffRemix
             )
             collection.document(newWorkId).set(communityWork).await()
+            try {
+                if (pendingCollabIds.isNotEmpty()) {
+                    NotificationDispatcher.dispatchCollabInviteNotifications(
+                        invitedUids = pendingCollabIds,
+                        postId = newWorkId,
+                        isFlash = false,
+                        previewUrl = thumbnailUrl.ifBlank { null },
+                        titleSnippet = caption.ifBlank { description }
+                    )
+                }
+                NotificationDispatcher.dispatchMentionNotifications(
+                    texts = listOf(caption, description),
+                    explicitMentions = mentions,
+                    surface = MentionSurface.POST,
+                    targetId = newWorkId,
+                    targetPreviewUrl = thumbnailUrl.ifBlank { null },
+                    detailSnippet = description.ifBlank { caption }
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
             Log.d("DiscoverRepository", "Community video post created: $newWorkId, url=$videoUrl")
             true
         } catch (e: Exception) {
@@ -592,37 +976,70 @@ class DiscoverRepository {
 
     suspend fun getWorksByUser(creatorId: String): List<DiscoverPost> {
         return try {
-            val snapshot = collection
+            val ownSnap = collection
                 .whereEqualTo("creatorId", creatorId)
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .get()
                 .await()
-            val posts = snapshot.documents.mapNotNull { doc ->
+            val ownPosts = ownSnap.documents.mapNotNull { doc ->
                 doc.toObject(DiscoverPost::class.java)?.copy(
                     id = if (doc.id.isNotBlank()) doc.id else (doc.toObject(DiscoverPost::class.java)?.id ?: "")
                 )
-            }.filter { !it.isArchived }
+            }.filter { !it.isArchived && !it.isTakedown }
 
-            val flashes = try {
-                val fSnap = db.collection("flash_videos")
-                    .whereEqualTo("creatorId", creatorId)
+            val collabPosts = try {
+                collection
+                    .whereArrayContains("collaboratorIds", creatorId)
                     .get()
                     .await()
-                fSnap.documents.mapNotNull { doc ->
-                    val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
-                    if (fv != null && !fv.isArchived) mapFlashToDiscoverPost(fv, doc.id) else null
-                }
+                    .documents.mapNotNull { doc ->
+                        doc.toObject(DiscoverPost::class.java)?.copy(
+                            id = if (doc.id.isNotBlank()) doc.id else (doc.toObject(DiscoverPost::class.java)?.id ?: "")
+                        )
+                    }.filter { !it.isArchived && !it.isTakedown }
             } catch (_: Exception) {
                 emptyList()
             }
 
-            (posts + flashes)
-                .distinctBy { it.id }
-                .sortedByDescending { it.timestamp }
+            val ownFlashes = try {
+                db.collection("flash_videos")
+                    .whereEqualTo("creatorId", creatorId)
+                    .get()
+                    .await()
+                    .documents.mapNotNull { doc ->
+                        val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
+                        if (fv != null && !fv.isArchived && !fv.isTakedown) mapFlashToDiscoverPost(fv, doc.id) else null
+                    }
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            val collabFlashes = try {
+                db.collection("flash_videos")
+                    .whereArrayContains("collaboratorIds", creatorId)
+                    .get()
+                    .await()
+                    .documents.mapNotNull { doc ->
+                        val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
+                        if (fv != null && !fv.isArchived && !fv.isTakedown) mapFlashToDiscoverPost(fv, doc.id) else null
+                    }
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            val combined = mergeCreatorAndCollabPosts(
+                creatorPosts = ownPosts + ownFlashes,
+                collabPosts = collabPosts + collabFlashes
+            )
+            val sortedWorks = hydrateAuthorProfiles(combined)
+            if (sortedWorks.isNotEmpty()) {
+                OfflineDataCacheManager.saveUserPosts(com.chroma.studio.ChromaApp.instance, creatorId, sortedWorks)
+            }
+            sortedWorks
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error fetching works for user", e)
-            emptyList()
+            OfflineDataCacheManager.getUserPosts(com.chroma.studio.ChromaApp.instance, creatorId)
         }
     }
 
@@ -656,13 +1073,28 @@ class DiscoverRepository {
         }
     }
 
-    suspend fun shareWork(work: ChromaWork, authorName: String, authorUsername: String, creatorId: String, authorAvatarUrl: String, authorVerified: Boolean, aspectRatio: String): Boolean {
+    suspend fun shareWork(
+        work: ChromaWork,
+        authorName: String,
+        authorUsername: String,
+        creatorId: String,
+        authorAvatarUrl: String,
+        authorVerified: Boolean,
+        aspectRatio: String,
+        collaborators: List<CollabParticipant> = emptyList(),
+        musicTrack: AttachedMusicSelection? = null
+    ): Boolean {
         return try {
+            val normalizedCollabs = normalizeInvitedCollaborators(creatorId, collaborators)
+            val pendingCollabIds = normalizedCollabs.map { it.uid }
             val communityWork = DiscoverPost(
                 id = work.id, 
                 title = work.name,
                 description = work.description,
                 jsonUrl = com.chroma.studio.utils.DataCompressionUtils.compressText(work.layersJson),
+                collaborators = normalizedCollabs,
+                pendingCollaboratorIds = pendingCollabIds,
+                collaboratorIds = emptyList(),
                 creatorId = creatorId,
                 authorUsername = authorUsername,
                 authorDisplayName = authorName,
@@ -670,9 +1102,39 @@ class DiscoverRepository {
                 authorVerified = authorVerified,
                 aspectRatio = aspectRatio,
                 timestamp = System.currentTimeMillis(),
-                likesCount = 0
+                likesCount = 0,
+                musicTrackId = musicTrack?.trackId,
+                musicTitle = musicTrack?.title,
+                musicArtist = musicTrack?.artist,
+                musicAlbum = musicTrack?.album,
+                musicCoverUrl = musicTrack?.coverUrl,
+                musicAudioUrl = musicTrack?.audioUrl,
+                musicStartSec = musicTrack?.startSec ?: 0,
+                musicDurationSec = musicTrack?.durationSec ?: 0,
+                musicShowLyrics = musicTrack?.showLyricsSticker ?: false
             )
             collection.document(communityWork.id).set(communityWork).await()
+            if (musicTrack != null) {
+                try { MusicRepository.getInstance().incrementTrackUsage(musicTrack.trackId) } catch (_: Exception) {}
+            }
+            try {
+                if (pendingCollabIds.isNotEmpty()) {
+                    NotificationDispatcher.dispatchCollabInviteNotifications(
+                        invitedUids = pendingCollabIds,
+                        postId = communityWork.id,
+                        isFlash = false,
+                        titleSnippet = work.name
+                    )
+                }
+                NotificationDispatcher.dispatchMentionNotifications(
+                    texts = listOf(work.name, work.description),
+                    surface = MentionSurface.POST,
+                    targetId = communityWork.id,
+                    detailSnippet = work.description.ifBlank { work.name }
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
             true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -807,14 +1269,25 @@ class DiscoverRepository {
                 try { likeRef.set(mapOf("timestamp" to now)).await() } catch (_: Exception) {}
                 try { userLikeRef.set(mapOf("likedAt" to now)).await() } catch (_: Exception) {}
 
-                // 4. Dispatch real notification to post author
+                // 4. Dispatch real notification to post creator and accepted collaborators
                 try {
+                    val workSnap = try { workRef.get().await() } catch (_: Exception) { null }
+                    val flashSnap = if (workSnap == null || !workSnap.exists()) {
+                        try { flashRef.get().await() } catch (_: Exception) { null }
+                    } else null
+                    @Suppress("UNCHECKED_CAST")
+                    val collabIds = (workSnap?.get("collaboratorIds") as? List<String>)
+                        ?: (flashSnap?.get("collaboratorIds") as? List<String>)
+                        ?: emptyList()
                     val targetAuthor = postAuthorId
-                    if (!targetAuthor.isNullOrBlank() && targetAuthor != userId) {
+                    val recipients = (listOfNotNull(targetAuthor) + collabIds)
+                        .filter { it.isNotBlank() && it != userId }
+                        .distinct()
+                    for (recipientUid in recipients) {
                         NotificationDispatcher.sendNotification(
-                            targetUserId = targetAuthor,
+                            targetUserId = recipientUid,
                             type = com.chroma.studio.model.NotificationActionType.LIKE,
-                            actionText = "liked your post",
+                            actionText = if (recipientUid == targetAuthor) "liked your post" else "liked your collab post",
                             detailText = postTitle ?: "post",
                             targetPreviewUrl = postThumb,
                             targetId = workId
@@ -930,16 +1403,221 @@ class DiscoverRepository {
 
     suspend fun updateWork(workId: String, newTitle: String, newDescription: String): Boolean {
         return try {
+            val existingDoc = try { collection.document(workId).get().await() } catch (_: Exception) { null }
+            val oldTitle = existingDoc?.getString("title")
+            val oldDescription = existingDoc?.getString("description")
+            val previewUrl = existingDoc?.getString("thumbnailUrl") ?: existingDoc?.getString("imageUrl")
+
             collection.document(workId).update(
                 mapOf(
                     "title" to newTitle,
                     "description" to newDescription
                 )
             ).await()
+
+            try {
+                NotificationDispatcher.dispatchMentionNotifications(
+                    texts = listOf(newTitle, newDescription),
+                    previousTexts = listOf(oldTitle, oldDescription),
+                    surface = MentionSurface.POST,
+                    targetId = workId,
+                    targetPreviewUrl = previewUrl,
+                    detailSnippet = newDescription.ifBlank { newTitle }
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
             true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error updating work", e)
+            false
+        }
+    }
+
+    private fun serializeCollabParticipants(list: List<CollabParticipant>): List<Map<String, Any?>> =
+        list.map { p ->
+            mapOf(
+                "uid" to p.uid,
+                "username" to p.username,
+                "displayName" to p.displayName,
+                "avatarUrl" to p.avatarUrl,
+                "verified" to p.verified,
+                "verifiedTone" to p.verifiedTone,
+                "status" to p.status,
+                "invitedAt" to p.invitedAt,
+                "respondedAt" to p.respondedAt
+            )
+        }
+
+    /**
+     * Accepts or declines a pending collaboration invite for [postId] atomically across `community_works` and `flash_videos`.
+     */
+    suspend fun respondToCollabInvite(postId: String, accept: Boolean): Boolean {
+        val currentUid = auth.currentUser?.uid ?: return false
+        if (postId.isBlank()) return false
+        return try {
+            val workRef = collection.document(postId)
+            val flashRef = db.collection("flash_videos").document(postId)
+            val workSnap = try { workRef.get().await() } catch (_: Exception) { null }
+            val flashSnap = try { flashRef.get().await() } catch (_: Exception) { null }
+            val sourceSnap = workSnap?.takeIf { it.exists() } ?: flashSnap?.takeIf { it.exists() } ?: return false
+
+            val sourcePost = sourceSnap.toObject(DiscoverPost::class.java)
+            val flashObj = if (sourcePost == null || !workSnap?.exists()!!) {
+                flashSnap?.toObject(com.chroma.studio.model.FlashVideo::class.java)
+            } else null
+
+            val currentCollabs = sourcePost?.collaborators ?: flashObj?.collaborators ?: emptyList()
+            val currentPending = sourcePost?.pendingCollaboratorIds ?: flashObj?.pendingCollaboratorIds ?: emptyList()
+            val currentAccepted = sourcePost?.collaboratorIds ?: flashObj?.collaboratorIds ?: emptyList()
+            val creatorUid = sourcePost?.creatorId ?: flashObj?.creatorId.orEmpty()
+            val previewUrl = sourcePost?.thumbnailUrl ?: sourcePost?.imageUrl ?: flashObj?.thumbnailUrl
+            val isFlash = (flashSnap != null && flashSnap.exists()) || sourcePost?.postType == "video"
+
+            val nextState = applyCollabInviteResponse(
+                participants = currentCollabs,
+                pendingIds = currentPending,
+                acceptedIds = currentAccepted,
+                responderUid = currentUid,
+                accept = accept
+            )
+            if (!nextState.changed) return false
+
+            val updates = mapOf(
+                "collaborators" to serializeCollabParticipants(nextState.collaborators),
+                "pendingCollaboratorIds" to nextState.pendingCollaboratorIds,
+                "collaboratorIds" to nextState.collaboratorIds
+            )
+            val batch = db.batch()
+            if (workSnap != null && workSnap.exists()) batch.update(workRef, updates)
+            if (flashSnap != null && flashSnap.exists()) batch.update(flashRef, updates)
+            batch.commit().await()
+
+            try {
+                NotificationDispatcher.dispatchCollabResponseNotification(
+                    creatorUid = creatorUid,
+                    postId = postId,
+                    isFlash = isFlash,
+                    accepted = accept,
+                    previewUrl = previewUrl
+                )
+            } catch (_: Exception) {}
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "respondToCollabInvite failed for $postId", e)
+            false
+        }
+    }
+
+    /**
+     * Allows an accepted collaborator to opt out ("Stop sharing"), removing the shared post only from their profile.
+     */
+    suspend fun leaveCollab(postId: String): Boolean {
+        val currentUid = auth.currentUser?.uid ?: return false
+        if (postId.isBlank()) return false
+        return try {
+            val workRef = collection.document(postId)
+            val flashRef = db.collection("flash_videos").document(postId)
+            val workSnap = try { workRef.get().await() } catch (_: Exception) { null }
+            val flashSnap = try { flashRef.get().await() } catch (_: Exception) { null }
+            val sourceSnap = workSnap?.takeIf { it.exists() } ?: flashSnap?.takeIf { it.exists() } ?: return false
+
+            val sourcePost = sourceSnap.toObject(DiscoverPost::class.java)
+            val flashObj = if (sourcePost == null) flashSnap?.toObject(com.chroma.studio.model.FlashVideo::class.java) else null
+
+            val currentCollabs = sourcePost?.collaborators ?: flashObj?.collaborators ?: emptyList()
+            val currentPending = sourcePost?.pendingCollaboratorIds ?: flashObj?.pendingCollaboratorIds ?: emptyList()
+            val currentAccepted = sourcePost?.collaboratorIds ?: flashObj?.collaboratorIds ?: emptyList()
+
+            val nextState = removeCollabParticipant(
+                participants = currentCollabs,
+                pendingIds = currentPending,
+                acceptedIds = currentAccepted,
+                targetUid = currentUid
+            )
+            if (!nextState.changed) return false
+
+            val updates = mapOf(
+                "collaborators" to serializeCollabParticipants(nextState.collaborators),
+                "collaboratorIds" to nextState.collaboratorIds
+            )
+            val batch = db.batch()
+            if (workSnap != null && workSnap.exists()) batch.update(workRef, updates)
+            if (flashSnap != null && flashSnap.exists()) batch.update(flashRef, updates)
+            batch.commit().await()
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "leaveCollab failed for $postId", e)
+            false
+        }
+    }
+
+    /**
+     * Allows the primary creator to invite new collaborators or remove existing ones after publishing.
+     */
+    suspend fun updateCollaboratorsAsCreator(
+        postId: String,
+        addedCollaborators: List<CollabParticipant> = emptyList(),
+        removedUids: List<String> = emptyList()
+    ): Boolean {
+        val currentUid = auth.currentUser?.uid ?: return false
+        if (postId.isBlank()) return false
+        return try {
+            val workRef = collection.document(postId)
+            val flashRef = db.collection("flash_videos").document(postId)
+            val workSnap = try { workRef.get().await() } catch (_: Exception) { null }
+            val flashSnap = try { flashRef.get().await() } catch (_: Exception) { null }
+            val sourceSnap = workSnap?.takeIf { it.exists() } ?: flashSnap?.takeIf { it.exists() } ?: return false
+
+            val sourcePost = sourceSnap.toObject(DiscoverPost::class.java)
+            val flashObj = if (sourcePost == null) flashSnap?.toObject(com.chroma.studio.model.FlashVideo::class.java) else null
+            val creatorUid = sourcePost?.creatorId ?: flashObj?.creatorId ?: return false
+            if (creatorUid != currentUid) return false
+
+            val existingCollabs = sourcePost?.collaborators ?: flashObj?.collaborators ?: emptyList()
+            val removeSet = removedUids.toSet()
+            val keptCollabs = existingCollabs.filterNot { it.uid in removeSet }.toMutableList()
+            val keptUids = keptCollabs.map { it.uid }.toMutableSet()
+            val normalizedAdditions = normalizeInvitedCollaborators(currentUid, addedCollaborators)
+                .filter { it.uid !in keptUids && keptCollabs.size < MAX_COLLAB_PARTICIPANTS }
+            for (newP in normalizedAdditions) {
+                if (keptCollabs.size < MAX_COLLAB_PARTICIPANTS && keptUids.add(newP.uid)) {
+                    keptCollabs.add(newP)
+                }
+            }
+            val nextPending = keptCollabs.filter { CollabInviteStatus.fromWire(it.status) == CollabInviteStatus.PENDING }.map { it.uid }
+            val nextAccepted = keptCollabs.filter { CollabInviteStatus.fromWire(it.status) == CollabInviteStatus.ACCEPTED }.map { it.uid }
+
+            val updates = mapOf(
+                "collaborators" to serializeCollabParticipants(keptCollabs),
+                "pendingCollaboratorIds" to nextPending,
+                "collaboratorIds" to nextAccepted
+            )
+            val batch = db.batch()
+            if (workSnap != null && workSnap.exists()) batch.update(workRef, updates)
+            if (flashSnap != null && flashSnap.exists()) batch.update(flashRef, updates)
+            batch.commit().await()
+
+            val newlyInvitedUids = normalizedAdditions.map { it.uid }
+            if (newlyInvitedUids.isNotEmpty()) {
+                val isFlash = (flashSnap != null && flashSnap.exists()) || sourcePost?.postType == "video"
+                val preview = sourcePost?.thumbnailUrl ?: sourcePost?.imageUrl ?: flashObj?.thumbnailUrl
+                val title = sourcePost?.title ?: flashObj?.caption
+                NotificationDispatcher.dispatchCollabInviteNotifications(
+                    invitedUids = newlyInvitedUids,
+                    postId = postId,
+                    isFlash = isFlash,
+                    previewUrl = preview,
+                    titleSnippet = title
+                )
+            }
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "updateCollaboratorsAsCreator failed for $postId", e)
             false
         }
     }
@@ -1353,56 +2031,52 @@ class DiscoverRepository {
 
     suspend fun updateUserProfile(updatedProfile: UserProfile): Result<Unit> {
         return try {
-            val uid = updatedProfile.uid.ifBlank { auth.currentUser?.uid }
+            val uid = auth.currentUser?.uid ?: updatedProfile.uid.ifBlank { null }
                 ?: return Result.failure(IllegalStateException("User is not authenticated"))
 
             val cleanUsername = updatedProfile.username.trim().lowercase()
             val cleanDisplayName = updatedProfile.displayName.trim()
 
-            if (cleanDisplayName.isBlank()) {
-                return Result.failure(IllegalArgumentException("Display name cannot be empty"))
+            validateProfileHandleUpdate(cleanDisplayName, cleanUsername)?.let { errMsg ->
+                return Result.failure(IllegalArgumentException(errMsg))
             }
 
-            if (cleanUsername.length < 3 || cleanUsername.length > 30) {
-                return Result.failure(IllegalArgumentException("Username must be between 3 and 30 characters"))
-            }
+            // Fetch current profile (bypassing stale cache if needed) to check username & staff role
+            val currentProfile = try {
+                usersCollection.document(uid).get().await().toUserProfileSafe()
+            } catch (_: Exception) {
+                null
+            } ?: getUserProfile(uid)
 
-            if (!cleanUsername.matches(Regex("^[a-z0-9._]+$"))) {
-                return Result.failure(IllegalArgumentException("Username can only contain lowercase letters, numbers, periods, and underscores"))
-            }
-
-            // Fetch current profile to check if username changed
-            val currentProfile = getUserProfile(uid)
             val oldUsername = currentProfile?.username?.trim()?.lowercase()
-            val usernameChanged = oldUsername != null && oldUsername != cleanUsername
-
+            val usernameChanged = !oldUsername.isNullOrBlank() && oldUsername != cleanUsername
+            val safeRole = resolveSafeProfileRole(currentProfile?.role, updatedProfile.role)
             val now = System.currentTimeMillis()
 
             db.runTransaction { transaction ->
                 val userRef = usersCollection.document(uid)
+                val newUsernameRef = usernamesCollection.document(cleanUsername)
+
+                // Perform ALL reads before ANY writes per Firestore transaction requirements
+                val newUsernameDoc = transaction.get(newUsernameRef)
+                val oldUsernameRef = if (usernameChanged) usernamesCollection.document(oldUsername!!) else null
+                val oldUsernameDoc = oldUsernameRef?.let { transaction.get(it) }
+
+                if (newUsernameDoc.exists() && newUsernameDoc.getString("uid") != uid) {
+                    throw IllegalArgumentException("Username @$cleanUsername is already taken")
+                }
 
                 if (usernameChanged) {
-                    val newUsernameRef = usernamesCollection.document(cleanUsername)
-                    val newUsernameDoc = transaction.get(newUsernameRef)
-                    if (newUsernameDoc.exists() && newUsernameDoc.getString("uid") != uid) {
-                        throw IllegalArgumentException("Username @$cleanUsername is already taken")
-                    }
-
-                    // Reserve new username in usernamesCollection index
                     transaction.set(newUsernameRef, mapOf("uid" to uid, "updatedAt" to now))
-
-                    // Free old username
-                    if (!oldUsername.isNullOrBlank()) {
-                        val oldUsernameRef = usernamesCollection.document(oldUsername)
+                    // Only delete old username index doc if it actually exists and is owned by this user
+                    if (oldUsernameDoc != null && oldUsernameDoc.exists() && oldUsernameDoc.getString("uid") == uid) {
                         transaction.delete(oldUsernameRef)
                     }
                 } else if (cleanUsername.isNotBlank()) {
-                    // Ensure current username document is indexed in usernamesCollection
-                    val usernameRef = usernamesCollection.document(cleanUsername)
-                    transaction.set(usernameRef, mapOf("uid" to uid, "updatedAt" to now), SetOptions.merge())
+                    transaction.set(newUsernameRef, mapOf("uid" to uid, "updatedAt" to now), SetOptions.merge())
                 }
 
-                // Prepare safe update map (merging into user doc without clobbering createdAt, counters, verified, etc.)
+                // Prepare safe update map (never clobbering immutable verified/isPro/banned/staff fields)
                 val updates = mutableMapOf<String, Any?>(
                     "uid" to uid,
                     "displayName" to cleanDisplayName,
@@ -1411,7 +2085,6 @@ class DiscoverRepository {
                     "bannerUrl" to updatedProfile.bannerUrl.trim(),
                     "bannerWorkId" to updatedProfile.bannerWorkId,
                     "bio" to updatedProfile.bio.trim(),
-                    "role" to updatedProfile.role.trim(),
                     "dob" to updatedProfile.dob,
                     "dateOfBirth" to updatedProfile.dob,
                     "gender" to updatedProfile.gender,
@@ -1425,6 +2098,10 @@ class DiscoverRepository {
                     "privateAccount" to updatedProfile.isPrivateAccount,
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
+                // Only include role if not a protected staff role and changed or non-empty
+                if (!isPrivilegedAccountRole(currentProfile?.role)) {
+                    updates["role"] = safeRole
+                }
 
                 transaction.set(userRef, updates, SetOptions.merge())
             }.await()
@@ -1445,6 +2122,21 @@ class DiscoverRepository {
             }
 
             profileCache[uid] = updatedProfile
+
+            // Notify any newly mentioned users in profile bio immediately
+            try {
+                NotificationDispatcher.dispatchMentionNotifications(
+                    texts = listOf(updatedProfile.bio),
+                    previousTexts = listOf(currentProfile?.bio),
+                    surface = MentionSurface.PROFILE,
+                    targetId = uid,
+                    targetPreviewUrl = updatedProfile.avatarUrl.ifBlank { null },
+                    detailSnippet = updatedProfile.bio.trim()
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+
             Result.success(Unit)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -1455,17 +2147,38 @@ class DiscoverRepository {
 
     suspend fun getUserProfile(uid: String): UserProfile? {
         if (uid.isBlank()) return null
-        profileCache[uid]?.let { return it }
+        profileCache[uid]?.let { cached ->
+            com.chroma.studio.ui.components.OscellionLuxuryBrandController.updateForProfileIfCurrentUser(
+                com.chroma.studio.ChromaApp.instance,
+                cached
+            )
+            return cached
+        }
+        OfflineDataCacheManager.getUserProfile(com.chroma.studio.ChromaApp.instance, uid)?.let { diskCached ->
+            profileCache[uid] = diskCached
+        }
         return try {
             val doc = usersCollection.document(uid).get().await()
-            val profile = doc.toObject(UserProfile::class.java)
+            val profile = doc.toUserProfileSafe()
             if (profile != null) {
                 profileCache[uid] = profile
+                com.chroma.studio.ui.components.VerifiedBadgeRegistry.register(profile)
+                com.chroma.studio.ui.components.OscellionLuxuryBrandController.updateForProfileIfCurrentUser(
+                    com.chroma.studio.ChromaApp.instance,
+                    profile
+                )
+                com.chroma.studio.data.OnlineStatusManager.seedProfilePresence(profile)
+                OfflineDataCacheManager.saveUserProfile(com.chroma.studio.ChromaApp.instance, profile)
             }
-            profile
+            profile ?: profileCache[uid]
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            null
+            val fallback = profileCache[uid] ?: OfflineDataCacheManager.getUserProfile(com.chroma.studio.ChromaApp.instance, uid)
+            com.chroma.studio.ui.components.OscellionLuxuryBrandController.updateForProfileIfCurrentUser(
+                com.chroma.studio.ChromaApp.instance,
+                fallback
+            )
+            fallback
         }
     }
 
@@ -1492,9 +2205,15 @@ class DiscoverRepository {
                 return@addSnapshotListener
             }
             if (snapshot != null && snapshot.exists()) {
-                val profile = snapshot.toObject(UserProfile::class.java)
+                val profile = snapshot.toUserProfileSafe()
                 if (profile != null) {
                     profileCache[uid] = profile
+                    com.chroma.studio.ui.components.VerifiedBadgeRegistry.register(profile)
+                    com.chroma.studio.ui.components.OscellionLuxuryBrandController.updateForProfileIfCurrentUser(
+                        com.chroma.studio.ChromaApp.instance,
+                        profile
+                    )
+                    com.chroma.studio.data.OnlineStatusManager.seedProfilePresence(profile)
                 }
                 trySend(profile)
             } else {
@@ -1819,13 +2538,17 @@ class DiscoverRepository {
                 val modeRaw = snap.getString("mode")
                 val mode = if (modeRaw == "curated_only") "curated_only" else "curated_first"
                 val maxSpot = (snap.getLong("maxSpotlight") ?: 6L).toInt().coerceIn(3, 20)
-                com.chroma.studio.model.TrendingConfig(mode = mode, maxSpotlight = maxSpot)
+                com.chroma.studio.model.TrendingConfig(mode = mode, maxSpotlight = maxSpot).also {
+                    OfflineDataCacheManager.saveTrendingConfig(com.chroma.studio.ChromaApp.instance, it)
+                }
             } else {
-                com.chroma.studio.model.TrendingConfig()
+                OfflineDataCacheManager.getTrendingConfig(com.chroma.studio.ChromaApp.instance)
+                    ?: com.chroma.studio.model.TrendingConfig()
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            com.chroma.studio.model.TrendingConfig()
+            OfflineDataCacheManager.getTrendingConfig(com.chroma.studio.ChromaApp.instance)
+                ?: com.chroma.studio.model.TrendingConfig()
         }
     }
 
@@ -1913,12 +2636,16 @@ class DiscoverRepository {
                         .thenByDescending { it.likesCount + it.effectiveCommentsCount * 2 + it.remixCount * 3 }
                 ).take(limit.toInt())
 
-                hydrateAuthorProfiles(sorted)
+                val hydratedTrending = hydrateAuthorProfiles(sorted)
+                if (hydratedTrending.isNotEmpty()) {
+                    OfflineDataCacheManager.saveTrendingPosts(com.chroma.studio.ChromaApp.instance, hydratedTrending)
+                }
+                hydratedTrending
             }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error fetching trending works", e)
-            emptyList()
+            OfflineDataCacheManager.getTrendingPosts(com.chroma.studio.ChromaApp.instance)
         }
     }
 

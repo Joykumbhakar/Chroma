@@ -237,6 +237,7 @@ fun ConversationsScreen(
     var isSearchExpanded by remember { mutableStateOf(false) }
     val selectedChatIds = remember { mutableStateListOf<String>() }
     var chatPendingDelete by remember { mutableStateOf<ChatConversation?>(null) }
+    var chatPendingClearHistory by remember { mutableStateOf<ChatConversation?>(null) }
     var storyPendingDelete by remember { mutableStateOf<Story?>(null) }
     var showDeleteSelectedChatsDialog by remember { mutableStateOf(false) }
     var showBiometricLockConfirmationDialog by remember { mutableStateOf(false) }
@@ -1182,7 +1183,7 @@ fun ConversationsScreen(
                     }
                 },
                 onArchive = { onArchiveChat(chat) },
-                onClearHistory = { onClearChatHistory(chat) },
+                onClearHistory = { chatPendingClearHistory = chat },
                 onExportChat = { onExportChat(chat) },
                 onDeleteChat = { chatPendingDelete = chat }
             )
@@ -1224,6 +1225,30 @@ fun ConversationsScreen(
                     )
                 ),
                 onDismiss = { chatPendingDelete = null }
+            )
+        }
+
+        chatPendingClearHistory?.let { chat ->
+            IosAlertDialog(
+                title = "Clear Chat History?",
+                message = "All messages in \"${chat.name}\" will be cleared from this conversation. This action cannot be undone.",
+                actions = listOf(
+                    IosAlertAction(
+                        title = "Cancel",
+                        isCancel = true,
+                        onClick = { chatPendingClearHistory = null }
+                    ),
+                    IosAlertAction(
+                        title = "Clear History",
+                        isDestructive = true,
+                        onClick = {
+                            val toClear = chat
+                            chatPendingClearHistory = null
+                            onClearChatHistory(toClear)
+                        }
+                    )
+                ),
+                onDismiss = { chatPendingClearHistory = null }
             )
         }
 
@@ -1367,7 +1392,7 @@ private fun sanitizeMessagePreview(rawText: String): String {
         val q = rawText.removePrefix("[POLL]:").substringBefore("|||").trim()
         return "Poll: $q"
     }
-    return rawText
+    return com.chroma.studio.data.ChatFontStyle.stripInlineFontMarkup(rawText)
         .replace(Regex("\\[([^]]+)\\]\\([^)]+\\)"), "$1") // [label](url) -> label
         .replace(Regex("[#*_~`]"), "")
         .replace(Regex("\\s+"), " ")
@@ -1486,9 +1511,9 @@ private fun IosStoryAvatarItem(
                         .size(18.dp)
                         .align(Alignment.BottomEnd)
                         .offset(x = (-1).dp, y = (-1).dp)
-                        .background(colors.appBg, CircleShape)
+                        .background(colors.appBg, RoundedCornerShape(5.dp))
                         .padding(1.5.dp)
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(4.dp))
                         .background(colors.iosBlue),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1868,7 +1893,7 @@ private fun IosConversationListRow(
                     avatarUrl = chat.avatar,
                     name = chat.name,
                     size = 52.dp,
-                    showOnline = true,
+                    showOnline = chat.type != "group",
                     isOnline = chat.online
                 )
 

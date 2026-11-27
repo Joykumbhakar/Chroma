@@ -242,6 +242,7 @@ fun HomeNavigationDrawerContent(
     avatarUrl: String,
     bannerUrl: String = "",
     isVerified: Boolean = false,
+    verifiedTone: String? = null,
     isOnline: Boolean = true,
     draftsBadgeCount: String? = null,
     onCloseClick: () -> Unit,
@@ -295,6 +296,7 @@ fun HomeNavigationDrawerContent(
                 avatarUrl = avatarUrl,
                 bannerUrl = bannerUrl,
                 isVerified = isVerified,
+                verifiedTone = verifiedTone,
                 isOnline = isOnline,
                 onCloseClick = onCloseClick,
                 onProfileClick = onProfileClick
@@ -529,6 +531,7 @@ private fun DrawerHeaderWithProfile(
     avatarUrl: String,
     bannerUrl: String,
     isVerified: Boolean,
+    verifiedTone: String? = null,
     isOnline: Boolean,
     onCloseClick: () -> Unit,
     onProfileClick: () -> Unit
@@ -685,30 +688,17 @@ private fun DrawerHeaderWithProfile(
                     )
                 }
 
-                // Online Status Indicator with soft pulsing ring
-                if (isOnline) {
-                    Box(
+                // Online Status Indicator with soft pulsing ring (single-source OnlineStatusDot)
+                if (isOnline && com.chroma.studio.data.OnlineStatusManager.isSelfStatusVisible()) {
+                    OnlineStatusDot(
+                        isOnline = true,
+                        size = 15.dp,
+                        showPulse = true,
+                        ringColor = palette.drawerBase,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .offset(x = (-2).dp, y = (-2).dp)
-                            .size(12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .scale(pulseScale)
-                                .clip(CircleShape)
-                                .background(Color(0xFF34D399).copy(alpha = pulseAlpha))
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF10B981))
-                                .border(2.dp, palette.drawerBase, CircleShape)
-                        )
-                    }
+                    )
                 }
             }
         }
@@ -736,7 +726,11 @@ private fun DrawerHeaderWithProfile(
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 if (isVerified) {
-                    VerifiedBadgeFilledIcon(modifier = Modifier.size(16.dp))
+                    VerifiedBadge(
+                        size = 16.dp,
+                        tone = verifiedTone,
+                        userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                    )
                 }
             }
             Text(

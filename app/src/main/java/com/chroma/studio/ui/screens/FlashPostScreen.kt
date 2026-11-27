@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.shadow
 
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 
 import androidx.compose.foundation.text.BasicTextField
 
@@ -126,7 +127,8 @@ data class FlashPostParams(
     val photoUris: List<Uri> = emptyList(),
     val durationPerSlideMs: Long = 3000L,
     val remixedFromPostId: String? = null,
-    val remixedFromAuthorUsername: String? = null
+    val remixedFromAuthorUsername: String? = null,
+    val musicTrack: com.chroma.studio.data.AttachedMusicSelection? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -204,6 +206,12 @@ fun FlashPostScreen(
     val discoverRepo = remember { DiscoverRepository() }
 
     var myUserProfile by remember { mutableStateOf<UserProfile?>(null) }
+    var invitedCollaborators by remember { mutableStateOf(emptyList<com.chroma.studio.model.CollabParticipant>()) }
+    var showCollabPickerSheet by remember { mutableStateOf(false) }
+    var selectedMusic by remember {
+        mutableStateOf(params.musicTrack ?: com.chroma.studio.data.PendingMusicHandoff.peek())
+    }
+    var showMusicPickerSheet by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
         if (!uid.isNullOrBlank()) {
@@ -313,9 +321,8 @@ fun FlashPostScreen(
             flashTrimEndMs = trimEndMs,
 
             hashtags = hashtags,
-
-            mentions = mentions
-
+            mentions = mentions,
+            collaborators = invitedCollaborators
         )
 
         draftRepo.saveDraft(draft)
@@ -493,9 +500,11 @@ fun FlashPostScreen(
                 remixedFromPostId = remixedFromPostId,
 
                 remixedFromAuthorUsername = remixedFromAuthorUsername,
+            collaborators = invitedCollaborators,
+            musicTrack = selectedMusic,
+            onSuccess = {
 
-                onSuccess = {
-
+                    com.chroma.studio.data.PendingMusicHandoff.consume()
                     draftRepo.deleteDraft(savedDraftId)
 
                     FlashUploadManager.setSuccess("Posted! 🎉")
@@ -582,7 +591,7 @@ fun FlashPostScreen(
                         letterSpacing = (-0.3).sp
                     )
                     Text(
-                        text = "Video & Reels",
+                        text = "Video & Flashes",
                         color = colors.textMuted,
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Medium
@@ -721,8 +730,8 @@ fun FlashPostScreen(
                                 .align(Alignment.TopEnd)
                                 .padding(6.dp)
                                 .size(24.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.70f)),
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.Black.copy(alpha = 0.60f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Lucide.Pencil, null, tint = Color.White, modifier = Modifier.size(11.dp))
@@ -918,7 +927,116 @@ fun FlashPostScreen(
                     InfoRow(icon = Lucide.Clock, title = "Duration", subtitle = "Video playtime", badge = "${((trimEndMs - trimStartMs) / 1000L).coerceAtLeast(1L)}s")
                     HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.35f), thickness = 0.5.dp)
                     InfoRow(icon = Lucide.Globe, title = "Audience", subtitle = "Visible to everyone", badge = "Public")
+                    HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.35f), thickness = 0.5.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showMusicPickerSheet = true }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFFFA2D48).copy(alpha = 0.14f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val musicCover = selectedMusic?.coverUrl
+                                if (!musicCover.isNullOrBlank()) {
+                                    coil.compose.AsyncImage(
+                                        model = musicCover,
+                                        contentDescription = "Track art",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Lucide.Music,
+                                        contentDescription = "Music",
+                                        tint = Color(0xFFFA2D48),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = selectedMusic?.title ?: "Add Music",
+                                    color = colors.textMain,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = selectedMusic?.let { "${it.artist} · ${it.durationSec}s clip" }
+                                        ?: "Pick track from Music Library",
+                                    color = colors.textMuted,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        if (selectedMusic != null) {
+                            IconButton(
+                                onClick = { selectedMusic = null },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.X,
+                                    contentDescription = "Clear music",
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        } else {
+                            Icon(
+                                imageVector = Lucide.ChevronRight,
+                                contentDescription = null,
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.35f), thickness = 0.5.dp)
+                    com.chroma.studio.ui.components.CollabInviteActionRow(
+                        selectedCollaborators = invitedCollaborators,
+                        onClick = { showCollabPickerSheet = true }
+                    )
                 }
+            }
+
+            if (showMusicPickerSheet) {
+                com.chroma.studio.ui.components.StoryMusicPickerModal(
+                    isOpen = true,
+                    initialTrackId = selectedMusic?.trackId,
+                    headerTitle = "Add Music",
+                    onDismiss = { showMusicPickerSheet = false },
+                    onClipConfirmed = { picked ->
+                        selectedMusic = picked
+                        showMusicPickerSheet = false
+                    }
+                )
+            }
+
+            if (showCollabPickerSheet) {
+                com.chroma.studio.ui.components.CollabPickerModalSheet(
+                    currentUserUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty(),
+                    initialSelection = invitedCollaborators,
+                    repository = discoverRepo,
+                    onDone = { picked ->
+                        invitedCollaborators = picked
+                        showCollabPickerSheet = false
+                    },
+                    onDismiss = { showCollabPickerSheet = false }
+                )
             }
 
             Spacer(Modifier.height(28.dp))

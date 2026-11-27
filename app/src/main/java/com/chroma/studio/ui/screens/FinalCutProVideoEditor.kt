@@ -175,6 +175,12 @@ import kotlin.math.*
 // ============================================================================
 // DATA MODELS
 // ============================================================================
+private data class FcpDeletePrompt(
+    val title: String,
+    val message: String,
+    val confirmText: String = "Delete",
+    val onConfirm: () -> Unit
+)
 enum class FcpWorkspaceTab(val label: String, val icon: ImageVector) {
     TIMELINE("Timeline", Lucide.Film),
     CANVAS("Canvas", Lucide.LayoutGrid),
@@ -345,7 +351,7 @@ enum class FcpTitlePresetType(
     MINIMAL_CLEAN("Minimal Cinematic", "Understated elegant lower-third title", "Clean"),
     RETRO_VHS("Retro 80s VHS", "Vivid synthwave neon with glitch scanlines", "Retro"),
     LUXURY_SERIF("Luxury Editorial", "Sophisticated high-fashion magazine title", "Luxury"),
-    KINETIC_PUNCH("Kinetic Impact", "High-energy bold social hook for reels", "Social"),
+    KINETIC_PUNCH("Kinetic Impact", "High-energy bold social hook for Flashes", "Social"),
     SUBTITLE_CARD("Modern Subtitle", "Clean translucent glass pill for captions", "Captions")
 }
 data class FcpTextLayer(
@@ -798,8 +804,32 @@ data class FcpCustomAudio(
     val fadeInSec: Float = 0f,
     val fadeOutSec: Float = 0f,
     val autoDucking: Boolean = false,
-    val duckingAmountDb: Float = -12f
+    val duckingAmountDb: Float = -12f,
+    val musicTrackId: String? = null,
+    val musicTitle: String? = null,
+    val musicArtist: String? = null,
+    val musicAlbum: String? = null,
+    val musicCoverUrl: String? = null,
+    val musicAudioUrl: String? = null,
+    val musicStartSec: Int = 0,
+    val musicDurationSec: Int = 15,
+    val musicShowLyrics: Boolean = false
 ) {
+    fun toAttachedMusicSelection(): com.chroma.studio.data.AttachedMusicSelection? {
+        val id = musicTrackId?.takeIf { it.isNotBlank() } ?: return null
+        return com.chroma.studio.data.AttachedMusicSelection(
+            trackId = id,
+            title = musicTitle ?: name,
+            artist = musicArtist.orEmpty(),
+            album = musicAlbum.orEmpty(),
+            coverUrl = musicCoverUrl.orEmpty(),
+            audioUrl = musicAudioUrl ?: uri.toString(),
+            startSec = musicStartSec,
+            durationSec = musicDurationSec.coerceAtLeast(5),
+            totalTrackSec = durationSec.toInt().coerceAtLeast(musicDurationSec.coerceAtLeast(15)),
+            showLyricsSticker = musicShowLyrics
+        )
+    }
     /** Effective trim-out point inside the source file (0 / invalid => whole file). */
     val effectiveTrimEndSec: Float
         get() = if (trimEndSec > trimStartSec + 0.1f) trimEndSec
@@ -961,11 +991,10 @@ private fun buildFcpColorMatrix(
     if (abs(satFactor - 1f) > 0.01f) {
         result.postConcat(android.graphics.ColorMatrix().apply { setSaturation(satFactor) })
     }
-    // 2. Exposure & Contrast
-    val expFactor = Math.pow(2.0, (exposure / 60.0)).toFloat()
+    // 2. Exposure & Contrast (Aligned linearly with FFmpeg eq=brightness=...:contrast=...)
     val contFactor = (contrast / 100f).coerceIn(0.3f, 2.2f)
-    val totalScale = expFactor * contFactor
-    val offset = (1f - contFactor) * 128f + (exposure * 1.2f)
+    val totalScale = contFactor
+    val offset = (1f - contFactor) * 128f + com.chroma.studio.utils.FcpStudioAudioSynth.exposureOffset255(exposure)
     if (abs(totalScale - 1f) > 0.01f || abs(offset) > 0.5f) {
         result.postConcat(
             android.graphics.ColorMatrix(
@@ -1089,9 +1118,9 @@ private fun buildFcpColorMatrix(
     return result
 }
 private enum class VideoDrawerLevel(val heightDp: Dp) {
-    COLLAPSED(104.dp),
-    MID(350.dp),
-    FULL(580.dp)
+    COLLAPSED(62.dp),
+    MID(280.dp),
+    FULL(500.dp)
 }
 // ============================================================================
 // MAIN SCREEN — CHROMA STUDIO WORKSPACE FOR VIDEO
@@ -1103,6 +1132,7 @@ fun FinalCutProVideoEditorScreen(
     draftId: String? = null,
     remixedFromAuthorUsername: String? = null,
     onDone: (startMs: Long, endMs: Long, clips: List<Uri>) -> Unit,
+    onMusicAttached: (com.chroma.studio.data.AttachedMusicSelection?) -> Unit = {},
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1146,6 +1176,7 @@ fun FinalCutProVideoEditorScreen(
     var lastAudioSyncUptimeMs by remember { mutableLongStateOf(0L) }
     // ── Dialog & Quick Overlay States ─────────────────────────────────────
     var showExitConfirmationDialog by remember { mutableStateOf(false) }
+    var pendingFcpDeleteConfirmation by remember { mutableStateOf<FcpDeletePrompt?>(null) }
     var showDurationWarningDialog by remember { mutableStateOf(false) }
     var showAnimationQuickSheet by remember { mutableStateOf(false) }
     var animationEditingClipId by remember { mutableStateOf<String?>(null) }
@@ -1165,19 +1196,47 @@ fun FinalCutProVideoEditorScreen(
             flashOverlayVisible = false
         }
     }
-    val bgImagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            canvasBackground = canvasBackground.copy(
-                type = FcpCanvasBgType.IMAGE,
-                customImageUri = uri
-            )
-            ToastManager.showToast("Background image applied")
-        }
+    val bgImagePicker = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Canvas Background",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        canvasBackground = canvasBackground.copy(
+            type = FcpCanvasBgType.IMAGE,
+            customImageUri = uri
+        )
+        ToastManager.showToast("Background image applied")
     }
     // ── Custom Soundtrack & Video Audio Extraction State ──────────────────
-    var customAudio by remember { mutableStateOf<FcpCustomAudio?>(null) }
+    var customAudio by remember {
+        mutableStateOf<FcpCustomAudio?>(
+            com.chroma.studio.data.PendingMusicHandoff.peek()?.takeIf { it.audioUrl.isNotBlank() }?.let { pending ->
+                FcpCustomAudio(
+                    uri = Uri.parse(pending.audioUrl),
+                    name = "${pending.title} · ${pending.artist}",
+                    durationSec = pending.totalTrackSec.toFloat().coerceAtLeast(pending.durationSec.toFloat()),
+                    volume = 1f,
+                    isExtractedFromVideo = false,
+                    muteOriginalVideo = true,
+                    loopAudio = true,
+                    trimStartSec = pending.startSec.toFloat(),
+                    trimEndSec = (pending.startSec + pending.durationSec).toFloat(),
+                    musicTrackId = pending.trackId,
+                    musicTitle = pending.title,
+                    musicArtist = pending.artist,
+                    musicAlbum = pending.album,
+                    musicCoverUrl = pending.coverUrl,
+                    musicAudioUrl = pending.audioUrl,
+                    musicStartSec = pending.startSec,
+                    musicDurationSec = pending.durationSec,
+                    musicShowLyrics = pending.showLyricsSticker
+                )
+            }
+        )
+    }
+    LaunchedEffect(customAudio) {
+        onMusicAttached(customAudio?.toAttachedMusicSelection())
+    }
     var showDeviceMusicModal by remember { mutableStateOf(false) }
     // ── Custom Soundtrack & Video Audio Extraction Pickers ───────────────
     val audioFilePicker = rememberLauncherForActivityResult(
@@ -1205,30 +1264,24 @@ fun FinalCutProVideoEditorScreen(
             ToastManager.showToast("Audio added: $fileName")
         }
     }
-    val videoExtractPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (_: Throwable) {}
-            val fileName = queryMediaFileName(context, uri)
-            val dur = extractVideoDurationSec(context, uri) ?: 0f
-            customAudio = FcpCustomAudio(
-                uri = uri,
-                name = "Extracted: $fileName",
-                durationSec = dur,
-                volume = 1f,
-                isExtractedFromVideo = true,
-                muteOriginalVideo = true,
-                trimStartSec = 0f,
-                trimEndSec = dur
-            )
-            ToastManager.showToast("Audio extracted from video: $fileName")
-        }
+    val videoExtractPicker = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Extract Audio from Video",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.VIDEOS,
+        showAlbumsTab = true
+    ) { uri ->
+        val fileName = queryMediaFileName(context, uri)
+        val dur = extractVideoDurationSec(context, uri) ?: 0f
+        customAudio = FcpCustomAudio(
+            uri = uri,
+            name = "Extracted: $fileName",
+            durationSec = dur,
+            volume = 1f,
+            isExtractedFromVideo = true,
+            muteOriginalVideo = true,
+            trimStartSec = 0f,
+            trimEndSec = dur
+        )
+        ToastManager.showToast("Audio extracted from video: $fileName")
     }
     // ── Overlay & Filter State ────────────────────────────────────────────
     var textLayers by remember {
@@ -1637,6 +1690,10 @@ fun FinalCutProVideoEditorScreen(
                         fps = fps,
                         previewWidthPx = previewViewportSize.width,
                         previewHeightPx = previewViewportSize.height,
+                        dialogueGainDb = dialogueGainDb,
+                        voiceIsolation = voiceIsolation,
+                        aiMaskEnabled = aiMaskEnabled,
+                        bokehAperture = bokehAperture,
                         onProgress = { p, stage ->
                             scope.launch(Dispatchers.Main) {
                                 exportProgress = p
@@ -2486,14 +2543,6 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
-    val multiVisualMediaPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia()
-    ) { uris ->
-        if (uris.isNotEmpty()) {
-            appendMediaClips(uris)
-        }
-    }
-
     val fallbackContentPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris ->
@@ -2502,14 +2551,18 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
+    val multiVisualMediaPicker = com.chroma.studio.ui.components.rememberOscellionMultiMediaPicker(
+        title = "Import Clips & Photos",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.ALL,
+        maxSelection = 20,
+        showAlbumsTab = true,
+        submitLabel = "Add Clips"
+    ) { uris, _ ->
+        appendMediaClips(uris)
+    }
+
     val launchMediaPicker = {
-        try {
-            multiVisualMediaPicker.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-            )
-        } catch (_: Exception) {
-            fallbackContentPicker.launch("*/*")
-        }
+        multiVisualMediaPicker.launch()
     }
 
     val videoPicker = fallbackContentPicker
@@ -2571,7 +2624,7 @@ fun FinalCutProVideoEditorScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(if (colors.isDark) Color(0xFF1A1D24) else colors.bg)
+            .background(colors.bg)
     ) {
         Column(
             modifier = Modifier
@@ -2589,11 +2642,16 @@ fun FinalCutProVideoEditorScreen(
                 FcpTopHeaderBar(
                     context = context,
                     clipsCount = clips.size,
+                    aspectRatio = aspectRatio,
                     undoEmpty = undoStack.isEmpty(),
                     redoEmpty = redoStack.isEmpty(),
                     isOverOneMinute = isOverOneMinute,
                     totalDurationSec = totalDurationSec,
                     remixedFromAuthorUsername = remixedFromAuthorUsername,
+                    onSelectAspect = { mode ->
+                        aspectRatio = mode
+                        ToastManager.showToast(mode.label)
+                    },
                     onBackClick = {
                         SoundManager.playTap(context)
                         if (clips.isNotEmpty()) {
@@ -2622,13 +2680,6 @@ fun FinalCutProVideoEditorScreen(
                         }
                     }
                 )
-                FcpAspectRatioSelector(
-                    aspectRatio = aspectRatio,
-                    onSelectAspect = { mode ->
-                        aspectRatio = mode
-                        ToastManager.showToast(mode.label)
-                    }
-                )
             }
             // ══════════════════════════════════════════════════════════════════
             // 3. CANVAS / VIDEO PREVIEW CARD (Matching CanvasPreview)
@@ -2648,11 +2699,7 @@ fun FinalCutProVideoEditorScreen(
                 val activePlayingSpan = remember(currentTimeSec, timelineSpans) {
                     timelineSpans.firstOrNull { currentTimeSec >= it.timelineStartSec && currentTimeSec < it.timelineEndSec }
                 }
-                val activeClip = if (isPlaying) {
-                    activePlayingSpan?.clip ?: selectedClip ?: clips.firstOrNull()
-                } else {
-                    selectedClip ?: activePlayingSpan?.clip ?: clips.firstOrNull()
-                }
+                val activeClip = activePlayingSpan?.clip ?: selectedClip ?: clips.firstOrNull()
                 val activeScale = activeClip?.scale ?: 1f
                 val activePanX = activeClip?.panX ?: 0f
                 val activePanY = activeClip?.panY ?: 0f
@@ -2686,10 +2733,10 @@ fun FinalCutProVideoEditorScreen(
                     modifier = Modifier
                         .size(fittedWidth.coerceAtLeast(1.dp), fittedHeight.coerceAtLeast(1.dp))
                         .onSizeChanged { previewViewportSize = it }
-                        .shadow(elevation = 8.dp, shape = previewShape, ambientColor = Color(0x0D1F2687), spotColor = Color(0x0D1F2687))
+                        .shadow(elevation = 6.dp, shape = previewShape, ambientColor = colors.cardBorder, spotColor = colors.cardBorder)
                         .clip(previewShape)
-                        .background(Color(0xFF111317))
-                        .border(1.dp, Color(0xFF2A2F3A), previewShape),
+                        .background(colors.inputBg)
+                        .border(0.75.dp, colors.cardBorder, previewShape),
                     contentAlignment = Alignment.Center
                 ) {
                     val supportsRenderEffect = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -2985,103 +3032,15 @@ fun FinalCutProVideoEditorScreen(
                                 }
                         )
                     }
-                    // Cinematic LUT Atmospheric Overlay
-                    when (selectedClip?.lut) {
-                        FcpLutPreset.TEAL_ORANGE -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(
-                                                Color(0xFF0D9488).copy(alpha = 0.12f),
-                                                Color(0xFFF97316).copy(alpha = 0.12f)
-                                            )
-                                        )
-                                    )
-                            )
-                        }
-                        FcpLutPreset.CYBER -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(
-                                                Color(0xFF3B82F6).copy(alpha = 0.10f),
-                                                Color(0xFFEC4899).copy(alpha = 0.10f)
-                                            )
-                                        )
-                                    )
-                            )
-                        }
-                        FcpLutPreset.WARM_GOLD -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(
-                                                Color(0xFFD97706).copy(alpha = 0.10f),
-                                                Color(0xFFFBBF24).copy(alpha = 0.08f)
-                                            )
-                                        )
-                                    )
-                            )
-                        }
-                        FcpLutPreset.COOL_NORDIC -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(
-                                                Color(0xFF0284C7).copy(alpha = 0.10f),
-                                                Color(0xFF38BDF8).copy(alpha = 0.08f)
-                                            )
-                                        )
-                                    )
-                            )
-                        }
-                        FcpLutPreset.VINTAGE_FADE -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(
-                                                Color(0xFF78350F).copy(alpha = 0.08f),
-                                                Color(0xFFFDE68A).copy(alpha = 0.06f)
-                                            )
-                                        )
-                                    )
-                            )
-                        }
-                        FcpLutPreset.EMERALD -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(
-                                                Color(0xFF065F46).copy(alpha = 0.10f),
-                                                Color(0xFF10B981).copy(alpha = 0.08f)
-                                            )
-                                        )
-                                    )
-                            )
-                        }
-                        FcpLutPreset.NOIR, FcpLutPreset.NONE, null -> {}
-                    }
-                    // Aurora Subject Mask Depth Vignette Simulation
+                    // Aurora Subject Mask Depth Vignette Simulation (aligned with export radial depth falloff)
                     if (aiMaskEnabled) {
-                        val blurRadius = (bokehAperture * 100f).coerceIn(150f, 600f)
+                        val blurRadius = (320f + (bokehAperture - 1.4f) * 120f).coerceIn(220f, 900f)
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
                                     Brush.radialGradient(
-                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)),
+                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.52f)),
                                         radius = blurRadius
                                     )
                                 )
@@ -3157,11 +3116,17 @@ fun FinalCutProVideoEditorScreen(
                                         ToastManager.showToast("Title duplicated")
                                     },
                                     onDelete = {
-                                        saveStateForUndo()
-                                        val remaining = textLayers.filter { it.id != layer.id }
-                                        textLayers = remaining
-                                        selectedTextLayerId = remaining.firstOrNull()?.id ?: ""
-                                        ToastManager.showToast("Title removed")
+                                        val targetId = layer.id
+                                        pendingFcpDeleteConfirmation = FcpDeletePrompt(
+                                            title = "Delete Title?",
+                                            message = "Remove this title overlay from your video project?"
+                                        ) {
+                                            saveStateForUndo()
+                                            val remaining = textLayers.filter { it.id != targetId }
+                                            textLayers = remaining
+                                            selectedTextLayerId = remaining.firstOrNull()?.id ?: ""
+                                            ToastManager.showToast("Title removed")
+                                        }
                                     }
                                 )
                             }
@@ -3313,9 +3278,9 @@ fun FinalCutProVideoEditorScreen(
             // ══════════════════════════════════════════════════════════════════
             val screenHeightDp = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
             val targetDrawerHeight = when (drawerLevel) {
-                VideoDrawerLevel.COLLAPSED -> 82.dp
-                VideoDrawerLevel.MID -> (screenHeightDp * 0.42f).coerceIn(296.dp, 368.dp)
-                VideoDrawerLevel.FULL -> (screenHeightDp * 0.62f).coerceIn(400.dp, 560.dp)
+                VideoDrawerLevel.COLLAPSED -> 62.dp
+                VideoDrawerLevel.MID -> (screenHeightDp * 0.36f).coerceIn(252.dp, 318.dp)
+                VideoDrawerLevel.FULL -> (screenHeightDp * 0.56f).coerceIn(360.dp, 510.dp)
             }
             val animatedDrawerHeight by animateDpAsState(
                 targetValue = targetDrawerHeight,
@@ -3335,7 +3300,7 @@ fun FinalCutProVideoEditorScreen(
                 label = "drawerBorderColor"
             )
             val drawerElevation by animateDpAsState(
-                targetValue = if (drawerScrubbingState.isScrubbing) 0.dp else 16.dp,
+                targetValue = if (drawerScrubbingState.isScrubbing) 0.dp else 10.dp,
                 animationSpec = tween(180),
                 label = "drawerElevation"
             )
@@ -3350,20 +3315,20 @@ fun FinalCutProVideoEditorScreen(
                     .height(animatedDrawerHeight)
                     .shadow(
                         elevation = drawerElevation,
-                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
                         ambientColor = Color(0x14000000),
                         spotColor = Color(0x14000000)
                     )
-                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                     .background(drawerBgColor)
-                    .border(0.5.dp, drawerBorderColor, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .border(0.5.dp, drawerBorderColor, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
             ) {
                 Column(Modifier.fillMaxSize()) {
-                    // Draggable Grab Bar Handle (Identical to ChromaStudio BottomDrawer)
+                    // Draggable Grab Bar Handle
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(26.dp)
+                            .height(18.dp)
                             .graphicsLayer { alpha = drawerChromeAlpha }
                             .pointerInput(Unit) {
                                 detectVerticalDragGestures(
@@ -3402,17 +3367,17 @@ fun FinalCutProVideoEditorScreen(
                     ) {
                         Box(
                             Modifier
-                                .size(width = 36.dp, height = 4.dp)
+                                .size(width = 34.dp, height = 3.5.dp)
                                 .clip(RoundedCornerShape(50))
-                                .background(Color(0xFFD1D5DB))
+                                .background(if (colors.isDark) Color.White.copy(alpha = 0.24f) else Color(0xFFD1D5DB))
                         )
                     }
-                    // Interactive Tab Switcher (Matching UiverseTabs from ChromaStudio)
+                    // Interactive Icon-Only Segmented Tab Dock
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .graphicsLayer { alpha = drawerChromeAlpha }
-                            .padding(bottom = 6.dp),
+                            .padding(bottom = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         VideoWorkspaceTabs(
@@ -3589,17 +3554,25 @@ fun FinalCutProVideoEditorScreen(
                                         },
                                         onDeleteClip = {
                                             if (clips.size > 1) {
-                                                saveStateForUndo()
-                                                val deleteIdx = clips.indexOfFirst { it.id == selectedId }
-                                                val remaining = clips.filter { it.id != selectedId }
-                                                clips = remaining
-                                                val nextIdx = if (deleteIdx in remaining.indices) deleteIdx else (remaining.size - 1).coerceAtLeast(0)
-                                                selectedId = remaining.getOrNull(nextIdx)?.id ?: ""
-                                                val span = timelineSpans.find { it.clip.id == selectedId }
-                                                if (span != null) {
-                                                    seekToGlobalTime(span.timelineStartSec)
+                                                val targetClipId = selectedId
+                                                pendingFcpDeleteConfirmation = FcpDeletePrompt(
+                                                    title = "Delete Clip?",
+                                                    message = "Remove the selected clip from the timeline?"
+                                                ) {
+                                                    if (clips.size > 1) {
+                                                        saveStateForUndo()
+                                                        val deleteIdx = clips.indexOfFirst { it.id == targetClipId }
+                                                        val remaining = clips.filter { it.id != targetClipId }
+                                                        clips = remaining
+                                                        val nextIdx = if (deleteIdx in remaining.indices) deleteIdx else (remaining.size - 1).coerceAtLeast(0)
+                                                        selectedId = remaining.getOrNull(nextIdx)?.id ?: ""
+                                                        val span = timelineSpans.find { it.clip.id == selectedId }
+                                                        if (span != null) {
+                                                            seekToGlobalTime(span.timelineStartSec)
+                                                        }
+                                                        ToastManager.showToast("Clip removed")
+                                                    }
                                                 }
-                                                ToastManager.showToast("Clip removed")
                                             } else {
                                                 ToastManager.showToast("Cannot delete the only clip")
                                             }
@@ -3636,6 +3609,11 @@ fun FinalCutProVideoEditorScreen(
                                 CanvasTabContent(
                                     background = canvasBackground,
                                     onBackgroundChange = { canvasBackground = it },
+                                    aspectRatio = aspectRatio,
+                                    onSelectAspect = { mode ->
+                                        aspectRatio = mode
+                                        ToastManager.showToast(mode.label)
+                                    },
                                     onPickImage = { bgImagePicker.launch("image/*") },
                                     blurBitmap = activeClipPreviewBitmap ?: blurBackgroundBitmap ?: selectedClip?.let { FcpThumbnailMemoryCache.get("${it.uri}_0") },
                                     isDarkMode = colors.isDark,
@@ -3724,8 +3702,19 @@ fun FinalCutProVideoEditorScreen(
                                         customAudio = customAudio?.copy(loopAudio = loop)
                                     },
                                     onRemoveCustomAudio = {
-                                        customAudio = null
-                                        ToastManager.showToast("Custom audio removed")
+                                        pendingFcpDeleteConfirmation = FcpDeletePrompt(
+                                            title = "Remove Soundtrack?",
+                                            message = "Remove the custom soundtrack from this video project?",
+                                            confirmText = "Remove"
+                                        ) {
+                                            saveStateForUndo()
+                                            customAudio = null
+                                            ToastManager.showToast("Custom audio removed")
+                                        }
+                                    },
+                                    onSelectCustomAudio = { newAudio ->
+                                        saveStateForUndo()
+                                        customAudio = newAudio
                                     },
                                     isPlaying = isPlaying,
                                     currentTimeSecProvider = { currentTimeSec },
@@ -3798,6 +3787,7 @@ fun FinalCutProVideoEditorScreen(
                                 TitlesTabContent(
                                     textLayers = textLayers,
                                     selectedLayerId = selectedTextLayerId,
+                                    totalDurationSec = totalDurationSec,
                                     onSelectLayer = { selectedTextLayerId = it },
                                     onUpdateLayer = { updated ->
                                         textLayers = textLayers.map { if (it.id == updated.id) updated else it }
@@ -3811,11 +3801,16 @@ fun FinalCutProVideoEditorScreen(
                                         ToastManager.showToast("Title layer added")
                                     },
                                     onDeleteLayer = { idToDelete ->
-                                        saveStateForUndo()
-                                        val remaining = textLayers.filter { it.id != idToDelete }
-                                        textLayers = remaining
-                                        selectedTextLayerId = remaining.firstOrNull()?.id ?: ""
-                                        ToastManager.showToast("Title layer deleted")
+                                        pendingFcpDeleteConfirmation = FcpDeletePrompt(
+                                            title = "Delete Title Layer?",
+                                            message = "Remove this title layer from your video project?"
+                                        ) {
+                                            saveStateForUndo()
+                                            val remaining = textLayers.filter { it.id != idToDelete }
+                                            textLayers = remaining
+                                            selectedTextLayerId = remaining.firstOrNull()?.id ?: ""
+                                            ToastManager.showToast("Title layer deleted")
+                                        }
                                     },
                                     onDuplicateLayer = { idToDuplicate ->
                                         val src = textLayers.find { it.id == idToDuplicate }
@@ -3952,26 +3947,52 @@ fun FinalCutProVideoEditorScreen(
             onDismissExitConfirmation = { showExitConfirmationDialog = false }
         )
     }
+    pendingFcpDeleteConfirmation?.let { prompt ->
+        com.chroma.studio.ui.components.IosAlertDialog(
+            title = prompt.title,
+            message = prompt.message,
+            confirmText = prompt.confirmText,
+            isDestructive = true,
+            onConfirm = {
+                pendingFcpDeleteConfirmation = null
+                prompt.onConfirm()
+            },
+            dismissText = "Cancel",
+            onDismiss = { pendingFcpDeleteConfirmation = null }
+        )
+    }
     if (showDeviceMusicModal) {
-        val totalVideoDuration = clips.sumOf { it.trimmedDurationSec.toDouble() }.toFloat().coerceAtLeast(1f)
-        DeviceMusicTrimmerModal(
-            videoDurationSec = totalVideoDuration,
-            onAudioSelected = { uri, name, dur, startSec, endSec ->
+        com.chroma.studio.ui.components.StoryMusicPickerModal(
+            isOpen = true,
+            initialTrackId = customAudio?.musicTrackId,
+            headerTitle = "Add Soundtrack",
+            onDismiss = { showDeviceMusicModal = false },
+            onClipConfirmed = { selection ->
+                saveStateForUndo()
                 customAudio = FcpCustomAudio(
-                    uri = uri,
-                    name = name,
-                    durationSec = dur,
+                    uri = Uri.parse(selection.audioUrl),
+                    name = "${selection.title} · ${selection.artist}",
+                    durationSec = selection.totalTrackSec.toFloat().coerceAtLeast(selection.durationSec.toFloat()),
                     volume = 1f,
                     isExtractedFromVideo = false,
                     muteOriginalVideo = true,
                     loopAudio = true,
-                    trimStartSec = startSec,
-                    trimEndSec = endSec
+                    trimStartSec = selection.startSec.toFloat(),
+                    trimEndSec = (selection.startSec + selection.durationSec).toFloat(),
+                    musicTrackId = selection.trackId,
+                    musicTitle = selection.title,
+                    musicArtist = selection.artist,
+                    musicAlbum = selection.album,
+                    musicCoverUrl = selection.coverUrl,
+                    musicAudioUrl = selection.audioUrl,
+                    musicStartSec = selection.startSec,
+                    musicDurationSec = selection.durationSec,
+                    musicShowLyrics = selection.showLyricsSticker
                 )
+                com.chroma.studio.data.PendingMusicHandoff.set(selection)
                 showDeviceMusicModal = false
-                ToastManager.showToast("Applied $name (${formatAudioTime(startSec)} - ${formatAudioTime(endSec)})")
-            },
-            onDismiss = { showDeviceMusicModal = false }
+                ToastManager.showToast("Applied ${selection.title} · ${selection.artist}")
+            }
         )
     }
 }
@@ -3988,17 +4009,17 @@ private fun VideoWorkspaceTabs(
     val haptic = LocalHapticFeedback.current
     val allTabs = FcpWorkspaceTab.entries
     val activeIndex = allTabs.indexOf(activeTab).coerceAtLeast(0)
-    val containerColor = if (isDarkMode) Color(0xFF0F1118) else Color(0xFFF1F5F9)
-    val indicatorColor = if (isDarkMode) Color(0xFF222634) else Color.White
+    val containerColor = colors.inputBg
+    val indicatorColor = colors.cardSurface
     val activeIconTint = colors.primary
-    val inactiveIconTint = if (isDarkMode) Color(0xFFA0A0A0) else Color(0xFF6B7280)
-    val tabWidthDp = 56.dp
-    val totalWidthDp = tabWidthDp * allTabs.size + 8.dp
-    val indicatorOffsetAnim = remember { Animatable(activeIndex * 56f) }
+    val inactiveIconTint = colors.textMuted
+    val tabWidthDp = 48.dp
+    val totalWidthDp = tabWidthDp * allTabs.size + 6.dp
+    val indicatorOffsetAnim = remember { Animatable(activeIndex * 48f) }
     LaunchedEffect(activeIndex) {
         indicatorOffsetAnim.animateTo(
-            targetValue = activeIndex * 56f,
-            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
+            targetValue = activeIndex * 48f,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
         )
     }
     Box(
@@ -4007,84 +4028,55 @@ private fun VideoWorkspaceTabs(
             .horizontalScroll(rememberScrollState()),
         contentAlignment = Alignment.Center
     ) {
-    Box(
-        modifier = Modifier
-            .padding(horizontal = 8.dp)
-            .size(width = totalWidthDp, height = 46.dp)
-            .clip(RoundedCornerShape(50))
-            .border(
-                width = 1.dp,
-                brush = Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.20f),
-                        Color.White.copy(alpha = 0.04f),
-                        Color.Black.copy(alpha = 0.30f)
-                    )
-                ),
-                shape = RoundedCornerShape(50)
-            )
-            .background(containerColor)
-            .padding(4.dp)
-    ) {
-        // Sliding indicator pill with micro-bevel edge
         Box(
             modifier = Modifier
-                .offset(x = indicatorOffsetAnim.value.dp)
-                .width(tabWidthDp)
-                .fillMaxHeight()
-                .shadow(2.dp, RoundedCornerShape(50))
+                .padding(horizontal = 8.dp)
+                .size(width = totalWidthDp, height = 38.dp)
                 .clip(RoundedCornerShape(50))
-                .border(
-                    width = 0.75.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = 0.28f),
-                            Color.White.copy(alpha = 0.06f)
-                        )
-                    ),
-                    shape = RoundedCornerShape(50)
-                )
-                .background(indicatorColor)
-        )
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically
+                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(50))
+                .background(containerColor)
+                .padding(3.dp)
         ) {
-            allTabs.forEach { tab ->
-                val selected = tab == activeTab
-                Column(
-                    modifier = Modifier
-                        .width(tabWidthDp)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(50))
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        ) {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onTabSelected(tab)
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = tab.icon,
-                        contentDescription = tab.label,
-                        tint = if (selected) activeIconTint else inactiveIconTint,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = tab.label,
-                        color = if (selected) activeIconTint else inactiveIconTint,
-                        fontSize = 9.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        maxLines = 1,
-                        softWrap = false
-                    )
+            Box(
+                modifier = Modifier
+                    .offset(x = indicatorOffsetAnim.value.dp)
+                    .width(tabWidthDp)
+                    .fillMaxHeight()
+                    .shadow(if (isDarkMode) 0.dp else 1.dp, RoundedCornerShape(50))
+                    .clip(RoundedCornerShape(50))
+                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(50))
+                    .background(indicatorColor)
+            )
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                allTabs.forEach { tab ->
+                    val selected = tab == activeTab
+                    Box(
+                        modifier = Modifier
+                            .width(tabWidthDp)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(50))
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onTabSelected(tab)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = tab.icon,
+                            contentDescription = tab.label,
+                            tint = if (selected) activeIconTint else inactiveIconTint,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
-    }
     }
 }
 // ============================================================================
@@ -4850,14 +4842,15 @@ private fun TimelineAudioTrackLane(
     val latestPps by rememberUpdatedState(pixelsPerSec)
     // Lane shows only the trimmed segment; it always starts at timeline 0 (soundtrack in-point = trimStart)
     val audioTrackWidthDp = (customAudio.trimmedLengthSec * pixelsPerSec).dp.coerceAtLeast(28.dp)
-    val trackAccent = Color(0xFF0381FE)
+    val colors = LocalOscellionColors.current
+    val trackAccent = colors.primary
     Box(
         modifier = Modifier
             .offset(x = timelineStartPaddingDp, y = 78.dp)
             .width(audioTrackWidthDp)
             .height(24.dp)
             .clip(RoundedCornerShape(6.dp))
-            .background(Color(0xFF1A2942).copy(alpha = 0.92f))
+            .background(if (colors.isDark) colors.primary.copy(alpha = 0.22f) else colors.primary.copy(alpha = 0.14f))
             .border(1.dp, trackAccent.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
             .clickable { onOpenAudioTab() }
             .padding(horizontal = 6.dp),
@@ -5069,15 +5062,15 @@ private fun TimelineJogWheel(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(44.dp)
-            .clip(RoundedCornerShape(22.dp))
+            .height(34.dp)
+            .clip(RoundedCornerShape(17.dp))
             .background(
-                if (isJogActive) colors.primary.copy(alpha = 0.08f) else colors.bg
+                if (isJogActive) colors.primary.copy(alpha = 0.08f) else colors.glassBg.copy(alpha = if (colors.isDark) 0.7f else 0.9f)
             )
             .border(
-                width = if (isJogActive) 1.5.dp else 1.dp,
+                width = if (isJogActive) 1.dp else 0.5.dp,
                 color = if (isJogActive) colors.primary.copy(alpha = 0.7f) else colors.glassBorder,
-                shape = RoundedCornerShape(22.dp)
+                shape = RoundedCornerShape(17.dp)
             )
             .pointerInput(totalDurationSec) {
                 var jogTime = 0f
@@ -5094,8 +5087,8 @@ private fun TimelineJogWheel(
                     onDrag = { change, dragAmount ->
                         change.consume()
                         jogScrollOffsetPx += dragAmount.x
-                        // 1 frame per tickSpacingPx (8dp)
-                        val frameStep = (dragAmount.x / tickSpacingPx) * (1f / 30f)
+                        // Left swipe moves timeline forward naturally
+                        val frameStep = (-dragAmount.x / tickSpacingPx) * (1f / 30f)
                         jogTime = (jogTime + frameStep).coerceIn(0f, totalDurationSec)
                         onScrubSec(jogTime)
                         val curFrame = (jogTime * 30f).roundToInt()
@@ -5144,11 +5137,11 @@ private fun TimelineJogWheel(
                     else -> size.height * 0.25f
                 }
                 val yTop = (size.height - tickHeight) / 2f
-                val strokeW = if (isMajor) 2.dp.toPx() else 1.dp.toPx()
+                val strokeW = if (isMajor) 1.75.dp.toPx() else 1.dp.toPx()
                 val color = when {
-                    isMajor -> colors.primary.copy(alpha = alpha * 0.95f)
-                    isMedium -> colors.textMuted.copy(alpha = alpha * 0.75f)
-                    else -> colors.textMuted.copy(alpha = alpha * 0.35f)
+                    isMajor -> colors.primary.copy(alpha = alpha * 0.9f)
+                    isMedium -> colors.textMuted.copy(alpha = alpha * 0.7f)
+                    else -> colors.textMuted.copy(alpha = alpha * 0.32f)
                 }
                 drawLine(
                     color = color,
@@ -5161,39 +5154,31 @@ private fun TimelineJogWheel(
             // Center Optical Needle Indicator
             drawLine(
                 color = Color(0xFFEF4444),
-                start = Offset(cx, 5.dp.toPx()),
-                end = Offset(cx, size.height - 5.dp.toPx()),
+                start = Offset(cx, 4.dp.toPx()),
+                end = Offset(cx, size.height - 4.dp.toPx()),
                 strokeWidth = 2.dp.toPx(),
                 cap = StrokeCap.Round
             )
         }
-        // Interactive Center HUD label
+        // Interactive Center HUD label only while actively scrubbing
         if (isJogActive) {
             val currentFrame = (currentTimeSecProvider() * 30f).roundToInt()
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Black.copy(alpha = 0.78f))
-                    .border(0.5.dp, colors.primary.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.cardSurface.copy(alpha = 0.92f))
+                    .border(0.5.dp, colors.primary.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
                     .padding(horizontal = 8.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = "◀  FRAME $currentFrame  ▶",
+                    text = "FRAME $currentFrame",
                     fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     color = colors.primary,
-                    letterSpacing = 0.5.sp,
+                    letterSpacing = 0.4.sp,
                     fontFamily = FontFamily.Monospace
                 )
             }
-        } else {
-            Text(
-                text = "◀  SCRUB FRAME  ▶",
-                fontSize = 8.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.textMuted.copy(alpha = 0.65f),
-                letterSpacing = 1.sp
-            )
         }
     }
 }
@@ -5436,24 +5421,14 @@ private fun TimelineTabContent(
                     // ══════════════════════════════════════════════════════════════════
                     // Quick Append Media Tile at End of Timeline (Extend Video)
                     // ══════════════════════════════════════════════════════════════════
+                    val timelineColors = LocalOscellionColors.current
                     Box(
                         modifier = Modifier
                             .padding(start = 10.dp, end = 40.dp)
                             .size(width = 58.dp, height = 54.dp)
-                            .studioBevel(cornerRadius = 10.dp, borderWidth = 1.dp)
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.05f))
-                                ),
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .border(
-                                width = 1.dp,
-                                brush = Brush.verticalGradient(
-                                    listOf(Color.White.copy(alpha = 0.35f), Color.White.copy(alpha = 0.10f))
-                                ),
-                                shape = RoundedCornerShape(10.dp)
-                            )
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(timelineColors.inputBg, RoundedCornerShape(10.dp))
+                            .border(0.75.dp, timelineColors.cardBorder, RoundedCornerShape(10.dp))
                             .clickable {
                                 SoundManager.playTap(context)
                                 actions.onAddClip()
@@ -5464,24 +5439,16 @@ private fun TimelineTabContent(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF0381FE)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Plus,
-                                    contentDescription = "Add Media",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = Lucide.Plus,
+                                contentDescription = "Add Media",
+                                tint = timelineColors.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
                             Text(
-                                text = "Add Media",
-                                color = Color.White.copy(alpha = 0.90f),
-                                fontSize = 9.sp,
+                                text = "Add",
+                                color = timelineColors.textMain,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -5739,7 +5706,7 @@ private fun ColorTabContent(
         // Sliders Section
         item {
             WorkspaceSectionCard(
-                title = "COLOR CORRECTION",
+                title = "Color Correction",
                 icon = Lucide.Palette,
                 trailingContent = {
                     Row(
@@ -5779,13 +5746,13 @@ private fun ColorTabContent(
                         // Apply To All Clips Button
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Brush.verticalGradient(listOf(Color(0xFFD97706), Color(0xFFF59E0B))))
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.primary)
                                 .clickable {
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     onApplyToAllClips()
                                 }
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .padding(horizontal = 9.dp, vertical = 4.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -5795,7 +5762,7 @@ private fun ColorTabContent(
                                 Text(
                                     text = "Apply All",
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = Color.White
                                 )
                             }
@@ -5910,7 +5877,7 @@ private fun ColorTabContent(
         // Apple LUT Presets Grid with Real Video Frame Previews
         item {
             WorkspaceSectionCard(
-                title = "CINEMATIC LUT PRESETS",
+                title = "Color Presets",
                 icon = Lucide.Sparkles,
                 modifier = Modifier.editorChromeFadeOnScrub()
             ) {
@@ -6017,7 +5984,7 @@ private fun ColorTabContent(
                                     Box(
                                         modifier = Modifier
                                             .size(18.dp)
-                                            .clip(CircleShape)
+                                            .clip(RoundedCornerShape(5.dp))
                                             .background(colors.primary),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -6042,7 +6009,7 @@ private fun ColorTabContent(
 // ============================================================================
 /** Soundtrack trim bar (drag handles) + play/pause previewer with live scrub. */
 @Composable
-private fun AudioTrimPreviewCard(
+private fun AudioTrimControlBlock(
     audio: FcpCustomAudio,
     isPreviewing: Boolean,
     previewPosSec: Float,
@@ -6058,129 +6025,178 @@ private fun AudioTrimPreviewCard(
     val seekCb by rememberUpdatedState(onSeekPreview)
     val trimCb by rememberUpdatedState(onTrimChange)
     val waveform = remember {
-        FloatArray(160) { i -> ((Math.sin(i * 0.37) * 0.4 + Math.cos(i * 0.19) * 0.3 + 0.75).toFloat()).coerceIn(0.15f, 1f) }
+        FloatArray(160) { i -> ((Math.sin(i * 0.37) * 0.4 + Math.cos(i * 0.19) * 0.3 + 0.75).toFloat()).coerceIn(0.18f, 1f) }
     }
-    val accent = Color(0xFF0381FE)
-    val waveformSurface = if (colors.isDark) Color(0xFF1A1D24) else Color(0xFFF1F4F9)
-    val inactiveBarColor = if (colors.isDark) Color.White.copy(alpha = 0.18f) else Color(0xFFCBD5E1)
-    val playheadColor = if (colors.isDark) Color.White else Color(0xFF111827)
-    WorkspaceSectionCard(title = "Trim & Preview", icon = Lucide.Scissors) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(waveformSurface)
-                    .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-                    .pointerInput(total) {
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            val w = size.width.toFloat().coerceAtLeast(1f)
-                            val grab = 24.dp.toPx()
-                            val a0 = latest
-                            val sx = a0.trimStartSec / total * w
-                            val ex = a0.effectiveTrimEndSec / total * w
-                            val mode = when {
-                                abs(down.position.x - sx) <= grab && abs(down.position.x - sx) <= abs(down.position.x - ex) -> 1
-                                abs(down.position.x - ex) <= grab -> 2
-                                else -> 0
-                            }
-                            if (mode != 0) { onTrimStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
-                            fun apply(x: Float) {
-                                val sec = (x / w * total).coerceIn(0f, total)
-                                val a = latest
-                                when (mode) {
-                                    1 -> trimCb(sec, a.effectiveTrimEndSec)
-                                    2 -> trimCb(a.trimStartSec, sec)
-                                    else -> seekCb((sec - a.trimStartSec).coerceIn(0f, a.trimmedLengthSec))
-                                }
-                            }
-                            apply(down.position.x)
-                            down.consume()
-                            do {
-                                val ev = awaitPointerEvent()
-                                val c = ev.changes.firstOrNull() ?: break
-                                if (c.pressed) { apply(c.position.x); c.consume() }
-                            } while (ev.changes.any { it.pressed })
+    val accent = colors.primary
+    val inactiveBarColor = colors.textMuted.copy(alpha = 0.24f)
+    val playheadColor = colors.textMain
+    val isTrimmed = audio.trimStartSec > 0.05f || (audio.durationSec - audio.effectiveTrimEndSec) > 0.05f
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(colors.inputBg)
+                .border(0.5.dp, colors.cardBorder, RoundedCornerShape(10.dp))
+                .pointerInput(total) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val w = size.width.toFloat().coerceAtLeast(1f)
+                        val grab = 24.dp.toPx()
+                        val a0 = latest
+                        val sx = a0.trimStartSec / total * w
+                        val ex = a0.effectiveTrimEndSec / total * w
+                        val mode = when {
+                            abs(down.position.x - sx) <= grab && abs(down.position.x - sx) <= abs(down.position.x - ex) -> 1
+                            abs(down.position.x - ex) <= grab -> 2
+                            else -> 0
                         }
+                        if (mode != 0) { onTrimStart(); haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
+                        fun apply(x: Float) {
+                            val sec = (x / w * total).coerceIn(0f, total)
+                            val a = latest
+                            when (mode) {
+                                1 -> trimCb(sec, a.effectiveTrimEndSec)
+                                2 -> trimCb(a.trimStartSec, sec)
+                                else -> seekCb((sec - a.trimStartSec).coerceIn(0f, a.trimmedLengthSec))
+                            }
+                        }
+                        apply(down.position.x)
+                        down.consume()
+                        do {
+                            val ev = awaitPointerEvent()
+                            val c = ev.changes.firstOrNull() ?: break
+                            if (c.pressed) { apply(c.position.x); c.consume() }
+                        } while (ev.changes.any { it.pressed })
                     }
-            ) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val step = 3.dp.toPx()
-                    val n = (size.width / step).toInt()
-                    val sx = audio.trimStartSec / total * size.width
-                    val ex = audio.effectiveTrimEndSec / total * size.width
-                    for (i in 0 until n) {
-                        val x = i * step + step / 2f
-                        val h = size.height * 0.72f * waveform[(i * waveform.size / n.coerceAtLeast(1)).coerceIn(0, waveform.size - 1)]
-                        drawLine(
-                            color = if (x in sx..ex) accent.copy(alpha = 0.88f) else inactiveBarColor,
-                            start = Offset(x, (size.height - h) / 2f),
-                            end = Offset(x, (size.height + h) / 2f),
-                            strokeWidth = 1.8.dp.toPx()
-                        )
-                    }
-                    // selection frame + handles
-                    drawRect(accent.copy(alpha = 0.10f), Offset(sx, 0f), Size((ex - sx).coerceAtLeast(0f), size.height))
-                    drawRoundRect(accent, Offset(sx - 3.dp.toPx(), 0f), Size(6.dp.toPx(), size.height), CornerRadius(3.dp.toPx()))
-                    drawRoundRect(accent, Offset(ex - 3.dp.toPx(), 0f), Size(6.dp.toPx(), size.height), CornerRadius(3.dp.toPx()))
-                    // preview playhead
-                    val px = (audio.trimStartSec + previewPosSec) / total * size.width
-                    drawLine(playheadColor, Offset(px, 0f), Offset(px, size.height), strokeWidth = 2.dp.toPx())
                 }
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val step = 3.dp.toPx()
+                val n = (size.width / step).toInt()
+                val sx = audio.trimStartSec / total * size.width
+                val ex = audio.effectiveTrimEndSec / total * size.width
+                for (i in 0 until n) {
+                    val x = i * step + step / 2f
+                    val h = size.height * 0.68f * waveform[(i * waveform.size / n.coerceAtLeast(1)).coerceIn(0, waveform.size - 1)]
+                    drawLine(
+                        color = if (x in sx..ex) accent.copy(alpha = 0.88f) else inactiveBarColor,
+                        start = Offset(x, (size.height - h) / 2f),
+                        end = Offset(x, (size.height + h) / 2f),
+                        strokeWidth = 1.6.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                }
+                drawRect(accent.copy(alpha = 0.08f), Offset(sx, 0f), Size((ex - sx).coerceAtLeast(0f), size.height))
+                drawRoundRect(accent, Offset(sx - 2.dp.toPx(), 4.dp.toPx()), Size(4.dp.toPx(), size.height - 8.dp.toPx()), CornerRadius(2.dp.toPx()))
+                drawRoundRect(accent, Offset(ex - 2.dp.toPx(), 4.dp.toPx()), Size(4.dp.toPx(), size.height - 8.dp.toPx()), CornerRadius(2.dp.toPx()))
+                val px = (audio.trimStartSec + previewPosSec) / total * size.width
+                drawLine(playheadColor, Offset(px, 0f), Offset(px, size.height), strokeWidth = 1.75.dp.toPx())
             }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("In ${formatTimecode(audio.trimStartSec)}", fontSize = 10.sp, color = colors.textMuted, fontFamily = FontFamily.Monospace)
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(accent)
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onTogglePreview()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isPreviewing) Lucide.Pause else Lucide.Play,
+                        contentDescription = if (isPreviewing) "Pause Preview" else "Preview Audio",
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
                 Text(
-                    "${formatTimecode(previewPosSec)} / ${formatTimecode(audio.trimmedLengthSec)}",
-                    fontSize = 10.5.sp, color = colors.textMain, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold
+                    text = "${formatTimecode(previewPosSec)} / ${formatTimecode(audio.trimmedLengthSec)}",
+                    fontSize = 11.sp,
+                    color = colors.textMain,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium
                 )
-                Text("Out ${formatTimecode(audio.effectiveTrimEndSec)}", fontSize = 10.sp, color = colors.textMuted, fontFamily = FontFamily.Monospace)
             }
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(accent.copy(alpha = 0.12f))
-                        .border(1.dp, accent.copy(alpha = 0.28f), RoundedCornerShape(12.dp))
-                        .clickable { onTogglePreview() }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(if (isPreviewing) Lucide.Pause else Lucide.Play, contentDescription = if (isPreviewing) "Pause Preview" else "Play Preview", tint = accent, modifier = Modifier.size(16.dp))
-                        Text(if (isPreviewing) "Pause Preview" else "Preview Audio", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = accent)
+                Text(
+                    text = "${formatTimecode(audio.trimStartSec)} – ${formatTimecode(audio.effectiveTrimEndSec)}",
+                    fontSize = 10.sp,
+                    color = colors.textMuted,
+                    fontFamily = FontFamily.Monospace
+                )
+                if (isTrimmed) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(colors.inputBg)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onTrimStart()
+                                onTrimChange(0f, audio.durationSec)
+                            }
+                            .padding(horizontal = 7.dp, vertical = 3.dp)
+                    ) {
+                        Text("Reset", fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = accent)
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.glassBg)
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-                        .clickable { onTrimStart(); onTrimChange(0f, audio.durationSec) }
-                        .padding(vertical = 10.dp, horizontal = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Reset", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
-                }
             }
-            Text(
-                "Drag the blue handles to trim. Tap or drag on the waveform to scrub the preview.",
-                fontSize = 10.sp, color = colors.textMuted, lineHeight = 14.sp
-            )
         }
     }
 }
+
+@Composable
+private fun AudioGroupedToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(
+                text = title,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textMain
+            )
+            Text(
+                text = subtitle,
+                fontSize = 10.5.sp,
+                color = colors.textMuted
+            )
+        }
+        SmallSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
 @Composable
 private fun AudioTabContent(
     gainDb: Float,
@@ -6204,419 +6220,324 @@ private fun AudioTabContent(
     onSeekAudioPreview: (Float) -> Unit = {},
     onAudioTrimChange: (Float, Float) -> Unit = { _, _ -> },
     onAudioTrimStart: () -> Unit = {},
-    onAutoDuckingChange: (Boolean) -> Unit = {}
+    onAutoDuckingChange: (Boolean) -> Unit = {},
+    onSelectCustomAudio: (FcpCustomAudio) -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // ── 1. CUSTOM SOUNDTRACK & VIDEO AUDIO EXTRACTION CARD ──
+        // ── 1. COMPACT OUTPUT LEVEL MONITOR ─────────────────────────────
         item {
-            val oneUiPrimary = Color(0xFF0381FE)
-            val cardSurface = if (colors.isDark) Color(0xFF1A1D24) else Color.White
-            val cardBorderColor = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
-            WorkspaceSectionCard(title = "Soundtrack & Audio", icon = Lucide.Music) {
-                if (customAudio == null) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val activeLevel = if (customAudio != null && customAudio.muteOriginalVideo) {
+                customAudio.volume
+            } else {
+                val dialogueNorm = (1f + (gainDb / 20f)).coerceIn(0.15f, 1.4f)
+                if (customAudio != null) maxOf(dialogueNorm, customAudio.volume) else dialogueNorm
+            }
+            WorkspaceSectionCard(
+                title = "Output Levels",
+                icon = Lucide.Activity,
+                modifier = Modifier.editorChromeFadeOnScrub(),
+                trailingContent = {
+                    val live = isPlaying || isAudioPreviewing
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (live) colors.primary.copy(alpha = 0.14f) else colors.inputBg)
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    ) {
                         Text(
-                            text = "Replace the video's original audio track with custom music or extract audio from another video.",
-                            fontSize = 11.5.sp,
-                            color = colors.textMuted,
-                            lineHeight = 16.sp
+                            text = if (live) "Live" else "Idle",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (live) colors.primary else colors.textMuted
                         )
+                    }
+                }
+            ) {
+                FcpStereoVuMeter(
+                    isPlaying = isPlaying || isAudioPreviewing,
+                    volumeNormalized = activeLevel
+                )
+            }
+        }
+
+        // ── 2. SOUNDTRACK & TRIM CONSOLE ────────────────────────────────
+        item {
+            WorkspaceSectionCard(
+                title = "Soundtrack",
+                icon = Lucide.Music,
+                trailingContent = if (customAudio != null) {
+                    {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.inputBg)
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onAddAudioFile()
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "Replace",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.primary
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFEF4444).copy(alpha = 0.12f))
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onRemoveCustomAudio()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Trash2,
+                                    contentDescription = "Remove soundtrack",
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                    }
+                } else null
+            ) {
+                if (customAudio == null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(colors.inputBg)
+                                .border(0.5.dp, colors.cardBorder, RoundedCornerShape(12.dp))
+                                .clickable { onAddAudioFile() }
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // "Add Audio" Button (Clean One UI Surface)
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(cardSurface)
-                                    .border(1.dp, cardBorderColor, RoundedCornerShape(14.dp))
-                                    .clickable { onAddAudioFile() }
-                                    .padding(vertical = 14.dp, horizontal = 10.dp),
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(9.dp))
+                                    .background(colors.primary.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(oneUiPrimary.copy(alpha = 0.12f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.Music, contentDescription = "Add Audio", tint = oneUiPrimary, modifier = Modifier.size(18.dp))
-                                    }
-                                    Text("Add Audio", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
-                                    Text("MP3, M4A, WAV", fontSize = 10.sp, color = colors.textMuted)
-                                }
+                                Icon(Lucide.Music, contentDescription = "Add Music", tint = colors.primary, modifier = Modifier.size(16.dp))
                             }
-                            // "Extract from a video" Button (Clean One UI Surface)
+                            Column {
+                                Text("Add Music", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                                Text("MP3, M4A, WAV", fontSize = 10.sp, color = colors.textMuted)
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(colors.inputBg)
+                                .border(0.5.dp, colors.cardBorder, RoundedCornerShape(12.dp))
+                                .clickable { onExtractAudioFromVideo() }
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(cardSurface)
-                                    .border(1.dp, cardBorderColor, RoundedCornerShape(14.dp))
-                                    .clickable { onExtractAudioFromVideo() }
-                                    .padding(vertical = 14.dp, horizontal = 10.dp),
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(9.dp))
+                                    .background(colors.primary.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(oneUiPrimary.copy(alpha = 0.12f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.Film, contentDescription = "Extract Audio", tint = oneUiPrimary, modifier = Modifier.size(18.dp))
-                                    }
-                                    Text("Extract From Video", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
-                                    Text("Rip audio from video", fontSize = 10.sp, color = colors.textMuted)
-                                }
+                                Icon(Lucide.Film, contentDescription = "Extract Audio", tint = colors.primary, modifier = Modifier.size(16.dp))
+                            }
+                            Column {
+                                Text("From Video", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                                Text("Extract track", fontSize = 10.sp, color = colors.textMuted)
                             }
                         }
                     }
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Column(
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // Track Title & Source Tag (clean borderless row inside card)
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .editorChromeFadeOnScrub(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                        // Clean One UI Selected Soundtrack Card
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(cardSurface)
-                                .border(1.dp, cardBorderColor, RoundedCornerShape(16.dp))
-                                .padding(horizontal = 12.dp, vertical = 11.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(colors.primary.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(oneUiPrimary.copy(alpha = 0.12f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (customAudio.isExtractedFromVideo) Lucide.Film else Lucide.Music,
-                                            contentDescription = "Audio track",
-                                            tint = oneUiPrimary,
-                                            modifier = Modifier.size(19.dp)
-                                        )
-                                    }
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Text(
-                                            text = customAudio.name,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = colors.textMain,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(oneUiPrimary.copy(alpha = 0.12f))
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(
-                                                    text = if (customAudio.isExtractedFromVideo) "Extracted Audio" else "Custom Audio",
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = if (colors.isDark) Color(0xFF60A5FA) else Color(0xFF0072DE)
-                                                )
-                                            }
-                                            if (customAudio.durationSec > 0f) {
-                                                Text(
-                                                    text = formatTimecode(customAudio.durationSec),
-                                                    fontSize = 10.5.sp,
-                                                    color = colors.textMuted,
-                                                    fontFamily = FontFamily.Monospace
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                IconButton(
-                                    onClick = onRemoveCustomAudio,
-                                    modifier = Modifier.size(34.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.Trash2,
-                                        contentDescription = "Remove soundtrack",
-                                        tint = Color(0xFFEF4444),
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                }
+                                Icon(
+                                    imageVector = if (customAudio.isExtractedFromVideo) Lucide.Film else Lucide.Music,
+                                    contentDescription = "Audio track",
+                                    tint = colors.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
                             }
-                        }
-                        // Toggle: Replace Original Video Audio (Mute Original)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(cardSurface)
-                                .border(1.dp, cardBorderColor, RoundedCornerShape(14.dp))
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
                                 Text(
-                                    text = "Replace Video Audio (Mute Original)",
+                                    text = customAudio.name,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = colors.textMain
+                                    color = colors.textMain,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = if (customAudio.muteOriginalVideo)
-                                        "Original video sound is muted and replaced"
-                                    else
-                                        "Mix custom audio with original video sound",
-                                    fontSize = 11.sp,
+                                    text = if (customAudio.isExtractedFromVideo) "Extracted audio" else "Custom track",
+                                    fontSize = 10.5.sp,
                                     color = colors.textMuted
                                 )
                             }
-                            SmallSwitch(
+                            if (customAudio.durationSec > 0f) {
+                                Text(
+                                    text = formatTimecode(customAudio.durationSec),
+                                    fontSize = 10.5.sp,
+                                    color = colors.textMuted,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+
+                        // Integrated Waveform Trim & Preview Console
+                        Box(modifier = Modifier.editorChromeFadeOnScrub()) {
+                            AudioTrimControlBlock(
+                                audio = customAudio,
+                                isPreviewing = isAudioPreviewing,
+                                previewPosSec = audioPreviewPosSec,
+                                onTogglePreview = onToggleAudioPreview,
+                                onSeekPreview = onSeekAudioPreview,
+                                onTrimChange = onAudioTrimChange,
+                                onTrimStart = onAudioTrimStart
+                            )
+                        }
+
+                        HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorder.copy(alpha = 0.65f))
+
+                        // Full-Width Level & Fades
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            FcpColorSliderRow(
+                                title = "Level",
+                                icon = Lucide.Volume2,
+                                value = customAudio.volume * 100f,
+                                defaultValue = 100f,
+                                valueRange = 0f..150f,
+                                isBipolar = false,
+                                formatValue = { v -> "${v.toInt()}%" },
+                                onValueChange = { onAudioVolumeChange(it / 100f) },
+                                gradientColors = listOf(colors.primary, colors.primary)
+                            )
+                            FcpColorSliderRow(
+                                title = "Fade In",
+                                icon = Lucide.TrendingUp,
+                                value = customAudio.fadeInSec,
+                                defaultValue = 0f,
+                                valueRange = 0.0f..5.0f,
+                                isBipolar = false,
+                                formatValue = { String.format("%.1fs", it) },
+                                onValueChange = onFadeInChange,
+                                gradientColors = listOf(colors.primary, colors.primary)
+                            )
+                            FcpColorSliderRow(
+                                title = "Fade Out",
+                                icon = Lucide.TrendingDown,
+                                value = customAudio.fadeOutSec,
+                                defaultValue = 0f,
+                                valueRange = 0.0f..5.0f,
+                                isBipolar = false,
+                                formatValue = { String.format("%.1fs", it) },
+                                onValueChange = onFadeOutChange,
+                                gradientColors = listOf(colors.primary, colors.primary)
+                            )
+                        }
+
+                        HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorder.copy(alpha = 0.65f))
+
+                        // Inset Grouped Switches (no nested bordered boxes)
+                        Column(
+                            modifier = Modifier.editorChromeFadeOnScrub(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AudioGroupedToggleRow(
+                                title = "Mute Original Audio",
+                                subtitle = "Replace video sound with this track",
                                 checked = customAudio.muteOriginalVideo,
                                 onCheckedChange = onMuteOriginalVideoChange
                             )
-                        }
-                        // Toggle: Loop Soundtrack
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(cardSurface)
-                                .border(1.dp, cardBorderColor, RoundedCornerShape(14.dp))
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
-                                Text(
-                                    text = "Loop Soundtrack",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = colors.textMain
-                                )
-                                Text(
-                                    text = if (customAudio.loopAudio)
-                                        "Soundtrack repeats continuously across project"
-                                    else
-                                        "Plays once and stops when track ends",
-                                    fontSize = 11.sp,
-                                    color = colors.textMuted
-                                )
-                            }
-                            SmallSwitch(
+                            HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorder.copy(alpha = 0.45f))
+                            AudioGroupedToggleRow(
+                                title = "Loop Track",
+                                subtitle = "Repeat across full timeline",
                                 checked = customAudio.loopAudio,
                                 onCheckedChange = onLoopAudioChange
                             )
-                        }
-                        // Toggle: Smart Audio Ducking
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(cardSurface)
-                                .border(1.dp, cardBorderColor, RoundedCornerShape(14.dp))
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
-                                Text(
-                                    text = "Smart Audio Ducking",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = colors.textMain
-                                )
-                                Text(
-                                    text = if (customAudio.autoDucking)
-                                        "Lowers background music by -12 dB during speech"
-                                    else
-                                        "Keep background soundtrack volume constant",
-                                    fontSize = 11.sp,
-                                    color = colors.textMuted
-                                )
-                            }
-                            SmallSwitch(
+                            HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorder.copy(alpha = 0.45f))
+                            AudioGroupedToggleRow(
+                                title = "Auto Ducking",
+                                subtitle = "Lower music -12 dB during speech",
                                 checked = customAudio.autoDucking,
                                 onCheckedChange = onAutoDuckingChange
                             )
                         }
-                        }
-                        // Soundtrack Volume Slider
-                        FcpColorSliderRow(
-                            title = "Soundtrack Volume",
-                            icon = Lucide.Volume2,
-                            value = customAudio.volume * 100f,
-                            defaultValue = 100f,
-                            valueRange = 0f..150f,
-                            isBipolar = false,
-                            formatValue = { v -> "${v.toInt()}%" },
-                            onValueChange = { onAudioVolumeChange(it / 100f) },
-                            gradientColors = listOf(oneUiPrimary, oneUiPrimary)
-                        )
-                        // Audio Fade In & Fade Out
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                FcpColorSliderRow(
-                                    title = "Fade In",
-                                    icon = Lucide.TrendingUp,
-                                    value = customAudio.fadeInSec,
-                                    defaultValue = 0f,
-                                    valueRange = 0.0f..5.0f,
-                                    isBipolar = false,
-                                    formatValue = { String.format("%.1fs", it) },
-                                    onValueChange = onFadeInChange,
-                                    gradientColors = listOf(oneUiPrimary, oneUiPrimary)
-                                )
-                            }
-                            Box(modifier = Modifier.weight(1f)) {
-                                FcpColorSliderRow(
-                                    title = "Fade Out",
-                                    icon = Lucide.TrendingDown,
-                                    value = customAudio.fadeOutSec,
-                                    defaultValue = 0f,
-                                    valueRange = 0.0f..5.0f,
-                                    isBipolar = false,
-                                    formatValue = { String.format("%.1fs", it) },
-                                    onValueChange = onFadeOutChange,
-                                    gradientColors = listOf(oneUiPrimary, oneUiPrimary)
-                                )
-                            }
-                        }
-                        // Quick Action Buttons
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .editorChromeFadeOnScrub(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(cardSurface)
-                                    .border(1.dp, cardBorderColor, RoundedCornerShape(12.dp))
-                                    .clickable { onAddAudioFile() }
-                                    .padding(vertical = 10.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Icon(Lucide.Music, contentDescription = "Soundtrack", tint = oneUiPrimary, modifier = Modifier.size(14.dp))
-                                    Text("Change Audio", fontSize = 12.sp, color = colors.textMain, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(cardSurface)
-                                    .border(1.dp, cardBorderColor, RoundedCornerShape(12.dp))
-                                    .clickable { onExtractAudioFromVideo() }
-                                    .padding(vertical = 10.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Icon(Lucide.Film, contentDescription = "Video file", tint = oneUiPrimary, modifier = Modifier.size(14.dp))
-                                    Text("Extract From Video", fontSize = 12.sp, color = colors.textMain, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
-                        }
                     }
                 }
             }
         }
-        // ── 1b. SOUNDTRACK TRIM + PREVIEW ──
-        if (customAudio != null) {
-            item {
-                Box(modifier = Modifier.editorChromeFadeOnScrub()) {
-                AudioTrimPreviewCard(
-                    audio = customAudio,
-                    isPreviewing = isAudioPreviewing,
-                    previewPosSec = audioPreviewPosSec,
-                    onTogglePreview = onToggleAudioPreview,
-                    onSeekPreview = onSeekAudioPreview,
-                    onTrimChange = onAudioTrimChange,
-                    onTrimStart = onAudioTrimStart
-                )
-                }
-            }
-        }
-        // ── 2. ORIGINAL VIDEO AUDIO MIXER CARD ──
+
+        // ── 3. ORIGINAL VIDEO AUDIO ─────────────────────────────────────
         item {
-            WorkspaceSectionCard(title = "Original Video Audio", icon = Lucide.Volume2) {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    if (customAudio?.muteOriginalVideo == true) {
+            val origMuted = customAudio?.muteOriginalVideo == true
+            WorkspaceSectionCard(
+                title = "Original Audio",
+                icon = Lucide.Volume2,
+                trailingContent = if (origMuted) {
+                    {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .editorChromeFadeOnScrub()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFFF59E0B).copy(alpha = 0.10f))
-                                .border(0.5.dp, Color(0xFFF59E0B).copy(alpha = 0.30f), RoundedCornerShape(10.dp))
-                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(Color(0xFFF59E0B).copy(alpha = 0.14f))
+                                .clickable { onMuteOriginalVideoChange(false) }
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(Lucide.VolumeX, contentDescription = "Muted audio", tint = Color(0xFFD97706), modifier = Modifier.size(14.dp))
-                                Text(
-                                    text = "Original audio is muted. Toggle 'Replace Video Audio' above to unmute and mix.",
-                                    fontSize = 10.5.sp,
-                                    color = Color(0xFFB45309),
-                                    lineHeight = 14.sp
-                                )
-                            }
+                            Text(
+                                text = "Muted · Tap to Mix",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFD97706)
+                            )
                         }
                     }
-                    // Gain Slider
+                } else null
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     FcpColorSliderRow(
                         title = "Dialogue Gain",
                         icon = Lucide.Volume2,
@@ -6629,21 +6550,13 @@ private fun AudioTabContent(
                             if (iv > 0) "+$iv dB" else if (iv < 0) "$iv dB" else "0 dB"
                         },
                         onValueChange = onGainChange,
-                        gradientColors = listOf(Color(0xFF0381FE), Color(0xFF0381FE))
+                        gradientColors = listOf(colors.primary, colors.primary)
                     )
-                    // Voice Isolation Switch
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .editorChromeFadeOnScrub(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Voice Isolation", fontSize = 12.sp, color = colors.textMain, fontWeight = FontWeight.SemiBold)
-                            Text("Neural background noise removal", fontSize = 10.sp, color = colors.textMuted)
-                        }
-                        SmallSwitch(
+                    HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorder.copy(alpha = 0.55f))
+                    Box(modifier = Modifier.editorChromeFadeOnScrub()) {
+                        AudioGroupedToggleRow(
+                            title = "Voice Isolation",
+                            subtitle = "Reduce background noise",
                             checked = voiceIsolation,
                             onCheckedChange = {
                                 onVoiceIsolationChange(it)
@@ -6654,59 +6567,41 @@ private fun AudioTabContent(
                 }
             }
         }
-        // ── 3. LIVE MASTER AUDIO WAVEFORM & DUAL STEREO VU LEVEL METERS ──
-        item {
-            WorkspaceSectionCard(
-                title = "MASTER AUDIO WAVEFORM & VU PEAK METERS",
-                icon = Lucide.Activity,
-                modifier = Modifier.editorChromeFadeOnScrub()
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    val audioDur = customAudio?.durationSec ?: 0f
-                    val progressFrac = if (audioDur > 0.1f) {
-                        (currentTimeSecProvider() / audioDur).coerceIn(0f, 1f)
-                    } else 0f
-                    val trimStFrac = if (audioDur > 0.1f) (customAudio?.trimStartSec ?: 0f) / audioDur else 0f
-                    val trimEnFrac = if (audioDur > 0.1f) (customAudio?.effectiveTrimEndSec ?: audioDur) / audioDur else 1f
 
-                    FcpAudioWaveformVisualizer(
-                        audioProgressFrac = progressFrac,
-                        isPlaying = isPlaying || isAudioPreviewing,
-                        durationSec = customAudio?.durationSec ?: 15f,
-                        trimStartFrac = trimStFrac,
-                        trimEndFrac = trimEnFrac,
-                        onSeekProgress = { frac ->
-                            if (customAudio != null) {
-                                val targetSec = customAudio.durationSec * frac
-                                onSeekAudioPreview(targetSec - customAudio.trimStartSec)
-                            }
-                        }
-                    )
-
-                    FcpStereoVuMeter(
-                        isPlaying = isPlaying || isAudioPreviewing,
-                        volumeNormalized = customAudio?.volume ?: (1f + (gainDb / 20f)).coerceIn(0.2f, 1.5f)
-                    )
-                }
-            }
-        }
-        // ── 4. BUILT-IN STUDIO SOUND EFFECTS (SFX) SOUNDBOARD ──
+        // ── 4. STUDIO SOUND EFFECTS (SFX) PADS ──────────────────────────
         item {
             Box(modifier = Modifier.editorChromeFadeOnScrub()) {
-            FcpStudioSfxSoundboard(
-                onPreviewSfx = { sfx ->
-                    try {
-                        SoundManager.playPop()
-                    } catch (_: Throwable) {}
-                    ToastManager.showToast("SFX Preview: ${sfx.title}")
-                },
-                onInsertSfx = { sfx ->
-                    try {
-                        SoundManager.playNotification()
-                    } catch (_: Throwable) {}
-                    ToastManager.showToast("${sfx.title} added to project")
-                }
-            )
+                FcpStudioSfxSoundboard(
+                    onPreviewSfx = { sfx ->
+                        val ok = com.chroma.studio.utils.FcpStudioAudioSynth.previewSfx(context, sfx)
+                        if (!ok) {
+                            try { SoundManager.playPop() } catch (_: Throwable) {}
+                        }
+                        ToastManager.showToast("Previewing: ${sfx.title}")
+                    },
+                    onInsertSfx = { sfx ->
+                        val wavFile = com.chroma.studio.utils.FcpStudioAudioSynth.getOrCreateSfxWav(context, sfx)
+                        if (wavFile != null && wavFile.exists()) {
+                            val durSec = com.chroma.studio.utils.FcpStudioAudioSynth.parseSfxDurationSec(sfx.durationText)
+                            val sfxTrack = FcpCustomAudio(
+                                uri = Uri.fromFile(wavFile),
+                                name = "SFX: ${sfx.title}",
+                                durationSec = durSec,
+                                volume = 1.0f,
+                                isExtractedFromVideo = false,
+                                muteOriginalVideo = false,
+                                loopAudio = false,
+                                trimStartSec = 0f,
+                                trimEndSec = durSec
+                            )
+                            onSelectCustomAudio(sfxTrack)
+                            com.chroma.studio.utils.FcpStudioAudioSynth.previewSfx(context, sfx)
+                            ToastManager.showToast("${sfx.title} attached to audio mix")
+                        } else {
+                            ToastManager.showToast("Unable to synthesize SFX")
+                        }
+                    }
+                )
             }
         }
     }
@@ -6744,7 +6639,7 @@ private fun FcpEffectThumbnailCard(
                 .fillMaxWidth()
                 .height(52.dp)
                 .clip(RoundedCornerShape(topStart = 9.dp, topEnd = 9.dp))
-                .background(Color.Black),
+                .background(colors.inputBg),
             contentAlignment = Alignment.Center
         ) {
             if (previewBitmap != null) {
@@ -7021,7 +6916,7 @@ private fun EffectsTabContent(
     ) {
         // 0. DEDICATED CLIP ANIMATION & MOTION EFFECTS (SHAKE, PULSE, ZOOM, JITTER)
         item {
-            WorkspaceSectionCard(title = "CLIP MOTION & CAMERA ANIMATIONS", icon = Lucide.Activity) {
+            WorkspaceSectionCard(title = "Clip Motion", icon = Lucide.Activity) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
                         modifier = Modifier
@@ -7092,7 +6987,7 @@ private fun EffectsTabContent(
         }
         // 1. VISUAL EFFECTS CATALOG (Real Video Frame Previews, Capsule/Pill free)
         item {
-            WorkspaceSectionCard(title = "CINEMATIC VISUAL EFFECTS", icon = Lucide.Sparkles) {
+            WorkspaceSectionCard(title = "Visual Effects", icon = Lucide.Sparkles) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     // Effects Horizontal Scroll Row with Real Video Frame Previews
                     Row(
@@ -7165,7 +7060,7 @@ private fun EffectsTabContent(
         }
         // 2. Aurora Subject Mask & Bokeh Depth
         item {
-            WorkspaceSectionCard(title = "CINEMATIC SUBJECT DEPTH & BOKEH", icon = Lucide.Zap) {
+            WorkspaceSectionCard(title = "Depth & Bokeh", icon = Lucide.Zap) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Row(
                         modifier = Modifier
@@ -7345,8 +7240,7 @@ private fun FcpFontDropdownSelector(
                             Box(
                                 modifier = Modifier
                                     .size(30.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.glassBg)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .clickable { showDialog = false },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -7354,7 +7248,7 @@ private fun FcpFontDropdownSelector(
                                     imageVector = Lucide.X,
                                     contentDescription = "Close",
                                     tint = colors.textMain,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
@@ -7426,20 +7320,12 @@ private fun FcpFontDropdownSelector(
                                         )
                                     }
                                     if (isSelected) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(24.dp)
-                                                .clip(CircleShape)
-                                                .background(colors.primary),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Lucide.Check,
-                                                contentDescription = "Selected",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
+                                        Icon(
+                                            imageVector = Lucide.Check,
+                                            contentDescription = "Selected",
+                                            tint = colors.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                     }
                                 }
                             }
@@ -7664,21 +7550,21 @@ private fun FcpTextLayerOverlay(
                 rotationZ = layer.rotationDeg + animRotZ
             }
             .then(
-                if (layer.hasBackgroundPill) {
+                if (layer.hasBackgroundPill && layer.presetType != FcpTitlePresetType.SUBTITLE_CARD) {
                     Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color.Black.copy(alpha = 0.55f))
-                        .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(14.dp))
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.58f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 } else Modifier
             )
             .then(
                 if (isSelected) {
                     Modifier
+                        .padding(10.dp)
                         .border(
-                            width = 1.5.dp,
-                            brush = Brush.linearGradient(listOf(Color(0xFF60A5FA), Color(0xFF3B82F6))),
-                            shape = RoundedCornerShape(10.dp)
+                            width = 1.25.dp,
+                            color = Color(0xFF0A84FF),
+                            shape = RoundedCornerShape(6.dp)
                         )
                         .padding(6.dp)
                 } else Modifier.padding(6.dp)
@@ -8195,10 +8081,9 @@ private fun FcpTextLayerOverlay(
             FcpTitlePresetType.SUBTITLE_CARD -> {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(Color.Black.copy(alpha = 0.65f))
-                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 18.dp, vertical = 8.dp),
+                        .padding(horizontal = 16.dp, vertical = 7.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -8212,55 +8097,67 @@ private fun FcpTextLayerOverlay(
                 }
             }
         }
-        // ── Floating Corner Interactive Badges When Selected ──────────────────
+        // ── Floating Corner Interactive Badges When Selected (Clean Non-Overlapping Anchors) ──
         if (isSelected) {
             // Top-Right: Delete [X]
-            Icon(
-                Lucide.X,
-                contentDescription = "Delete Title",
-                tint = Color(0xFFEF4444),
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 8.dp, y = (-8).dp)
-                    .size(18.dp)
+                    .size(20.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFFFF3B30))
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onDelete()
-                    }
-            )
-            // Top-Left: Duplicate [+]
-            Icon(
-                Lucide.Copy,
-                contentDescription = "Duplicate Title",
-                tint = Color(0xFF3B82F6),
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Lucide.X,
+                    contentDescription = "Delete Title",
+                    tint = Color.White,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+            // Top-Left: Duplicate
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .offset(x = (-8).dp, y = (-8).dp)
-                    .size(18.dp)
+                    .size(20.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF0A84FF))
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onDuplicate()
-                    }
-            )
-            // Bottom-Right: Corner Node
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Lucide.Copy,
+                    contentDescription = "Duplicate Title",
+                    tint = Color.White,
+                    modifier = Modifier.size(11.dp)
+                )
+            }
+            // Bottom-Right: Clean Corner Pin
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .offset(x = 6.dp, y = 6.dp)
-                    .size(10.dp)
-                    .clip(CircleShape)
+                    .offset(x = 3.dp, y = 3.dp)
+                    .size(8.dp)
+                    .clip(RoundedCornerShape(2.dp))
                     .background(Color.White)
-                    .border(2.dp, Color(0xFF3B82F6), CircleShape)
+                    .border(1.25.dp, Color(0xFF0A84FF), RoundedCornerShape(2.dp))
             )
-            // Bottom-Left: Corner Node
+            // Bottom-Left: Clean Corner Pin
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .offset(x = (-6).dp, y = 6.dp)
-                    .size(10.dp)
-                    .clip(CircleShape)
+                    .offset(x = (-3).dp, y = 3.dp)
+                    .size(8.dp)
+                    .clip(RoundedCornerShape(2.dp))
                     .background(Color.White)
-                    .border(2.dp, Color(0xFF3B82F6), CircleShape)
+                    .border(1.25.dp, Color(0xFF0A84FF), RoundedCornerShape(2.dp))
             )
         }
     }
@@ -8438,18 +8335,13 @@ private fun FcpTypeButton(
     onClick: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    val shape = RoundedCornerShape(8.dp)
-    val bgColor = if (active) colors.primary.copy(alpha = 0.12f) else colors.glassBg
+    val shape = RoundedCornerShape(10.dp)
+    val bgColor = if (active) colors.primary.copy(alpha = 0.14f) else colors.inputBg
     val contentColor = if (active) colors.primary else colors.textMain
     Column(
         modifier = modifier
             .clip(shape)
             .background(bgColor, shape)
-            .border(
-                width = if (active) 1.5.dp else 1.dp,
-                color = if (active) colors.primary else colors.glassBorder,
-                shape = shape
-            )
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
@@ -8592,6 +8484,7 @@ private fun FcpTitleLayerCard(
     layer: FcpTextLayer,
     index: Int,
     totalLayers: Int,
+    totalDurationSec: Float = 30f,
     isSelected: Boolean,
     onSelect: () -> Unit,
     onToggleExpand: () -> Unit,
@@ -8606,19 +8499,14 @@ private fun FcpTitleLayerCard(
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(10.dp)
     var isRenaming by remember { mutableStateOf(false) }
     var renameText by remember(layer.name) { mutableStateOf(layer.name) }
     val titleScrubState = com.chroma.studio.ui.components.LocalSliderScrubbingState.current
     val titleCardBg by animateColorAsState(
-        targetValue = if (titleScrubState.isScrubbing) Color.Transparent else if (isSelected) colors.primary.copy(alpha = 0.05f) else colors.glassBg,
+        targetValue = if (titleScrubState.isScrubbing) Color.Transparent else if (isSelected) colors.primary.copy(alpha = 0.08f) else colors.inputBg,
         animationSpec = tween(180),
         label = "titleCardBg"
-    )
-    val titleCardBorder by animateColorAsState(
-        targetValue = if (titleScrubState.isScrubbing) Color.Transparent else if (isSelected) colors.primary else colors.glassBorder,
-        animationSpec = tween(180),
-        label = "titleCardBorder"
     )
     Column(
         modifier = Modifier
@@ -8626,11 +8514,6 @@ private fun FcpTitleLayerCard(
             .animateContentSize(animationSpec = tween(durationMillis = 200))
             .clip(shape)
             .background(titleCardBg, shape)
-            .border(
-                width = if (isSelected) 1.5.dp else 1.dp,
-                color = titleCardBorder,
-                shape = shape
-            )
             .padding(12.dp)
     ) {
         // ── 1. Header Row (Reorder, Visibility, Swatch, Title, Expand, Duplicate, Delete) ──
@@ -8908,7 +8791,7 @@ private fun FcpTitleLayerCard(
                     layerName = layer.name,
                     timelineStartSec = layer.timelineStartSec,
                     timelineEndSec = layer.timelineEndSec,
-                    totalDurationSec = 30f,
+                    totalDurationSec = totalDurationSec,
                     onRangeChange = { newSt, newEn ->
                         onUpdate(layer.copy(timelineStartSec = newSt, timelineEndSec = newEn))
                     }
@@ -8942,12 +8825,20 @@ private fun FcpTitleLayerCard(
                         )
                     } else null
                 }
+                val miniLum = layer.textColor.red * 0.299f + layer.textColor.green * 0.587f + layer.textColor.blue * 0.114f
+                val miniPreviewBg = if (colors.isDark) {
+                    colors.inputBg
+                } else if (miniLum > 0.72f && !layer.hasBackgroundPill) {
+                    colors.textMuted.copy(alpha = 0.72f)
+                } else {
+                    colors.inputBg
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (colors.isDark) Color(0xFF070B14) else Color(0xFF0F172A))
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(10.dp))
+                        .background(miniPreviewBg)
+                        .border(0.5.dp, colors.cardBorder, RoundedCornerShape(10.dp))
                         .padding(horizontal = 14.dp, vertical = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -9608,12 +9499,17 @@ private fun MiniPresetVisualRender(
     preset: FcpTitlePresetType,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalOscellionColors.current
     val context = LocalContext.current
+    val inkMain = colors.textMain
+    val inkSub = colors.textMuted
+    val scriptWarm = if (colors.isDark) Color(0xFFFFB800) else Color(0xFFD97706)
+    val accentCyan = if (colors.isDark) Color(0xFF38BDF8) else colors.primary
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF0B0F17))
-            .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+            .background(if (colors.isDark) colors.inputBg else colors.cardSurfaceElevated)
+            .border(0.5.dp, colors.cardBorder, RoundedCornerShape(10.dp))
             .padding(8.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -9628,14 +9524,14 @@ private fun MiniPresetVisualRender(
                             fontFamily = primaryFont,
                             fontWeight = FontWeight.Black,
                             fontSize = 14.sp,
-                            color = Color.White,
+                            color = inkMain,
                             letterSpacing = 1.sp
                         )
                         Text(
                             text = "Signature",
                             fontFamily = scriptFont,
                             fontSize = 17.sp,
-                            color = Color(0xFFFFB800),
+                            color = scriptWarm,
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .offset(x = (-6).dp, y = (-7).dp)
@@ -9646,7 +9542,7 @@ private fun MiniPresetVisualRender(
                         text = "EDITORIAL STYLE",
                         fontFamily = primaryFont,
                         fontSize = 7.sp,
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = inkSub,
                         letterSpacing = 1.5.sp
                     )
                 }
@@ -9654,16 +9550,16 @@ private fun MiniPresetVisualRender(
             FcpTitlePresetType.GOLD_3D -> {
                 val primaryFont = remember { getFcpFontFamily(context, "Outfit-Bold.ttf") }
                 val goldBrush = Brush.verticalGradient(
-                    listOf(Color(0xFFFFF2A1), Color(0xFFFFDF00), Color(0xFFD4AF37), Color(0xFF996515))
+                    listOf(Color(0xFFFDE047), Color(0xFFD97706), Color(0xFF92400E))
                 )
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(3.dp))
-                            .background(Color(0xFFFFB800).copy(alpha = 0.2f))
+                            .background(Color(0xFFF59E0B).copy(alpha = 0.16f))
                             .padding(horizontal = 6.dp, vertical = 1.dp)
                     ) {
-                        Text("3D BEVEL", fontSize = 6.5.sp, color = Color(0xFFFFDF00), fontWeight = FontWeight.Bold)
+                        Text("3D BEVEL", fontSize = 6.5.sp, color = scriptWarm, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.height(2.dp))
                     Text(
@@ -9683,21 +9579,21 @@ private fun MiniPresetVisualRender(
                         fontFamily = primaryFont,
                         fontWeight = FontWeight.Black,
                         fontSize = 14.sp,
-                        color = Color.White,
+                        color = inkMain,
                         letterSpacing = 2.sp
                     )
                     Box(
                         modifier = Modifier
                             .width(36.dp)
                             .height(1.5.dp)
-                            .background(Color(0xFF38BDF8))
+                            .background(accentCyan)
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
                         text = "OFFICIAL TRAILER",
                         fontFamily = primaryFont,
                         fontSize = 6.5.sp,
-                        color = Color(0xFF94A3B8),
+                        color = inkSub,
                         letterSpacing = 1.5.sp
                     )
                 }
@@ -9711,14 +9607,14 @@ private fun MiniPresetVisualRender(
                         fontFamily = primaryFont,
                         fontWeight = FontWeight.Black,
                         fontSize = 15.sp,
-                        color = Color.White,
+                        color = inkMain,
                         letterSpacing = 1.sp
                     )
                     Text(
                         text = "Elegance &",
                         fontFamily = scriptFont,
                         fontSize = 16.sp,
-                        color = Color(0xFF67E8F9),
+                        color = accentCyan,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .offset(x = 6.dp, y = (-5).dp)
@@ -9730,7 +9626,7 @@ private fun MiniPresetVisualRender(
                 val primaryFont = remember { getFcpFontFamily(context, "Istok-Regular.ttf") }
                 Box(
                     modifier = Modifier
-                        .border(1.dp, Color.White, RoundedCornerShape(3.dp))
+                        .border(1.dp, inkMain.copy(alpha = 0.75f), RoundedCornerShape(3.dp))
                         .padding(horizontal = 10.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -9739,7 +9635,7 @@ private fun MiniPresetVisualRender(
                         fontFamily = primaryFont,
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.sp,
-                        color = Color.White,
+                        color = inkMain,
                         letterSpacing = 2.sp
                     )
                 }
@@ -9765,11 +9661,12 @@ private fun MiniPresetVisualRender(
             }
             FcpTitlePresetType.CYBER_NEON -> {
                 val primaryFont = remember { getFcpFontFamily(context, "Wotham.ttf") }
+                val neonColor = if (colors.isDark) Color(0xFF00F0FF) else colors.primary
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF0F172A))
-                        .border(1.dp, Color(0xFF00F0FF), RoundedCornerShape(6.dp))
+                        .background(neonColor.copy(alpha = 0.12f))
+                        .border(1.dp, neonColor, RoundedCornerShape(6.dp))
                         .padding(horizontal = 10.dp, vertical = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -9778,7 +9675,7 @@ private fun MiniPresetVisualRender(
                         fontFamily = primaryFont,
                         fontWeight = FontWeight.Black,
                         fontSize = 12.sp,
-                        color = Color(0xFF00F0FF),
+                        color = neonColor,
                         letterSpacing = 1.5.sp
                     )
                 }
@@ -9790,23 +9687,24 @@ private fun MiniPresetVisualRender(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
-                        .background(Color.Black.copy(alpha = 0.6f))
+                        .background(colors.cardSurface)
+                        .border(0.5.dp, colors.cardBorder, RoundedCornerShape(4.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Box(Modifier.width(2.5.dp).height(18.dp).background(Color(0xFF38BDF8)))
+                    Box(Modifier.width(2.5.dp).height(18.dp).background(accentCyan))
                     Column {
                         Text(
                             text = "LESS IS MORE",
                             fontFamily = primaryFont,
                             fontWeight = FontWeight.Bold,
                             fontSize = 9.sp,
-                            color = Color.White
+                            color = inkMain
                         )
                         Text(
                             text = "CINEMATIC CUT",
                             fontFamily = primaryFont,
                             fontSize = 6.sp,
-                            color = Color.White.copy(alpha = 0.6f),
+                            color = inkSub,
                             letterSpacing = 1.sp
                         )
                     }
@@ -9814,18 +9712,18 @@ private fun MiniPresetVisualRender(
             }
             FcpTitlePresetType.RETRO_VHS -> {
                 val primaryFont = remember { getFcpFontFamily(context, "Wotham.ttf") }
-                val vhsBrush = Brush.horizontalGradient(listOf(Color(0xFFFF007F), Color(0xFF00F0FF)))
+                val vhsBrush = Brush.horizontalGradient(listOf(Color(0xFFEC4899), accentCyan))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                         modifier = Modifier
                             .clip(RoundedCornerShape(2.dp))
-                            .background(Color.Black.copy(alpha = 0.8f))
+                            .background(colors.error.copy(alpha = 0.14f))
                             .padding(horizontal = 4.dp, vertical = 1.dp)
                     ) {
-                        Box(Modifier.size(4.dp).clip(CircleShape).background(Color.Red))
-                        Text("REC ●", fontSize = 6.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        Box(Modifier.size(4.dp).clip(CircleShape).background(colors.error))
+                        Text("REC ●", fontSize = 6.sp, color = colors.error, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.height(2.dp))
                     Text(
@@ -9840,12 +9738,13 @@ private fun MiniPresetVisualRender(
             FcpTitlePresetType.LUXURY_SERIF -> {
                 val primaryFont = remember { getFcpFontFamily(context, "Comfortaa-Bold.ttf") }
                 val scriptFont = remember { getFcpFontFamily(context, "Thesignature.ttf") }
+                val serifGold = if (colors.isDark) Color(0xFFD4AF37) else Color(0xFFB45309)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "Collection",
                         fontFamily = scriptFont,
                         fontSize = 14.sp,
-                        color = Color(0xFFD4AF37),
+                        color = serifGold,
                         modifier = Modifier.offset(y = 2.dp).rotate(-4f)
                     )
                     Text(
@@ -9853,16 +9752,16 @@ private fun MiniPresetVisualRender(
                         fontFamily = primaryFont,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
-                        color = Color(0xFFFDE68A),
+                        color = inkMain,
                         letterSpacing = 3.sp
                     )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Box(Modifier.width(10.dp).height(0.6.dp).background(Color(0xFFD4AF37)))
-                        Text("AUTUMN EDITION", fontSize = 5.5.sp, color = Color.White.copy(alpha = 0.8f))
-                        Box(Modifier.width(10.dp).height(0.6.dp).background(Color(0xFFD4AF37)))
+                        Box(Modifier.width(10.dp).height(0.6.dp).background(serifGold))
+                        Text("AUTUMN EDITION", fontSize = 5.5.sp, color = inkSub)
+                        Box(Modifier.width(10.dp).height(0.6.dp).background(serifGold))
                     }
                 }
             }
@@ -9890,7 +9789,7 @@ private fun MiniPresetVisualRender(
                         fontFamily = primaryFont,
                         fontWeight = FontWeight.Black,
                         fontSize = 6.5.sp,
-                        color = Color.White
+                        color = inkMain
                     )
                 }
             }
@@ -9899,8 +9798,8 @@ private fun MiniPresetVisualRender(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.7f))
-                        .border(0.8.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                        .background(colors.cardSurface)
+                        .border(0.8.dp, colors.cardBorder, RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -9908,7 +9807,7 @@ private fun MiniPresetVisualRender(
                         text = "Modern Subtitle Caption",
                         fontFamily = primaryFont,
                         fontSize = 9.sp,
-                        color = Color.White,
+                        color = inkMain,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -10239,13 +10138,21 @@ private fun FcpTextAnimationStudio(
             val len = (layer.primaryText.length * inProg).toInt().coerceAtLeast(1)
             layer.primaryText.take(len)
         } else layer.primaryText
+        val animLum = layer.textColor.red * 0.299f + layer.textColor.green * 0.587f + layer.textColor.blue * 0.114f
+        val animStageBg = if (colors.isDark) {
+            colors.inputBg
+        } else if (animLum > 0.72f && !layer.hasBackgroundPill) {
+            colors.textMuted.copy(alpha = 0.78f)
+        } else {
+            colors.inputBg
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(130.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF070B12))
-                .border(1.dp, colors.primary.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+                .background(animStageBg)
+                .border(0.75.dp, colors.cardBorder, RoundedCornerShape(14.dp))
                 .padding(10.dp)
         ) {
             // Live badge top-left
@@ -10504,6 +10411,7 @@ private fun FcpTextAnimationStudio(
 private fun TitlesTabContent(
     textLayers: List<FcpTextLayer>,
     selectedLayerId: String,
+    totalDurationSec: Float = 30f,
     onSelectLayer: (String) -> Unit,
     onUpdateLayer: (FcpTextLayer) -> Unit,
     onAddLayer: (FcpTitlePresetType?) -> Unit,
@@ -10528,9 +10436,8 @@ private fun TitlesTabContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(colors.glassBg)
-                    .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.inputBg)
                     .padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -10540,8 +10447,8 @@ private fun TitlesTabContent(
                         modifier = Modifier
                             .weight(1f)
                             .height(34.dp)
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(if (isActive) colors.primary else Color.Transparent)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isActive) colors.cardSurfaceElevated else Color.Transparent)
                             .clickable {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 currentSubSection = sub
@@ -10555,27 +10462,27 @@ private fun TitlesTabContent(
                             Icon(
                                 imageVector = sub.icon,
                                 contentDescription = sub.label,
-                                tint = if (isActive) colors.onPrimary else colors.textMuted,
+                                tint = if (isActive) colors.primary else colors.textMuted,
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = sub.label,
                                 fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isActive) colors.onPrimary else colors.textMuted
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isActive) colors.textMain else colors.textMuted
                             )
                             if (sub == TitlesSubSection.LAYERS && textLayers.isNotEmpty()) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(if (isActive) colors.onPrimary.copy(alpha = 0.25f) else colors.primary.copy(alpha = 0.15f))
+                                        .clip(RoundedCornerShape(5.dp))
+                                        .background(if (isActive) colors.primary.copy(alpha = 0.14f) else colors.textMuted.copy(alpha = 0.14f))
                                         .padding(horizontal = 5.dp, vertical = 1.dp)
                                 ) {
                                     Text(
                                         text = "${textLayers.size}",
-                                        fontSize = 9.sp,
+                                        fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isActive) colors.onPrimary else colors.primary
+                                        color = if (isActive) colors.primary else colors.textMuted
                                     )
                                 }
                             }
@@ -10592,27 +10499,33 @@ private fun TitlesTabContent(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Primary Add Text button (Single plus icon only)
-                    PrimaryGradientButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onAddLayer(null)
-                        },
-                        height = 36.dp,
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 12.dp)
-                    ) {
-                        Icon(Lucide.Plus, contentDescription = "Add", tint = Color.White, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Add Text", color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
-                    }
-                    // Quick Browse Presets button
+                    // Primary Add Text button (Borderless Apple System Blue)
                     Box(
                         modifier = Modifier
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colors.glassBg)
-                            .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                            .weight(1f)
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(colors.primary)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onAddLayer(null)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(Lucide.Plus, contentDescription = "Add", tint = Color.White, modifier = Modifier.size(14.dp))
+                            Text("Add Text", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    // Quick Browse Presets button (Borderless flat tint)
+                    Box(
+                        modifier = Modifier
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(colors.inputBg)
                             .clickable {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 currentSubSection = TitlesSubSection.PRESETS
@@ -10625,7 +10538,7 @@ private fun TitlesTabContent(
                             horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Icon(Lucide.Sparkles, contentDescription = "Add title effect", tint = colors.primary, modifier = Modifier.size(13.dp))
-                            Text("Presets Gallery", color = colors.textMain, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Presets Gallery", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -10633,18 +10546,23 @@ private fun TitlesTabContent(
             item {
                 FcpQuickStickerStrip(
                     onAddSticker = { sticker ->
+                        val staggeredY = -80f + ((textLayers.size % 3) * 32f)
                         val newLayer = FcpTextLayer(
                             name = sticker.label,
+                            presetType = FcpTitlePresetType.SUBTITLE_CARD,
                             primaryText = sticker.label,
-                            subtitleText = sticker.subtitle,
-                            badgeText = sticker.label,
+                            scriptText = "",
+                            subtitleText = "",
+                            badgeText = "",
+                            fontSizeSp = 15f,
                             accentColor = sticker.badgeColor,
                             textColor = Color.White,
                             secondaryTextColor = sticker.badgeColor,
+                            offsetY = staggeredY,
                             hasBackgroundPill = true
                         )
                         onAddCustomLayer(newLayer)
-                        ToastManager.showToast("${sticker.label} sticker added")
+                        ToastManager.showToast("${sticker.label} badge added")
                     }
                 )
             }
@@ -10655,7 +10573,7 @@ private fun TitlesTabContent(
                 if (textLayers.isEmpty()) {
                     item {
                         WorkspaceSectionCard(
-                            title = "TEXT ON VIDEO",
+                            title = "Title Styling",
                             icon = Lucide.Type
                         ) {
                             Column(
@@ -10715,6 +10633,7 @@ private fun TitlesTabContent(
                             layer = layer,
                             index = index,
                             totalLayers = textLayers.size,
+                            totalDurationSec = totalDurationSec,
                             isSelected = isSelected,
                             onSelect = { onSelectLayer(layer.id) },
                             onToggleExpand = {
@@ -10747,7 +10666,7 @@ private fun TitlesTabContent(
                 }
                 // Quick Presets Row at bottom of Layers tab
                 item {
-                    WorkspaceSectionCard(title = "PREVIEW & ADD FROM PRESETS", icon = Lucide.Sparkles) {
+                    WorkspaceSectionCard(title = "Title Presets", icon = Lucide.Sparkles) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
                                 text = "Tap any preset below to add another styled title layer:",
@@ -10865,7 +10784,7 @@ private fun TitlesTabContent(
             TitlesSubSection.ANIMATIONS -> {
                 item {
                     WorkspaceSectionCard(
-                        title = "TEXT ANIMATIONS STUDIO",
+                        title = "Text Animations",
                         icon = Lucide.Film
                     ) {
                         FcpTextAnimationStudio(
@@ -10982,11 +10901,17 @@ private fun AspectRatioPill(
     val colors = LocalOscellionColors.current
     val shape = remember { RoundedCornerShape(50) }
     val haptic = LocalHapticFeedback.current
+    val shortLabel = when (aspect) {
+        FcpAspectRatio.VERTICAL_9_16 -> "9:16"
+        FcpAspectRatio.SQUARE_1_1 -> "1:1"
+        FcpAspectRatio.WIDESCREEN_16_9 -> "16:9"
+        FcpAspectRatio.CINEMATIC_21_9 -> "21:9"
+    }
     Box(
         modifier = Modifier
             .clip(shape)
-            .background(if (active) colors.primary else colors.glassBg, shape)
-            .border(0.5.dp, if (active) colors.primary else colors.glassBorder, shape)
+            .background(if (active) colors.primary else colors.cardSurface, shape)
+            .border(0.5.dp, if (active) colors.primary else colors.cardBorder, shape)
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
@@ -10994,13 +10919,26 @@ private fun AspectRatioPill(
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()
             }
-            .padding(horizontal = 14.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
-        AspectRatioBoxIcon(
-            aspect = aspect,
-            active = active
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            AspectRatioBoxIcon(
+                aspect = aspect,
+                active = active
+            )
+            Text(
+                text = shortLabel,
+                fontSize = 11.sp,
+                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (active) Color.White else colors.textMain,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
     }
 }
 @Composable
@@ -11536,6 +11474,8 @@ private fun CanvasBackgroundLayer(
 private fun CanvasTabContent(
     background: FcpCanvasBackground,
     onBackgroundChange: (FcpCanvasBackground) -> Unit,
+    aspectRatio: FcpAspectRatio = FcpAspectRatio.VERTICAL_9_16,
+    onSelectAspect: (FcpAspectRatio) -> Unit = {},
     onPickImage: () -> Unit,
     blurBitmap: Bitmap?,
     isDarkMode: Boolean,
@@ -11549,10 +11489,29 @@ private fun CanvasTabContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Aspect Ratio Strip (compact access inside Canvas inspector)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .editorChromeFadeOnScrub(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "FRAME RATIO",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textMuted,
+                letterSpacing = 0.6.sp
+            )
+            FcpAspectRatioSelector(
+                aspectRatio = aspectRatio,
+                onSelectAspect = onSelectAspect
+            )
+        }
         // Section Header
         Row(
             modifier = Modifier
@@ -11564,10 +11523,10 @@ private fun CanvasTabContent(
             Column {
                 Text(
                     text = "CANVAS FILL",
-                    fontSize = 11.sp,
+                    fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.primary,
-                    letterSpacing = 1.sp
+                    letterSpacing = 0.8.sp
                 )
                 Text(
                     text = "Fill blank gaps, letterboxes & borders",
@@ -11579,7 +11538,7 @@ private fun CanvasTabContent(
         // Clip Transform & Orientation Controls (Mirror, 90° Rotate, Reset)
         if (selectedClip != null) {
             WorkspaceSectionCard(
-                title = "CLIP ORIENTATION & TRANSFORM",
+                title = "Transform",
                 icon = Lucide.Maximize2,
                 modifier = Modifier.editorChromeFadeOnScrub()
             ) {
@@ -11708,7 +11667,7 @@ private fun CanvasTabContent(
                 .editorChromeFadeOnScrub()
                 .height(42.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(if (isDarkMode) Color(0xFF1E1E22) else Color(0xFFE5E7EB))
+                .background(colors.inputBg)
                 .padding(3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -11720,9 +11679,7 @@ private fun CanvasTabContent(
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(9.dp))
                         .background(
-                            if (isSelected) {
-                                if (isDarkMode) Color(0xFF2C2C34) else Color.White
-                            } else Color.Transparent
+                            if (isSelected) colors.cardSurface else Color.Transparent
                         )
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -11898,7 +11855,7 @@ private fun CanvasTabContent(
                         value = background.backdropDim,
                         sliderId = "FcpCanvasScrim",
                         onValueChange = { onBackgroundChange(background.copy(backdropDim = it)) },
-                        valueRange = 0.15f..0.75f
+                        valueRange = 0f..0.75f
                     )
                 }
             }
@@ -11994,20 +11951,12 @@ private fun CanvasTabContent(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.primary.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Upload,
-                                    contentDescription = "Upload",
-                                    tint = colors.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = Lucide.Upload,
+                                contentDescription = "Upload",
+                                tint = colors.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
                             Column {
                                 Text(
                                     text = if (background.customImageUri != null) "Change Photo from Gallery" else "Upload from Gallery",
@@ -12185,8 +12134,7 @@ private fun TimelineMiniButton(
         !enabled -> SolidColor(Color.Transparent)
         isPressed && isDanger -> SolidColor(colors.error.copy(alpha = 0.22f))
         isPressed -> SolidColor(colors.primary.copy(alpha = 0.22f))
-        colors.isDark -> Brush.verticalGradient(listOf(Color(0xFF262C38), Color(0xFF191D26)))
-        else -> Brush.verticalGradient(listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9)))
+        else -> SolidColor(colors.cardSurfaceElevated)
     }
     Box(
         modifier = Modifier
@@ -12226,7 +12174,7 @@ private fun WorkspaceSectionCard(
     var expanded by remember { mutableStateOf(defaultExpanded) }
     val shape = RoundedCornerShape(16.dp)
     val cardBg by animateColorAsState(
-        targetValue = if (scrubbingState.isScrubbing) Color.Transparent else if (colors.isDark) Color(0xFF141722) else colors.glassBg,
+        targetValue = if (scrubbingState.isScrubbing) Color.Transparent else colors.cardSurface,
         animationSpec = tween(180),
         label = "workspaceCardBg"
     )
@@ -12238,22 +12186,7 @@ private fun WorkspaceSectionCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .then(
-                if (cardBorderAlpha > 0.01f) {
-                    Modifier.studioBevel(
-                        cornerRadius = 16.dp,
-                        borderWidth = 1.dp,
-                        accentBorder = Brush.verticalGradient(
-                            listOf(
-                                Color.White.copy(alpha = 0.14f * cardBorderAlpha),
-                                colors.glassBorder.copy(alpha = colors.glassBorder.alpha * cardBorderAlpha)
-                            )
-                        )
-                    )
-                } else Modifier.clip(shape)
-            )
-            .background(cardBg, shape)
-            .padding(14.dp)
+            .padding(vertical = 4.dp)
     ) {
         val headerAlpha by animateFloatAsState(if (scrubbingState.isScrubbing) 0f else 1f, tween(180))
         Row(
@@ -12428,10 +12361,10 @@ fun FcpTransitionDialog(
                     .fillMaxWidth()
                     .graphicsLayer { translationY = slideAnim.value }
                     .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                    .background(if (colors.isDark) Color(0xFF14151C) else Color(0xFFF7F8FA))
+                    .background(colors.cardSurface)
                     .border(
-                        1.dp,
-                        if (colors.isDark) Color(0xFF2C3246) else Color(0xFFE2E8F0),
+                        0.75.dp,
+                        colors.cardBorder,
                         RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
                     )
                     .clickable(
@@ -12519,7 +12452,7 @@ fun FcpTransitionDialog(
                             .weight(1f)
                             .height(44.dp),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, if (colors.isDark) Color(0xFF333846) else Color(0xFFCBD5E1))
+                        border = BorderStroke(1.dp, colors.cardBorder)
                     ) {
                         Text("Cancel", color = colors.textMuted, fontSize = 14.sp)
                     }
@@ -12533,7 +12466,7 @@ fun FcpTransitionDialog(
                             .weight(1.3f)
                             .height(44.dp),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE))
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
                     ) {
                         Icon(
                             imageVector = Lucide.Check,
@@ -12822,9 +12755,9 @@ fun FcpExportSheet(
     val resolutions = listOf("720p", "1080p", "4K")
     val frameRates = listOf("24 FPS", "30 FPS", "60 FPS")
 
-    val sheetBg = if (colors.isDark) Color(0xFF14161F) else Color(0xFFFFFFFF)
-    val cardBg = if (colors.isDark) Color(0xFF1C202C) else Color(0xFFF1F5F9)
-    val cardBorder = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f)
+    val sheetBg = colors.cardSurface
+    val cardBg = colors.inputBg
+    val cardBorder = colors.cardBorder
 
     // Calculate dimensions based on aspect ratio & resolution
     val baseDim = when (selectedRes) {
@@ -14126,20 +14059,12 @@ fun FcpDurationWarningDialog(
                     modifier = Modifier.padding(top = 20.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFFF9500).copy(alpha = 0.16f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Lucide.TriangleAlert,
-                            contentDescription = "Warning alert",
-                            tint = Color(0xFFFF9500),
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Lucide.TriangleAlert,
+                        contentDescription = "Warning alert",
+                        tint = Color(0xFFFF9500),
+                        modifier = Modifier.size(30.dp)
+                    )
                     Spacer(Modifier.height(12.dp))
                     Text(
                         text = "Video Exceeds 1 Minute",
@@ -14229,8 +14154,8 @@ private fun FcpAnimationThumbnailCard(
     onClick: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    val cardBg = if (isSelected) Color(0xFFE11D48).copy(alpha = 0.18f) else if (colors.isDark) Color(0xFF1B1E26) else Color(0xFFF1F5F9)
-    val cardBorder = if (isSelected) Color(0xFFE11D48) else colors.glassBorder
+    val cardBg = if (isSelected) colors.error.copy(alpha = 0.14f) else colors.inputBg
+    val cardBorder = if (isSelected) colors.error else colors.cardBorder
     Column(
         modifier = Modifier
             .width(82.dp)
@@ -14246,7 +14171,7 @@ private fun FcpAnimationThumbnailCard(
             modifier = Modifier
                 .size(36.dp)
                 .clip(RoundedCornerShape(6.dp))
-                .background(if (isSelected) Color(0xFFE11D48) else if (colors.isDark) Color(0xFF282C37) else Color(0xFFE2E8F0)),
+                .background(if (isSelected) colors.error else colors.cardSurfaceElevated),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -14284,7 +14209,7 @@ fun FcpClipAnimationDialog(
         label = "animDlgScrim"
     )
     val dlgCardBg by animateColorAsState(
-        targetValue = if (dlgScrubState.isScrubbing) Color.Transparent else if (colors.isDark) Color(0xFF181A20) else Color.White,
+        targetValue = if (dlgScrubState.isScrubbing) Color.Transparent else colors.cardSurface,
         animationSpec = tween(180),
         label = "animDlgCardBg"
     )
@@ -14510,11 +14435,13 @@ data class FcpDialogState(
 private fun FcpTopHeaderBar(
     context: Context,
     clipsCount: Int,
+    aspectRatio: FcpAspectRatio,
     undoEmpty: Boolean,
     redoEmpty: Boolean,
     isOverOneMinute: Boolean,
     totalDurationSec: Float,
     remixedFromAuthorUsername: String?,
+    onSelectAspect: (FcpAspectRatio) -> Unit,
     onBackClick: () -> Unit,
     onUndoClick: () -> Unit,
     onRedoClick: () -> Unit,
@@ -14522,24 +14449,30 @@ private fun FcpTopHeaderBar(
     onExportClick: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    var showAspectMenu by remember { mutableStateOf(false) }
+    val shortAspect = when (aspectRatio) {
+        FcpAspectRatio.VERTICAL_9_16 -> "9:16"
+        FcpAspectRatio.SQUARE_1_1 -> "1:1"
+        FcpAspectRatio.WIDESCREEN_16_9 -> "16:9"
+        FcpAspectRatio.CINEMATIC_21_9 -> "21:9"
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(54.dp)
-            .background(if (colors.isDark) Color(0xFF14161D) else colors.bg)
-            .border(width = 0.5.dp, color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else colors.glassBorder)
+            .height(48.dp)
+            .background(colors.bg)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left: Back button + optional compact clip count pill (no branding/logo clutter)
+            // Left: Back + Clip pill + Inline Aspect Ratio dropdown
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 IconGhostButton(
                     icon = Lucide.ArrowLeft,
@@ -14547,27 +14480,72 @@ private fun FcpTopHeaderBar(
                     onClick = onBackClick
                 )
                 if (clipsCount > 0) {
-                    Box(
+                    Text(
+                        text = "$clipsCount ${if (clipsCount == 1) "clip" else "clips"}",
+                        color = colors.textMuted,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+                Box {
+                    Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.inputBg)
+                            .clickable { showAspectMenu = true }
+                            .padding(horizontal = 9.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         Text(
-                            text = "$clipsCount ${if (clipsCount == 1) "clip" else "clips"}",
-                            color = colors.textMuted,
+                            text = shortAspect,
+                            color = colors.textMain,
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             softWrap = false
                         )
+                        Icon(
+                            imageVector = Lucide.ChevronDown,
+                            contentDescription = "Aspect Ratio",
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showAspectMenu,
+                        onDismissRequest = { showAspectMenu = false }
+                    ) {
+                        listOf(
+                            FcpAspectRatio.VERTICAL_9_16,
+                            FcpAspectRatio.SQUARE_1_1,
+                            FcpAspectRatio.WIDESCREEN_16_9,
+                            FcpAspectRatio.CINEMATIC_21_9
+                        ).forEach { mode ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = mode.label,
+                                        fontWeight = if (mode == aspectRatio) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (mode == aspectRatio) colors.primary else colors.textMain
+                                    )
+                                },
+                                onClick = {
+                                    showAspectMenu = false
+                                    onSelectAspect(mode)
+                                }
+                            )
+                        }
                     }
                 }
             }
-            // Right: Undo, Redo, Duration Warning (if >1m), Export Button
+            // Right: Undo, Redo, Duration Warning (if >1m), Crisp Solid Apple Export Pill
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 IconGhostButton(
                     icon = Lucide.Undo,
@@ -14584,11 +14562,10 @@ private fun FcpTopHeaderBar(
                 if (isOverOneMinute) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFFFF9500).copy(alpha = 0.14f))
-                            .border(0.5.dp, Color(0xFFFF9500).copy(alpha = 0.35f), RoundedCornerShape(999.dp))
                             .clickable(onClick = onDurationWarningClick)
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                            .padding(horizontal = 7.dp, vertical = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
@@ -14599,12 +14576,12 @@ private fun FcpTopHeaderBar(
                                 imageVector = Lucide.TriangleAlert,
                                 contentDescription = "Warning alert",
                                 tint = Color(0xFFFF9500),
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(11.dp)
                             )
                             Text(
                                 text = ">1m",
                                 color = Color(0xFFFF9500),
-                                fontSize = 11.sp,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 softWrap = false
@@ -14612,17 +14589,19 @@ private fun FcpTopHeaderBar(
                         }
                     }
                 }
-                // Export Primary Button (Clean Solid One UI Pill)
-                PrimaryGradientButton(
-                    onClick = onExportClick,
-                    shape = RoundedCornerShape(999.dp),
-                    height = 36.dp,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                Box(
+                    modifier = Modifier
+                        .height(34.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.primary)
+                        .clickable(onClick = onExportClick)
+                        .padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Export",
                         color = Color.White,
-                        fontSize = 13.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         softWrap = false
@@ -14630,6 +14609,11 @@ private fun FcpTopHeaderBar(
                 }
             }
         }
+        HorizontalDivider(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            thickness = 0.5.dp,
+            color = colors.glassBorder
+        )
     }
     if (remixedFromAuthorUsername != null) {
         Row(

@@ -129,10 +129,8 @@ fun LiveVoiceBubblePreview(
 
             Box(
                 modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(playBtnBg)
-                    .border(0.75.dp, playBtnBorder, CircleShape)
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .clickable {
                         SoundManager.playReaction()
                         isPlaying = !isPlaying

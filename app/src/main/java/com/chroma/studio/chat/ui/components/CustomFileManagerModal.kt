@@ -35,6 +35,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.chat.data.ChatFileItem
+import com.chroma.studio.chat.data.formatReadableFileSize
+import com.chroma.studio.chat.data.getFileBadgeVisual
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.chat.ui.theme.LocalChatColors
@@ -57,13 +59,14 @@ data class DeviceFileItem(
 
 /**
  * Authentic Apple HIG Inbuilt File Manager Modal.
- * Scans device storage for real documents, PDFs, archives, and audio files,
- * with live search, file category filter pills, multi-file selection, and instant chat sending.
+ * Scans device storage for real documents, PDFs, archives, and media files,
+ * supports system file & cloud picking (`OpenMultipleDocuments`), live search,
+ * category filters, multi-file selection with total size guard, and optional captions.
  */
 @Composable
 fun CustomFileManagerModal(
     onDismiss: () -> Unit,
-    onSendFiles: (List<ChatFileItem>) -> Unit
+    onSendFiles: (List<ChatFileItem>, String) -> Unit
 ) {
     val context = LocalContext.current
     val colors = LocalChatColors.current
@@ -72,37 +75,75 @@ fun CustomFileManagerModal(
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
+    var captionText by remember { mutableStateOf("") }
     val selectedFiles = remember { mutableStateListOf<DeviceFileItem>() }
 
     val systemDocPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         if (uris.isNotEmpty()) {
-            val pickedItems = uris.mapNotNull { uri ->
+            val dateNow = SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date())
+            var skippedOversized = 0
+            val newlyPicked = uris.mapNotNull { uri ->
                 try {
+                    try {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    } catch (_: Exception) {}
+
                     var fileName = "Document"
-                    var fileSize = 0L
+                    var fileSize = -1L
                     context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                         val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
                         val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
                         if (cursor.moveToFirst()) {
                             if (nameIndex != -1) fileName = cursor.getString(nameIndex) ?: "Document"
-                            if (sizeIndex != -1) fileSize = cursor.getLong(sizeIndex)
+                            if (sizeIndex != -1 && !cursor.isNull(sizeIndex)) {
+                                fileSize = cursor.getLong(sizeIndex)
+                            }
                         }
                     }
+                    if (fileSize <= 0L) {
+                        fileSize = ChatMediaLimiter.getMediaSizeBytes(context, uri)
+                    }
+                    if (fileSize > ChatMediaLimiter.MAX_FILE_SIZE_BYTES) {
+                        skippedOversized++
+                        return@mapNotNull null
+                    }
                     val ext = fileName.substringAfterLast(".", "FILE").uppercase()
-                    ChatFileItem(
-                        id = UUID.randomUUID().toString(),
+                    val readableSize = formatReadableFileSize(fileSize).ifBlank { "File" }
+                    DeviceFileItem(
+                        id = uri.toString(),
                         name = fileName,
-                        size = formatFileSize(fileSize),
-                        uri = uri.toString(),
-                        extension = ext
+                        size = readableSize,
+                        sizeBytes = fileSize.coerceAtLeast(0L),
+                        uri = uri,
+                        extension = ext,
+                        dateModified = dateNow,
+                        path = uri.toString()
                     )
-                } catch (_: Exception) { null }
+                } catch (_: Exception) {
+                    null
+                }
             }
-            if (pickedItems.isNotEmpty()) {
-                SoundManager.playSend()
-                onSendFiles(pickedItems)
+            if (skippedOversized > 0) {
+                ToastManager.showToast("Skipped $skippedOversized file(s) exceeding 100 MB limit")
+            }
+            if (newlyPicked.isNotEmpty()) {
+                val existingIds = files.mapTo(mutableSetOf()) { it.id }
+                val toPrepend = newlyPicked.filter { it.id !in existingIds }
+                if (toPrepend.isNotEmpty()) {
+                    files = toPrepend + files
+                }
+                newlyPicked.forEach { item ->
+                    if (selectedFiles.none { it.id == item.id }) {
+                        selectedFiles.add(item)
+                    }
+                }
+                selectedCategory = "All"
+                SoundManager.playReaction()
             }
         }
     }
@@ -116,20 +157,18 @@ fun CustomFileManagerModal(
         isLoading = false
     }
 
-    val categories = listOf("All", "PDF", "Docs", "Sheets", "Archives", "Audio")
+    val categories = listOf("All", "PDF", "Docs", "Sheets", "Archives", "Audio", "Media")
 
     val filteredFiles = remember(files, searchQuery, selectedCategory) {
         files.filter { file ->
+            val cat = getFileBadgeVisual(file.extension).category
             val matchesCategory = when (selectedCategory) {
-                "PDF" -> file.extension.equals("PDF", ignoreCase = true)
-                "Docs" -> listOf("DOC", "DOCX", "TXT", "RTF").any { it.equals(file.extension, ignoreCase = true) }
-                "Sheets" -> listOf("XLS", "XLSX", "CSV").any { it.equals(file.extension, ignoreCase = true) }
-                "Archives" -> listOf("ZIP", "RAR", "7Z", "TAR", "GZ").any { it.equals(file.extension, ignoreCase = true) }
-                "Audio" -> listOf("MP3", "WAV", "M4A", "AAC", "OGG").any { it.equals(file.extension, ignoreCase = true) }
-                else -> true
+                "All" -> true
+                else -> cat.equals(selectedCategory, ignoreCase = true)
             }
             val matchesSearch = if (searchQuery.isBlank()) true else {
-                file.name.contains(searchQuery.trim(), ignoreCase = true)
+                file.name.contains(searchQuery.trim(), ignoreCase = true) ||
+                    file.extension.contains(searchQuery.trim(), ignoreCase = true)
             }
             matchesCategory && matchesSearch
         }
@@ -280,6 +319,56 @@ fun CustomFileManagerModal(
 
             Spacer(Modifier.height(10.dp))
 
+            // Quick System & Cloud Picker Banner
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(colors.iosBlue.copy(alpha = if (colors.isLight) 0.08f else 0.14f))
+                    .border(0.5.dp, colors.iosBlue.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+                    .clickable {
+                        SoundManager.playReaction()
+                        systemDocPickerLauncher.launch(arrayOf("*/*"))
+                    }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.iosBlue.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    PhosphorFileIcon(tint = colors.iosBlue, size = 17.dp)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Browse Device, Downloads & Cloud",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textDark
+                    )
+                    Text(
+                        text = "Send PDF, DOCX, ZIP, APK, or uncompressed media up to 100 MB",
+                        fontSize = 11.sp,
+                        color = colors.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    text = "Open",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.iosBlue
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
             // Category Filter Pills
             LazyRow(
                 modifier = Modifier
@@ -372,15 +461,8 @@ fun CustomFileManagerModal(
                     items(filteredFiles, key = { it.id }) { file ->
                         val isSelected = selectedFiles.any { it.id == file.id }
 
-                        val badgeColor = when (file.extension.uppercase()) {
-                            "PDF" -> Color(0xFFFF3B30)
-                            "DOC", "DOCX" -> Color(0xFF0381FE)
-                            "XLS", "XLSX", "CSV" -> Color(0xFF34C759)
-                            "ZIP", "RAR", "7Z" -> Color(0xFF0284C7)
-                            "APK" -> Color(0xFFFF9500)
-                            "MP3", "WAV", "M4A" -> Color(0xFFE11D48)
-                            else -> colors.iosBlue
-                        }
+                        val badgeVisual = getFileBadgeVisual(file.extension)
+                        val badgeColor = Color(badgeVisual.accentColorHex)
 
                         Row(
                             modifier = Modifier
@@ -475,14 +557,40 @@ fun CustomFileManagerModal(
                         .border(0.5.dp, colors.borderSubtle)
                         .imePadding()
                         .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    // Optional caption input
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF2C2C2E))
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        BasicTextField(
+                            value = captionText,
+                            onValueChange = { captionText = it },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            textStyle = TextStyle(fontSize = 13.5.sp, color = colors.textDark),
+                            cursorBrush = SolidColor(colors.iosBlue),
+                            decorationBox = { inner ->
+                                if (captionText.isEmpty()) {
+                                    Text("Add a message with ${selectedFiles.size} file${if (selectedFiles.size > 1) "s" else ""}...", fontSize = 13.5.sp, color = colors.textMuted)
+                                }
+                                inner()
+                            }
+                        )
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "${selectedFiles.size} file${if (selectedFiles.size > 1) "s" else ""} selected",
                                 fontSize = 13.5.sp,
@@ -490,11 +598,23 @@ fun CustomFileManagerModal(
                                 color = colors.textDark
                             )
                             val totalBytes = selectedFiles.sumOf { it.sizeBytes }
-                            Text(
-                                text = "Total: ${formatFileSize(totalBytes)}",
-                                fontSize = 11.5.sp,
-                                color = colors.textMuted
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "${formatFileSize(totalBytes)} / 100 MB",
+                                    fontSize = 11.5.sp,
+                                    color = colors.textMuted
+                                )
+                                Text(
+                                    text = "Clear",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.iosBlue,
+                                    modifier = Modifier.clickable { selectedFiles.clear() }
+                                )
+                            }
                         }
 
                         Button(
@@ -513,7 +633,7 @@ fun CustomFileManagerModal(
                                         extension = it.extension.uppercase()
                                     )
                                 }
-                                onSendFiles(chatFiles)
+                                onSendFiles(chatFiles, captionText.trim())
                                 onDismiss()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = colors.iosBlue),
@@ -615,29 +735,34 @@ private fun loadDeviceDocuments(context: Context): List<DeviceFileItem> {
         // Fallback gracefully to directory scanning or samples
     }
 
-    // Also check Downloads directory directly
-    try {
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        if (downloadsDir != null && downloadsDir.exists()) {
-            downloadsDir.listFiles()?.filter { it.isFile && !it.name.startsWith(".") }?.take(20)?.forEach { file ->
-                val ext = file.name.substringAfterLast(".", "FILE").uppercase()
-                val sizeBytes = file.length()
-                if (items.none { it.name == file.name }) {
-                    items.add(
-                        DeviceFileItem(
-                            name = file.name,
-                            size = formatFileSize(sizeBytes),
-                            sizeBytes = sizeBytes,
-                            uri = Uri.fromFile(file),
-                            extension = ext,
-                            dateModified = dateFormat.format(Date(file.lastModified())),
-                            path = file.absolutePath
+    // Also check Downloads and Documents directories directly
+    listOf(
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+    ).forEach { publicDir ->
+        try {
+            if (publicDir != null && publicDir.exists()) {
+                publicDir.listFiles()?.filter { it.isFile && !it.name.startsWith(".") }?.take(25)?.forEach { file ->
+                    val ext = file.name.substringAfterLast(".", "FILE").uppercase()
+                    val sizeBytes = file.length()
+                    if (items.none { it.path == file.absolutePath || (it.name == file.name && it.sizeBytes == sizeBytes) }) {
+                        items.add(
+                            DeviceFileItem(
+                                id = file.absolutePath,
+                                name = file.name,
+                                size = formatFileSize(sizeBytes),
+                                sizeBytes = sizeBytes,
+                                uri = Uri.fromFile(file),
+                                extension = ext,
+                                dateModified = dateFormat.format(Date(file.lastModified())),
+                                path = file.absolutePath
+                            )
                         )
-                    )
+                    }
                 }
             }
-        }
-    } catch (e: Exception) {}
+        } catch (_: Exception) {}
+    }
 
     return items
 }

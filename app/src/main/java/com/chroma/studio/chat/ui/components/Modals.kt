@@ -1,5 +1,14 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class
+)
 package com.chroma.studio.chat.ui.components
+
+import androidx.compose.ui.focus.onFocusChanged
+import com.chroma.studio.ui.screens.advanceStoryProgress
+import com.chroma.studio.ui.screens.computeStoryAutoAdvanceDurationMs
+import com.chroma.studio.ui.screens.isStoryProgressComplete
+import com.chroma.studio.ui.screens.rememberStoryLifecycleResumed
 
 import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.ui.components.OnlineStatusDot
@@ -42,6 +51,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -51,7 +61,9 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -218,9 +230,9 @@ fun IosCoverBannerPickerModal(
                                             .size(20.dp)
                                             .align(Alignment.TopEnd)
                                             .offset(x = (-6).dp, y = 6.dp)
-                                            .clip(CircleShape)
+                                            .clip(RoundedCornerShape(6.dp))
                                             .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
-                                            .border(1.dp, Color.White, CircleShape),
+                                            .border(1.dp, Color.White, RoundedCornerShape(6.dp)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         LucideCheck(tint = Color.White, size = 12.dp)
@@ -437,15 +449,15 @@ fun ContactInfoDrawer(
                                     size = 15.dp
                                 )
                             }
-                        } else if (chat.online) {
+                        } else if (!isGroup && chat.online) {
                             OnlineStatusDot(
                                 isOnline = true,
-                                size = 22.dp,
+                                size = 20.dp,
                                 showPulse = true,
                                 ringColor = colors.appBg,
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .offset(x = (-2).dp, y = (-2).dp)
+                                    .offset(x = (-4).dp, y = (-4).dp)
                             )
                         }
                     }
@@ -1902,23 +1914,43 @@ private fun UserStoryPageView(
     val currentStory = if (stories.isNotEmpty() && currentIndex in stories.indices) stories[currentIndex] else stories.firstOrNull()
 
     var replyText by remember { mutableStateOf("") }
+    var isReplyInputFocused by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
     var isPaused by remember { mutableStateOf(false) }
+    val isLifecycleResumed = rememberStoryLifecycleResumed()
+    val isImeVisible = WindowInsets.isImeVisible
+    val effectivePaused = isPaused || !isActive || !isLifecycleResumed || isReplyInputFocused || replyText.isNotBlank() || isImeVisible
 
-    // Auto-Advance Timer for this user's story sequence
-    LaunchedEffect(currentStory?.id, isPaused, isActive) {
-        if (!isActive || currentStory == null) {
+    val storyDurationMs = remember(currentStory?.id, currentStory?.image, currentStory?.caption, currentStory?.pollData) {
+        if (currentStory == null) {
+            5000L
+        } else {
+            computeStoryAutoAdvanceDurationMs(
+                hasVisualMedia = currentStory.image != null,
+                textContent = currentStory.caption,
+                hasInteractiveWidgets = currentStory.pollData != null
+            )
+        }
+    }
+
+    // Reset progress only when switching stories or active user page (never on pause/resume)
+    LaunchedEffect(currentStory?.id, isActive) {
+        progress = 0f
+    }
+
+    // Frame-accurate Auto-Advance Timer for this user's story sequence
+    LaunchedEffect(currentStory?.id, effectivePaused, isActive, storyDurationMs) {
+        if (!isActive || currentStory == null || effectivePaused) {
             return@LaunchedEffect
         }
-        val duration = 5000L
-        val interval = 40L
-        val step = interval.toFloat() / duration
-        progress = 0f
-        while (progress < 1f && !isPaused && isActive) {
-            kotlinx.coroutines.delay(interval)
-            progress += step
+        var lastFrameTimeNanos = withFrameNanos { it }
+        while (!isStoryProgressComplete(progress) && !effectivePaused && isActive) {
+            val frameTimeNanos = withFrameNanos { it }
+            val deltaMs = ((frameTimeNanos - lastFrameTimeNanos).coerceAtLeast(0L)) / 1_000_000L
+            lastFrameTimeNanos = frameTimeNanos
+            progress = advanceStoryProgress(progress, deltaMs, storyDurationMs)
         }
-        if (progress >= 1f && !isPaused && isActive) {
+        if (isStoryProgressComplete(progress) && !effectivePaused && isActive) {
             if (currentIndex < stories.size - 1) {
                 currentIndex++
                 progress = 0f
@@ -1954,7 +1986,7 @@ private fun UserStoryPageView(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Brush.verticalGradient(currentStory.bgGradientColors!!))
+                    .background(Brush.verticalGradient(currentStory.bgGradientColors))
             )
         } else {
             Box(
@@ -2518,7 +2550,9 @@ private fun UserStoryPageView(
                                 onValueChange = { replyText = it },
                                 textStyle = TextStyle(fontSize = 14.sp, color = Color.White),
                                 cursorBrush = SolidColor(Color.White),
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onFocusChanged { isReplyInputFocused = it.isFocused },
                                 decorationBox = { inner ->
                                     if (replyText.isEmpty()) {
                                         Text(
@@ -2579,210 +2613,517 @@ fun FullCallModal(
     onToggleCam: () -> Unit,
     onToggleSpeaker: () -> Unit,
     onSwitchCamera: () -> Unit = {},
+    onMinimize: (() -> Unit)? = null,
     onHangup: () -> Unit
 ) {
-    val min = callDurationSec / 60
-    val sec = callDurationSec % 60
-    val timerStr = "$min:${sec.toString().padStart(2, '0')}"
     val defaultFalse = remember { kotlinx.coroutines.flow.MutableStateFlow(false) }
     val defaultCam = remember { kotlinx.coroutines.flow.MutableStateFlow(callType.contains("Video")) }
+    val defaultCallState = remember { kotlinx.coroutines.flow.MutableStateFlow(com.chroma.studio.webrtc.CallState.CALLING) }
+    val defaultQuality = remember { kotlinx.coroutines.flow.MutableStateFlow(com.chroma.studio.webrtc.CallConnectionQuality.CONNECTING) }
+    val emptyCallFlow = remember { kotlinx.coroutines.flow.MutableStateFlow<com.chroma.studio.webrtc.CallModel?>(null) }
+    val emptyRtcFlow = remember { kotlinx.coroutines.flow.MutableStateFlow<com.chroma.studio.webrtc.WebRTCClient?>(null) }
+
     val isMicMuted by (callManager?.isMicMuted ?: defaultFalse).collectAsState()
     val isCamOn by (callManager?.isCameraEnabled ?: defaultCam).collectAsState()
     val isSpeakerOn by (callManager?.isSpeakerOn ?: defaultFalse).collectAsState()
+    val rtcCallState by (callManager?.callState ?: defaultCallState).collectAsState()
+    val connectionQuality by (callManager?.connectionQuality ?: defaultQuality).collectAsState()
+    val hasRemoteVideo by (callManager?.hasRemoteVideo ?: defaultFalse).collectAsState()
+    val isCaller by (callManager?.isCaller ?: defaultFalse).collectAsState()
+    val activeCall by (callManager?.activeCall ?: emptyCallFlow).collectAsState()
+    val activeRtcClient by (callManager?.webRTCClientFlow ?: emptyRtcFlow).collectAsState()
+
+    val currentUid = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty() }
+    val (peerName, peerAvatar) = remember(activeCall, chat.name, chat.avatar, currentUid) {
+        com.chroma.studio.webrtc.resolveRemotePeerInfo(activeCall, chat.name, chat.avatar, currentUid)
+    }
+
+    val statusText = com.chroma.studio.webrtc.formatCallStatusText(
+        callState = rtcCallState,
+        connectionQuality = connectionQuality,
+        durationSec = callDurationSec,
+        isCaller = isCaller
+    )
+    val isLiveConnected = rtcCallState == com.chroma.studio.webrtc.CallState.ACTIVE &&
+        connectionQuality == com.chroma.studio.webrtc.CallConnectionQuality.GOOD
+    val statusColor = when {
+        isLiveConnected -> Color(0xFF30D158)
+        connectionQuality == com.chroma.studio.webrtc.CallConnectionQuality.RECONNECTING -> Color(0xFFFF9F0A)
+        else -> Color.White.copy(alpha = 0.72f)
+    }
+
+    val showVideoLayout = isCamOn || hasRemoteVideo
+    var controlsVisible by remember(showVideoLayout) { mutableStateOf(true) }
+    var pipOffsetX by remember { mutableFloatStateOf(0f) }
+    var pipOffsetY by remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(24.dp)
+            .background(Color(0xFF06080C))
+            .pointerInput(showVideoLayout, hasRemoteVideo) {
+                if (showVideoLayout && hasRemoteVideo) {
+                    detectTapGestures(onTap = { controlsVisible = !controlsVisible })
+                }
+            }
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Apple In-Call Header Info
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(top = 28.dp)
-            ) {
-                Text(
-                    text = if (isCamOn) "Oscellion Video" else "Oscellion Audio",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = chat.name,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = timerStr,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = Color(0xFF34C759)
+        // =========================================================================
+        // 1. AMBIENT / VIDEO MEDIA CANVAS
+        // =========================================================================
+        if (showVideoLayout && callManager != null && activeRtcClient != null && hasRemoteVideo) {
+            // Edge-to-edge FaceTime remote camera feed
+            com.chroma.studio.webrtc.WebRTCVideoView(
+                callManager = callManager,
+                isLocal = false,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            // Subtle iOS Contact Poster ambient blurred backdrop for Audio & Waiting states
+            if (peerAvatar.isNotBlank()) {
+                AsyncImage(
+                    model = peerAvatar,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(54.dp)
                 )
             }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF0B0E15).copy(alpha = 0.78f),
+                                Color(0xFF07090E).copy(alpha = 0.86f),
+                                Color(0xFF040507).copy(alpha = 0.94f)
+                            )
+                        )
+                    )
+            )
+        }
 
-            // In-Call Center Avatar / Real WebRTC Video
-            if (isCamOn) {
+        // Video edge scrims when chrome is visible
+        if (showVideoLayout) {
+            AnimatedVisibility(
+                visible = controlsVisible,
+                enter = fadeIn(tween(180)),
+                exit = fadeOut(tween(180)),
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(300.dp, 400.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0xFF1C1C1E))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
-                ) {
-                    if (callManager?.webRTCClient != null) {
-                        // Remote Video Stream
-                        com.chroma.studio.webrtc.WebRTCVideoView(
-                            callManager = callManager,
-                            isLocal = false,
-                            modifier = Modifier.fillMaxSize()
-                        )
-
-                        // Floating Local Camera PiP in top-right
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(10.dp)
-                                .size(88.dp, 120.dp)
-                                .shadow(8.dp, RoundedCornerShape(14.dp))
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFF2C2C2E))
-                                .border(1.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
-                        ) {
-                            com.chroma.studio.webrtc.WebRTCVideoView(
-                                callManager = callManager,
-                                isLocal = true,
-                                modifier = Modifier.fillMaxSize()
+                        .fillMaxWidth()
+                        .height(175.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent)
                             )
-                            // Camera Flip button on PiP
+                        )
+                )
+            }
+            AnimatedVisibility(
+                visible = controlsVisible,
+                enter = fadeIn(tween(180)),
+                exit = fadeOut(tween(180)),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(225.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.86f))
+                            )
+                        )
+                )
+            }
+        }
+
+        // =========================================================================
+        // 2. FOREGROUND INTERFACE (FaceTime Video UI vs iOS Voice Calling UI)
+        // =========================================================================
+        if (showVideoLayout) {
+            // ── APPLE FACETIME VIDEO CALLING INTERFACE ────────────────────────────
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = 18.dp, vertical = 14.dp)
+            ) {
+                // Waiting-for-remote center indicator when remote camera hasn't started
+                if (!hasRemoteVideo) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        com.chroma.studio.ui.components.IosAvatarView(
+                            name = peerName,
+                            avatarUrl = peerAvatar,
+                            size = 112.dp,
+                            isOnline = chat.online
+                        )
+                        Text(
+                            text = if (rtcCallState == com.chroma.studio.webrtc.CallState.CALLING) "Contacting..." else "Waiting for camera...",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White.copy(alpha = 0.72f)
+                        )
+                    }
+                }
+
+                // FaceTime Header Overlay
+                AnimatedVisibility(
+                    visible = controlsVisible,
+                    enter = fadeIn(tween(180)) + slideInVertically { -it / 3 },
+                    exit = fadeOut(tween(160)) + slideOutVertically { -it / 3 },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (onMinimize != null) {
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(4.dp)
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.65f))
-                                    .clickable { onSwitchCamera() },
-                                contentAlignment = Alignment.Center
+                                    .size(40.dp)
+                                    .clickable { onMinimize() },
+                                contentAlignment = Alignment.CenterStart
                             ) {
                                 Icon(
-                                    Lucide.RefreshCw,
-                                    contentDescription = "Flip",
+                                    imageVector = Lucide.ChevronDown,
+                                    contentDescription = "Minimize Call",
                                     tint = Color.White,
-                                    modifier = Modifier.size(12.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
-                    } else {
-                        AsyncImage(
-                            model = chat.avatar.ifBlank { chat.banner },
-                            contentDescription = "Video feed",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
 
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = if (onMinimize != null) Alignment.Start else Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = peerName,
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Lock,
+                                    contentDescription = null,
+                                    tint = statusColor,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = "FaceTime • $statusText",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = statusColor
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Draggable & Tappable Floating Local PiP Preview
+                if (isCamOn && callManager != null && activeRtcClient != null) {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(12.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .align(Alignment.TopEnd)
+                            .padding(top = 58.dp)
+                            .offset { IntOffset(pipOffsetX.roundToInt(), pipOffsetY.roundToInt()) }
+                            .size(width = 96.dp, height = 140.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFF16181E))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(14.dp))
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    pipOffsetX = (pipOffsetX + dragAmount.x).coerceIn(-620f, 40f)
+                                    pipOffsetY = (pipOffsetY + dragAmount.y).coerceIn(-40f, 920f)
+                                }
+                            }
+                            .clickable { onSwitchCamera() }
                     ) {
-                        Text("${chat.name} (Live)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                    }
-                }
-            } else {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.size(130.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        com.chroma.studio.ui.components.IosAvatarView(
-                            name = chat.name,
-                            avatarUrl = chat.avatar,
-                            size = 130.dp,
-                            isOnline = chat.online
+                        com.chroma.studio.webrtc.WebRTCVideoView(
+                            callManager = callManager,
+                            isLocal = true,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
-                    com.chroma.studio.ui.components.AppleDynamicWaveform(tint = Color(0xFF34C759))
+                }
+
+                // FaceTime Bottom Dock
+                AnimatedVisibility(
+                    visible = controlsVisible,
+                    enter = fadeIn(tween(180)) + slideInVertically { it / 2 },
+                    exit = fadeOut(tween(160)) + slideOutVertically { it / 2 },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppleCallIconButton(
+                                icon = {
+                                    if (isMicMuted) LucideMicOff(tint = Color(0xFFFF453A), size = 23.dp)
+                                    else LucideMic(tint = Color.White, size = 23.dp)
+                                },
+                                label = if (isMicMuted) "Unmute" else "Mute",
+                                isActive = isMicMuted,
+                                onClick = onToggleMic
+                            )
+                            AppleCallIconButton(
+                                icon = {
+                                    LucideVolume2(
+                                        tint = if (isSpeakerOn) Color(0xFF0381FE) else Color.White,
+                                        size = 23.dp
+                                    )
+                                },
+                                label = if (isSpeakerOn) "Speaker" else "Audio",
+                                isActive = isSpeakerOn,
+                                onClick = onToggleSpeaker
+                            )
+                            AppleCallIconButton(
+                                icon = {
+                                    if (isCamOn) LucideVideo(tint = Color(0xFF0381FE), size = 23.dp)
+                                    else LucideVideoOff(tint = Color.White, size = 23.dp)
+                                },
+                                label = if (isCamOn) "Camera On" else "Camera Off",
+                                isActive = isCamOn,
+                                onClick = onToggleCam
+                            )
+                            if (isCamOn) {
+                                AppleCallIconButton(
+                                    icon = {
+                                        Icon(
+                                            imageVector = Lucide.RefreshCw,
+                                            contentDescription = "Flip Camera",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    },
+                                    label = "Flip",
+                                    isActive = false,
+                                    onClick = onSwitchCamera
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth(0.56f)
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFFFF3B30))
+                                .clickable { onHangup() },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            LucideCallEnd(tint = Color.White, size = 21.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = "End",
+                                color = Color.White,
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
             }
-
-            // Apple 6-Button Call Grid + End Call Button
+        } else {
+            // ── APPLE iOS VOICE CALLING INTERFACE ─────────────────────────────────
             Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = 24.dp, vertical = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(28.dp),
-                modifier = Modifier.padding(bottom = 16.dp)
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Clean Active Call Controls (Mute, Speaker, Video, Camera Flip)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppleCallIconButton(
-                        icon = {
-                            if (isMicMuted) LucideMicOff(tint = Color.Black, size = 26.dp)
-                            else LucideMic(tint = Color.White, size = 26.dp)
-                        },
-                        label = "mute",
-                        isActive = isMicMuted,
-                        onClick = onToggleMic
-                    )
-                    AppleCallIconButton(
-                        icon = {
-                            if (isSpeakerOn) LucideVolume2(tint = Color.Black, size = 26.dp)
-                            else LucideVolume2(tint = Color.White, size = 26.dp)
-                        },
-                        label = "speaker",
-                        isActive = isSpeakerOn,
-                        onClick = onToggleSpeaker
-                    )
-                    AppleCallIconButton(
-                        icon = {
-                            if (isCamOn) LucideVideo(tint = Color.Black, size = 26.dp)
-                            else LucideVideoOff(tint = Color.White, size = 26.dp)
-                        },
-                        label = "video",
-                        isActive = isCamOn,
-                        onClick = onToggleCam
-                    )
-                    if (isCamOn) {
-                        AppleCallIconButton(
-                            icon = {
-                                Icon(Lucide.RefreshCw, contentDescription = "Flip", tint = Color.White, modifier = Modifier.size(24.dp))
-                            },
-                            label = "flip",
-                            isActive = false,
-                            onClick = onSwitchCamera
+                // Top iOS Phone / FaceTime Audio Header (Status line ABOVE huge Contact Name)
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    if (onMinimize != null) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .size(40.dp)
+                                .clickable { onMinimize() },
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Icon(
+                                imageVector = Lucide.ChevronDown,
+                                contentDescription = "Minimize Call",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(start = 40.dp, top = 8.dp, end = 40.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Lock,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.55f),
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = "Oscellion Audio • $statusText",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = statusColor
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = peerName,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
-
-                // Bottom End Call Button (Apple Red 72dp Circle)
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(Color(0xFFFF3B30))
-                        .clickable { onHangup() },
-                    contentAlignment = Alignment.Center
+                // Center Contact Portrait + Voice Waveform
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    LucideCallEnd(tint = Color.White, size = 32.dp)
+                    com.chroma.studio.ui.components.IosAvatarView(
+                        name = peerName,
+                        avatarUrl = peerAvatar,
+                        size = 132.dp,
+                        isOnline = chat.online
+                    )
+                    if (isLiveConnected) {
+                        com.chroma.studio.ui.components.AppleDynamicWaveform(tint = Color(0xFF30D158))
+                    } else {
+                        Text(
+                            text = "End-to-end encrypted voice",
+                            fontSize = 12.5.sp,
+                            color = Color.White.copy(alpha = 0.52f)
+                        )
+                    }
+                }
+
+                // Bottom iOS Voice Control Grid + End Call Button
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(22.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AppleCallIconButton(
+                            icon = {
+                                LucideVolume2(
+                                    tint = if (isSpeakerOn) Color(0xFF0381FE) else Color.White,
+                                    size = 24.dp
+                                )
+                            },
+                            label = "Speaker",
+                            isActive = isSpeakerOn,
+                            onClick = onToggleSpeaker
+                        )
+                        AppleCallIconButton(
+                            icon = {
+                                LucideVideo(
+                                    tint = Color.White,
+                                    size = 24.dp
+                                )
+                            },
+                            label = "FaceTime",
+                            isActive = false,
+                            onClick = onToggleCam
+                        )
+                        AppleCallIconButton(
+                            icon = {
+                                if (isMicMuted) LucideMicOff(tint = Color(0xFFFF453A), size = 24.dp)
+                                else LucideMic(tint = Color.White, size = 24.dp)
+                            },
+                            label = if (isMicMuted) "Muted" else "Mute",
+                            isActive = isMicMuted,
+                            onClick = onToggleMic
+                        )
+                        if (onMinimize != null) {
+                            AppleCallIconButton(
+                                icon = {
+                                    Icon(
+                                        imageVector = Lucide.MessageCircle,
+                                        contentDescription = "Open Chat",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(23.dp)
+                                    )
+                                },
+                                label = "Messages",
+                                isActive = false,
+                                onClick = onMinimize
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth(0.58f)
+                            .height(52.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFFFF3B30))
+                            .clickable { onHangup() },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        LucideCallEnd(tint = Color.White, size = 22.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = "End Call",
+                            color = Color.White,
+                            fontSize = 15.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
@@ -2798,23 +3139,19 @@ private fun AppleCallIconButton(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isActive) Color.White.copy(alpha = 0.14f) else Color.Transparent)
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(68.dp)
-                .clip(CircleShape)
-                .background(if (isActive) Color.White else Color.White.copy(alpha = 0.16f))
-                .clickable { onClick() },
-            contentAlignment = Alignment.Center
-        ) {
-            icon()
-        }
+        icon()
         Text(
             text = label,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Normal,
-            color = Color.White.copy(alpha = 0.85f)
+            fontSize = 11.5.sp,
+            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+            color = Color.White.copy(alpha = if (isActive) 0.98f else 0.78f)
         )
     }
 }
@@ -3522,12 +3859,11 @@ fun AppearanceSettingsModal(
                     Box(
                         modifier = Modifier
                             .size(28.dp)
-                            .clip(CircleShape)
-                            .background(colors.bubbleGray)
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable { onClose() },
                         contentAlignment = Alignment.Center
                     ) {
-                        LucideX(tint = colors.textMuted, size = 15.dp)
+                        LucideX(tint = colors.textMuted, size = 16.dp)
                     }
                 }
 
@@ -4112,15 +4448,7 @@ fun AppearanceSettingsModal(
                                         }
 
                                         if (isSelected) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(24.dp)
-                                                    .clip(CircleShape)
-                                                    .background(colors.iosBlue),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                LucideCheck(tint = Color.White, size = 14.dp)
-                                            }
+                                            LucideCheck(tint = colors.iosBlue, size = 16.dp)
                                         }
                                     }
 
@@ -4373,15 +4701,7 @@ fun AppearanceSettingsModal(
                                         }
 
                                         if (isSelected) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(24.dp)
-                                                    .clip(CircleShape)
-                                                    .background(colors.iosBlue),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                LucideCheck(tint = Color.White, size = 14.dp)
-                                            }
+                                            LucideCheck(tint = colors.iosBlue, size = 16.dp)
                                         }
                                     }
 
@@ -4799,12 +5119,11 @@ fun EmojiReactionPickerModal(
                 Box(
                     modifier = Modifier
                         .size(28.dp)
-                        .clip(CircleShape)
-                        .background(colors.surfaceSecondary)
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable { onDismiss() },
                     contentAlignment = Alignment.Center
                 ) {
-                    LucideX(tint = colors.textMuted, size = 15.dp)
+                    LucideX(tint = colors.textMuted, size = 16.dp)
                 }
             }
 
@@ -4847,12 +5166,11 @@ fun EmojiReactionPickerModal(
                         Box(
                             modifier = Modifier
                                 .size(18.dp)
-                                .clip(CircleShape)
-                                .background(colors.textMuted.copy(alpha = 0.3f))
+                                .clip(RoundedCornerShape(6.dp))
                                 .clickable { searchQuery = "" },
                             contentAlignment = Alignment.Center
                         ) {
-                            LucideX(tint = colors.textDark, size = 10.dp)
+                            LucideX(tint = colors.textDark, size = 12.dp)
                         }
                     }
                 }

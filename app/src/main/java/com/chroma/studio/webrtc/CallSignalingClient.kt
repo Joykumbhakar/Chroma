@@ -45,6 +45,17 @@ class CallSignalingClient {
         }
     }
 
+    /** Sends an updated SDP offer during an active call (e.g. audio-to-video upgrade) without resetting status. */
+    suspend fun sendRenegotiationOffer(callId: String, offerSdp: String) {
+        if (callId.isBlank()) return
+        try {
+            val offerMap = mapOf("type" to "OFFER", "sdp" to offerSdp)
+            callsCollection.document(callId).update("offer", offerMap).await()
+        } catch (e: Exception) {
+            Log.e("CallSignalingClient", "Error sending renegotiation offer", e)
+        }
+    }
+
     suspend fun sendAnswer(callId: String, answerSdp: String) {
         if (callId.isBlank()) return
         try {
@@ -124,8 +135,10 @@ class CallSignalingClient {
                     if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
                         try {
                             val model = change.document.toObject(IceCandidateModel::class.java)
-                            val ice = IceCandidate(model.sdpMid, model.sdpMLineIndex, model.sdpCandidate)
-                            trySend(ice)
+                            if (model.sdpCandidate.isNotBlank()) {
+                                val ice = IceCandidate(model.sdpMid, model.sdpMLineIndex, model.sdpCandidate)
+                                trySend(ice)
+                            }
                         } catch (e: Exception) {
                             Log.e("CallSignalingClient", "Error parsing caller candidate", e)
                         }
@@ -148,8 +161,10 @@ class CallSignalingClient {
                     if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
                         try {
                             val model = change.document.toObject(IceCandidateModel::class.java)
-                            val ice = IceCandidate(model.sdpMid, model.sdpMLineIndex, model.sdpCandidate)
-                            trySend(ice)
+                            if (model.sdpCandidate.isNotBlank()) {
+                                val ice = IceCandidate(model.sdpMid, model.sdpMLineIndex, model.sdpCandidate)
+                                trySend(ice)
+                            }
                         } catch (e: Exception) {
                             Log.e("CallSignalingClient", "Error parsing callee candidate", e)
                         }
@@ -165,28 +180,32 @@ class CallSignalingClient {
             close()
             return@callbackFlow
         }
-        // Find calls where calleeId == current user and status == calling
+        // Query by calleeId only (single-field auto-indexed, matches Web client) and filter
+        // for fresh active ringing/calling sessions so stale abandoned docs never block new calls.
         val listener: ListenerRegistration = callsCollection
             .whereEqualTo("calleeId", calleeUid)
-            .whereEqualTo("status", "calling")
-            .limit(1)
+            .limit(15)
             .addSnapshotListener { snapshots, error ->
                 if (error != null || snapshots == null) {
+                    if (error != null) Log.w("CallSignalingClient", "listenForIncomingCalls error: ${error.message}")
                     trySend(null)
                     return@addSnapshotListener
                 }
-                if (!snapshots.isEmpty) {
+                val cutoff = System.currentTimeMillis() - 120_000L
+                val freshCall = snapshots.documents.mapNotNull { doc ->
                     try {
-                        val firstDoc = snapshots.documents.first()
-                        val call = firstDoc.toObject(CallModel::class.java)
-                        trySend(call)
+                        doc.toObject(CallModel::class.java)?.let { c ->
+                            if (c.id.isBlank()) c.copy(id = doc.id) else c
+                        }
                     } catch (e: Exception) {
-                        Log.e("CallSignalingClient", "Error parsing incoming call", e)
-                        trySend(null)
+                        Log.w("CallSignalingClient", "Error parsing incoming call doc ${doc.id}: ${e.message}")
+                        null
                     }
-                } else {
-                    trySend(null)
-                }
+                }.filter { c ->
+                    (c.status == "calling" || c.status == "ringing") && c.timestamp >= cutoff
+                }.maxByOrNull { it.timestamp }
+
+                trySend(freshCall)
             }
         awaitClose { listener.remove() }
     }

@@ -32,8 +32,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
+import android.graphics.Typeface
+import android.net.Uri
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import java.io.File
+import java.io.FileOutputStream
+import com.composables.icons.lucide.*
 import coil.compose.AsyncImage
 import com.chroma.studio.R
 import com.chroma.studio.chat.data.drawableUri
@@ -106,6 +117,7 @@ fun GroupIconCreatorModal(
     onApplyIcon: (String) -> Unit
 ) {
     val colors = LocalChatColors.current
+    val context = LocalContext.current
 
     var selectedTab by remember { mutableStateOf("presets") } // "presets", "monogram", "icons", "emojis"
     var monogramText by remember {
@@ -126,6 +138,15 @@ fun GroupIconCreatorModal(
         )
     }
 
+    val devicePhotoPicker = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Group Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { pickedUri ->
+        SoundManager.playSend()
+        onApplyIcon(pickedUri.toString())
+    }
+
     IosModalBottomSheet(
         onDismissRequest = onDismiss
     ) {
@@ -144,30 +165,55 @@ fun GroupIconCreatorModal(
                 ) {
                     Text(
                         text = "Group Icon Studio",
-                        fontSize = 19.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.textDark
                     )
 
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clickable { onDismiss() },
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        PhosphorCloseX(tint = colors.textMuted, size = 16.dp)
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.iosBlue.copy(alpha = 0.12f))
+                                .clickable {
+                                    SoundManager.playReaction()
+                                    devicePhotoPicker.launch("image/*")
+                                }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(Lucide.ImagePlus, contentDescription = null, tint = colors.iosBlue, modifier = Modifier.size(14.dp))
+                            Text(
+                                text = "Gallery",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.iosBlue
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clickable { onDismiss() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            PhosphorCloseX(tint = colors.textMuted, size = 16.dp)
+                        }
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(14.dp))
 
                 // ── LIVE LARGE PREVIEW HERO ──────────────────────────────────
                 Box(
                     modifier = Modifier
-                        .size(96.dp)
-                        .shadow(8.dp, CircleShape)
+                        .size(92.dp)
                         .clip(CircleShape)
-                        .border(3.dp, colors.cardBg, CircleShape),
+                        .border(1.5.dp, colors.iosBlue.copy(alpha = 0.35f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     when (selectedTab) {
@@ -514,6 +560,24 @@ fun GroupIconCreatorModal(
                         onClick = {
                             val resultAvatar = when (selectedTab) {
                                 "presets" -> selectedPresetAvatar
+                                "monogram" -> renderGroupIconToCacheFile(
+                                    context = context,
+                                    gradientColors = selectedGradient.colors,
+                                    badgeText = monogramText.ifBlank { "GP" }.take(2).uppercase(),
+                                    isEmoji = false
+                                ) ?: selectedPresetAvatar
+                                "icons" -> renderGroupIconToCacheFile(
+                                    context = context,
+                                    gradientColors = selectedGradient.colors,
+                                    badgeText = groupSymbolGlyph(selectedIcon),
+                                    isEmoji = true
+                                ) ?: selectedPresetAvatar
+                                "emojis" -> renderGroupIconToCacheFile(
+                                    context = context,
+                                    gradientColors = selectedGradient.colors,
+                                    badgeText = selectedEmoji,
+                                    isEmoji = true
+                                ) ?: selectedPresetAvatar
                                 else -> selectedPresetAvatar
                             }
                             SoundManager.playSend()
@@ -526,6 +590,77 @@ fun GroupIconCreatorModal(
         }
     }
 
+private fun groupSymbolGlyph(name: String): String = when (name) {
+    "users" -> "👥"
+    "code" -> "</>"
+    "rocket" -> "🚀"
+    "sparkles" -> "✨"
+    "coffee" -> "☕"
+    "gamepad" -> "🎮"
+    "music" -> "🎵"
+    "building" -> "🏛"
+    "star" -> "★"
+    "shield" -> "🛡"
+    "flame" -> "🔥"
+    "heart" -> "❤"
+    "globe" -> "🌐"
+    "terminal" -> ">_"
+    "camera" -> "📷"
+    "compass" -> "🧭"
+    "briefcase" -> "💼"
+    "zap" -> "⚡"
+    else -> "👥"
+}
+
+private fun renderGroupIconToCacheFile(
+    context: Context,
+    gradientColors: List<Color>,
+    badgeText: String,
+    isEmoji: Boolean
+): String? {
+    return try {
+        val size = 320
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = AndroidCanvas(bmp)
+        val intColors = gradientColors.map { it.toArgb() }.toIntArray()
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = if (intColors.size >= 2) {
+                LinearGradient(0f, 0f, size.toFloat(), size.toFloat(), intColors, null, Shader.TileMode.CLAMP)
+            } else {
+                null
+            }
+            if (intColors.size < 2) {
+                color = intColors.firstOrNull() ?: 0xFF0381FE.toInt()
+            }
+        }
+        canvas.drawRect(0f, 0f, size.toFloat(), size.toFloat(), bgPaint)
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textSize = when {
+                isEmoji && badgeText.length <= 2 -> size * 0.44f
+                badgeText.length >= 3 -> size * 0.28f
+                else -> size * 0.36f
+            }
+        }
+        val fm = textPaint.fontMetrics
+        val baseline = size / 2f - (fm.ascent + fm.descent) / 2f
+        canvas.drawText(badgeText, size / 2f, baseline, textPaint)
+
+        val outDir = File(context.cacheDir, "group_icons").apply { mkdirs() }
+        val outFile = File(outDir, "icon_${System.currentTimeMillis()}.png")
+        FileOutputStream(outFile).use { stream ->
+            bmp.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        }
+        bmp.recycle()
+        Uri.fromFile(outFile).toString()
+    } catch (_: Throwable) {
+        null
+    }
+}
+
 @Composable
 fun GroupVectorIconRenderer(
     name: String,
@@ -533,16 +668,25 @@ fun GroupVectorIconRenderer(
     tint: Color
 ) {
     when (name) {
-        "users" -> PhosphorUserIcon(tint = tint, size = size)
-        "code" -> PhosphorKeypadIcon(tint = tint, size = size)
-        "rocket" -> PhosphorPaperPlaneTilt(tint = tint, size = size)
-        "sparkles" -> LucideSparkles(tint = tint, size = size)
-        "camera" -> PhosphorCameraIcon(tint = tint, size = size)
-        "star" -> LucideStar(tint = tint, size = size)
-        "flame" -> PhosphorSparkleIcon(tint = tint, size = size)
-        "shield" -> LucideShieldCheck(tint = tint, size = size)
-        "heart" -> LucideHeart(tint = tint, size = size)
-        else -> PhosphorUserIcon(tint = tint, size = size)
+        "users" -> Icon(Lucide.Users, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "code" -> Icon(Lucide.Code, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "rocket" -> Icon(Lucide.Rocket, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "sparkles" -> Icon(Lucide.Sparkles, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "coffee" -> Icon(Lucide.Coffee, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "gamepad" -> Icon(Lucide.Gamepad2, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "music" -> Icon(Lucide.Music, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "building" -> Icon(Lucide.Building2, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "star" -> Icon(Lucide.Star, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "shield" -> Icon(Lucide.ShieldCheck, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "flame" -> Icon(Lucide.Flame, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "heart" -> Icon(Lucide.Heart, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "globe" -> Icon(Lucide.Globe, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "terminal" -> Icon(Lucide.Terminal, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "camera" -> Icon(Lucide.Camera, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "compass" -> Icon(Lucide.Compass, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "briefcase" -> Icon(Lucide.Briefcase, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        "zap" -> Icon(Lucide.Zap, contentDescription = null, tint = tint, modifier = Modifier.size(size))
+        else -> Icon(Lucide.Users, contentDescription = null, tint = tint, modifier = Modifier.size(size))
     }
 }
 

@@ -29,11 +29,15 @@ import androidx.compose.foundation.lazy.LazyRow
 
 import androidx.compose.foundation.lazy.items
 
+import androidx.compose.foundation.rememberScrollState
+
 import androidx.compose.foundation.shape.CircleShape
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 import androidx.compose.foundation.text.BasicTextField
+
+import androidx.compose.foundation.verticalScroll
 
 import androidx.compose.material3.*
 
@@ -171,7 +175,9 @@ fun IosAlertDialog(
 
                 .fillMaxSize()
 
-                .background(Color.Black.copy(alpha = 0.40f))
+                .background(Color.Black.copy(alpha = 0.42f))
+
+                .imePadding()
 
                 .clickable(
 
@@ -469,11 +475,13 @@ private fun IosAlertButton(
 
     val textWeight = when {
 
-        action.isDefault || action.isCancel -> FontWeight.SemiBold
+        action.isDestructive || action.isDefault || action.isCancel -> FontWeight.SemiBold
 
         else -> FontWeight.Normal
 
     }
+
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     Box(
 
@@ -489,6 +497,9 @@ private fun IosAlertButton(
 
             ) {
 
+                if (action.isDestructive) {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                }
                 SoundManager.playReaction()
 
                 action.onClick()
@@ -897,7 +908,9 @@ fun IosInputDialog(
 
                 .fillMaxSize()
 
-                .background(Color.Black.copy(alpha = 0.40f))
+                .background(Color.Black.copy(alpha = 0.42f))
+
+                .imePadding()
 
                 .clickable(
 
@@ -1809,15 +1822,15 @@ fun IosConversationContextMenuModal(
 
                         )
 
-                        if (chat.online) {
+                        if (chat.type != "group" && chat.online) {
                             OnlineStatusDot(
                                 isOnline = true,
-                                size = 12.dp,
+                                size = 13.dp,
                                 showPulse = true,
                                 ringColor = colors.cardBg,
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .offset(x = (-1).dp, y = (-1).dp)
+                                    .offset(x = (-2).dp, y = (-2).dp)
                             )
                         }
                     }
@@ -2275,18 +2288,52 @@ fun IosStoryContextMenuModal(
  */
 
 @Composable
-
 fun IosMessageInfoModal(
-
     message: ChatMessage,
-
     isOutgoing: Boolean,
-
+    chat: ChatConversation? = null,
+    userProfiles: Map<String, com.chroma.studio.model.UserProfile> = emptyMap(),
+    currentUid: String = "",
     onDismiss: () -> Unit
-
 ) {
-
     val colors = LocalChatColors.current
+    val isGroup = chat?.type == "group"
+
+    val receiptParticipantIds = remember(chat, message, currentUid) {
+        val fromChat = chat?.participantUids.orEmpty().filter { it.isNotBlank() && it != message.senderId }
+        val fromMembers = chat?.members.orEmpty().map { it.id }.filter { it.isNotBlank() && it != message.senderId }
+        val fromReceipts = (message.readBy.keys + message.deliveredTo.keys).filter { it.isNotBlank() && it != message.senderId }
+        (fromChat + fromMembers + fromReceipts).distinct()
+    }
+
+    val seenList = remember(receiptParticipantIds, message.readBy) {
+        receiptParticipantIds
+            .filter { message.readBy.containsKey(it) }
+            .sortedByDescending { message.readBy[it] ?: 0L }
+    }
+    val deliveredOnlyList = remember(receiptParticipantIds, message.readBy, message.deliveredTo) {
+        receiptParticipantIds
+            .filter { !message.readBy.containsKey(it) && message.deliveredTo.containsKey(it) }
+            .sortedByDescending { message.deliveredTo[it] ?: 0L }
+    }
+    val sentPendingList = remember(receiptParticipantIds, message.readBy, message.deliveredTo) {
+        receiptParticipantIds.filter { !message.readBy.containsKey(it) && !message.deliveredTo.containsKey(it) }
+    }
+
+    fun formatReceiptTime(ts: Long?): String {
+        if (ts == null || ts <= 0L) return ""
+        return try {
+            val now = java.util.Calendar.getInstance()
+            val target = java.util.Calendar.getInstance().apply { timeInMillis = ts }
+            val timeFmt = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date(ts))
+            val sameDay = now.get(java.util.Calendar.YEAR) == target.get(java.util.Calendar.YEAR) &&
+                now.get(java.util.Calendar.DAY_OF_YEAR) == target.get(java.util.Calendar.DAY_OF_YEAR)
+            if (sameDay) "Today, $timeFmt"
+            else java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault()).format(java.util.Date(ts))
+        } catch (_: Exception) {
+            ""
+        }
+    }
 
     IosModalBottomSheet(
         onDismissRequest = onDismiss
@@ -2294,6 +2341,7 @@ fun IosMessageInfoModal(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -2306,10 +2354,72 @@ fun IosMessageInfoModal(
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
             HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
+
+            if (isGroup && isOutgoing) {
+                GroupReceiptSectionCard(
+                    title = "Seen by (${seenList.size})",
+                    iconColor = Color(0xFF0A84FF),
+                    isDoubleTick = true,
+                    memberIds = seenList,
+                    timestamps = message.readBy,
+                    fallbackStatus = "Seen",
+                    userProfiles = userProfiles,
+                    chat = chat,
+                    currentUid = currentUid,
+                    formatTs = ::formatReceiptTime,
+                    emptyText = "No one has read this message yet"
+                )
+                GroupReceiptSectionCard(
+                    title = "Delivered to (${deliveredOnlyList.size})",
+                    iconColor = colors.textMuted,
+                    isDoubleTick = true,
+                    memberIds = deliveredOnlyList,
+                    timestamps = message.deliveredTo,
+                    fallbackStatus = "Delivered",
+                    userProfiles = userProfiles,
+                    chat = chat,
+                    currentUid = currentUid,
+                    formatTs = ::formatReceiptTime,
+                    emptyText = if (seenList.size == receiptParticipantIds.size && receiptParticipantIds.isNotEmpty()) {
+                        "Seen by everyone"
+                    } else "Waiting for other devices"
+                )
+                GroupReceiptSectionCard(
+                    title = "Sent to (${sentPendingList.size})",
+                    iconColor = colors.textMuted.copy(alpha = 0.7f),
+                    isDoubleTick = false,
+                    memberIds = sentPendingList,
+                    timestamps = emptyMap(),
+                    fallbackStatus = "Sent • Not delivered yet",
+                    userProfiles = userProfiles,
+                    chat = chat,
+                    currentUid = currentUid,
+                    formatTs = ::formatReceiptTime,
+                    emptyText = "Delivered to all members"
+                )
+                HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
+            } else if (!isGroup && isOutgoing && (message.readBy.isNotEmpty() || message.deliveredTo.isNotEmpty())) {
+                val readTs = message.readBy.values.firstOrNull()
+                val delivTs = message.deliveredTo.values.firstOrNull()
+                if (readTs != null) {
+                    InfoRow(label = "Read", value = formatReceiptTime(readTs).ifBlank { "Seen" })
+                }
+                if (delivTs != null) {
+                    InfoRow(label = "Delivered", value = formatReceiptTime(delivTs).ifBlank { "Delivered" })
+                }
+            }
+
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 InfoRow(label = "Sender", value = if (isOutgoing) "You" else message.senderName)
                 InfoRow(label = "Sent Time", value = message.time)
-                InfoRow(label = "Delivery Status", value = message.status.replaceFirstChar { it.uppercase() })
+                InfoRow(
+                    label = "Delivery Status",
+                    value = when (message.status.lowercase()) {
+                        "read", "seen" -> if (isGroup) "Seen by ${seenList.size}/${receiptParticipantIds.size.coerceAtLeast(1)}" else "Seen"
+                        "delivered" -> if (isGroup) "Delivered to ${(seenList.size + deliveredOnlyList.size)}/${receiptParticipantIds.size.coerceAtLeast(1)}" else "Delivered"
+                        else -> message.status.replaceFirstChar { it.uppercase() }
+                    }
+                )
                 if (message.mediaType != null) {
                     InfoRow(label = "Type", value = message.mediaType.uppercase())
                 }
@@ -2331,6 +2441,111 @@ fun IosMessageInfoModal(
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupReceiptSectionCard(
+    title: String,
+    iconColor: Color,
+    isDoubleTick: Boolean,
+    memberIds: List<String>,
+    timestamps: Map<String, Long>,
+    fallbackStatus: String,
+    userProfiles: Map<String, com.chroma.studio.model.UserProfile>,
+    chat: ChatConversation?,
+    currentUid: String,
+    formatTs: (Long?) -> String,
+    emptyText: String
+) {
+    val colors = LocalChatColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (colors.isLight) Color(0xFFF6F7FA) else Color(0xFF1F2024))
+            .border(0.5.dp, colors.separator.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (isDoubleTick) {
+                LucideCheckCheck(tint = iconColor, size = 15.dp)
+            } else {
+                LucideCheck(tint = iconColor, size = 15.dp)
+            }
+            Text(
+                text = title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textDark
+            )
+        }
+        if (memberIds.isEmpty()) {
+            Text(
+                text = emptyText,
+                fontSize = 12.sp,
+                color = colors.textMuted
+            )
+        } else {
+            memberIds.forEach { uid ->
+                val prof = userProfiles[uid]
+                val fallbackMember = chat?.members?.firstOrNull { it.id == uid }
+                val name = when {
+                    uid == currentUid -> "You"
+                    !prof?.displayName.isNullOrBlank() -> prof.displayName
+                    !prof?.username.isNullOrBlank() -> "@${prof.username}"
+                    fallbackMember != null -> fallbackMember.name
+                    else -> "Member"
+                }
+                val avatar = prof?.avatarUrl?.takeIf { it.isNotBlank() } ?: fallbackMember?.avatar.orEmpty()
+                val timeText = formatTs(timestamps[uid]).ifBlank { fallbackStatus }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    com.chroma.studio.ui.components.IosAvatarView(
+                        name = name,
+                        avatarUrl = avatar,
+                        size = 32.dp,
+                        isOnline = false
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = name,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textDark,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            if (prof?.verified == true) {
+                                com.chroma.studio.ui.components.VerifiedBadge(
+                                    size = 12.dp,
+                                    tone = prof.verifiedTone,
+                                    userId = uid
+                                )
+                            }
+                        }
+                        Text(
+                            text = timeText,
+                            fontSize = 11.5.sp,
+                            color = colors.textMuted,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
         }
     }

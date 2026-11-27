@@ -908,16 +908,16 @@ fun AppleProfileCardSheet(
     var isSavingImage by remember { mutableStateOf(false) }
 
     // Photo picker launcher for custom background image
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            customization = customization.copy(
-                bgMode = PassBackgroundMode.CUSTOM_IMAGE,
-                customImageUri = uri,
-                isDarkText = false // Default to light text for custom photos
-            )
-        }
+    val photoPickerLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Pass Card Background",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        customization = customization.copy(
+            bgMode = PassBackgroundMode.CUSTOM_IMAGE,
+            customImageUri = uri,
+            isDarkText = false // Default to light text for custom photos
+        )
     }
 
     ModalBottomSheet(

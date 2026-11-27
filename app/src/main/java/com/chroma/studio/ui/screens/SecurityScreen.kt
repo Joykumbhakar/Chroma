@@ -323,87 +323,68 @@ fun SecurityScreen(
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { if (!isDeletingAccount) showDeleteConfirm = false },
-            title = { Text("Delete Account Permanently?", fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    "Your Oscellion profile (@${profile.username}), username reservation, and sign-in credentials will be permanently deleted. This action cannot be undone."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !isDeletingAccount,
-                    onClick = {
-                        val currentUser = auth.currentUser ?: return@TextButton
-                        val executeDelete: () -> Unit = {
-                            isDeletingAccount = true
-                            scope.launch {
+        IosAlertDialog(
+            title = "Delete Account Permanently?",
+            message = "Your Oscellion profile (@${profile.username}), username reservation, and sign-in credentials will be permanently deleted. This action cannot be undone.",
+            confirmText = if (isDeletingAccount) "Deleting..." else "Delete Permanently",
+            confirmEnabled = !isDeletingAccount,
+            isDestructive = true,
+            onConfirm = {
+                val currentUser = auth.currentUser ?: return@IosAlertDialog
+                val executeDelete: () -> Unit = {
+                    isDeletingAccount = true
+                    scope.launch {
+                        try {
+                            val db = FirebaseFirestore.getInstance()
+                            if (profile.username.isNotBlank()) {
                                 try {
-                                    val db = FirebaseFirestore.getInstance()
-                                    // 1. Release username reservation if present
-                                    if (profile.username.isNotBlank()) {
-                                        try {
-                                            db.collection("usernames").document(profile.username.lowercase()).delete().await()
-                                        } catch (_: Exception) {}
-                                    }
-                                    // 2. Delete Firestore user profile document
-                                    try {
-                                        db.collection("users").document(currentUser.uid).delete().await()
-                                    } catch (_: Exception) {}
-                                    // 3. Delete Firebase Auth account
-                                    currentUser.delete().await()
-                                    showDeleteConfirm = false
-                                    isDeletingAccount = false
-                                    ToastManager.showToast("Account deleted")
-                                    if (onAccountDeleted != null) {
-                                        onAccountDeleted()
-                                    } else {
-                                        auth.signOut()
-                                        onBack()
-                                    }
-                                } catch (e: FirebaseAuthRecentLoginRequiredException) {
-                                    isDeletingAccount = false
-                                    showDeleteConfirm = false
-                                    ToastManager.showToast("For security, please sign out and sign back in before deleting your account.")
-                                } catch (e: Exception) {
-                                    isDeletingAccount = false
-                                    showDeleteConfirm = false
-                                    ToastManager.showToast("Could not delete account: ${e.localizedMessage ?: "Try again"}")
-                                }
+                                    db.collection("usernames").document(profile.username.lowercase()).delete().await()
+                                } catch (_: Exception) {}
                             }
-                        }
-                        if (biometricPasskeyEnabled) {
-                            val activity = context.findActivity()
-                            if (activity == null) {
-                                ToastManager.showToast("Biometric authentication unavailable on this screen")
+                            try {
+                                db.collection("users").document(currentUser.uid).delete().await()
+                            } catch (_: Exception) {}
+                            currentUser.delete().await()
+                            showDeleteConfirm = false
+                            isDeletingAccount = false
+                            ToastManager.showToast("Account deleted")
+                            if (onAccountDeleted != null) {
+                                onAccountDeleted()
                             } else {
-                                BiometricHelper.authenticate(
-                                    activity = activity,
-                                    title = "Confirm Account Deletion",
-                                    subtitle = "Verify your identity before permanently deleting your account",
-                                    onSuccess = executeDelete,
-                                    onCancel = {},
-                                    onError = { err -> ToastManager.showToast(err) }
-                                )
+                                auth.signOut()
+                                onBack()
                             }
-                        } else {
-                            executeDelete()
+                        } catch (e: FirebaseAuthRecentLoginRequiredException) {
+                            isDeletingAccount = false
+                            showDeleteConfirm = false
+                            ToastManager.showToast("For security, please sign out and sign back in before deleting your account.")
+                        } catch (e: Exception) {
+                            isDeletingAccount = false
+                            showDeleteConfirm = false
+                            ToastManager.showToast("Could not delete account: ${e.localizedMessage ?: "Try again"}")
                         }
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFEF4444))
-                ) {
-                    Text(if (isDeletingAccount) "Deleting..." else "Delete Permanently", fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (biometricPasskeyEnabled) {
+                    val activity = context.findActivity()
+                    if (activity == null) {
+                        ToastManager.showToast("Biometric authentication unavailable on this screen")
+                    } else {
+                        BiometricHelper.authenticate(
+                            activity = activity,
+                            title = "Confirm Account Deletion",
+                            subtitle = "Verify your identity before permanently deleting your account",
+                            onSuccess = executeDelete,
+                            onCancel = {},
+                            onError = { err -> ToastManager.showToast(err) }
+                        )
+                    }
+                } else {
+                    executeDelete()
                 }
             },
-            dismissButton = {
-                TextButton(
-                    enabled = !isDeletingAccount,
-                    onClick = { showDeleteConfirm = false }
-                ) {
-                    Text("Cancel")
-                }
-            }
+            dismissText = if (isDeletingAccount) null else "Cancel",
+            onDismiss = { if (!isDeletingAccount) showDeleteConfirm = false }
         )
     }
 

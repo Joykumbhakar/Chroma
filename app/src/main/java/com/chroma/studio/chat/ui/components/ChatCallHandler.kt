@@ -130,9 +130,21 @@ fun ChatCallOverlays(
     isFullCallModalOpen: Boolean,
     callDurationSeconds: Int,
     onCallUiOpened: (String) -> Unit,
+    onMinimize: (() -> Unit)? = null,
     onHangup: () -> Unit,
     showToast: (String) -> Unit
 ) {
+    val camUpgradePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val camOn = chatViewModel?.toggleCamera() ?: true
+            showToast(if (camOn) "Camera enabled" else "Camera disabled")
+        } else {
+            showToast("Camera permission needed to turn on video")
+        }
+    }
+
     // Fullscreen Call Modal
     AnimatedVisibility(
         visible = isFullCallModalOpen,
@@ -149,6 +161,17 @@ fun ChatCallOverlays(
                 showToast(if (muted) "Microphone muted" else "Microphone unmuted")
             },
             onToggleCam = {
+                val currentlyOn = chatViewModel?.callManager?.isCameraEnabled?.value ?: false
+                if (!currentlyOn) {
+                    val hasCamera = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.CAMERA
+                    ) == PackageManager.PERMISSION_GRANTED
+                    if (!hasCamera) {
+                        camUpgradePermissionLauncher.launch(Manifest.permission.CAMERA)
+                        return@FullCallModal
+                    }
+                }
                 val camOn = chatViewModel?.toggleCamera() ?: true
                 showToast(if (camOn) "Camera enabled" else "Camera disabled")
             },
@@ -159,6 +182,7 @@ fun ChatCallOverlays(
             onSwitchCamera = {
                 chatViewModel?.switchCamera()
             },
+            onMinimize = onMinimize,
             onHangup = onHangup
         )
     }

@@ -126,7 +126,8 @@ object ChatAdapters {
         currentUid: String,
         userProfiles: Map<String, UserProfile>,
         allMessagesMap: Map<String, com.chroma.studio.model.ChatMessage> = emptyMap(),
-        isOtherOnline: Boolean = false
+        isOtherOnline: Boolean = false,
+        groupParticipants: List<String> = emptyList()
     ): ChatMessage {
         val isMe = msg.senderId == currentUid
         val senderProfile = userProfiles[msg.senderId]
@@ -134,11 +135,21 @@ object ChatAdapters {
 
         val timeStr = formatTime(msg.timestamp)
 
-        val isDelivered = msg.isDelivered || msg.isRead || (isMe && isOtherOnline)
+        val otherMembers = if (groupParticipants.isNotEmpty()) {
+            groupParticipants.filter { it != currentUid && it != msg.senderId }
+        } else emptyList()
+        val isGroupMsg = otherMembers.size > 1 || (groupParticipants.size > 2)
+
+        val isDelivered = msg.isDelivered || msg.deliveredTo.isNotEmpty() || msg.isRead || msg.readBy.isNotEmpty() || (isMe && isOtherOnline)
         val statusStr = when {
             msg.isPending -> "pending"
             msg.isError -> "error"
-            msg.isRead -> "read"
+            isGroupMsg && otherMembers.isNotEmpty() -> when {
+                otherMembers.all { msg.readBy.containsKey(it) } -> "read"
+                msg.readBy.keys.any { it in otherMembers } || msg.deliveredTo.keys.any { it in otherMembers } || msg.isDelivered -> "delivered"
+                else -> "sent"
+            }
+            msg.isRead || msg.readBy.isNotEmpty() -> "read"
             isDelivered -> "delivered"
             else -> "sent"
         }
@@ -206,6 +217,7 @@ object ChatAdapters {
 
         val mappedMediaType = when {
             isPoll -> "poll"
+            msg.messageType.equals("music", ignoreCase = true) || msg.musicTrackId != null -> "music"
             msg.messageType.equals("flash_video", ignoreCase = true) || msg.flashVideoId != null -> "flash_video"
             msg.messageType.equals("story_reply", ignoreCase = true) || msg.storyThumbnailUrl != null || msg.storyId != null -> "story_reply"
             msg.messageType.equals("sticker", ignoreCase = true) -> "sticker"
@@ -224,11 +236,13 @@ object ChatAdapters {
                 val parentProfile = userProfiles[parent.senderId]
                 val parentAuthor = if (parentIsMe) "You" else (parentProfile?.displayName?.takeIf { it.isNotBlank() } ?: parentProfile?.username?.takeIf { it.isNotBlank() } ?: "User")
                 val parentText = when {
+                    parent.messageType.equals("music", ignoreCase = true) || parent.musicTrackId != null ->
+                        "🎵 ${parent.musicTitle?.takeIf { it.isNotBlank() } ?: "Music track"}"
                     parent.messageType.equals("flash_video", ignoreCase = true) || parent.flashVideoId != null -> "⚡ Flash video"
                     parent.messageType.equals("audio", ignoreCase = true) || parent.messageType.equals("voice", ignoreCase = true) -> "🎤 Voice message"
                     parent.messageType.equals("image", ignoreCase = true) -> "📷 Photo"
                     parent.messageType.equals("video", ignoreCase = true) -> "🎥 Video"
-                    parent.messageType.equals("file", ignoreCase = true) -> "📄 Document"
+                    parent.messageType.equals("file", ignoreCase = true) -> formatFileRoomPreview(parent.fileName, parent.text)
                     parent.text.isNotBlank() -> parent.text
                     else -> "Message"
                 }
@@ -243,6 +257,13 @@ object ChatAdapters {
             }
         }
 
+        val fileResolved = if (mappedMediaType == "file") {
+            resolveFileMessageNameAndCaption(msg.fileName, msg.text)
+        } else null
+        val resolvedFileSize = if (mappedMediaType == "file") {
+            formatReadableFileSize(msg.fileSizeBytes).ifBlank { null }
+        } else null
+
         return ChatMessage(
             id = msg.id,
             senderId = msg.senderId,
@@ -250,17 +271,16 @@ object ChatAdapters {
             text = when {
                 isPoll -> null
                 mappedMediaType == "voice" -> null
-                mappedMediaType in listOf("image", "video", "file") && (msg.text == "🔒 Message encrypted" || msg.text.isBlank()) -> null
+                mappedMediaType == "file" -> fileResolved?.second
+                mappedMediaType in listOf("image", "video") && (msg.text == "🔒 Message encrypted" || msg.text.isBlank()) -> null
                 else -> msg.text.takeIf { it.isNotBlank() } ?: msg.flashVideoCaption
             },
             mediaType = mappedMediaType,
             mediaUrl = msg.imageUrl ?: msg.mediaUrl ?: msg.flashVideoUrl,
             mediaUrls = listOfNotNull(msg.imageUrl ?: msg.mediaUrl ?: msg.flashVideoUrl),
             localUri = if (mappedMediaType == "voice" || msg.isPending) (msg.imageUrl ?: msg.mediaUrl) else null,
-            fileName = if (mappedMediaType == "file") {
-                msg.text.takeIf { it.isNotBlank() && it != "🔒 Message encrypted" } ?: "Document"
-            } else null,
-            fileSize = null,
+            fileName = fileResolved?.first,
+            fileSize = resolvedFileSize,
             fileItems = emptyList(),
             voiceDuration = msg.durationSeconds ?: 4,
             waveformSamples = if (mappedMediaType == "voice") DEFAULT_WAVEFORM_SAMPLES else emptyList(),
@@ -287,7 +307,18 @@ object ChatAdapters {
             flashVideoCaption = msg.flashVideoCaption,
             flashVideoAuthorUsername = msg.flashVideoAuthorUsername,
             flashVideoAuthorAvatarUrl = msg.flashVideoAuthorAvatarUrl,
-            flashVideoDurationMs = msg.flashVideoDurationMs
+            flashVideoDurationMs = msg.flashVideoDurationMs,
+            musicTrackId = msg.musicTrackId,
+            musicTitle = msg.musicTitle,
+            musicArtist = msg.musicArtist,
+            musicAlbum = msg.musicAlbum,
+            musicCoverUrl = msg.musicCoverUrl,
+            musicAudioUrl = msg.musicAudioUrl,
+            musicStartSec = msg.musicStartSec,
+            musicDurationSec = msg.musicDurationSec,
+            deliveredTo = msg.deliveredTo,
+            readBy = msg.readBy,
+            fontStyle = msg.fontStyle
         )
     }
 
@@ -357,10 +388,13 @@ object ChatAdapters {
                 if (firstActivity == "recording") "recording audio..." else "typing..."
             }
         } else {
+            val allowPresence = room.isGroup || (otherProfile?.showOnlineStatus != false)
+            val effectiveOnline = !room.isGroup && isOnline && allowPresence
+            val resolvedLastSeen = if (allowPresence) (lastSeenTime?.takeIf { it > 0L } ?: otherProfile?.lastSeen?.takeIf { it > 0L }) else null
             when {
-                isOnline -> if (room.isGroup) "${room.participants.size} members" else "online"
-                !room.isGroup && lastSeenTime != null && lastSeenTime > 0 -> {
-                    com.chroma.studio.data.OnlineStatusManager.formatWhatsAppLastSeen(lastSeenTime)
+                effectiveOnline -> "online"
+                !room.isGroup && resolvedLastSeen != null && resolvedLastSeen > 0 -> {
+                    com.chroma.studio.data.OnlineStatusManager.formatWhatsAppLastSeen(resolvedLastSeen)
                 }
                 room.isGroup -> "${room.participants.size} members"
                 else -> "Offline"
@@ -446,7 +480,11 @@ object ChatAdapters {
             otherUserId = otherUid,
             participantUids = room.participants,
             admins = room.admins,
-            onlyAdminsCanPost = room.onlyAdminsCanPost
+            onlyAdminsCanPost = room.onlyAdminsCanPost,
+            disappearingHours = room.disappearingHours,
+            inviteCode = room.inviteCode,
+            isPublicGroup = room.isPublicGroup,
+            editInfoAdminsOnly = room.editInfoAdminsOnly
         )
     }
 

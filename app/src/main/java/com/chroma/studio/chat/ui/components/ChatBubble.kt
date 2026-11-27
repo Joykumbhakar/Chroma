@@ -86,11 +86,20 @@ import com.chroma.studio.R
 import com.chroma.studio.chat.data.ChatFileItem
 import com.chroma.studio.chat.data.ChatMessage
 import com.chroma.studio.chat.data.PollData
+import com.chroma.studio.chat.data.getFileBadgeVisual
+import com.chroma.studio.chat.data.resolveMimeTypeForFileName
+import com.chroma.studio.chat.data.sanitizeStorageFileName
 import com.chroma.studio.chat.media.AudioPlayerManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.chat.ui.theme.ChatColors
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
+import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.RefreshCw
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
 import androidx.compose.foundation.shape.CutCornerShape
 import kotlin.math.roundToInt
@@ -107,12 +116,14 @@ private val MARKDOWN_PATTERN: Pattern = Pattern.compile(
     "((?:https?://|www\\.)[a-zA-Z0-9\\-\\._~:/?#\\[\\]@!\\$&'()*+,;=%]+)|" + // 3: Bare URL
     "```(?:[a-zA-Z0-9_\\-]*\\r?\\n)?([\\s\\S]*?)```|" + // 4: Code block
     "`([^`\\r\\n]+)`|" + // 5: Inline code
-    "\\*\\*([^\\*\\r\\n]+)\\*\\*|" + // 6: Bold
-    "(?:\\*([^\\*\\r\\n]+)\\*|_([^\\_\\r\\n]+)_)|" + // 7, 8: Italic
-    "(?:~~([^~\\r\\n]+)~~|~([^~\\r\\n]+)~)|" + // 9, 10: Strikethrough
-    "\\|\\|([\\s\\S]*?)\\|\\||" + // 11: Spoiler
-    "(?:(?<=^|[\\s(]))@([a-zA-Z0-9_]{2,30})\\b|" + // 12: Mention
-    "(?:(?<=^|[\\s(]))#([a-zA-Z0-9_]{2,30})\\b" // 13: Hashtag
+    "\\[(serif|mono|script|cursive|signature)\\]([\\s\\S]*?)\\[/\\6\\]|" + // 6, 7: Inline font style span
+    "\\*\\*([^\\*\\r\\n]+)\\*\\*|" + // 8: Bold
+    "(?:\\*([^\\*\\r\\n]+)\\*|_([^\\_\\r\\n]+)_)|" + // 9, 10: Italic
+    "(?:~~([^~\\r\\n]+)~~|~([^~\\r\\n]+)~)|" + // 11, 12: Strikethrough
+    "\\|\\|([\\s\\S]*?)\\|\\||" + // 13: Spoiler
+    "(?:(?<=^|[\\s(]))@([a-zA-Z0-9_]{2,30})\\b|" + // 14: Mention
+    "(?:(?<=^|[\\s(]))#([a-zA-Z0-9_]{2,30})\\b", // 15: Hashtag
+    Pattern.CASE_INSENSITIVE
 )
 
 fun parseMarkdownToAnnotatedString(
@@ -122,54 +133,101 @@ fun parseMarkdownToAnnotatedString(
     searchQuery: String = "",
     revealedSpoilers: Set<String> = emptySet()
 ): androidx.compose.ui.text.AnnotatedString {
-    return buildAnnotatedString {
-        val matcher = MARKDOWN_PATTERN.matcher(text)
-        var lastEnd = 0
-        var spoilerIndex = 0
+    return parseMarkdownToAnnotatedString(
+        text = text,
+        textColor = visual.textColor,
+        mentionColor = visual.mentionColor,
+        baseFontWeight = visual.fontWeight,
+        isOutgoing = isOutgoing,
+        searchQuery = searchQuery,
+        revealedSpoilers = revealedSpoilers
+    )
+}
 
-        fun appendPlainWithSearch(plainText: String) {
-            if (plainText.isEmpty()) return
-            if (searchQuery.isNotBlank() && plainText.contains(searchQuery, ignoreCase = true)) {
-                var searchStart = 0
-                val lowerPlain = plainText.lowercase()
-                val lowerQuery = searchQuery.lowercase()
-                while (searchStart < plainText.length) {
-                    val foundIdx = lowerPlain.indexOf(lowerQuery, searchStart)
-                    if (foundIdx == -1) {
-                        withStyle(SpanStyle(color = visual.textColor, fontWeight = visual.fontWeight)) {
-                            append(plainText.substring(searchStart))
-                        }
-                        break
-                    }
-                    if (foundIdx > searchStart) {
-                        withStyle(SpanStyle(color = visual.textColor, fontWeight = visual.fontWeight)) {
-                            append(plainText.substring(searchStart, foundIdx))
-                        }
-                    }
+fun parseMarkdownToAnnotatedString(
+    text: String,
+    textColor: Color,
+    mentionColor: Color,
+    baseFontWeight: FontWeight = FontWeight.Normal,
+    isOutgoing: Boolean = false,
+    searchQuery: String = "",
+    revealedSpoilers: Set<String> = emptySet()
+): androidx.compose.ui.text.AnnotatedString {
+    var spoilerIndex = 0
+
+    fun androidx.compose.ui.text.AnnotatedString.Builder.appendPlainWithSearch(
+        plainText: String,
+        activeFontFamily: FontFamily?
+    ) {
+        if (plainText.isEmpty()) return
+        if (searchQuery.isNotBlank() && plainText.contains(searchQuery, ignoreCase = true)) {
+            var searchStart = 0
+            val lowerPlain = plainText.lowercase()
+            val lowerQuery = searchQuery.lowercase()
+            while (searchStart < plainText.length) {
+                val foundIdx = lowerPlain.indexOf(lowerQuery, searchStart)
+                if (foundIdx == -1) {
                     withStyle(
                         SpanStyle(
-                            background = Color(0xFFFACC15),
-                            color = Color.Black,
-                            fontWeight = FontWeight.Bold
+                            color = textColor,
+                            fontWeight = baseFontWeight,
+                            fontFamily = activeFontFamily
                         )
                     ) {
-                        append(plainText.substring(foundIdx, foundIdx + searchQuery.length))
+                        append(plainText.substring(searchStart))
                     }
-                    searchStart = foundIdx + searchQuery.length
+                    break
                 }
-            } else {
-                withStyle(SpanStyle(color = visual.textColor, fontWeight = visual.fontWeight)) {
-                    append(plainText)
+                if (foundIdx > searchStart) {
+                    withStyle(
+                        SpanStyle(
+                            color = textColor,
+                            fontWeight = baseFontWeight,
+                            fontFamily = activeFontFamily
+                        )
+                    ) {
+                        append(plainText.substring(searchStart, foundIdx))
+                    }
                 }
+                withStyle(
+                    SpanStyle(
+                        background = Color(0xFFFACC15),
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = activeFontFamily
+                    )
+                ) {
+                    append(plainText.substring(foundIdx, foundIdx + searchQuery.length))
+                }
+                searchStart = foundIdx + searchQuery.length
+            }
+        } else {
+            withStyle(
+                SpanStyle(
+                    color = textColor,
+                    fontWeight = baseFontWeight,
+                    fontFamily = activeFontFamily
+                )
+            ) {
+                append(plainText)
             }
         }
+    }
+
+    fun androidx.compose.ui.text.AnnotatedString.Builder.appendMarkdownSegments(
+        segmentText: String,
+        activeFontFamily: FontFamily? = null,
+        depth: Int = 0
+    ) {
+        val matcher = MARKDOWN_PATTERN.matcher(segmentText)
+        var lastEnd = 0
 
         while (matcher.find()) {
             val start = matcher.start()
             val end = matcher.end()
 
             if (start > lastEnd) {
-                appendPlainWithSearch(text.substring(lastEnd, start))
+                appendPlainWithSearch(segmentText.substring(lastEnd, start), activeFontFamily)
             }
 
             when {
@@ -180,9 +238,10 @@ fun parseMarkdownToAnnotatedString(
                     val tagStart = length
                     withStyle(
                         SpanStyle(
-                            color = visual.mentionColor,
+                            color = mentionColor,
                             fontWeight = FontWeight.SemiBold,
-                            textDecoration = TextDecoration.Underline
+                            textDecoration = TextDecoration.Underline,
+                            fontFamily = activeFontFamily
                         )
                     ) {
                         append(linkText)
@@ -196,9 +255,10 @@ fun parseMarkdownToAnnotatedString(
                     val tagStart = length
                     withStyle(
                         SpanStyle(
-                            color = visual.mentionColor,
+                            color = mentionColor,
                             fontWeight = FontWeight.Normal,
-                            textDecoration = TextDecoration.Underline
+                            textDecoration = TextDecoration.Underline,
+                            fontFamily = activeFontFamily
                         )
                     ) {
                         append(url)
@@ -214,7 +274,7 @@ fun parseMarkdownToAnnotatedString(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 12.5.sp,
                             background = if (isOutgoing) Color(0x38000000) else Color(0x18000000),
-                            color = visual.textColor
+                            color = textColor
                         )
                     ) {
                         append("\n" + codeContent.trim() + "\n")
@@ -229,7 +289,7 @@ fun parseMarkdownToAnnotatedString(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 13.sp,
                             background = if (isOutgoing) Color(0x38000000) else Color(0x18000000),
-                            color = visual.textColor,
+                            color = textColor,
                             fontWeight = FontWeight.Medium
                         )
                     ) {
@@ -237,38 +297,65 @@ fun parseMarkdownToAnnotatedString(
                     }
                 }
 
-                // 6: Bold **text**
-                matcher.group(6) != null -> {
-                    val boldText = matcher.group(6)!!
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = visual.textColor)) {
+                // 6 & 7: Inline Font Style [serif]...[/serif], [mono], [script], [signature]
+                matcher.group(6) != null && matcher.group(7) != null -> {
+                    val styleKey = matcher.group(6)!!
+                    val innerText = matcher.group(7)!!
+                    val inlineFont = com.chroma.studio.data.ChatFontStyle.fromKey(styleKey).fontFamily
+                    withStyle(SpanStyle(fontFamily = inlineFont)) {
+                        if (depth < 3) {
+                            appendMarkdownSegments(innerText, activeFontFamily = inlineFont, depth = depth + 1)
+                        } else {
+                            appendPlainWithSearch(innerText, inlineFont)
+                        }
+                    }
+                }
+
+                // 8: Bold **text**
+                matcher.group(8) != null -> {
+                    val boldText = matcher.group(8)!!
+                    withStyle(
+                        SpanStyle(
+                            fontWeight = FontWeight.Bold,
+                            color = textColor,
+                            fontFamily = activeFontFamily
+                        )
+                    ) {
                         append(boldText)
                     }
                 }
 
-                // 7 or 8: Italic *text* or _text_
-                matcher.group(7) != null || matcher.group(8) != null -> {
-                    val italicText = matcher.group(7) ?: matcher.group(8)!!
-                    withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = visual.textColor)) {
+                // 9 or 10: Italic *text* or _text_
+                matcher.group(9) != null || matcher.group(10) != null -> {
+                    val italicText = matcher.group(9) ?: matcher.group(10)!!
+                    withStyle(
+                        SpanStyle(
+                            fontStyle = FontStyle.Italic,
+                            color = textColor,
+                            fontFamily = activeFontFamily
+                        )
+                    ) {
                         append(italicText)
                     }
                 }
 
-                // 9 or 10: Strikethrough ~~text~~ or ~text~
-                matcher.group(9) != null || matcher.group(10) != null -> {
-                    val strikeText = matcher.group(9) ?: matcher.group(10)!!
+                // 11 or 12: Strikethrough ~~text~~ or ~text~
+                matcher.group(11) != null || matcher.group(12) != null -> {
+                    val strikeText = matcher.group(11) ?: matcher.group(12)!!
                     withStyle(
                         SpanStyle(
                             textDecoration = TextDecoration.LineThrough,
-                            color = visual.textColor.copy(alpha = 0.85f)
+                            color = textColor.copy(alpha = 0.85f),
+                            fontFamily = activeFontFamily
                         )
                     ) {
                         append(strikeText)
                     }
                 }
 
-                // 11: Spoiler ||text||
-                matcher.group(11) != null -> {
-                    val spoilerText = matcher.group(11)!!
+                // 13: Spoiler ||text||
+                matcher.group(13) != null -> {
+                    val spoilerText = matcher.group(13)!!
                     val spoilerId = "spoiler_${spoilerIndex++}"
                     val isRevealed = revealedSpoilers.contains(spoilerId)
                     val tagStart = length
@@ -276,7 +363,8 @@ fun parseMarkdownToAnnotatedString(
                         withStyle(
                             SpanStyle(
                                 background = if (isOutgoing) Color(0x2EFFFFFF) else Color(0x22000000),
-                                color = visual.textColor
+                                color = textColor,
+                                fontFamily = activeFontFamily
                             )
                         ) {
                             append(spoilerText)
@@ -285,7 +373,8 @@ fun parseMarkdownToAnnotatedString(
                         withStyle(
                             SpanStyle(
                                 background = if (isOutgoing) Color.White.copy(alpha = 0.5f) else Color.Gray.copy(alpha = 0.6f),
-                                color = Color.Transparent
+                                color = Color.Transparent,
+                                fontFamily = activeFontFamily
                             )
                         ) {
                             append(spoilerText)
@@ -294,27 +383,29 @@ fun parseMarkdownToAnnotatedString(
                     addStringAnnotation(tag = "SPOILER", annotation = spoilerId, start = tagStart, end = length)
                 }
 
-                // 12: Mention @user
-                matcher.group(12) != null -> {
-                    val username = matcher.group(12)!!
+                // 14: Mention @user
+                matcher.group(14) != null -> {
+                    val username = matcher.group(14)!!
                     withStyle(
                         SpanStyle(
-                            color = visual.mentionColor,
+                            color = mentionColor,
                             fontWeight = FontWeight.Bold,
-                            textDecoration = TextDecoration.Underline
+                            textDecoration = TextDecoration.Underline,
+                            fontFamily = activeFontFamily
                         )
                     ) {
                         append("@$username")
                     }
                 }
 
-                // 13: Hashtag #tag
-                matcher.group(13) != null -> {
-                    val tag = matcher.group(13)!!
+                // 15: Hashtag #tag
+                matcher.group(15) != null -> {
+                    val tag = matcher.group(15)!!
                     withStyle(
                         SpanStyle(
-                            color = visual.mentionColor,
-                            fontWeight = FontWeight.SemiBold
+                            color = mentionColor,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = activeFontFamily
                         )
                     ) {
                         append("#$tag")
@@ -322,15 +413,19 @@ fun parseMarkdownToAnnotatedString(
                 }
 
                 else -> {
-                    appendPlainWithSearch(text.substring(start, end))
+                    appendPlainWithSearch(segmentText.substring(start, end), activeFontFamily)
                 }
             }
             lastEnd = end
         }
 
-        if (lastEnd < text.length) {
-            appendPlainWithSearch(text.substring(lastEnd))
+        if (lastEnd < segmentText.length) {
+            appendPlainWithSearch(segmentText.substring(lastEnd), activeFontFamily)
         }
+    }
+
+    return buildAnnotatedString {
+        appendMarkdownSegments(text)
     }
 }
 
@@ -945,8 +1040,21 @@ private fun MessageBubbleCard(
             )
         }
 
-        val visual = remember(bubbleStyle, customCornerConfig, isOutgoing, isConsecutive, isNextSame, colors.isLight, colors.iosBlue) {
+        val baseVisual = remember(bubbleStyle, customCornerConfig, isOutgoing, isConsecutive, isNextSame, colors.isLight, colors.iosBlue) {
             resolveBubbleVisual(bubbleStyle, isOutgoing, isConsecutive, isNextSame, colors, customCornerConfig)
+        }
+        val resolvedFontFamily = remember(message.fontStyle, baseVisual.fontFamily) {
+            val msgKey = message.fontStyle?.takeIf { it.isNotBlank() && !it.equals("default", ignoreCase = true) }
+            if (msgKey != null) {
+                com.chroma.studio.data.ChatFontStyle.fromKey(msgKey).fontFamily
+            } else {
+                baseVisual.fontFamily
+            }
+        }
+        val visual = remember(baseVisual, resolvedFontFamily) {
+            if (resolvedFontFamily != baseVisual.fontFamily) {
+                baseVisual.copy(fontFamily = resolvedFontFamily)
+            } else baseVisual
         }
 
         Box(
@@ -1042,6 +1150,7 @@ private fun MessageBubbleCard(
                     isMediaOnly = isMediaOnly,
                     searchQuery = searchQuery,
                     isSelectionMode = isSelectionMode,
+                    isGroupChat = showSenderName || (message.readBy.size + message.deliveredTo.size > 1),
                     colors = colors,
                     showReactionDock = showReactionDock,
                     hasTail = hasTail,
@@ -1267,6 +1376,7 @@ private fun MessageBubbleInnerContent(
     isMediaOnly: Boolean,
     searchQuery: String,
     isSelectionMode: Boolean,
+    isGroupChat: Boolean = false,
     colors: ChatColors,
     showReactionDock: Boolean,
     hasTail: Boolean,
@@ -1350,7 +1460,7 @@ private fun MessageBubbleInnerContent(
                         color = if (isOutgoing) Color.White else colors.iosBlue
                     )
                     Text(
-                        text = message.replyTo.text,
+                        text = com.chroma.studio.data.ChatFontStyle.stripInlineFontMarkup(message.replyTo.text),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = if (isOutgoing) Color.White.copy(alpha = 0.9f) else colors.textDark,
@@ -1552,19 +1662,10 @@ private fun MessageBubbleInnerContent(
                                 modifier = Modifier.align(Alignment.Center)
                             )
                         } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(50.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.6f))
-                                    .border(1.dp, Color.White.copy(alpha = 0.45f), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LucidePlay(
-                                    tint = Color.White,
-                                    size = 24.dp
-                                )
-                            }
+                            LucidePlay(
+                                tint = Color.White,
+                                size = 32.dp
+                            )
                         }
                     }
                     if (!isMediaOnly) Spacer(Modifier.height(4.dp))
@@ -1747,7 +1848,7 @@ private fun MessageBubbleInnerContent(
                 }
             }
             "file", "file_stack" -> {
-                if (message.fileItems.isNotEmpty()) {
+                if (message.fileItems.isNotEmpty() && (message.fileItems.size > 1 || message.mediaType == "file_stack")) {
                     FileStackCluster(
                         fileItems = message.fileItems,
                         isOutgoing = isOutgoing
@@ -1755,43 +1856,167 @@ private fun MessageBubbleInnerContent(
                     Spacer(Modifier.height(4.dp))
                 } else {
                     val context = androidx.compose.ui.platform.LocalContext.current
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    val fileCoroutineScope = rememberCoroutineScope()
+                    var isDownloadingFile by remember(message.id) { mutableStateOf(false) }
+                    var isSavedToDownloads by remember(message.id) { mutableStateOf(false) }
+
+                    val displayFileName = message.fileName?.takeIf { it.isNotBlank() } ?: "Document"
+                    val badgeVisual = remember(displayFileName) { getFileBadgeVisual(displayFileName) }
+                    val badgeColor = Color(badgeVisual.accentColorHex)
+                    val targetUriString = message.localUri ?: message.mediaUrl
+                    val isErrorState = message.status == "error"
+                    val uploadPct = message.uploadProgress
+                    val metaLine = when {
+                        isErrorState -> "Upload failed • Tap to retry"
+                        uploadPct != null -> "Uploading • ${uploadPct.coerceIn(0, 100)}%"
+                        isDownloadingFile -> "Downloading document..."
+                        else -> listOfNotNull(
+                            message.fileSize?.takeIf { it.isNotBlank() },
+                            badgeVisual.typeDescription
+                        ).joinToString(" • ")
+                    }
+
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
                             .background(if (isOutgoing) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.04f))
-                            .border(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.25f) else colors.borderSubtle, RoundedCornerShape(14.dp))
-                            .clickable {
-                                openChatFileIntent(context, message.localUri ?: message.mediaUrl, message.fileName)
+                            .border(
+                                0.5.dp,
+                                when {
+                                    isErrorState -> Color(0xFFFF453A).copy(alpha = 0.72f)
+                                    isOutgoing -> Color.White.copy(alpha = 0.25f)
+                                    else -> colors.borderSubtle
+                                },
+                                RoundedCornerShape(14.dp)
+                            )
+                            .clickable(enabled = !isDownloadingFile && uploadPct == null) {
+                                if (isErrorState) {
+                                    onRetry?.invoke()
+                                } else {
+                                    isDownloadingFile = true
+                                    fileCoroutineScope.launch {
+                                        downloadAndOpenChatFile(context, targetUriString, displayFileName)
+                                        isDownloadingFile = false
+                                    }
+                                }
                             }
-                            .padding(10.dp)
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .background(colors.iosBlueSubtle, RoundedCornerShape(10.dp))
-                                .border(0.5.dp, colors.iosBlue.copy(alpha = 0.25f), RoundedCornerShape(10.dp)),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            LucideFileText(tint = colors.iosBlue, size = 18.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(badgeColor.copy(alpha = if (isOutgoing) 0.24f else 0.16f))
+                                    .border(0.5.dp, badgeColor.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = badgeVisual.extensionLabel,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isOutgoing) Color.White else badgeColor
+                                )
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = displayFileName,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isOutgoing) Color.White else colors.textDark,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = metaLine,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = when {
+                                        isErrorState -> Color(0xFFFF6B6B)
+                                        isOutgoing -> Color.White.copy(alpha = 0.82f)
+                                        else -> colors.textMuted
+                                    },
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            if (isErrorState) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFF453A).copy(alpha = 0.22f))
+                                        .clickable { onRetry?.invoke() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.RefreshCw,
+                                        contentDescription = "Retry upload",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            } else if (uploadPct != null || isDownloadingFile) {
+                                CircularProgressIndicator(
+                                    color = if (isOutgoing) Color.White else colors.iosBlue,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            } else if (!targetUriString.isNullOrBlank()) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isOutgoing) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.05f))
+                                        .clickable {
+                                            isDownloadingFile = true
+                                            fileCoroutineScope.launch {
+                                                val saved = saveChatFileToDownloads(context, targetUriString, displayFileName)
+                                                isDownloadingFile = false
+                                                if (saved) isSavedToDownloads = true
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isSavedToDownloads) {
+                                        Icon(
+                                            imageVector = Lucide.Check,
+                                            contentDescription = "Saved to Downloads",
+                                            tint = Color(0xFF34C759),
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    } else {
+                                        LucideDownload(
+                                            tint = if (isOutgoing) Color.White else colors.textMuted,
+                                            size = 15.dp
+                                        )
+                                    }
+                                }
+                            }
                         }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = message.fileName ?: "Document.pdf",
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isOutgoing) Color.White else colors.textDark,
-                                maxLines = 1
-                            )
-                            Text(
-                                text = "${message.fileSize ?: "1.2 MB"} • Document",
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isOutgoing) Color.White.copy(alpha = 0.8f) else colors.textMuted
+
+                        if (uploadPct != null) {
+                            LinearProgressIndicator(
+                                progress = { (uploadPct.coerceIn(0, 100) / 100f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .clip(CircleShape),
+                                color = if (isOutgoing) Color.White else colors.iosBlue,
+                                trackColor = if (isOutgoing) Color.White.copy(alpha = 0.25f) else colors.borderSubtle
                             )
                         }
+                    }
+                    if (!message.text.isNullOrBlank()) {
+                        Spacer(Modifier.height(4.dp))
                     }
                 }
             }
@@ -1802,10 +2027,17 @@ private fun MessageBubbleInnerContent(
                     onFlashVideoClick = onFlashVideoClick
                 )
             }
+            "music" -> {
+                ChatMusicTrackBubbleCard(
+                    message = message,
+                    isOutgoing = isOutgoing,
+                    onOpenFlash = { flashId -> onFlashVideoClick?.invoke(flashId) }
+                )
+            }
         }
 
         // 3. Message Text with Markdown, Links, Formatted Text, Spoilers & Mentions
-        if (!message.text.isNullOrEmpty() && message.mediaType != "flash_video") {
+        if (!message.text.isNullOrEmpty() && message.mediaType != "flash_video" && message.mediaType != "music") {
             val uriHandler = LocalUriHandler.current
             var isExpanded by remember(message.id) { mutableStateOf(false) }
             var isLongMessage by remember(message.id) { mutableStateOf(false) }
@@ -1881,6 +2113,7 @@ private fun MessageBubbleInnerContent(
             }
 
             val isShortSingleLine = remember(message.text, message.replyTo, message.mediaType, message.storyThumbnailUrl, message.flashVideoId) {
+                val renderedPlain = message.text?.let { com.chroma.studio.data.ChatFontStyle.stripInlineFontMarkup(it) } ?: ""
                 message.replyTo == null &&
                 message.storyThumbnailUrl == null &&
                 message.storyId == null &&
@@ -1888,8 +2121,8 @@ private fun MessageBubbleInnerContent(
                 message.mediaType != "story_reply" &&
                 message.mediaType != "flash_video" &&
                 (message.mediaType.isNullOrEmpty() || message.mediaType == "text") &&
-                !message.text.contains('\n') &&
-                message.text.length <= 26 &&
+                !renderedPlain.contains('\n') &&
+                renderedPlain.length <= 26 &&
                 !message.text.contains("```")
             }
 
@@ -1920,9 +2153,18 @@ private fun MessageBubbleInnerContent(
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Normal,
                             color = if (isOutgoing) Color.White.copy(alpha = 0.85f) else visual.timeColor,
-                            fontFamily = visual.fontFamily
+                            fontFamily = FontFamily.SansSerif
                         )
                         if (isOutgoing) {
+                            if (isGroupChat && message.readBy.isNotEmpty()) {
+                                Text(
+                                    text = "Seen ${message.readBy.size}",
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF8BE2FF),
+                                    fontFamily = FontFamily.SansSerif
+                                )
+                            }
                             MessageStatusTick(
                                 status = message.status,
                                 isOutgoing = true,
@@ -1991,9 +2233,18 @@ private fun MessageBubbleInnerContent(
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.Normal,
                         color = if (isOutgoing) Color.White.copy(alpha = 0.85f) else visual.timeColor,
-                        fontFamily = visual.fontFamily
+                        fontFamily = FontFamily.SansSerif
                     )
                     if (isOutgoing) {
+                        if (isGroupChat && message.readBy.isNotEmpty()) {
+                            Text(
+                                text = "Seen ${message.readBy.size}",
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF8BE2FF),
+                                fontFamily = FontFamily.SansSerif
+                            )
+                        }
                         MessageStatusTick(
                             status = message.status,
                             isOutgoing = true,
@@ -2021,7 +2272,7 @@ private fun MessageBubbleInnerContent(
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
                         color = visual.timeColor,
-                        fontFamily = visual.fontFamily
+                        fontFamily = FontFamily.SansSerif
                     )
                     if (isOutgoing) {
                         MessageStatusTick(
@@ -2592,7 +2843,7 @@ fun PollCard(
                                     Box(
                                         modifier = Modifier
                                             .size(20.dp)
-                                            .clip(CircleShape)
+                                            .clip(RoundedCornerShape(6.dp))
                                             .background(Color(0xFF34C759)),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -2602,7 +2853,7 @@ fun PollCard(
                                     Box(
                                         modifier = Modifier
                                             .size(20.dp)
-                                            .clip(CircleShape)
+                                            .clip(RoundedCornerShape(6.dp))
                                             .background(if (isOutgoing) Color.White else colors.iosBlue),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -2615,8 +2866,8 @@ fun PollCard(
                                     Box(
                                         modifier = Modifier
                                             .size(20.dp)
-                                            .clip(CircleShape)
-                                            .border(1.dp, if (isOutgoing) Color.White.copy(alpha = 0.35f) else colors.borderSubtle, CircleShape)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .border(1.dp, if (isOutgoing) Color.White.copy(alpha = 0.35f) else colors.borderSubtle, RoundedCornerShape(6.dp))
                                     )
                                 }
                             }
@@ -4655,23 +4906,24 @@ fun FileStackCluster(
         )
 
         // Individual File Rows
+        val stackScope = rememberCoroutineScope()
+        var downloadingIndex by remember { mutableStateOf<Int?>(null) }
+
         fileItems.forEachIndexed { index, file ->
-            val ext = (file.extension.ifEmpty { file.name.substringAfterLast(".", "FILE") }).uppercase()
-            val badgeColor = when (ext) {
-                "PDF" -> Color(0xFFFF3B30)
-                "DOC", "DOCX" -> Color(0xFF0381FE)
-                "XLS", "XLSX", "CSV" -> Color(0xFF34C759)
-                "ZIP", "RAR", "7Z" -> Color(0xFF0284C7)
-                "APK" -> Color(0xFFFF9500)
-                else -> colors.iosBlue
-            }
+            val badgeVisual = getFileBadgeVisual(file.extension.ifEmpty { file.name })
+            val badgeColor = Color(badgeVisual.accentColorHex)
+            val isRowLoading = downloadingIndex == index
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .clickable {
-                        openChatFileIntent(context, file.uri, file.name)
+                    .clickable(enabled = !isRowLoading) {
+                        downloadingIndex = index
+                        stackScope.launch {
+                            downloadAndOpenChatFile(context, file.uri, file.name)
+                            if (downloadingIndex == index) downloadingIndex = null
+                        }
                     }
                     .padding(vertical = 4.dp, horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -4685,10 +4937,10 @@ fun FileStackCluster(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = ext.take(4),
+                        text = badgeVisual.extensionLabel,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        color = badgeColor
+                        color = if (isOutgoing) Color.White else badgeColor
                     )
                 }
                 Column(modifier = Modifier.weight(1f)) {
@@ -4701,16 +4953,27 @@ fun FileStackCluster(
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                     Text(
-                        text = file.size,
+                        text = listOfNotNull(
+                            file.size.takeIf { it.isNotBlank() },
+                            badgeVisual.typeDescription
+                        ).joinToString(" • "),
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.Normal,
                         color = if (isOutgoing) Color.White.copy(alpha = 0.75f) else colors.textMuted
                     )
                 }
-                LucideDownload(
-                    tint = if (isOutgoing) Color.White.copy(alpha = 0.85f) else colors.textMuted,
-                    size = 15.dp
-                )
+                if (isRowLoading) {
+                    CircularProgressIndicator(
+                        color = if (isOutgoing) Color.White else colors.iosBlue,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp)
+                    )
+                } else {
+                    LucideDownload(
+                        tint = if (isOutgoing) Color.White.copy(alpha = 0.85f) else colors.textMuted,
+                        size = 15.dp
+                    )
+                }
             }
 
             if (index < fileItems.size - 1) {
@@ -4720,6 +4983,158 @@ fun FileStackCluster(
                 )
             }
         }
+    }
+}
+
+/**
+ * Resolves and caches a remote or local chat document into `cacheDir/chat_documents`,
+ * then opens it with the appropriate MIME type via [androidx.core.content.FileProvider].
+ */
+suspend fun downloadAndOpenChatFile(
+    context: android.content.Context,
+    uriString: String?,
+    fileName: String?
+) {
+    if (uriString.isNullOrBlank()) {
+        withContext(Dispatchers.Main) {
+            android.widget.Toast.makeText(context, "File link unavailable", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        return
+    }
+    if (uriString.startsWith("http://") || uriString.startsWith("https://")) {
+        val localCachedFile = withContext(Dispatchers.IO) {
+            fetchOrCacheRemoteChatDocument(context, uriString, fileName)
+        }
+        withContext(Dispatchers.Main) {
+            if (localCachedFile != null && localCachedFile.exists()) {
+                openChatFileIntent(context, "file://${localCachedFile.absolutePath}", fileName ?: localCachedFile.name)
+            } else {
+                android.widget.Toast.makeText(context, "Failed to download ${fileName ?: "file"}", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    } else {
+        withContext(Dispatchers.Main) {
+            openChatFileIntent(context, uriString, fileName)
+        }
+    }
+}
+
+/**
+ * Downloads (if remote) or copies (if local) an attached chat document into the public Downloads directory.
+ */
+suspend fun saveChatFileToDownloads(
+    context: android.content.Context,
+    uriString: String?,
+    fileName: String?
+): Boolean {
+    if (uriString.isNullOrBlank()) return false
+    val safeName = sanitizeStorageFileName(fileName, fallbackExt = "bin")
+    val mimeType = resolveMimeTypeForFileName(safeName)
+
+    val saved = withContext(Dispatchers.IO) {
+        try {
+            val sourceBytesStream = when {
+                uriString.startsWith("http://") || uriString.startsWith("https://") -> {
+                    val cached = fetchOrCacheRemoteChatDocument(context, uriString, safeName) ?: return@withContext false
+                    cached.inputStream()
+                }
+                uriString.startsWith("file://") -> {
+                    val path = android.net.Uri.parse(uriString).path ?: return@withContext false
+                    java.io.File(path).takeIf { it.exists() }?.inputStream() ?: return@withContext false
+                }
+                else -> {
+                    context.contentResolver.openInputStream(android.net.Uri.parse(uriString)) ?: return@withContext false
+                }
+            }
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, safeName)
+                    put(android.provider.MediaStore.Downloads.MIME_TYPE, mimeType)
+                    put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val resolver = context.contentResolver
+                val destUri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: return@withContext false
+                sourceBytesStream.use { input ->
+                    resolver.openOutputStream(destUri)?.use { output ->
+                        input.copyTo(output)
+                    } ?: return@withContext false
+                }
+                values.clear()
+                values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(destUri, values, null, null)
+                true
+            } else {
+                @Suppress("DEPRECATION")
+                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_DOWNLOADS
+                )
+                downloadsDir?.mkdirs()
+                val destFile = java.io.File(downloadsDir, safeName)
+                sourceBytesStream.use { input ->
+                    destFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                true
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    withContext(Dispatchers.Main) {
+        android.widget.Toast.makeText(
+            context,
+            if (saved) "Saved '$safeName' to Downloads" else "Could not save file to Downloads",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+    return saved
+}
+
+private fun fetchOrCacheRemoteChatDocument(
+    context: android.content.Context,
+    remoteUrl: String,
+    fileName: String?
+): java.io.File? {
+    return try {
+        val docsDir = java.io.File(context.cacheDir, "chat_documents")
+        if (!docsDir.exists()) docsDir.mkdirs()
+        val safeName = sanitizeStorageFileName(fileName, fallbackExt = remoteUrl.substringAfterLast('.', "bin").substringBefore('?'))
+        val targetFile = java.io.File(docsDir, "${remoteUrl.hashCode().toUInt()}_$safeName")
+        if (targetFile.exists() && targetFile.length() > 0L) return targetFile
+
+        val tempFile = java.io.File(docsDir, "${targetFile.name}.part")
+        val conn = (java.net.URL(remoteUrl).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 15000
+            readTimeout = 30000
+            instanceFollowRedirects = true
+        }
+        try {
+            if (conn.responseCode !in 200..299) return null
+            conn.inputStream.use { input ->
+                tempFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            if (tempFile.exists() && tempFile.length() > 0L) {
+                if (targetFile.exists()) targetFile.delete()
+                if (!tempFile.renameTo(targetFile)) {
+                    tempFile.copyTo(targetFile, overwrite = true)
+                    tempFile.delete()
+                }
+                targetFile
+            } else {
+                tempFile.delete()
+                null
+            }
+        } finally {
+            conn.disconnect()
+        }
+    } catch (_: Exception) {
+        null
     }
 }
 
@@ -4738,22 +5153,7 @@ fun openChatFileIntent(context: android.content.Context, uriString: String?, fil
                     } catch (_: Throwable) { parsed }
                 } else parsed
             } else parsed
-            val extension = fileName?.substringAfterLast('.', "")?.lowercase() ?: ""
-            val mimeType = context.contentResolver.getType(uri) ?: when (extension) {
-                "pdf" -> "application/pdf"
-                "doc", "docx" -> "application/msword"
-                "xls", "xlsx" -> "application/vnd.ms-excel"
-                "ppt", "pptx" -> "application/vnd.ms-powerpoint"
-                "zip" -> "application/zip"
-                "rar" -> "application/x-rar-compressed"
-                "7z" -> "application/x-7z-compressed"
-                "txt" -> "text/plain"
-                "apk" -> "application/vnd.android.package-archive"
-                "mp3", "wav", "m4a", "aac", "ogg" -> "audio/*"
-                "mp4", "mkv", "mov" -> "video/*"
-                "jpg", "jpeg", "png", "webp", "gif" -> "image/*"
-                else -> "*/*"
-            }
+            val mimeType = context.contentResolver.getType(uri) ?: resolveMimeTypeForFileName(fileName)
             val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, mimeType)
                 addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)

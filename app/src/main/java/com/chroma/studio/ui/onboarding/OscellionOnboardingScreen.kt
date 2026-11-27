@@ -511,43 +511,37 @@ fun OscellionOnboardingScreen(
                             .padding(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(24.dp),
-                            color = surfaceBg,
-                            border = BorderStroke(
-                                1.dp,
-                                if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.07f)
-                            )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 32.dp, vertical = 28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 28.dp, vertical = 26.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Image(
-                                    painter = painterResource(R.drawable.ic_oscellion_app_icon),
-                                    contentDescription = "Oscellion",
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                )
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(28.dp),
-                                    color = Color(0xFF0381FE),
-                                    strokeWidth = 2.6.dp
-                                )
-                                Text(
-                                    text = "Verifying Oscellion account…",
-                                    color = textPrimary,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = "Checking directory & workspace profile",
-                                    color = textMuted,
-                                    fontSize = 12.5.sp
-                                )
-                            }
+                            Image(
+                                painter = painterResource(R.drawable.ic_oscellion_app_icon),
+                                contentDescription = "Oscellion",
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                            )
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(26.dp),
+                                color = colors.primary,
+                                strokeWidth = 2.4.dp
+                            )
+                            Text(
+                                text = "Verifying Oscellion account…",
+                                color = textPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = (-0.2).sp
+                            )
+                            Text(
+                                text = "Checking directory & workspace profile",
+                                color = textMuted,
+                                fontSize = 13.sp
+                            )
                         }
                     }
                 }

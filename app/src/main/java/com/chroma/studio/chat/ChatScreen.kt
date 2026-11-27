@@ -398,6 +398,7 @@ private fun ChatScreenContent(
     var isStickerPickerOpen by remember { mutableStateOf(false) }
     var isStickerStudioOpen by remember { mutableStateOf(false) }
     var isFlashVideoPickerOpen by remember { mutableStateOf(false) }
+    var isMusicPickerOpen by remember { mutableStateOf(false) }
     var editingChatPhotoUris by remember { mutableStateOf<List<Uri>?>(null) }
     var editingChatPhotoInitialIndex by remember { mutableIntStateOf(0) }
     var editingChatCaption by remember { mutableStateOf<String?>(null) }
@@ -408,15 +409,15 @@ private fun ChatScreenContent(
 
 
 
-    val storyMediaPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            if (onNavigateToCreateStory != null) {
-                onNavigateToCreateStory.invoke(uri)
-            } else {
-                editingStoryImageUri = uri
-            }
+    val storyMediaPicker = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Story Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        if (onNavigateToCreateStory != null) {
+            onNavigateToCreateStory.invoke(uri)
+        } else {
+            editingStoryImageUri = uri
         }
     }
 
@@ -544,9 +545,15 @@ private fun ChatScreenContent(
 
     }
 
-    val isActiveOnline = isOtherOnline || (activeRoomPresence?.online == true)
+    val otherUserProfileForRoom = remember(otherUid, userProfiles) { otherUid?.let { userProfiles[it] } }
+    val canShowOtherPresence = otherUserProfileForRoom?.showOnlineStatus != false
+    val isActiveOnline = canShowOtherPresence && (isOtherOnline || (activeRoomPresence?.online == true))
 
-    val activeLastSeen = otherLastSeen ?: activeRoomPresence?.lastOnline
+    val activeLastSeen = if (canShowOtherPresence) {
+        otherLastSeen?.takeIf { it > 0L }
+            ?: activeRoomPresence?.lastOnline?.takeIf { it > 0L }
+            ?: otherUserProfileForRoom?.lastSeen?.takeIf { it > 0L }
+    } else null
 
     val activeRoomTyping = remember(typingStatuses, activeChatId, otherUid) {
         val current = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
@@ -615,6 +622,13 @@ private fun ChatScreenContent(
                 pinnedMessage = null,
                 isMuted = mutedChatIds.contains(activeChatId),
                 isBlocked = blockedUserIds.contains(resolvedTargetUid),
+                isVerified = otherProfile?.verified == true,
+                verifiedTone = otherProfile?.verifiedTone,
+                otherUserId = resolvedTargetUid.takeIf { it.isNotBlank() },
+                participantUids = listOfNotNull(
+                    currentUid.takeIf { it.isNotBlank() },
+                    resolvedTargetUid.takeIf { it.isNotBlank() }
+                ),
                 messages = emptyList()
             )
 
@@ -636,9 +650,11 @@ private fun ChatScreenContent(
                         if (room.id == activeChatId) activeChatBase
                         else {
                             val oUid = if (!room.isGroup) room.participants.firstOrNull { it != currentUid } else null
+                            val oProfile = oUid?.let { userProfiles[it] }
+                            val allowO = room.isGroup || (oProfile?.showOnlineStatus != false)
                             val presence = if (oUid != null) onlineUsersPresence[oUid] else null
-                            val isOnline = presence?.online == true
-                            val lastSeenTime = presence?.lastOnline
+                            val isOnline = allowO && !room.isGroup && (presence?.online == true)
+                            val lastSeenTime = if (allowO) (presence?.lastOnline ?: oProfile?.lastSeen) else null
                             val normalizedId = com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(room.id, currentUid, oUid)
                             val roomTyping = typingStatuses[room.id] ?: typingStatuses[normalizedId] ?: emptyMap()
                             ChatAdapters.toChatConversation(
@@ -664,11 +680,15 @@ private fun ChatScreenContent(
 
                     val oUid = if (!room.isGroup) room.participants.firstOrNull { it != currentUid } else null
 
+                    val oProfile = oUid?.let { userProfiles[it] }
+                    val allowO = room.isGroup || (oProfile?.showOnlineStatus != false)
                     val presence = if (oUid != null) onlineUsersPresence[oUid] else null
 
-                    val isOnline = presence?.online == true || (!room.isGroup && room.id == activeChatId && isOtherOnline)
+                    val isOnline = allowO && !room.isGroup && (presence?.online == true || (room.id == activeChatId && isOtherOnline))
 
-                    val lastSeenTime = presence?.lastOnline ?: if (room.id == activeChatId) otherLastSeen else null
+                    val lastSeenTime = if (allowO) {
+                        ((presence?.lastOnline ?: if (room.id == activeChatId) otherLastSeen else null) ?: oProfile?.lastSeen)
+                    } else null
 
                     val normalizedId = com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(room.id, currentUid, oUid)
                             val roomTyping = typingStatuses[room.id] ?: typingStatuses[normalizedId] ?: emptyMap()
@@ -706,15 +726,23 @@ private fun ChatScreenContent(
 
     val rawMessages by (chatViewModel?.currentMessages?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
 
-    val liveMessages = remember(rawMessages, userProfiles, currentUid, isOtherOnline, isActiveOnline) {
+    val liveMessages = remember(rawMessages, userProfiles, currentUid, isOtherOnline, isActiveOnline, activeRoom?.participants, activeRoom?.isGroup) {
 
         if (rawMessages.isNotEmpty()) {
 
             val rawMap = rawMessages.associateBy { it.id }
+            val groupMembers = if (activeRoom?.isGroup == true) activeRoom.participants else emptyList()
 
             rawMessages.reversed().map { msg ->
 
-                ChatAdapters.toDisplayMessage(msg, currentUid, userProfiles, rawMap, isActiveOnline)
+                ChatAdapters.toDisplayMessage(
+                    msg = msg,
+                    currentUid = currentUid,
+                    userProfiles = userProfiles,
+                    allMessagesMap = rawMap,
+                    isOtherOnline = isActiveOnline,
+                    groupParticipants = groupMembers
+                )
 
             }
 
@@ -1847,6 +1875,7 @@ private fun ChatScreenContent(
         isStickerPickerOpen ||
         isStickerStudioOpen ||
         isFlashVideoPickerOpen ||
+        isMusicPickerOpen ||
         showStoryViewer ||
         editingChatPhotoUris != null ||
         isGalleryPickerOpen ||
@@ -1983,7 +2012,9 @@ private fun ChatScreenContent(
 
             status = "pending",
 
-            replyTo = activeReplyQuote
+            replyTo = activeReplyQuote,
+
+            fontStyle = null
 
         )
 
@@ -2019,7 +2050,7 @@ private fun ChatScreenContent(
 
         if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
-            chatViewModel.sendMessage(trimmed, replyToMessageId = replyMessageId)
+            chatViewModel.sendMessage(trimmed, replyToMessageId = replyMessageId, fontStyle = null)
 
         }
 
@@ -2094,6 +2125,7 @@ private fun ChatScreenContent(
             isStickerStudioOpen -> isStickerStudioOpen = false
             isStickerPickerOpen -> isStickerPickerOpen = false
             isFlashVideoPickerOpen -> isFlashVideoPickerOpen = false
+            isMusicPickerOpen -> isMusicPickerOpen = false
             showShareStoryAudienceSheet -> showShareStoryAudienceSheet = false
             editingStoryImageUri != null -> editingStoryImageUri = null
             showStoryGalleryPicker -> showStoryGalleryPicker = false
@@ -3248,7 +3280,7 @@ private fun ChatScreenContent(
                                 msg.mediaType == "video" -> "🎥 Video"
                                 msg.mediaType == "file" || msg.mediaType == "file_stack" -> "📄 ${msg.fileName ?: "Document"}"
                                 msg.mediaType == "poll" -> "📊 ${msg.pollData?.question ?: "Poll"}"
-                                !msg.text.isNullOrBlank() -> msg.text
+                                !msg.text.isNullOrBlank() -> com.chroma.studio.data.ChatFontStyle.stripInlineFontMarkup(msg.text)
                                 else -> "Attachment"
                             }
                             activeReplyQuote = ReplyQuote(
@@ -3451,7 +3483,9 @@ private fun ChatScreenContent(
 
                                     val selectedMsgs = activeChat.messages.filter { it.id in selectedMessageIds }
 
-                                    val text = selectedMsgs.mapNotNull { it.text }.joinToString("\n")
+                                    val text = selectedMsgs.mapNotNull {
+                                        it.text?.let { raw -> com.chroma.studio.data.ChatFontStyle.stripInlineFontMarkup(raw) }
+                                    }.joinToString("\n")
 
                                     if (text.isNotEmpty()) {
 
@@ -3594,6 +3628,7 @@ private fun ChatScreenContent(
                                     onPollClick = { isPollCreatorOpen = true },
                                     onStickerClick = { isStickerPickerOpen = true },
                                     onFlashVideoClick = { isFlashVideoPickerOpen = true },
+                                    onMusicClick = { isMusicPickerOpen = true },
 
                                     onVoiceClick = { startVoiceRecording() },
 
@@ -4289,6 +4324,10 @@ private fun ChatScreenContent(
                 isFullCallModalOpen = true
                 callDurationSeconds = 0
             },
+            onMinimize = {
+                isFullCallModalOpen = false
+                isCallBannerActive = true
+            },
             onHangup = {
                 isCallBannerActive = false
                 isFullCallModalOpen = false
@@ -4556,6 +4595,20 @@ private fun ChatScreenContent(
 
             CustomGalleryPickerModal(
 
+                title = "Choose Story Photo",
+
+                maxSelection = 1,
+
+                allowedMediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+
+                showCaptionInput = false,
+
+                showAlbumsTab = true,
+
+                lockMediaFilter = true,
+
+                singleTapImmediate = true,
+
                 onDismiss = { showStoryGalleryPicker = false },
 
                 onLaunchCamera = {
@@ -4588,25 +4641,29 @@ private fun ChatScreenContent(
 
         }
 
-        // Story Image Editor
+        // Story Image Editor (Apple HIG Story Studio)
         if (editingStoryImageUri != null) {
-            ChromaPhotoEditorScreen(
-                photoUri = editingStoryImageUri!!,
-                photoUris = listOf(editingStoryImageUri!!),
-                exportButtonLabel = "Share Story",
-                onExportSuccess = { singleEditedUri ->
-                    pendingUploadStoryUri = singleEditedUri
-                    showShareStoryAudienceSheet = true
+            val onlyFriends by effectiveStoryVm.onlyFriendsIds.collectAsState()
+            com.chroma.studio.ui.storystudio.StoryStudioScreen(
+                initialPhotoUri = editingStoryImageUri,
+                onNavigateBack = {
                     editingStoryImageUri = null
                 },
-                onExportAllSuccess = { editedUris ->
-                    val finalUri = editedUris.firstOrNull() ?: editingStoryImageUri!!
-                    pendingUploadStoryUri = finalUri
-                    showShareStoryAudienceSheet = true
+                onPublishStory = { renderedSlides, audience ->
+                    val isCloseFriends = audience == com.chroma.studio.ui.storystudio.StoryAudience.CLOSE_FRIENDS
+                    val audienceType = if (isCloseFriends) "only_friends" else "public"
+                    val customIds = if (isCloseFriends) onlyFriends else emptyList()
+                    effectiveStoryVm.uploadStories(
+                        context = context,
+                        uris = renderedSlides.map { it.uri },
+                        audienceType = audienceType,
+                        customAudienceIds = customIds,
+                        textFormats = renderedSlides.map { it.interactiveFormatJson }
+                    )
                     editingStoryImageUri = null
-                },
-                onBack = {
-                    editingStoryImageUri = null
+                    com.chroma.studio.ui.components.ToastManager.showToast(
+                        if (isCloseFriends) "Shared with Close Friends!" else "Sharing your story..."
+                    )
                 }
             )
         }
@@ -4702,6 +4759,22 @@ private fun ChatScreenContent(
                 onFlashVideoSelected = { selectedFlash ->
                     if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
                         chatViewModel.sendFlashVideo(activeChatId, selectedFlash)
+                    }
+                }
+            )
+        }
+
+        if (isMusicPickerOpen) {
+            com.chroma.studio.ui.components.StoryMusicPickerModal(
+                isOpen = true,
+                headerTitle = "Share Music",
+                onDismiss = { isMusicPickerOpen = false },
+                onClipConfirmed = { selection ->
+                    isMusicPickerOpen = false
+                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                        chatViewModel.sendMusicTrack(activeChatId, selection)
+                    } else {
+                        showToast("Shared ${selection.title} · ${selection.artist}")
                     }
                 }
             )
@@ -4891,145 +4964,59 @@ private fun ChatScreenContent(
         if (isFileManagerOpen) {
 
             CustomFileManagerModal(
-
                 onDismiss = { isFileManagerOpen = false },
-
-                onSendFiles = { files ->
-
+                onSendFiles = { files, caption ->
                     val replyQuoteSnapshot = activeReplyQuote
-
-                    if (files.size > 1) {
-
+                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                        chatViewModel.sendFileItems(
+                            context = context,
+                            files = files,
+                            caption = caption,
+                            replyToMessageId = replyQuoteSnapshot?.messageId
+                        )
+                        SoundManager.playSend()
+                        showToast(
+                            if (files.size > 1) "Sending ${files.size} files…"
+                            else "Sending ${files.firstOrNull()?.name ?: "file"}…"
+                        )
+                    } else if (files.size > 1) {
                         val newFileMsg = ChatMessage(
-
                             id = "m_${System.currentTimeMillis()}",
-
                             senderId = currentUser.id,
-
                             senderName = currentUser.name,
-
                             mediaType = "file_stack",
-
                             fileItems = files,
-
-                            text = "${files.size} documents attached",
-
+                            text = caption.takeIf { it.isNotBlank() } ?: "${files.size} documents attached",
                             time = getCurrentTimeFormatted(),
-
                             status = "sent",
-
                             replyTo = replyQuoteSnapshot
-
                         )
-
                         chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newFileMsg) else it }
-
-                        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
-
-                            files.forEach { f ->
-
-                                coroutineScope.launch(Dispatchers.IO) {
-
-                                    try {
-
-                                        val u = f.uri?.let { Uri.parse(it) }
-
-                                        if (u != null) {
-
-                                            val bytes = context.contentResolver.openInputStream(u)?.use { it.readBytes() }
-
-                                            if (bytes != null) {
-
-                                                chatViewModel.sendMediaMessage(bytes, f.extension.lowercase().ifBlank { "bin" }, text = f.name, replyToMessageId = replyQuoteSnapshot?.messageId)
-
-                                            }
-
-                                        }
-
-                                    } catch (_: Exception) {}
-
-                                }
-
-                            }
-
-                        }
-
                         SoundManager.playSend()
-
                         showToast("${files.size} files sent ✨")
-
                     } else if (files.isNotEmpty()) {
-
                         val file = files.first()
-
                         val newFileMsg = ChatMessage(
-
                             id = "m_${System.currentTimeMillis()}",
-
                             senderId = currentUser.id,
-
                             senderName = currentUser.name,
-
                             mediaType = "file",
-
                             fileName = file.name,
-
                             fileSize = file.size,
-
                             localUri = file.uri,
-
                             fileItems = listOf(file),
-
-                            text = null,
-
+                            text = caption.takeIf { it.isNotBlank() },
                             time = getCurrentTimeFormatted(),
-
                             status = "sent",
-
                             replyTo = replyQuoteSnapshot
-
                         )
-
                         chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newFileMsg) else it }
-
-                        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
-
-                            coroutineScope.launch(Dispatchers.IO) {
-
-                                try {
-
-                                    val u = file.uri?.let { Uri.parse(it) }
-
-                                    if (u != null) {
-
-                                        val bytes = context.contentResolver.openInputStream(u)?.use { it.readBytes() }
-
-                                        if (bytes != null) {
-
-                                            chatViewModel.sendMediaMessage(bytes, file.extension.lowercase().ifBlank { "bin" }, text = file.name, replyToMessageId = replyQuoteSnapshot?.messageId)
-
-                                        }
-
-                                    }
-
-                                } catch (_: Exception) {}
-
-                            }
-
-                        }
-
                         SoundManager.playSend()
-
                         showToast("File sent ✨")
-
                     }
-
                     activeReplyQuote = null
-
                     isFileManagerOpen = false
-
                 }
-
             )
 
         }
@@ -5060,7 +5047,9 @@ private fun ChatScreenContent(
 
                             status = if (prof.online) "Online" else "Active on Oscellion",
 
-                            isVerified = prof.verified
+                            isVerified = prof.verified,
+
+                            verifiedTone = prof.verifiedTone
 
                         )
 
@@ -5140,7 +5129,9 @@ private fun ChatScreenContent(
 
                             status = if (prof.online) "Online" else "Active on Oscellion",
 
-                            isVerified = prof.verified
+                            isVerified = prof.verified,
+
+                            verifiedTone = prof.verifiedTone
 
                         )
 
@@ -5176,11 +5167,20 @@ private fun ChatScreenContent(
 
                 },
 
-                onCreateGroup = { groupName, groupAvatar, members, groupDescription, onlyAdminsCanPost ->
+                onCreateGroup = { config ->
 
                     val newGroupId = "group_${System.currentTimeMillis()}"
 
                     val currentTime = getCurrentTimeFormatted()
+
+                    val groupName = config.groupName
+                    val groupAvatar = config.groupAvatar
+                    val members = config.members
+                    val groupDescription = config.groupDescription
+                    val onlyAdminsCanPost = config.onlyAdminsCanPost
+                    val welcomeText = config.welcomeMessage.trim().takeIf { it.isNotBlank() }?.let { "👋 Welcome to $groupName! $it" }
+                        ?: "👋 Welcome to $groupName! Group created"
+                    val allAdminIds = (listOf(currentUser.id) + config.coAdminIds).distinct()
 
                     val newGroupChat = ChatConversation(
 
@@ -5212,9 +5212,17 @@ private fun ChatScreenContent(
 
                         participantUids = members.map { it.id },
 
-                        admins = listOf(currentUser.id),
+                        admins = allAdminIds,
 
                         onlyAdminsCanPost = onlyAdminsCanPost,
+
+                        disappearingHours = config.disappearingHours,
+
+                        inviteCode = config.inviteCode,
+
+                        isPublicGroup = config.isPublicGroup,
+
+                        editInfoAdminsOnly = config.editInfoAdminsOnly,
 
                         messages = listOf(
 
@@ -5226,7 +5234,7 @@ private fun ChatScreenContent(
 
                                 senderName = currentUser.name,
 
-                                text = "👋 Welcome to $groupName! Group created",
+                                text = welcomeText,
 
                                 time = currentTime,
 
@@ -5248,14 +5256,13 @@ private fun ChatScreenContent(
 
                     if (chatViewModel != null) {
 
-                        val realParticipantIds = members.mapNotNull { it.id.takeIf { id -> id.isNotBlank() && id != currentUser.id } }
-
-                        chatViewModel.createGroup(groupName, groupDescription.ifBlank { null }, realParticipantIds, groupAvatar, newGroupId, onlyAdminsCanPost) { generatedRoomId ->
-
+                        chatViewModel.createGroupFromConfig(
+                            context = context,
+                            config = config,
+                            preGeneratedRoomId = newGroupId
+                        ) { generatedRoomId ->
                             activeChatId = generatedRoomId
-
                             isInsideChat = true
-
                         }
 
                     } else {
@@ -5633,7 +5640,7 @@ private fun ChatScreenContent(
 
                         msg.mediaType == "poll" -> "📊 ${msg.pollData?.question ?: "Poll"}"
 
-                        !msg.text.isNullOrBlank() -> msg.text
+                        !msg.text.isNullOrBlank() -> com.chroma.studio.data.ChatFontStyle.stripInlineFontMarkup(msg.text)
 
                         else -> "Attachment"
 
@@ -5657,9 +5664,13 @@ private fun ChatScreenContent(
 
                 onCopy = {
 
-                    val textToCopy = msg.text ?: msg.mediaUrl ?: "Voice Message"
-
-                    clipboardManager.setText(AnnotatedString(textToCopy))
+                    clipboardManager.setText(
+                        AnnotatedString(
+                            msg.text?.let { com.chroma.studio.data.ChatFontStyle.stripInlineFontMarkup(it) }
+                                ?: msg.mediaUrl
+                                ?: "Voice Message"
+                        )
+                    )
 
                     showToast("Copied to clipboard")
 
@@ -5837,6 +5848,12 @@ private fun ChatScreenContent(
                 message = msg,
 
                 isOutgoing = msg.senderId == currentUser.id,
+
+                chat = activeChat,
+
+                userProfiles = userProfiles,
+
+                currentUid = currentUid,
 
                 onDismiss = { selectedMessageForInfo = null }
 
@@ -6108,13 +6125,10 @@ private fun ChatScreenContent(
             },
 
             onEndCall = {
-
                 isCallBannerActive = false
-
                 isFullCallModalOpen = false
-
+                chatViewModel?.endCall()
                 showToast("Call ended")
-
             },
 
             onStopRecording = { finishVoiceRecording() },

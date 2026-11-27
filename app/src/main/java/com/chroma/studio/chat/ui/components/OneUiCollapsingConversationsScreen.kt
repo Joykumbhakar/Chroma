@@ -186,6 +186,7 @@ fun OneUiCollapsingConversationsScreen(
     var isSelectionMode by remember { mutableStateOf(false) }
     val selectedChatIds = remember { mutableStateListOf<String>() }
     var chatPendingDelete by remember { mutableStateOf<ChatConversation?>(null) }
+    var chatPendingClearHistory by remember { mutableStateOf<ChatConversation?>(null) }
     var showDeleteSelectedChatsDialog by remember { mutableStateOf(false) }
     var showBiometricLockConfirmationDialog by remember { mutableStateOf(false) }
     var selectedChatForActions by remember { mutableStateOf<ChatConversation?>(null) }
@@ -876,15 +877,7 @@ fun OneUiCollapsingConversationsScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(54.dp)
-                                        .clip(CircleShape)
-                                        .background(colors.iosBlue.copy(alpha = 0.12f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    LucideEdit(tint = colors.iosBlue, size = 24.dp)
-                                }
+                                LucideEdit(tint = colors.iosBlue, size = 28.dp)
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = if (activeTab != "all") "No ${activeTab.replaceFirstChar { it.uppercase() }} Chats" else "No conversations yet",
@@ -1290,6 +1283,30 @@ fun OneUiCollapsingConversationsScreen(
             )
         }
 
+        chatPendingClearHistory?.let { chat ->
+            IosAlertDialog(
+                title = "Clear Chat History?",
+                message = "All messages in \"${chat.name}\" will be cleared from this conversation. This action cannot be undone.",
+                actions = listOf(
+                    IosAlertAction(
+                        title = "Cancel",
+                        isCancel = true,
+                        onClick = { chatPendingClearHistory = null }
+                    ),
+                    IosAlertAction(
+                        title = "Clear History",
+                        isDestructive = true,
+                        onClick = {
+                            val toClear = chat
+                            chatPendingClearHistory = null
+                            onClearChatHistory(toClear)
+                        }
+                    )
+                ),
+                onDismiss = { chatPendingClearHistory = null }
+            )
+        }
+
         // 6. LONG-PRESS CONVERSATION QUICK ACTIONS MODAL SHEET
         selectedChatForActions?.let { targetChat ->
             val isPinned = targetChat.id in pinnedChatIds
@@ -1369,14 +1386,14 @@ fun OneUiCollapsingConversationsScreen(
                         color = Color(0xFFFF9500)
                     ) {
                         selectedChatForActions = null
-                        onClearChatHistory(targetChat)
+                        chatPendingClearHistory = targetChat
                     }
                     OneUiSheetActionRow(
                         label = "Delete Conversation",
                         color = Color(0xFFFF3B30)
                     ) {
                         selectedChatForActions = null
-                        onDeleteChat(targetChat)
+                        chatPendingDelete = targetChat
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                 }
@@ -1646,7 +1663,8 @@ private fun OneUiSwipeableConversationItem(
                     name = chat.name,
                     avatarUrl = chat.avatar,
                     size = 50.dp,
-                    isOnline = chat.online,
+                    isGroup = chat.type == "group",
+                    isOnline = chat.type != "group" && chat.online,
                     statusRingColor = cardBgColor
                 )
 
@@ -1667,6 +1685,13 @@ private fun OneUiSwipeableConversationItem(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
+                        if (chat.isVerified && chat.type != "group") {
+                            com.chroma.studio.ui.components.VerifiedBadge(
+                                size = 14.dp,
+                                tone = chat.verifiedTone,
+                                userId = chat.otherUserId ?: chat.participantUids.firstOrNull()
+                            )
+                        }
                         if (isPinned) {
                             LucideStar(tint = Color(0xFFF59E0B), size = 13.dp)
                         }

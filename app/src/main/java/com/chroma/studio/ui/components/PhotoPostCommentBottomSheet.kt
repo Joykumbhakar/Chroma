@@ -384,9 +384,39 @@ data class CommentReply(
     val likedByMe: Boolean = false,
     val creatorHeart: Boolean = false,
     val reactions: Map<String, ReactionData> = emptyMap(),
+    val replyFlashVideoUrl: String? = null,
     val isPending: Boolean = false,
     val isError: Boolean = false
 )
+
+internal fun toggleReactionDataMap(
+    current: Map<String, ReactionData>,
+    emoji: String
+): Map<String, ReactionData> {
+    val mutable = current.toMutableMap()
+    val prev = mutable[emoji] ?: ReactionData(0, false)
+    if (prev.activeByMe) {
+        val nextCount = (prev.count - 1).coerceAtLeast(0)
+        if (nextCount == 0) mutable.remove(emoji) else mutable[emoji] = ReactionData(nextCount, false)
+    } else {
+        mutable[emoji] = ReactionData(prev.count + 1, true)
+    }
+    return mutable
+}
+
+internal fun resolveVerifiedBadgeType(verified: Boolean, tone: String?): VerifiedBadgeType {
+    if (!verified) return VerifiedBadgeType.NONE
+    return when (tone?.lowercase()?.trim()) {
+        "gold" -> VerifiedBadgeType.GOLD
+        "chroma", "emerald" -> VerifiedBadgeType.EMERALD
+        else -> VerifiedBadgeType.BLUE
+    }
+}
+
+internal fun computeDeletedCommentCountDelta(parentComment: PostComment?, replyId: String?): Int {
+    if (parentComment == null) return -1
+    return if (replyId == null) -(1 + parentComment.replies.size) else -1
+}
 
 data class PostComment(
     val id: String,
@@ -638,17 +668,18 @@ fun PhotoPostScreenDemo(
                     fontWeight = FontWeight.Bold,
                     color = palette.textPrimary
                 )
-                Surface(
-                    shape = CircleShape,
-                    color = palette.surfaceChip,
-                    modifier = Modifier.clickable { isDark = !isDark }
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(palette.surfaceChip)
+                        .clickable { isDark = !isDark }
+                        .padding(horizontal = 12.dp, vertical = 5.dp)
                 ) {
                     Text(
                         text = if (isDark) "Light" else "Dark",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = palette.textSecondary,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                        color = palette.textSecondary
                     )
                 }
             }
@@ -835,10 +866,13 @@ fun PhotoPostCommentBottomSheet(
     onTotalCommentCountChanged: ((Int) -> Unit)? = null,
     onTimestampClick: ((String) -> Unit)? = null,
     onSubmitComment: ((text: String, parentCommentId: String?, media: CommentMediaAttachment?) -> Unit)? = null,
+    onBeforeSubmitCheck: (() -> Boolean)? = null,
     onRetryComment: ((commentId: String) -> Unit)? = null,
     onEditComment: ((commentId: String, replyId: String?, newText: String) -> Unit)? = null,
     onToggleLike: ((commentId: String, replyId: String?) -> Unit)? = null,
     onToggleCreatorHeart: ((commentId: String, replyId: String?) -> Unit)? = null,
+    onToggleReaction: ((commentId: String, replyId: String?, emoji: String) -> Unit)? = null,
+    onOpenReplyFlashVideo: ((flashUrl: String) -> Unit)? = null,
     onTogglePin: ((commentId: String) -> Unit)? = null,
     onDeleteComment: ((commentId: String, replyId: String?) -> Unit)? = null,
     onVotePoll: ((commentId: String, optionId: String) -> Unit)? = null,
@@ -874,10 +908,19 @@ fun PhotoPostCommentBottomSheet(
                     visibleRepliesCount = maxOf(old.visibleRepliesCount, incoming.visibleRepliesCount),
                     showTranslation = old.showTranslation,
                     bookmarked = old.bookmarked || incoming.bookmarked,
+                    edited = old.edited || incoming.edited,
                     reactions = if (incoming.reactions.isEmpty()) old.reactions else incoming.reactions,
                     replies = incoming.replies.map { r ->
                         val prevR = oldReplies[r.id]
-                        if (prevR != null && r.reactions.isEmpty()) r.copy(reactions = prevR.reactions) else r
+                        if (prevR == null) {
+                            r
+                        } else {
+                            r.copy(
+                                edited = prevR.edited || r.edited,
+                                reactions = if (r.reactions.isEmpty()) prevR.reactions else r.reactions,
+                                replyFlashVideoUrl = r.replyFlashVideoUrl ?: prevR.replyFlashVideoUrl
+                            )
+                        }
                     }
                 )
             }
@@ -911,6 +954,7 @@ fun PhotoPostCommentBottomSheet(
     var activeReactionPickerKey by remember { mutableStateOf<String?>(null) }
     var editingTarget by remember { mutableStateOf<TargetRef?>(null) }
     var menuTarget by remember { mutableStateOf<TargetRef?>(null) }
+    var pendingDeleteTarget by remember { mutableStateOf<TargetRef?>(null) }
     var reportTarget by remember { mutableStateOf<TargetRef?>(null) }
     var lightboxMedia by remember { mutableStateOf<CommentMediaAttachment?>(null) }
     var lastDeleted by remember { mutableStateOf<DeletedCommentRecord?>(null) }
@@ -1111,7 +1155,7 @@ fun PhotoPostCommentBottomSheet(
                         modifier = Modifier
                             .width(36.dp)
                             .height(4.dp)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(2.dp))
                             .background(palette.underlineInactive.copy(alpha = 0.6f))
                     )
                 }
@@ -1127,8 +1171,7 @@ fun PhotoPostCommentBottomSheet(
                         Box(
                             modifier = Modifier
                                 .size(34.dp)
-                                .clip(CircleShape)
-                                .background(if (showPostPreview) palette.surfaceChip else Color.Transparent)
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable { showPostPreview = !showPostPreview },
                             contentAlignment = Alignment.Center
                         ) {
@@ -1144,7 +1187,7 @@ fun PhotoPostCommentBottomSheet(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
                             text = "Comments",
@@ -1153,20 +1196,19 @@ fun PhotoPostCommentBottomSheet(
                             color = palette.textPrimary
                         )
                         if (headerDisplayCount > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(palette.surfaceChip)
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                RollingCountText(
-                                    value = headerDisplayCount,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = palette.textSecondary,
-                                    reducedMotion = reducedMotion
-                                )
-                            }
+                            Text(
+                                text = "·",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = palette.textMuted
+                            )
+                            RollingCountText(
+                                value = headerDisplayCount,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = palette.textMuted,
+                                reducedMotion = reducedMotion
+                            )
                         }
                     }
 
@@ -1178,8 +1220,7 @@ fun PhotoPostCommentBottomSheet(
                             Box(
                                 modifier = Modifier
                                     .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(if (showSearchBar) Blue600.copy(alpha = 0.14f) else Color.Transparent)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .clickable {
                                         showSearchBar = !showSearchBar
                                         if (!showSearchBar) searchQuery = ""
@@ -1197,7 +1238,7 @@ fun PhotoPostCommentBottomSheet(
                         Box(
                             modifier = Modifier
                                 .size(34.dp)
-                                .clip(CircleShape)
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable(onClick = onDismissRequest),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1212,75 +1253,74 @@ fun PhotoPostCommentBottomSheet(
                 }
 
                 // ------------------------------------------------------------
-                // B. OPTIONAL COLLAPSIBLE POST CONTEXT STRIP (REAL DATA ONLY)
+                // B. OPTIONAL COLLAPSIBLE POST CONTEXT STRIP (BORDERLESS)
                 // ------------------------------------------------------------
                 AnimatedVisibility(visible = showPostPreview && hasPostContext) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp)
-                            .padding(bottom = 10.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(palette.cardBg)
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        if (postSummary.thumbnailUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = postSummary.thumbnailUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(9.dp))
-                            )
-                        } else {
-                            MacProfileAvatar(
-                                style = postSummary.author?.avatarStyle ?: AvatarStyle.ROYAL_BLUE,
-                                author = postSummary.author,
-                                avatarSize = 36.dp,
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = "@${postSummary.authorHandle}",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = palette.textPrimary
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            if (postSummary.thumbnailUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = postSummary.thumbnailUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(RoundedCornerShape(8.dp))
                                 )
-                                VerifiedSealBadge(
-                                    postSummary.authorVerified,
-                                    tone = postSummary.authorVerifiedTone,
-                                    size = 13.dp
+                            } else {
+                                MacProfileAvatar(
+                                    style = postSummary.author?.avatarStyle ?: AvatarStyle.ROYAL_BLUE,
+                                    author = postSummary.author,
+                                    avatarSize = 34.dp,
+                                    modifier = Modifier.size(34.dp)
                                 )
                             }
-                            if (postSummary.caption.isNotBlank()) {
-                                Text(
-                                    text = postSummary.caption,
-                                    fontSize = 12.sp,
-                                    color = palette.textMuted,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = "@${postSummary.authorHandle}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = palette.textPrimary
+                                    )
+                                    VerifiedSealBadge(
+                                        postSummary.authorVerified,
+                                        tone = postSummary.authorVerifiedTone,
+                                        size = 13.dp
+                                    )
+                                }
+                                if (postSummary.caption.isNotBlank()) {
+                                    Text(
+                                        text = postSummary.caption,
+                                        fontSize = 12.sp,
+                                        color = palette.textMuted,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
                 // ------------------------------------------------------------
-                // C. SMART FILTER PILLS + SORT MENU
+                // C. CLEAN FLAT FILTER TABS + BORDERLESS SORT MENU
                 // ------------------------------------------------------------
                 if (comments.isNotEmpty()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                            .padding(horizontal = 14.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -1288,22 +1328,30 @@ fun PhotoPostCommentBottomSheet(
                             modifier = Modifier
                                 .weight(1f)
                                 .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             availableFilters.forEach { filter ->
                                 val selected = activeFilter == filter
-                                Box(
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(if (selected) palette.textPrimary else palette.surfaceChip)
+                                        .clip(RoundedCornerShape(6.dp))
                                         .clickable { activeFilter = filter }
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        .padding(horizontal = 4.dp, vertical = 4.dp)
                                 ) {
                                     Text(
                                         text = filter.label,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (selected) palette.sheetBg else palette.textSecondary
+                                        fontSize = 12.5.sp,
+                                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                        color = if (selected) palette.textPrimary else palette.textMuted
+                                    )
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .width(if (selected) 16.dp else 0.dp)
+                                            .height(2.dp)
+                                            .clip(RoundedCornerShape(1.dp))
+                                            .background(if (selected) Blue600 else Color.Transparent)
                                     )
                                 }
                             }
@@ -1312,10 +1360,9 @@ fun PhotoPostCommentBottomSheet(
                         Box {
                             Row(
                                 modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(palette.surfaceChip)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .clickable { showSortDropdown = true }
-                                    .padding(horizontal = 11.dp, vertical = 6.dp),
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
@@ -1323,7 +1370,7 @@ fun PhotoPostCommentBottomSheet(
                                     imageVector = Lucide.SlidersHorizontal,
                                     contentDescription = "Sort",
                                     tint = palette.textSecondary,
-                                    modifier = Modifier.size(12.dp)
+                                    modifier = Modifier.size(13.dp)
                                 )
                                 Text(
                                     text = activeSort.label,
@@ -1375,8 +1422,9 @@ fun PhotoPostCommentBottomSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(palette.surfaceChip)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(palette.surfaceSubtle)
+                                .border(0.5.dp, palette.border, RoundedCornerShape(10.dp))
                                 .padding(horizontal = 12.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1409,7 +1457,7 @@ fun PhotoPostCommentBottomSheet(
                                 Box(
                                     modifier = Modifier
                                         .size(22.dp)
-                                        .clip(CircleShape)
+                                        .clip(RoundedCornerShape(6.dp))
                                         .clickable { searchQuery = "" },
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -1466,20 +1514,12 @@ fun PhotoPostCommentBottomSheet(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(52.dp)
-                                            .clip(CircleShape)
-                                            .background(palette.surfaceChip),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (comments.isEmpty()) Lucide.MessageCircle else Lucide.Search,
-                                            contentDescription = null,
-                                            tint = palette.textMuted,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = if (comments.isEmpty()) Lucide.MessageCircle else Lucide.Search,
+                                        contentDescription = null,
+                                        tint = palette.textMuted,
+                                        modifier = Modifier.size(30.dp)
+                                    )
                                     Text(
                                         text = if (comments.isEmpty()) "No comments yet" else "No matching comments",
                                         fontSize = 15.5.sp,
@@ -1499,7 +1539,7 @@ fun PhotoPostCommentBottomSheet(
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Box(
                                             modifier = Modifier
-                                                .clip(CircleShape)
+                                                .clip(RoundedCornerShape(10.dp))
                                                 .background(Blue600)
                                                 .clickable {
                                                     activeFilter = CommentFilter.ALL
@@ -1587,23 +1627,21 @@ fun PhotoPostCommentBottomSheet(
                                             onToggleCreatorHeart?.invoke(ref.commentId, ref.replyId)
                                         },
                                         onToggleReaction = { ref, emoji ->
-                                            fun toggleMap(map: Map<String, ReactionData>): Map<String, ReactionData> {
-                                                val mutable = map.toMutableMap()
-                                                val prev = mutable[emoji] ?: ReactionData(0, false)
-                                                if (prev.activeByMe) {
-                                                    val newCount = (prev.count - 1).coerceAtLeast(0)
-                                                    if (newCount == 0) mutable.remove(emoji) else mutable[emoji] = ReactionData(newCount, false)
-                                                } else {
-                                                    mutable[emoji] = ReactionData(prev.count + 1, true)
-                                                    spawnEmojiCelebration(emoji, count = 4)
-                                                }
-                                                return mutable
-                                            }
+                                            if (onBeforeSubmitCheck?.invoke() == false) return@CommentThreadItem
                                             if (ref.replyId == null) {
-                                                updateComment(ref.commentId) { it.copy(reactions = toggleMap(it.reactions)) }
+                                                updateComment(ref.commentId) { c ->
+                                                    val nextMap = toggleReactionDataMap(c.reactions, emoji)
+                                                    if (nextMap[emoji]?.activeByMe == true) spawnEmojiCelebration(emoji, count = 4)
+                                                    c.copy(reactions = nextMap)
+                                                }
                                             } else {
-                                                updateReply(ref.commentId, ref.replyId) { it.copy(reactions = toggleMap(it.reactions)) }
+                                                updateReply(ref.commentId, ref.replyId) { r ->
+                                                    val nextMap = toggleReactionDataMap(r.reactions, emoji)
+                                                    if (nextMap[emoji]?.activeByMe == true) spawnEmojiCelebration(emoji, count = 4)
+                                                    r.copy(reactions = nextMap)
+                                                }
                                             }
+                                            onToggleReaction?.invoke(ref.commentId, ref.replyId, emoji)
                                             activeReactionPickerKey = null
                                         },
                                         onOpenReactionPicker = { key ->
@@ -1698,6 +1736,9 @@ fun PhotoPostCommentBottomSheet(
                                         onTimestampClick = { ts ->
                                             onTimestampClick?.invoke(ts)
                                             showToast("Jumped to $ts")
+                                        },
+                                        onOpenReplyFlashVideo = { url ->
+                                            onOpenReplyFlashVideo?.invoke(url)
                                         }
                                     )
                                     HorizontalDivider(thickness = 0.5.dp, color = palette.divider.copy(alpha = 0.65f))
@@ -1714,8 +1755,8 @@ fun PhotoPostCommentBottomSheet(
                                     ) {
                                         Row(
                                             modifier = Modifier
-                                                .clip(CircleShape)
-                                                .background(palette.surfaceChip)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .border(0.5.dp, palette.border, RoundedCornerShape(10.dp))
                                                 .clickable(enabled = !isLoadingMore) {
                                                     isLoadingMore = true
                                                     scope.launch {
@@ -1729,27 +1770,14 @@ fun PhotoPostCommentBottomSheet(
                                                 }
                                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
                                             Text(
-                                                text = if (isLoadingMore) "Loading..." else "View more comments",
+                                                text = if (isLoadingMore) "Loading..." else "View more comments (${extraPool.size})",
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = palette.textSecondary
                                             )
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(CircleShape)
-                                                    .background(palette.cardBg)
-                                                    .padding(horizontal = 6.dp, vertical = 1.dp)
-                                            ) {
-                                                Text(
-                                                    text = extraPool.size.toString(),
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = palette.textMuted
-                                                )
-                                            }
                                         }
                                     }
                                 }
@@ -1789,6 +1817,41 @@ fun PhotoPostCommentBottomSheet(
                                     )
                                 )
                         )
+                    }
+
+                    val showScrollToTop by remember { derivedStateOf { listState.firstVisibleItemIndex >= 2 } }
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showScrollToTop && filteredComments.size > 3,
+                        enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 2 },
+                        exit = fadeOut(tween(150)) + slideOutVertically(tween(180)) { it / 2 },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 14.dp, bottom = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(palette.cardBg.copy(alpha = 0.94f))
+                                .border(0.5.dp, palette.border, RoundedCornerShape(10.dp))
+                                .clickable {
+                                    scope.launch { listState.animateScrollToItem(0) }
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            ChevronDownOrUpIcon(
+                                pointingUp = true,
+                                color = palette.textSecondary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "Top",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = palette.textSecondary
+                            )
+                        }
                     }
                 }
 
@@ -1899,6 +1962,7 @@ fun PhotoPostCommentBottomSheet(
                             val raw = composerText.trim()
                             val hasExtra = attachedMedia != null || attachedVoiceNote != null || attachedPoll != null
                             if (raw.isEmpty() && !hasExtra) return@DockedCommentComposer
+                            if (onBeforeSubmitCheck?.invoke() == false) return@DockedCommentComposer
 
                             val activeReply = replyTarget
                             if (activeReply != null) {
@@ -1970,8 +2034,8 @@ fun PhotoPostCommentBottomSheet(
                 toastState?.let { toast ->
                     Row(
                         modifier = Modifier
-                            .shadow(elevation = 6.dp, shape = CircleShape)
-                            .clip(CircleShape)
+                            .shadow(elevation = 6.dp, shape = RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .background(if (palette.isDark) Color(0xFFF4F4F5) else Color(0xFF18181B))
                             .padding(horizontal = 16.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -2083,30 +2147,7 @@ fun PhotoPostCommentBottomSheet(
                             editingTarget = ref
                         }
                         IconoraMenuIconType.DELETE -> {
-                            val allowUndo = onDeleteComment == null
-                            if (ref.replyId == null) {
-                                val idx = comments.indexOfFirst { it.id == ref.commentId }
-                                if (idx >= 0) {
-                                    val removed = comments.removeAt(idx)
-                                    lastDeleted = if (allowUndo) DeletedCommentRecord(null, idx, comment = removed) else null
-                                    onDeleteComment?.invoke(ref.commentId, null)
-                                }
-                            } else {
-                                val parentIdx = comments.indexOfFirst { it.id == ref.commentId }
-                                if (parentIdx >= 0) {
-                                    val p = comments[parentIdx]
-                                    val rIdx = p.replies.indexOfFirst { it.id == ref.replyId }
-                                    if (rIdx >= 0) {
-                                        val removed = p.replies[rIdx]
-                                        comments[parentIdx] = p.copy(replies = p.replies.filterNot { it.id == ref.replyId })
-                                        lastDeleted = if (allowUndo) DeletedCommentRecord(ref.commentId, rIdx, reply = removed) else null
-                                        onDeleteComment?.invoke(ref.commentId, ref.replyId)
-                                    }
-                                }
-                            }
-                            if (allowUndo) {
-                                showToast("Comment deleted", canUndo = true)
-                            }
+                            pendingDeleteTarget = ref
                         }
                         IconoraMenuIconType.REPORT -> {
                             reportTarget = ref
@@ -2115,6 +2156,46 @@ fun PhotoPostCommentBottomSheet(
                 }
             )
         }
+    }
+
+    // Delete Comment Confirmation Dialog
+    pendingDeleteTarget?.let { ref ->
+        val isReplyDelete = ref.replyId != null
+        IosAlertDialog(
+            title = if (isReplyDelete) "Delete Reply?" else "Delete Comment?",
+            message = if (isReplyDelete) "Are you sure you want to delete this reply?" else "Are you sure you want to delete this comment? This action cannot be undone.",
+            confirmText = "Delete",
+            isDestructive = true,
+            onConfirm = {
+                pendingDeleteTarget = null
+                val allowUndo = onDeleteComment == null
+                if (ref.replyId == null) {
+                    val idx = comments.indexOfFirst { it.id == ref.commentId }
+                    if (idx >= 0) {
+                        val removed = comments.removeAt(idx)
+                        lastDeleted = if (allowUndo) DeletedCommentRecord(null, idx, comment = removed) else null
+                        onDeleteComment?.invoke(ref.commentId, null)
+                    }
+                } else {
+                    val parentIdx = comments.indexOfFirst { it.id == ref.commentId }
+                    if (parentIdx >= 0) {
+                        val p = comments[parentIdx]
+                        val rIdx = p.replies.indexOfFirst { it.id == ref.replyId }
+                        if (rIdx >= 0) {
+                            val removed = p.replies[rIdx]
+                            comments[parentIdx] = p.copy(replies = p.replies.filterNot { it.id == ref.replyId })
+                            lastDeleted = if (allowUndo) DeletedCommentRecord(ref.commentId, rIdx, reply = removed) else null
+                            onDeleteComment?.invoke(ref.commentId, ref.replyId)
+                        }
+                    }
+                }
+                if (allowUndo) {
+                    showToast("Comment deleted", canUndo = true)
+                }
+            },
+            dismissText = "Cancel",
+            onDismiss = { pendingDeleteTarget = null }
+        )
     }
 
     // Report Dialog
@@ -2152,8 +2233,8 @@ fun PhotoPostCommentBottomSheet(
                                 .align(Alignment.TopEnd)
                                 .padding(10.dp)
                                 .size(28.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.65f))
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Black.copy(alpha = 0.55f))
                                 .clickable { lightboxMedia = null },
                             contentAlignment = Alignment.Center
                         ) {
@@ -2217,21 +2298,21 @@ private fun CommentSkeletonList(palette: CommentSheetPalette) {
                         modifier = Modifier
                             .width((96 + idx * 14).dp)
                             .height(11.dp)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(4.dp))
                             .background(fill)
                     )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(lineFraction)
                             .height(12.dp)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(4.dp))
                             .background(fill)
                     )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(lineFraction * 0.65f)
                             .height(10.dp)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(4.dp))
                             .background(fill)
                     )
                 }
@@ -2283,7 +2364,7 @@ private fun CommentMenuOptionsSheet(
                     modifier = Modifier
                         .width(36.dp)
                         .height(4.dp)
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(2.dp))
                         .background(palette.underlineInactive.copy(alpha = 0.6f))
                 )
             }
@@ -2371,11 +2452,11 @@ private fun CommentMenuOptionsSheet(
             }
 
             Spacer(modifier = Modifier.height(6.dp))
+            HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(palette.surfaceChip)
+                    .clip(RoundedCornerShape(10.dp))
                     .clickable(onClick = onDismiss)
                     .padding(vertical = 13.dp),
                 contentAlignment = Alignment.Center
@@ -2384,7 +2465,7 @@ private fun CommentMenuOptionsSheet(
                     text = "Cancel",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = palette.textPrimary
+                    color = palette.textSecondary
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -2422,22 +2503,19 @@ private fun MenuOptionRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(iconBg),
+            modifier = Modifier.size(24.dp),
             contentAlignment = Alignment.Center
         ) {
             when (type) {
-                IconoraMenuIconType.PIN -> PinMiniIcon(color = tintColor, modifier = Modifier.size(16.dp))
-                IconoraMenuIconType.CREATOR_HEART -> Icon(Lucide.Heart, contentDescription = label, tint = tintColor, modifier = Modifier.size(16.dp))
-                IconoraMenuIconType.BOOKMARK -> Icon(Lucide.Bookmark, contentDescription = label, tint = tintColor, modifier = Modifier.size(16.dp))
-                IconoraMenuIconType.TRANSLATE -> Icon(Lucide.Globe, contentDescription = label, tint = tintColor, modifier = Modifier.size(16.dp))
-                IconoraMenuIconType.COPY_TEXT -> Icon(Lucide.Copy, contentDescription = label, tint = tintColor, modifier = Modifier.size(16.dp))
-                IconoraMenuIconType.SHARE_LINK -> Icon(Lucide.Share2, contentDescription = label, tint = tintColor, modifier = Modifier.size(16.dp))
-                IconoraMenuIconType.EDIT -> Icon(Lucide.Pencil, contentDescription = label, tint = tintColor, modifier = Modifier.size(16.dp))
-                IconoraMenuIconType.DELETE -> Icon(Lucide.Trash2, contentDescription = label, tint = tintColor, modifier = Modifier.size(16.dp))
-                IconoraMenuIconType.REPORT -> Icon(Lucide.Flag, contentDescription = label, tint = tintColor, modifier = Modifier.size(16.dp))
+                IconoraMenuIconType.PIN -> PinMiniIcon(color = tintColor, modifier = Modifier.size(18.dp))
+                IconoraMenuIconType.CREATOR_HEART -> Icon(Lucide.Heart, contentDescription = label, tint = tintColor, modifier = Modifier.size(18.dp))
+                IconoraMenuIconType.BOOKMARK -> Icon(Lucide.Bookmark, contentDescription = label, tint = tintColor, modifier = Modifier.size(18.dp))
+                IconoraMenuIconType.TRANSLATE -> Icon(Lucide.Globe, contentDescription = label, tint = tintColor, modifier = Modifier.size(18.dp))
+                IconoraMenuIconType.COPY_TEXT -> Icon(Lucide.Copy, contentDescription = label, tint = tintColor, modifier = Modifier.size(18.dp))
+                IconoraMenuIconType.SHARE_LINK -> Icon(Lucide.Share2, contentDescription = label, tint = tintColor, modifier = Modifier.size(18.dp))
+                IconoraMenuIconType.EDIT -> Icon(Lucide.Pencil, contentDescription = label, tint = tintColor, modifier = Modifier.size(18.dp))
+                IconoraMenuIconType.DELETE -> Icon(Lucide.Trash2, contentDescription = label, tint = tintColor, modifier = Modifier.size(18.dp))
+                IconoraMenuIconType.REPORT -> Icon(Lucide.Flag, contentDescription = label, tint = tintColor, modifier = Modifier.size(18.dp))
             }
         }
         Text(
@@ -2515,7 +2593,8 @@ private fun CommentThreadItem(
     onCycleVoiceSpeed: (String) -> Unit,
     onSpoilerRevealed: () -> Unit,
     onMentionOrTagClick: (String) -> Unit,
-    onTimestampClick: (String) -> Unit
+    onTimestampClick: (String) -> Unit,
+    onOpenReplyFlashVideo: (String) -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -2559,21 +2638,19 @@ private fun CommentThreadItem(
                     modifier = Modifier
                         .align(Alignment.CenterStart)
                         .padding(start = 6.dp)
-                        .size(32.dp)
+                        .size(30.dp)
                         .graphicsLayer {
                             alpha = swipeProgress
                             scaleX = 0.55f + swipeProgress * 0.45f
                             scaleY = 0.55f + swipeProgress * 0.45f
-                        }
-                        .clip(CircleShape)
-                        .background(if (swipeProgress >= 1f) Blue600 else Blue600.copy(alpha = 0.14f)),
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Lucide.CornerLeftUp,
                         contentDescription = "Reply",
-                        tint = if (swipeProgress >= 1f) Color.White else Blue600,
-                        modifier = Modifier.size(15.dp)
+                        tint = Blue600,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -2776,7 +2853,7 @@ private fun CommentThreadItem(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(6.dp))
                         .clickable { onToggleReplies(comment.id) }
                         .padding(vertical = 2.dp)
                 ) {
@@ -2873,6 +2950,31 @@ private fun CommentThreadItem(
                                                 onSpoilerRevealed = onSpoilerRevealed,
                                                 onDoubleTapLike = { onDoubleTapLike(replyRef) }
                                             )
+                                            reply.replyFlashVideoUrl?.takeIf { it.isNotBlank() }?.let { flashUrl ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .padding(top = 5.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .border(0.5.dp, palette.border, RoundedCornerShape(8.dp))
+                                                        .clickable { onOpenReplyFlashVideo(flashUrl) }
+                                                        .padding(horizontal = 9.dp, vertical = 5.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Lucide.Video,
+                                                        contentDescription = "Watch Flash reply",
+                                                        tint = if (palette.isDark) Blue400 else Blue600,
+                                                        modifier = Modifier.size(13.dp)
+                                                    )
+                                                    Text(
+                                                        text = "Watch Flash reply",
+                                                        fontSize = 11.5.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = if (palette.isDark) Blue400 else Blue600
+                                                    )
+                                                }
+                                            }
                                         }
                                         Spacer(modifier = Modifier.height(5.dp))
                                         SocialMicroActionRow(
@@ -2905,7 +3007,7 @@ private fun CommentThreadItem(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     modifier = Modifier
-                                        .clip(CircleShape)
+                                        .clip(RoundedCornerShape(6.dp))
                                         .clickable { onShowMoreReplies(comment.id) }
                                         .padding(vertical = 2.dp)
                                 ) {
@@ -2956,24 +3058,18 @@ private fun AuthorMetaHeader(
         )
         VerifiedSealBadge(author.verified, tone = author.verifiedTone, size = 13.dp)
         author.role?.let { role ->
-            val (bg, fg) = when (role) {
-                "Creator" -> Blue600.copy(alpha = 0.14f) to if (palette.isDark) Blue400 else Blue600
-                "Mod" -> Emerald600.copy(alpha = 0.14f) to if (palette.isDark) Emerald400 else Emerald600
-                else -> Amber600.copy(alpha = 0.14f) to if (palette.isDark) Amber400 else Amber600
+            val fg = when (role) {
+                "Creator" -> if (palette.isDark) Blue400 else Blue600
+                "Mod" -> if (palette.isDark) Emerald400 else Emerald600
+                else -> if (palette.isDark) Amber400 else Amber600
             }
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(bg)
-                    .padding(horizontal = 6.dp, vertical = 1.dp)
-            ) {
-                Text(
-                    text = role,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = fg
-                )
-            }
+            Text(
+                text = "· $role",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = fg,
+                maxLines = 1
+            )
         }
         when {
             isError -> {
@@ -2981,7 +3077,7 @@ private fun AuthorMetaHeader(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(6.dp))
                         .background(Rose500.copy(alpha = 0.14f))
                         .clickable(enabled = onRetry != null) { onRetry?.invoke() }
                         .padding(horizontal = 6.dp, vertical = 1.dp)
@@ -3062,45 +3158,58 @@ private fun SocialMicroActionRow(
                     .padding(horizontal = 2.dp, vertical = 2.dp)
             )
 
-            // Creator Heart Avatar Badge (shows actual creator avatar + Rose heart)
+            // Creator Heart Avatar Badge (shows actual creator avatar + Rose heart, zero circle icon bg)
             if (creatorHeart) {
-                Box(
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier
-                        .size(22.dp)
+                        .align(Alignment.CenterVertically)
                         .let { mod ->
                             if (canToggleCreatorHeart) mod.clickable(onClick = onToggleCreatorHeart) else mod
                         }
                 ) {
-                    MacProfileAvatar(
-                        style = postAuthor?.avatarStyle ?: AvatarStyle.ROYAL_BLUE,
-                        ringColor = Color.Transparent,
-                        author = postAuthor,
-                        avatarSize = 17.dp,
-                        modifier = Modifier.size(17.dp)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(11.dp)
-                            .clip(CircleShape)
-                            .background(palette.sheetBg),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        HeartOutlineOrFilledIcon(
-                            filled = true,
-                            color = Rose500,
-                            modifier = Modifier.size(8.dp)
+                    Box(modifier = Modifier.size(20.dp)) {
+                        MacProfileAvatar(
+                            style = postAuthor?.avatarStyle ?: AvatarStyle.ROYAL_BLUE,
+                            ringColor = Color.Transparent,
+                            author = postAuthor,
+                            avatarSize = 17.dp,
+                            modifier = Modifier.size(17.dp)
                         )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .size(10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            HeartOutlineOrFilledIcon(
+                                filled = true,
+                                color = Rose500,
+                                modifier = Modifier.size(9.dp)
+                            )
+                        }
                     }
+                    Text(
+                        text = "Creator liked",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Rose500
+                    )
                 }
             }
 
-            // Active Emoji Reaction Pills (Borderless)
+            // Active Emoji Reaction Chips (Flat Minimal)
             reactions.entries.filter { it.value.count > 0 }.forEach { (emoji, data) ->
                 Row(
                     modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (data.activeByMe) Blue600.copy(alpha = 0.14f) else palette.surfaceChip)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (data.activeByMe) Blue600.copy(alpha = 0.12f) else Color.Transparent)
+                        .border(
+                            width = 0.5.dp,
+                            color = if (data.activeByMe) Blue600.copy(alpha = 0.45f) else palette.border,
+                            shape = RoundedCornerShape(8.dp)
+                        )
                         .clickable { onToggleReaction(emoji) }
                         .padding(horizontal = 7.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -3120,8 +3229,7 @@ private fun SocialMicroActionRow(
             Box(
                 modifier = Modifier
                     .size(24.dp)
-                    .clip(CircleShape)
-                    .background(if (isPickerOpen) Blue600.copy(alpha = 0.14f) else Color.Transparent)
+                    .clip(RoundedCornerShape(6.dp))
                     .clickable(onClick = onOpenPicker),
                 contentAlignment = Alignment.Center
             ) {
@@ -3135,7 +3243,7 @@ private fun SocialMicroActionRow(
             Box(
                 modifier = Modifier
                     .size(24.dp)
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(6.dp))
                     .clickable(onClick = onOpenMenu),
                 contentAlignment = Alignment.Center
             ) {
@@ -3151,9 +3259,10 @@ private fun SocialMicroActionRow(
         AnimatedVisibility(visible = isPickerOpen) {
             Row(
                 modifier = Modifier
-                    .shadow(elevation = 4.dp, shape = CircleShape)
-                    .clip(CircleShape)
+                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(palette.cardBg)
+                    .border(0.5.dp, palette.border, RoundedCornerShape(12.dp))
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -3162,7 +3271,7 @@ private fun SocialMicroActionRow(
                         text = emoji,
                         fontSize = 16.sp,
                         modifier = Modifier
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable { onToggleReaction(emoji) }
                             .padding(horizontal = 5.dp, vertical = 2.dp)
                     )
@@ -3259,7 +3368,7 @@ private fun InlineEditBox(
                     .clickable(onClick = onCancel)
             )
             Surface(
-                shape = CircleShape,
+                shape = RoundedCornerShape(8.dp),
                 color = Blue600,
                 modifier = Modifier.clickable { onSave(draft) }
             ) {
@@ -3810,7 +3919,7 @@ private fun DockedCommentComposer(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(10.dp))
                             .background(Rose500.copy(alpha = 0.14f))
                     ) {
                         Row(
@@ -3863,7 +3972,7 @@ private fun DockedCommentComposer(
                     attachedVoiceNote?.let { voice ->
                         Row(
                             modifier = Modifier
-                                .clip(CircleShape)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(Blue600.copy(alpha = 0.14f))
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -3894,7 +4003,7 @@ private fun DockedCommentComposer(
                     attachedPoll?.let { poll ->
                         Row(
                             modifier = Modifier
-                                .clip(CircleShape)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(Emerald600.copy(alpha = 0.14f))
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -3961,7 +4070,7 @@ private fun DockedCommentComposer(
                     Box(
                         modifier = Modifier
                             .size(22.dp)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(6.dp))
                             .clickable(onClick = onCancelReply),
                         contentAlignment = Alignment.Center
                     ) {
@@ -4001,8 +4110,8 @@ private fun DockedCommentComposer(
                             .align(Alignment.TopEnd)
                             .padding(5.dp)
                             .size(20.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.72f))
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.65f))
                             .clickable(onClick = onRemoveMedia),
                         contentAlignment = Alignment.Center
                     ) {
@@ -4124,13 +4233,22 @@ private fun DockedCommentComposer(
                             )
                         }
 
+                        if (text.length >= 380) {
+                            Text(
+                                text = "${text.length}/500",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (text.length >= 485) Rose500 else palette.textMuted,
+                                modifier = Modifier.padding(bottom = 8.dp, end = 2.dp)
+                            )
+                        }
+
                         // Identity-preserving (+) -> (×) Rich Tools trigger
                         Box(
                             modifier = Modifier
                                 .padding(bottom = 4.dp)
                                 .size(28.dp)
-                                .clip(CircleShape)
-                                .background(if (showRichTools) Blue600.copy(alpha = 0.12f) else Color.Transparent)
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable(onClick = onToggleRichTools),
                             contentAlignment = Alignment.Center
                         ) {
@@ -4173,10 +4291,10 @@ private fun RichToolChip(
 ) {
     Row(
         modifier = Modifier
-            .clip(CircleShape)
-            .background(palette.surfaceChip)
+            .clip(RoundedCornerShape(8.dp))
+            .border(0.5.dp, palette.border, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 11.dp, vertical = 6.dp),
+            .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
@@ -4491,26 +4609,25 @@ private fun VoiceNotePlayerBubble(
         ) {
             Box(
                 modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(Blue600)
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(6.dp))
                     .clickable(onClick = onTogglePlay),
                 contentAlignment = Alignment.Center
             ) {
-                Canvas(modifier = Modifier.size(14.dp)) {
+                Canvas(modifier = Modifier.size(16.dp)) {
                     val w = size.width
                     val h = size.height
                     if (isPlaying) {
-                        drawRoundRect(Color.White, Offset(w * 0.16f, h * 0.14f), Size(w * 0.24f, h * 0.72f), CornerRadius(2f, 2f))
-                        drawRoundRect(Color.White, Offset(w * 0.60f, h * 0.14f), Size(w * 0.24f, h * 0.72f), CornerRadius(2f, 2f))
+                        drawRoundRect(Blue600, Offset(w * 0.16f, h * 0.12f), Size(w * 0.24f, h * 0.76f), CornerRadius(2f, 2f))
+                        drawRoundRect(Blue600, Offset(w * 0.60f, h * 0.12f), Size(w * 0.24f, h * 0.76f), CornerRadius(2f, 2f))
                     } else {
                         val p = Path().apply {
-                            moveTo(w * 0.24f, h * 0.14f)
+                            moveTo(w * 0.22f, h * 0.12f)
                             lineTo(w * 0.88f, h * 0.50f)
-                            lineTo(w * 0.24f, h * 0.86f)
+                            lineTo(w * 0.22f, h * 0.88f)
                             close()
                         }
-                        drawPath(p, Color.White)
+                        drawPath(p, Blue600)
                     }
                 }
             }
@@ -4671,42 +4788,88 @@ private fun ReportCommentDialog(
     )
     var selected by remember { mutableStateOf(reasons.first()) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = palette.cardBg,
-        title = { Text("Report comment", fontWeight = FontWeight.Bold, color = palette.textPrimary) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(palette.cardBg)
+                .border(0.5.dp, palette.border, RoundedCornerShape(14.dp))
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Report comment",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.textPrimary
+                )
                 Text(
                     text = "Why are you reporting this comment? Your report stays anonymous.",
-                    fontSize = 12.sp,
+                    fontSize = 12.5.sp,
                     color = palette.textMuted
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 reasons.forEach { reason ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable { selected = reason }
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(selected = selected == reason, onClick = { selected = reason })
-                        Text(text = reason, fontSize = 13.sp, color = palette.textPrimary)
+                        Text(text = reason, fontSize = 13.5.sp, color = palette.textPrimary)
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onSubmit(selected) },
-                colors = ButtonDefaults.buttonColors(containerColor = Blue600)
-            ) { Text("Submit", color = Color.White) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", color = palette.textSecondary) }
+            HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Cancel",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = palette.textSecondary
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .width(0.5.dp)
+                        .fillMaxHeight()
+                        .background(palette.divider)
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable { onSubmit(selected) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Submit",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Blue600
+                    )
+                }
+            }
         }
-    )
+    }
 }
 
 // ============================================================================

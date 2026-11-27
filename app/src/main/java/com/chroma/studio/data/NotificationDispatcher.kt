@@ -197,7 +197,12 @@ object NotificationDispatcher {
                             actorName
                         }
                     } else "$actorName ($actorHandle)"
-                    val pushBody = detailText ?: actionText
+                    val pushBody = if (type == NotificationActionType.MENTION) {
+                        val snippet = detailText?.trim()?.takeIf { it.isNotBlank() }?.take(100)
+                        if (snippet != null) "$actorHandle $actionText: $snippet" else "$actorHandle $actionText"
+                    } else {
+                        detailText ?: actionText
+                    }
                     FcmPushSender.sendPushNotification(
                         context = com.chroma.studio.ChromaApp.instance,
                         targetFcmToken = targetFcmToken,
@@ -329,5 +334,152 @@ object NotificationDispatcher {
             Log.e("NotificationDispatcher", "Failed to clear notifications for $userId", e)
             false
         }
+    }
+
+    /**
+     * Resolves a list of normalized `@username` handles to distinct Firestore user IDs.
+     * Uses `usernames/{handle}` primary lookup with a `users.whereEqualTo("username", handle)` fallback.
+     */
+    suspend fun resolveUserIdsByUsernames(handles: List<String>): List<String> = withContext(Dispatchers.IO) {
+        if (handles.isEmpty()) return@withContext emptyList()
+        val currentUid = auth.currentUser?.uid
+        val resolved = handles.distinct().map { handle ->
+            async {
+                try {
+                    val usernameDoc = db.collection("usernames").document(handle).get().await()
+                    val directUid = usernameDoc.getString("uid")
+                    if (!directUid.isNullOrBlank()) return@async directUid
+
+                    val querySnap = db.collection("users")
+                        .whereEqualTo("username", handle)
+                        .limit(1)
+                        .get()
+                        .await()
+                    querySnap.documents.firstOrNull()?.id
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }.awaitAll()
+
+        resolved.filterNotNull()
+            .filter { it.isNotBlank() && it != currentUid }
+            .distinct()
+    }
+
+    /**
+     * Extracts `@username` mentions across [texts] and [explicitMentions] and immediately dispatches
+     * [NotificationActionType.MENTION] notifications to every resolved mentioned user (excluding self).
+     */
+    suspend fun dispatchMentionNotifications(
+        texts: List<String?>,
+        explicitMentions: List<String> = emptyList(),
+        previousTexts: List<String?>? = null,
+        surface: MentionSurface,
+        targetId: String? = null,
+        targetPreviewUrl: String? = null,
+        customActionText: String? = null,
+        detailSnippet: String? = null
+    ) = withContext(Dispatchers.IO) {
+        auth.currentUser ?: return@withContext
+        val candidateHandles = if (previousTexts != null) {
+            findNewlyAddedMentions(
+                previousTexts = previousTexts,
+                newTexts = texts,
+                explicitNewMentions = explicitMentions
+            )
+        } else {
+            mergeMentionedUsernames(
+                explicitMentions = explicitMentions,
+                *texts.toTypedArray()
+            )
+        }
+        if (candidateHandles.isEmpty()) return@withContext
+
+        val targetUids = resolveUserIdsByUsernames(candidateHandles)
+        if (targetUids.isEmpty()) return@withContext
+
+        val action = customActionText?.ifBlank { null } ?: surface.actionText
+        val resolvedTargetId = when {
+            targetId.isNullOrBlank() -> null
+            surface.targetPrefix.isNotEmpty() && !targetId.startsWith(surface.targetPrefix) ->
+                "${surface.targetPrefix}$targetId"
+            else -> targetId
+        }
+        val cleanSnippet = (detailSnippet ?: texts.firstOrNull { !it.isNullOrBlank() })
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.take(140)
+
+        targetUids.map { uid ->
+            async {
+                sendNotification(
+                    targetUserId = uid,
+                    type = NotificationActionType.MENTION,
+                    actionText = action,
+                    detailText = cleanSnippet,
+                    targetPreviewUrl = targetPreviewUrl,
+                    targetId = resolvedTargetId
+                )
+            }
+        }.awaitAll()
+    }
+
+    /**
+     * Immediately notifies users invited to collaborate on a Post or Flash.
+     */
+    suspend fun dispatchCollabInviteNotifications(
+        invitedUids: List<String>,
+        postId: String,
+        isFlash: Boolean,
+        previewUrl: String? = null,
+        titleSnippet: String? = null
+    ) = withContext(Dispatchers.IO) {
+        val currentUid = auth.currentUser?.uid ?: return@withContext
+        val targets = invitedUids.filter { it.isNotBlank() && it != currentUid }.distinct()
+        if (targets.isEmpty() || postId.isBlank()) return@withContext
+
+        val actionText = if (isFlash) {
+            "invited you to collaborate on a Flash"
+        } else {
+            "invited you to collaborate on a post"
+        }
+        val targetId = if (isFlash) "collab_flash:$postId" else "collab:$postId"
+        val cleanDetail = titleSnippet?.trim()?.takeIf { it.isNotBlank() }?.take(120)
+
+        targets.map { uid ->
+            async {
+                sendNotification(
+                    targetUserId = uid,
+                    type = NotificationActionType.PROJECT_COLLAB,
+                    actionText = actionText,
+                    detailText = cleanDetail,
+                    targetPreviewUrl = previewUrl,
+                    targetId = targetId
+                )
+            }
+        }.awaitAll()
+    }
+
+    /**
+     * Notifies the primary creator when an invited collaborator accepts or declines.
+     */
+    suspend fun dispatchCollabResponseNotification(
+        creatorUid: String,
+        postId: String,
+        isFlash: Boolean,
+        accepted: Boolean,
+        previewUrl: String? = null
+    ) = withContext(Dispatchers.IO) {
+        val currentUid = auth.currentUser?.uid ?: return@withContext
+        if (creatorUid.isBlank() || creatorUid == currentUid || postId.isBlank()) return@withContext
+        val targetId = if (isFlash) "collab_flash:$postId" else "collab:$postId"
+        sendNotification(
+            targetUserId = creatorUid,
+            type = NotificationActionType.PROJECT_COLLAB,
+            actionText = if (accepted) "accepted your collaboration invite" else "declined your collaboration invite",
+            targetPreviewUrl = previewUrl,
+            targetId = targetId
+        )
     }
 }

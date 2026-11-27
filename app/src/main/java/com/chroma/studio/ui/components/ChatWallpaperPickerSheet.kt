@@ -58,15 +58,15 @@ fun ChatWallpaperPickerSheet(
     var selectedCategory by remember { mutableIntStateOf(0) }
     val categories = listOf("Solids", "Gradients", "Doodles", "Photos", "Themes", "Bubbles")
 
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            previewConfig = previewConfig.copy(
-                type = WallpaperType.GALLERY,
-                value = uri.toString()
-            )
-        }
+    val galleryLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Chat Wallpaper",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        previewConfig = previewConfig.copy(
+            type = WallpaperType.GALLERY,
+            value = uri.toString()
+        )
     }
 
     ModalBottomSheet(

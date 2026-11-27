@@ -72,6 +72,7 @@ fun ColorStopEditor(
     val sorted by remember(stops) { derivedStateOf { stops.sortedBy { it.position } } }
 
     var editingStopId by remember { mutableStateOf(sorted.firstOrNull()?.id) }
+    var stopPendingDelete by remember { mutableStateOf<ColorStop?>(null) }
 
     // Auto-select first stop if current is deleted or null
     if (editingStopId == null && sorted.isNotEmpty()) {
@@ -400,12 +401,9 @@ fun ColorStopEditor(
                             modifier = Modifier
                                 .size(20.dp)
                                 .clip(CircleShape)
-                                .clickable(enabled = canDelete) { 
+                                .clickable(enabled = canDelete) {
                                     if (canDelete) {
-                                        currentOnStopsChange(currentStops.filterNot { it.id == stop.id })
-                                        if (editingStopId == stop.id) {
-                                            editingStopId = currentStops.firstOrNull { it.id != stop.id }?.id
-                                        }
+                                        stopPendingDelete = stop
                                     }
                                 }
                                 .padding(2.dp),
@@ -424,6 +422,25 @@ fun ColorStopEditor(
         }
 
         val editing = sorted.find { it.id == editingStopId }
+        stopPendingDelete?.let { pendingStop ->
+            IosAlertDialog(
+                title = "Remove Color Stop?",
+                message = "Remove color stop at ${pendingStop.position.toInt()}% from this gradient?",
+                confirmText = "Remove",
+                isDestructive = true,
+                onConfirm = {
+                    stopPendingDelete = null
+                    if (currentStops.size > 2) {
+                        currentOnStopsChange(currentStops.filterNot { it.id == pendingStop.id })
+                        if (editingStopId == pendingStop.id) {
+                            editingStopId = currentStops.firstOrNull { it.id != pendingStop.id }?.id
+                        }
+                    }
+                },
+                dismissText = "Cancel",
+                onDismiss = { stopPendingDelete = null }
+            )
+        }
         if (editing != null) {
             Spacer(Modifier.padding(top = 12.dp))
             Row(

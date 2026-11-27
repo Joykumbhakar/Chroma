@@ -1,8 +1,15 @@
 package com.chroma.studio.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.chroma.studio.data.SavedAccountManager
 import com.chroma.studio.ui.theme.LocalOscellionColors
@@ -92,14 +99,15 @@ fun YouTubeCommentsSheet(
                 name = cleanCreatorHandle,
                 handle = cleanCreatorHandle,
                 avatarStyle = AvatarStyle.ROYAL_BLUE,
-                verified = if (creatorVerified) VerifiedBadgeType.BLUE else VerifiedBadgeType.NONE,
+                verified = resolveVerifiedBadgeType(creatorVerified, creatorVerifiedTone),
                 verifiedTone = creatorVerifiedTone,
                 role = "Creator",
                 avatarUrl = creatorAvatarUrl,
                 userId = creatorId
             ),
             authorHandle = cleanCreatorHandle,
-            authorVerified = if (creatorVerified) VerifiedBadgeType.BLUE else VerifiedBadgeType.NONE,
+            authorVerified = resolveVerifiedBadgeType(creatorVerified, creatorVerifiedTone),
+            authorVerifiedTone = creatorVerifiedTone,
             caption = postCaption.trim(),
             thumbnailUrl = postThumbnailUrl.trim(),
             relativeTime = "",
@@ -113,6 +121,15 @@ fun YouTubeCommentsSheet(
             .filter { !it.replyToCommentId.isNullOrBlank() }
             .groupBy { it.replyToCommentId!! }
 
+        fun mapReactions(raw: Map<String, List<String>>): Map<String, ReactionData> =
+            raw.mapNotNull { (emoji, uids) ->
+                if (uids.isEmpty()) null
+                else emoji to ReactionData(
+                    count = uids.size,
+                    activeByMe = currentUser.userId.isNotBlank() && uids.contains(currentUser.userId)
+                )
+            }.toMap()
+
         roots.map { flash ->
             val replies = repliesMap[flash.id]?.map { reply ->
                 CommentReply(
@@ -121,7 +138,7 @@ fun YouTubeCommentsSheet(
                         name = reply.displayName.ifBlank { reply.username },
                         handle = reply.username.ifBlank { "user" },
                         avatarStyle = AvatarStyle.CLASSIC_MAC,
-                        verified = if (reply.verified) VerifiedBadgeType.BLUE else VerifiedBadgeType.NONE,
+                        verified = resolveVerifiedBadgeType(reply.verified, reply.verifiedTone),
                         verifiedTone = reply.verifiedTone,
                         role = if (creatorId.isNotBlank() && reply.userId == creatorId) "Creator" else null,
                         isSelf = currentUser.userId.isNotBlank() && reply.userId == currentUser.userId,
@@ -130,9 +147,12 @@ fun YouTubeCommentsSheet(
                     ),
                     text = reply.text,
                     createdAtMillis = reply.timestamp,
+                    edited = reply.edited,
                     likes = reply.likesCount,
                     likedByMe = currentUser.userId.isNotBlank() && reply.likedBy.contains(currentUser.userId),
                     creatorHeart = reply.isCreatorHearted,
+                    reactions = mapReactions(reply.reactions),
+                    replyFlashVideoUrl = reply.replyFlashVideoUrl,
                     isPending = reply.isPending,
                     isError = reply.isError
                 )
@@ -144,7 +164,7 @@ fun YouTubeCommentsSheet(
                     name = flash.displayName.ifBlank { flash.username },
                     handle = flash.username.ifBlank { "user" },
                     avatarStyle = AvatarStyle.CLASSIC_MAC,
-                    verified = if (flash.verified) VerifiedBadgeType.BLUE else VerifiedBadgeType.NONE,
+                    verified = resolveVerifiedBadgeType(flash.verified, flash.verifiedTone),
                     verifiedTone = flash.verifiedTone,
                     role = if (creatorId.isNotBlank() && flash.userId == creatorId) "Creator" else null,
                     isSelf = currentUser.userId.isNotBlank() && flash.userId == currentUser.userId,
@@ -153,10 +173,12 @@ fun YouTubeCommentsSheet(
                 ),
                 text = flash.text,
                 createdAtMillis = flash.timestamp,
+                edited = flash.edited,
                 pinned = flash.isPinned,
                 likes = flash.likesCount,
                 likedByMe = currentUser.userId.isNotBlank() && flash.likedBy.contains(currentUser.userId),
                 creatorHeart = flash.isCreatorHearted,
+                reactions = mapReactions(flash.reactions),
                 isPending = flash.isPending,
                 isError = flash.isError,
                 replies = replies
@@ -175,6 +197,8 @@ fun YouTubeCommentsSheet(
             .filter { it.handle.isNotBlank() }
             .distinctBy { it.handle.lowercase() }
     }
+
+    var activeReplyFlashUrl by remember { mutableStateOf<String?>(null) }
 
     PhotoPostCommentBottomSheet(
         postSummary = postSummary,
@@ -198,6 +222,14 @@ fun YouTubeCommentsSheet(
         } else null,
         onCommentCountChanged = null,
         onTotalCommentCountChanged = null,
+        onBeforeSubmitCheck = {
+            if (auth.currentUser == null || SavedAccountManager.isGuest(context)) {
+                onRequireLogin()
+                false
+            } else {
+                true
+            }
+        },
         onSubmitComment = { text, parentCommentId, _ ->
             if (auth.currentUser == null || SavedAccountManager.isGuest(context)) {
                 onRequireLogin()
@@ -219,6 +251,13 @@ fun YouTubeCommentsSheet(
                 commentVm.retryComment(it)
             }
         },
+        onEditComment = { commentId, replyId, newText ->
+            if (auth.currentUser == null || SavedAccountManager.isGuest(context)) {
+                onRequireLogin()
+            } else {
+                commentVm.editComment(replyId ?: commentId, newText)
+            }
+        },
         onToggleLike = { commentId, replyId ->
             if (auth.currentUser == null || SavedAccountManager.isGuest(context)) {
                 onRequireLogin()
@@ -231,6 +270,14 @@ fun YouTubeCommentsSheet(
                 commentVm.toggleCreatorHeart(it)
             }
         },
+        onToggleReaction = { commentId, replyId, emoji ->
+            if (auth.currentUser == null || SavedAccountManager.isGuest(context)) {
+                onRequireLogin()
+            } else {
+                commentVm.toggleReaction(replyId ?: commentId, emoji)
+            }
+        },
+        onOpenReplyFlashVideo = { url -> activeReplyFlashUrl = url },
         onTogglePin = { commentId ->
             liveComments.firstOrNull { it.id == commentId }?.let {
                 commentVm.togglePin(it, targetId)
@@ -238,14 +285,79 @@ fun YouTubeCommentsSheet(
         },
         onDeleteComment = { commentId, replyId ->
             val targetCommentId = replyId ?: commentId
+            val childCount = if (replyId == null) {
+                liveComments.count { it.replyToCommentId == commentId }
+            } else 0
             liveComments.firstOrNull { it.id == targetCommentId }?.let {
                 commentVm.deleteComment(it)
-                onCommentCountChanged(-1)
+                onCommentCountChanged(-(1 + childCount))
             }
         },
         onVotePoll = { _, _ -> },
-        onReportComment = { _, reason ->
-            ToastManager.showToast("Report submitted: $reason")
+        onReportComment = { commentId, reason ->
+            if (auth.currentUser == null || SavedAccountManager.isGuest(context)) {
+                onRequireLogin()
+            } else {
+                commentVm.reportComment(commentId, targetId, reason)
+            }
         }
     )
+
+    activeReplyFlashUrl?.let { flashUrl ->
+        ReplyFlashPreviewDialog(
+            videoUrl = flashUrl,
+            isDark = isDark,
+            onDismiss = { activeReplyFlashUrl = null }
+        )
+    }
+}
+
+@Composable
+private fun ReplyFlashPreviewDialog(
+    videoUrl: String,
+    isDark: Boolean,
+    onDismiss: () -> Unit
+) {
+    val bgColor = if (isDark) androidx.compose.ui.graphics.Color(0xFF141418) else androidx.compose.ui.graphics.Color(0xFFFFFFFF)
+    val textColor = if (isDark) androidx.compose.ui.graphics.Color(0xFFFAFAFA) else androidx.compose.ui.graphics.Color(0xFF111114)
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        androidx.compose.foundation.layout.Column(
+            modifier = androidx.compose.ui.Modifier
+                .fillMaxWidth()
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                .background(bgColor)
+        ) {
+            androidx.compose.foundation.layout.Row(
+                modifier = androidx.compose.ui.Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
+            ) {
+                androidx.compose.material3.Text(
+                    text = "Flash Reply",
+                    color = textColor,
+                    fontSize = androidx.compose.ui.unit.TextUnit(15f, androidx.compose.ui.unit.TextUnitType.Sp),
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                )
+                androidx.compose.material3.TextButton(onClick = onDismiss) {
+                    androidx.compose.material3.Text("Close")
+                }
+            }
+            androidx.compose.ui.viewinterop.AndroidView(
+                factory = { ctx ->
+                    android.widget.VideoView(ctx).apply {
+                        setVideoURI(android.net.Uri.parse(videoUrl))
+                        setOnPreparedListener { mp ->
+                            mp.isLooping = true
+                            start()
+                        }
+                    }
+                },
+                modifier = androidx.compose.ui.Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(9f / 14f)
+            )
+        }
+    }
 }

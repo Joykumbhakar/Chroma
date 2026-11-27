@@ -192,20 +192,12 @@ fun RemixQuoteRepostSheet(
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF0381FE).copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Lucide.User,
-                            contentDescription = null,
-                            tint = Color(0xFF0381FE),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Lucide.User,
+                        contentDescription = null,
+                        tint = Color(0xFF0381FE),
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -426,20 +418,12 @@ fun RemixQuoteRepostSheet(
                         )
 
                         if (isVideo) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.55f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Play,
-                                    contentDescription = "Video",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = Lucide.Play,
+                                contentDescription = "Video",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     }
                 }

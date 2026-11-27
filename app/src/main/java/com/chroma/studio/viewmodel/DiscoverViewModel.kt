@@ -53,6 +53,14 @@ class DiscoverViewModel : ViewModel() {
     private val _lastRefreshedTime = MutableStateFlow<Long>(System.currentTimeMillis())
     val lastRefreshedTime: StateFlow<Long> = _lastRefreshedTime.asStateFlow()
 
+    private val _feedRefreshSeed = MutableStateFlow(System.currentTimeMillis())
+    val feedRefreshSeed: StateFlow<Long> = _feedRefreshSeed.asStateFlow()
+
+    private val _seenPostIdsSnapshot = MutableStateFlow<Set<String>>(emptySet())
+    val seenPostIdsSnapshot: StateFlow<Set<String>> = _seenPostIdsSnapshot.asStateFlow()
+
+    private val seenPostIdsBuffer = java.util.Collections.synchronizedList(mutableListOf<String>())
+    private var oldestFetchedTimestamp: Long? = null
     private var hasMoreWorks = true
 
     private val authStateListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { auth ->
@@ -65,18 +73,48 @@ class DiscoverViewModel : ViewModel() {
     }
 
     init {
+        val ctx = com.chroma.studio.ChromaApp.instance
+        // Frame-0 memory + local disk warmup for instant launch and full offline browsing
+        com.chroma.studio.data.OfflineDataCacheManager.warmupOnStartup(ctx)
+        val cachedPosts = com.chroma.studio.data.OfflineDataCacheManager.getRecentPosts(ctx)
+        if (cachedPosts.isNotEmpty()) {
+            _works.value = cachedPosts
+        }
+        val cachedTrending = com.chroma.studio.data.OfflineDataCacheManager.getTrendingPosts(ctx)
+        if (cachedTrending.isNotEmpty()) {
+            _trendingWorks.value = cachedTrending
+        }
+        com.chroma.studio.data.OfflineDataCacheManager.getTrendingConfig(ctx)?.let {
+            _trendingConfig.value = it
+        }
+
         val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
         if (!currentUid.isNullOrBlank()) {
             val cached = getCachedLikedWorkIds(currentUid)
             if (cached.isNotEmpty()) {
                 _likedWorkIds.value = cached
             }
+            val cachedSaved = com.chroma.studio.data.OfflineDataCacheManager.getSavedWorkIds(ctx, currentUid)
+            if (cachedSaved.isNotEmpty()) {
+                _savedWorkIds.value = cachedSaved
+            }
         }
         try {
-            val ctx = com.chroma.studio.ChromaApp.instance
             val prefs = ctx.getSharedPreferences("chroma_community_prefs", android.content.Context.MODE_PRIVATE)
             val savedTime = prefs.getLong("community_last_refresh_time", System.currentTimeMillis())
             _lastRefreshedTime.value = savedTime
+            val savedSeen = prefs.getString("community_seen_post_ids", "")
+                ?.split(',')
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                .orEmpty()
+            if (savedSeen.isNotEmpty()) {
+                synchronized(seenPostIdsBuffer) {
+                    seenPostIdsBuffer.clear()
+                    seenPostIdsBuffer.addAll(savedSeen.takeLast(250))
+                }
+                _seenPostIdsSnapshot.value = savedSeen.toSet()
+            }
         } catch (_: Exception) {}
         loadWorks()
         loadTrending()
@@ -208,6 +246,36 @@ class DiscoverViewModel : ViewModel() {
 
     private var loadWorksJob: kotlinx.coroutines.Job? = null
 
+    /**
+     * Silently records a post as viewed so subsequent refreshes push already-seen items down
+     * without shifting items live while the user is actively scrolling.
+     */
+    fun markPostSeen(postId: String) {
+        if (postId.isBlank() || postId.startsWith("temp_")) return
+        synchronized(seenPostIdsBuffer) {
+            seenPostIdsBuffer.remove(postId)
+            seenPostIdsBuffer.add(postId)
+            if (seenPostIdsBuffer.size > 250) {
+                seenPostIdsBuffer.removeAt(0)
+            }
+        }
+    }
+
+    private fun commitSeenSnapshotAndSeed(bumpSeed: Boolean) {
+        val snapshot = synchronized(seenPostIdsBuffer) { seenPostIdsBuffer.toSet() }
+        _seenPostIdsSnapshot.value = snapshot
+        if (bumpSeed) {
+            _feedRefreshSeed.value = System.currentTimeMillis()
+        }
+        try {
+            val ctx = com.chroma.studio.ChromaApp.instance
+            val prefs = ctx.getSharedPreferences("chroma_community_prefs", android.content.Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString("community_seen_post_ids", snapshot.take(250).joinToString(","))
+                .apply()
+        } catch (_: Exception) {}
+    }
+
     fun loadWorks(isRefresh: Boolean = false) {
         if (isRefresh && _isRefreshing.value) return
         if (!isRefresh && _isLoading.value) return
@@ -215,15 +283,21 @@ class DiscoverViewModel : ViewModel() {
         loadWorksJob = viewModelScope.launch {
             if (isRefresh) {
                 _isRefreshing.value = true
+                commitSeenSnapshotAndSeed(bumpSeed = true)
                 repository.clearProfileCache()
                 loadTrending()
             } else if (_works.value.isEmpty()) {
                 _isLoading.value = true
             }
+            val activeSeed = _feedRefreshSeed.value
             hasMoreWorks = true
             try {
-                val recentWorks = repository.getRecentWorks()
-                if (recentWorks.size < 10) hasMoreWorks = false
+                val recentWorks = repository.getDiscoveryWorks(limit = 45L, rotationSeed = activeSeed)
+                if (recentWorks.isEmpty()) {
+                    hasMoreWorks = false
+                } else {
+                    oldestFetchedTimestamp = recentWorks.minOfOrNull { it.timestamp }
+                }
                 val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                 // Preserve any in-flight optimistic like mutations on freshly fetched works
                 val reconciledRecent = if (!currentUid.isNullOrBlank()) {
@@ -237,10 +311,19 @@ class DiscoverViewModel : ViewModel() {
                 } else recentWorks
                 val pendingOptimistic = _works.value.filter { it.id.startsWith("temp_") }
                 // Keep newly refreshed feed ordered by latest timestamp so newest creations remain at the top
-                val combined = (pendingOptimistic + reconciledRecent)
-                    .distinctBy { it.id }
-                    .sortedByDescending { it.timestamp }
-                _works.value = combined
+                // Do not overwrite non-empty offline cached works with empty list on network drop
+                if (reconciledRecent.isNotEmpty() || _works.value.isEmpty()) {
+                    val combined = (pendingOptimistic + reconciledRecent)
+                        .distinctBy { it.id }
+                        .sortedByDescending { it.timestamp }
+                    _works.value = combined
+                    if (combined.isNotEmpty()) {
+                        com.chroma.studio.data.OfflineDataCacheManager.saveRecentPosts(
+                            com.chroma.studio.ChromaApp.instance,
+                            combined
+                        )
+                    }
+                }
 
                 if (isRefresh) {
                     val now = System.currentTimeMillis()
@@ -272,7 +355,15 @@ class DiscoverViewModel : ViewModel() {
                         val totalLiked = reconcileLikedIdsWithInFlight(remoteLiked + instantLiked)
                         _likedWorkIds.value = totalLiked
                         saveCachedLikedWorkIds(currentUid, totalLiked)
-                        _savedWorkIds.value = savedAsync.await()
+                        val remoteSaved = savedAsync.await()
+                        if (remoteSaved.isNotEmpty() || _savedWorkIds.value.isEmpty()) {
+                            _savedWorkIds.value = remoteSaved
+                            com.chroma.studio.data.OfflineDataCacheManager.saveSavedWorkIds(
+                                com.chroma.studio.ChromaApp.instance,
+                                currentUid,
+                                remoteSaved
+                            )
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -306,8 +397,16 @@ class DiscoverViewModel : ViewModel() {
                 val cfg = repository.getTrendingConfig()
                 _trendingConfig.value = cfg
                 val remoteTrending = repository.getTrendingWorks(30, cfg)
-                val combined = sortAndFilterTrending(remoteTrending + _works.value, cfg)
-                _trendingWorks.value = combined
+                if (remoteTrending.isNotEmpty() || _trendingWorks.value.isEmpty()) {
+                    val combined = sortAndFilterTrending(remoteTrending + _works.value, cfg)
+                    _trendingWorks.value = combined
+                    if (combined.isNotEmpty()) {
+                        com.chroma.studio.data.OfflineDataCacheManager.saveTrendingPosts(
+                            com.chroma.studio.ChromaApp.instance,
+                            combined
+                        )
+                    }
+                }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
             } finally {
@@ -321,12 +420,16 @@ class DiscoverViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoadingMore.value = true
             try {
-                val lastTimestamp = _works.value.lastOrNull()?.timestamp
-                val newWorks = repository.getRecentWorks(lastTimestamp = lastTimestamp)
+                val lastTimestamp = oldestFetchedTimestamp ?: _works.value.minOfOrNull { it.timestamp }
+                val newWorks = repository.getRecentWorks(limit = 20L, lastTimestamp = lastTimestamp)
                 if (newWorks.isEmpty()) {
                     hasMoreWorks = false
                 } else {
-                    if (newWorks.size < 10) hasMoreWorks = false
+                    val minNewTs = newWorks.minOfOrNull { it.timestamp }
+                    if (minNewTs != null) {
+                        oldestFetchedTimestamp = minOf(oldestFetchedTimestamp ?: minNewTs, minNewTs)
+                    }
+                    if (newWorks.size < 5) hasMoreWorks = false
                     val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                     val reconciledNew = if (!currentUid.isNullOrBlank()) {
                         newWorks.map { w ->

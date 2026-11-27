@@ -1,5 +1,6 @@
 package com.chroma.studio
 
+import com.chroma.studio.data.toChatRoomSafe
 import androidx.compose.runtime.Composable
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
 
@@ -233,6 +234,7 @@ private fun AuthenticatedRoute(
                 val handleLogout: () -> Unit = {
                     // Optimistic instant UI transition directly to Login screen (never blank)
                     prefs.edit().putBoolean("is_first_launch", true).apply()
+                    com.chroma.studio.ui.components.OscellionLuxuryBrandController.resetForLogout(this@HomeActivity)
                     com.chroma.studio.data.SavedAccountManager.clearAllAccounts(this@HomeActivity)
                     com.chroma.studio.data.DiscoverRepository.getInstance().clearProfileCache()
                     com.chroma.studio.data.mutation.OptimisticFollowManager.reset()
@@ -478,6 +480,19 @@ private fun AuthenticatedRoute(
                                 val roomId = action.removePrefix("deeplink_chat:").trim()
                                 if (roomId.isNotBlank()) navController.navigate("chat/$roomId")
                             }
+                            action.startsWith("deeplink_join_group:") -> {
+                                val code = action.removePrefix("deeplink_join_group:").trim()
+                                if (code.isNotBlank()) {
+                                    chatVm.joinGroupByInviteCode(code) { joinedRoomId ->
+                                        if (!joinedRoomId.isNullOrBlank()) {
+                                            com.chroma.studio.ui.components.ToastManager.showToast("Joined group")
+                                            navController.navigate("chat/$joinedRoomId")
+                                        } else {
+                                            com.chroma.studio.ui.components.ToastManager.showToast("Group invite link is invalid or private")
+                                        }
+                                    }
+                                }
+                            }
                             action.startsWith("deeplink_story:") -> {
                                 val storyId = action.removePrefix("deeplink_story:").trim()
                                 if (storyId.isNotBlank()) {
@@ -690,7 +705,7 @@ private fun AuthenticatedRoute(
                                     if (change.type == com.google.firebase.firestore.DocumentChange.Type.MODIFIED ||
                                         change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED
                                     ) {
-                                        val room = change.document.toObject(com.chroma.studio.model.ChatRoom::class.java)
+                                        val room = change.document.toChatRoomSafe() ?: return@forEach
                                         val unread = room.unreadCount[activeUidKey] ?: 0
                                         if (unread > 0 && room.lastMessage.isNotBlank()) {
                                             val currentBackStack = navController.currentBackStackEntry
@@ -1329,12 +1344,30 @@ private fun AuthenticatedRoute(
                     if (activeUser != null) {
                         androidx.compose.runtime.LaunchedEffect(activeUser.uid) {
                             try {
-                                val repo = com.chroma.studio.data.DiscoverRepository()
-                                val prof = repo.getUserProfile(activeUser.uid)
-                                if (prof != null) {
-                                    com.chroma.studio.data.SavedAccountManager.saveFromProfile(this@HomeActivity, prof, activeUser.email)
+                                val repo = com.chroma.studio.data.DiscoverRepository.getInstance()
+                                val initialProf = repo.getUserProfile(activeUser.uid)
+                                if (initialProf != null) {
+                                    com.chroma.studio.data.SavedAccountManager.saveFromProfile(this@HomeActivity, initialProf, activeUser.email)
+                                    com.chroma.studio.ui.components.OscellionLuxuryBrandController.updateForProfileIfCurrentUser(
+                                        this@HomeActivity,
+                                        initialProf,
+                                        activeUser.uid
+                                    )
+                                }
+                                repo.getUserProfileFlow(activeUser.uid).collect { liveProf ->
+                                    if (liveProf != null) {
+                                        com.chroma.studio.ui.components.OscellionLuxuryBrandController.updateForProfileIfCurrentUser(
+                                            this@HomeActivity,
+                                            liveProf,
+                                            activeUser.uid
+                                        )
+                                    }
                                 }
                             } catch (_: Exception) {}
+                        }
+                    } else {
+                        androidx.compose.runtime.LaunchedEffect(Unit) {
+                            com.chroma.studio.ui.components.OscellionLuxuryBrandController.resetForLogout(this@HomeActivity)
                         }
                     }
 
@@ -1466,7 +1499,6 @@ private fun AuthenticatedRoute(
                     }
                 ) {
                             val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
-                            val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
                             androidx.activity.compose.BackHandler(enabled = pagerState.currentPage != 0) {
                                 navigateToTab(0)
                             }
@@ -1578,7 +1610,10 @@ private fun AuthenticatedRoute(
                                         onNavigateToSettings = { navController.navigate("settings") },
                                         onNavigateToBackgrounds = { navController.navigate("backgrounds") },
                                         onNavigateToDrafts = { navController.navigate("drafts_list") },
-                                        onNavigateToImageStory = { navController.navigate("story_editor") },
+                                        onNavigateToImageStory = {
+                                            storyInitialPhotoUri = null
+                                            navController.navigate("story_editor")
+                                        },
                                         onNavigateToFlashDrafts = { navController.navigate("flash_projects_hub") },
                                         onNavigateToProfile = { navigateToTab(4) },
                                         onNavigateToUpgradeToPro = { navController.navigate("upgrade_to_pro") },
@@ -1691,7 +1726,11 @@ private fun AuthenticatedRoute(
                              onStoryViewerChange = { isDiscoverStoryViewerActive = it },
                              onNavigateToCreateStory = { maybeUri ->
                                  storyInitialPhotoUri = maybeUri
-                                 navController.navigate("story_editor")
+                                 if (maybeUri != null) {
+                                     navController.navigate("story_editor")
+                                 } else {
+                                     navController.navigate("create_text_status")
+                                 }
                              },
                              onNavigateToDrafts = { navController.navigate("drafts_list") },
                              onFlashVideoClick = { videoId ->
@@ -1732,7 +1771,11 @@ private fun AuthenticatedRoute(
                                             },
                                             onNavigateToCreateStory = { maybeUri ->
                                                 storyInitialPhotoUri = maybeUri
-                                                navController.navigate("story_editor")
+                                                if (maybeUri != null) {
+                                                    navController.navigate("story_editor")
+                                                } else {
+                                                    navController.navigate("create_text_status")
+                                                }
                                             },
                                             onInsideChatChange = { inside ->
                                                 isInsideChatTab = inside
@@ -1788,7 +1831,11 @@ private fun AuthenticatedRoute(
                                             },
                                             onNavigateToCreateStory = { maybeUri ->
                                                 storyInitialPhotoUri = maybeUri
-                                                navController.navigate("story_editor")
+                                                if (maybeUri != null) {
+                                                    navController.navigate("story_editor")
+                                                } else {
+                                                    navController.navigate("create_text_status")
+                                                }
                                             },
                                             onStoryViewerChange = { isProfileStoryViewerActive = it },
                                             onBack = { navController.popBackStack() }
@@ -2009,6 +2056,9 @@ private fun AuthenticatedRoute(
                                     val post = com.chroma.studio.data.DiscoverRepository.getInstance().mapFlashToDiscoverPost(video)
                                     remixTargetPost = post
                                 }
+                            },
+                            onNavigateToPost = { postId ->
+                                navController.navigate("post_detail/${android.net.Uri.encode(postId)}")
                             },
                             onRequireLogin = { navController.navigate("login") }
                         )
@@ -2232,7 +2282,12 @@ private fun AuthenticatedRoute(
                                         onSave = { updatedProfile ->
                                             val res = discoverVm.updateUserProfile(updatedProfile)
                                             if (res.isSuccess) {
+                                                profile = updatedProfile
                                                 com.chroma.studio.data.SavedAccountManager.saveFromProfile(this@HomeActivity, updatedProfile)
+                                                com.chroma.studio.ui.components.OscellionLuxuryBrandController.updateForProfileIfCurrentUser(
+                                                    this@HomeActivity,
+                                                    updatedProfile
+                                                )
                                             }
                                             res
                                         },
@@ -2241,6 +2296,22 @@ private fun AuthenticatedRoute(
                                 } else {
                                     androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                                         OscellionLoadingSpinner()
+                                    }
+                                }
+                            } else {
+                                androidx.compose.foundation.layout.Column(
+                                    modifier = androidx.compose.ui.Modifier.fillMaxSize().padding(24.dp),
+                                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Text(
+                                        text = "Sign in to edit Profile & Identity",
+                                        fontSize = 17.sp,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                                    )
+                                    androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
+                                    androidx.compose.material3.Button(onClick = { navController.navigate("login") }) {
+                                        Text("Sign In")
                                     }
                                 }
                             }
@@ -2577,7 +2648,6 @@ private fun AuthenticatedRoute(
                     ) { backStackEntry ->
                         val userId = backStackEntry.arguments?.getString("userId") ?: return@composable
                         val postId = backStackEntry.arguments?.getString("postId")
-                        val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
 
                         com.chroma.studio.ui.screens.UserProfileScreen(
                             userId = userId,
@@ -2612,7 +2682,11 @@ private fun AuthenticatedRoute(
                             },
                             onNavigateToCreateStory = { maybeUri ->
                                 storyInitialPhotoUri = maybeUri
-                                navController.navigate("story_editor")
+                                if (maybeUri != null) {
+                                    navController.navigate("story_editor")
+                                } else {
+                                    navController.navigate("create_text_status")
+                                }
                             },
                             onStoryViewerChange = { isProfileStoryViewerActive = it },
                             onBack = { navController.popBackStack() }
@@ -2749,18 +2823,31 @@ private fun AuthenticatedRoute(
 
                     composable("story_editor") {
                         AuthenticatedRoute(navController, "Story Editor") {
-                            val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
-                            com.chroma.studio.ui.screens.StoryEditorScreen(
-                                storyViewModel = storyVm,
-                                initialBackgroundUri = storyInitialPhotoUri,
+                            val onlyFriends: List<String> by storyVm.onlyFriendsIds.collectAsState()
+                            val activityContext = androidx.compose.ui.platform.LocalContext.current
+                            com.chroma.studio.ui.storystudio.StoryStudioScreen(
+                                initialPhotoUri = storyInitialPhotoUri,
                                 onNavigateBack = {
                                     storyInitialPhotoUri = null
                                     navController.popBackStack()
                                 },
-                                onStoryPosted = {
+                                onPublishStory = { renderedSlides, audience ->
+                                    val isCloseFriends = audience == com.chroma.studio.ui.storystudio.StoryAudience.CLOSE_FRIENDS
+                                    val audienceType = if (isCloseFriends) "only_friends" else "public"
+                                    val customIds = if (isCloseFriends) onlyFriends else emptyList()
+                                    storyVm.uploadStories(
+                                        context = activityContext,
+                                        uris = renderedSlides.map { it.uri },
+                                        audienceType = audienceType,
+                                        customAudienceIds = customIds,
+                                        textFormats = renderedSlides.map { it.interactiveFormatJson },
+                                        musicTrack = renderedSlides.firstNotNullOfOrNull { it.musicTrack }
+                                    )
                                     storyInitialPhotoUri = null
                                     navController.popBackStack()
-                                    com.chroma.studio.ui.components.ToastManager.showToast("Story published! 🌟")
+                                    com.chroma.studio.ui.components.ToastManager.showToast(
+                                        if (isCloseFriends) "Sharing with Close Friends..." else "Sharing your story..."
+                                    )
                                 }
                             )
                         }
@@ -2768,7 +2855,6 @@ private fun AuthenticatedRoute(
 
                     composable("create_text_status") {
                         AuthenticatedRoute(navController, "Story Status") {
-                            val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
                             com.chroma.studio.ui.screens.StoryEditorScreen(
                                 storyViewModel = storyVm,
                                 initialBackgroundUri = storyInitialPhotoUri,
@@ -2806,6 +2892,43 @@ private fun AuthenticatedRoute(
 
             // ── Global WebRTC Incoming Call Overlay ──
             val rtcIncomingCall by chatVm.incomingCall.collectAsState()
+            var pendingAnswerCall by remember { mutableStateOf<com.chroma.studio.webrtc.CallModel?>(null) }
+
+            fun proceedAnswerIncomingCall(call: com.chroma.studio.webrtc.CallModel) {
+                try {
+                    chatVm.initializeCallManager(this@HomeActivity)
+                    chatVm.answerCall(call)
+                    if (call.roomId.isNotBlank()) {
+                        coroutineScope.launch {
+                            pagerState.scrollToPage(3)
+                        }
+                        navController.navigate("chat/${call.roomId}") {
+                            launchSingleTop = true
+                        }
+                    }
+                } catch (e: Throwable) {
+                    android.util.Log.e("HomeActivity", "Error answering incoming call", e)
+                    com.chroma.studio.ui.components.ToastManager.showToast("Unable to answer call: ${e.message}")
+                }
+            }
+
+            val incomingCallPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+            ) { perms ->
+                val call = pendingAnswerCall ?: return@rememberLauncherForActivityResult
+                pendingAnswerCall = null
+                val audioGranted = perms[android.Manifest.permission.RECORD_AUDIO] == true
+                val cameraGranted = !call.isVideo || perms[android.Manifest.permission.CAMERA] == true
+                if (audioGranted && cameraGranted) {
+                    proceedAnswerIncomingCall(call)
+                } else {
+                    com.chroma.studio.ui.components.ToastManager.showToast(
+                        if (call.isVideo) "Camera and microphone permissions are required to answer video calls"
+                        else "Microphone permission is required to answer audio calls"
+                    )
+                }
+            }
+
             androidx.compose.animation.AnimatedVisibility(
                 visible = rtcIncomingCall != null,
                 enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(250)) + androidx.compose.animation.slideInVertically { -it },
@@ -2815,20 +2938,24 @@ private fun AuthenticatedRoute(
                     call = rtcIncomingCall,
                     onAccept = {
                         val call = rtcIncomingCall ?: return@IncomingCallOverlay
-                        try {
-                            chatVm.initializeCallManager(this@HomeActivity)
-                            chatVm.answerCall(call)
-                            if (call.roomId.isNotBlank()) {
-                                coroutineScope.launch {
-                                    pagerState.scrollToPage(3)
-                                }
-                                navController.navigate("chat/${call.roomId}") {
-                                    launchSingleTop = true
-                                }
+                        val hasAudio = androidx.core.content.ContextCompat.checkSelfPermission(
+                            this@HomeActivity,
+                            android.Manifest.permission.RECORD_AUDIO
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        val hasCamera = !call.isVideo || androidx.core.content.ContextCompat.checkSelfPermission(
+                            this@HomeActivity,
+                            android.Manifest.permission.CAMERA
+                        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        if (hasAudio && hasCamera) {
+                            proceedAnswerIncomingCall(call)
+                        } else {
+                            pendingAnswerCall = call
+                            val needed = if (call.isVideo) {
+                                arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)
+                            } else {
+                                arrayOf(android.Manifest.permission.RECORD_AUDIO)
                             }
-                        } catch (e: Throwable) {
-                            android.util.Log.e("HomeActivity", "Error answering incoming call", e)
-                            com.chroma.studio.ui.components.ToastManager.showToast("Unable to answer call: ${e.message}")
+                            incomingCallPermissionLauncher.launch(needed)
                         }
                     },
                     onDecline = {
@@ -3024,6 +3151,7 @@ private fun AuthenticatedRoute(
             "post", "work" -> (segments.firstOrNull() ?: queryId)?.let { "deeplink_post:$it" }
             "flash", "reel" -> "deeplink_flash:${(segments.firstOrNull() ?: queryId).orEmpty()}"
             "chat" -> (segments.firstOrNull() ?: queryId)?.let { "deeplink_chat:$it" }
+            "join" -> (segments.firstOrNull() ?: queryId)?.let { "deeplink_join_group:$it" }
             "story" -> (segments.firstOrNull() ?: queryId)?.let { "deeplink_story:$it" }
             "notifications" -> "deeplink_notifications"
             "home" -> "deeplink_home"
@@ -3042,6 +3170,7 @@ private fun AuthenticatedRoute(
                     "post", "work" -> (segments.getOrNull(1) ?: queryId)?.let { "deeplink_post:$it" }
                     "flash", "reel" -> "deeplink_flash:${(segments.getOrNull(1) ?: queryId).orEmpty()}"
                     "chat" -> (segments.getOrNull(1) ?: queryId)?.let { "deeplink_chat:$it" }
+                    "join" -> (segments.getOrNull(1) ?: queryId)?.let { "deeplink_join_group:$it" }
                     "story" -> (segments.getOrNull(1) ?: queryId)?.let { "deeplink_story:$it" }
                     "notifications" -> "deeplink_notifications"
                     else -> "deeplink_home"

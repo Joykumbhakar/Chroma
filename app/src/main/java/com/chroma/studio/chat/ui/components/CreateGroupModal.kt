@@ -1,29 +1,62 @@
 package com.chroma.studio.chat.ui.components
 
-import com.chroma.studio.ui.components.OnlineStatusBadge
-
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,10 +70,26 @@ import com.chroma.studio.chat.data.GroupMember
 import com.chroma.studio.chat.data.User
 import com.chroma.studio.chat.data.drawableUri
 import com.chroma.studio.chat.sound.SoundManager
-import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.data.OnlineStatusManager
 import com.chroma.studio.ui.components.AppleSwitch
+import com.chroma.studio.ui.components.GalleryMediaTypeFilter
+import com.chroma.studio.ui.components.LiquidGlassCheckbox
+import com.chroma.studio.ui.components.OnlineStatusBadge
+import com.chroma.studio.ui.components.ToastManager
 import com.chroma.studio.ui.components.VerifiedBadge
+import com.chroma.studio.ui.components.rememberOscellionMediaPicker
+import com.composables.icons.lucide.Copy
+import com.composables.icons.lucide.Globe
+import com.composables.icons.lucide.ImagePlus
+import com.composables.icons.lucide.Link2
+import com.composables.icons.lucide.Lock
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Palette
+import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.ShieldCheck
+import com.composables.icons.lucide.Timer
+import com.composables.icons.lucide.Users
 
 /**
  * Available Contact item for Group Creation selection.
@@ -55,10 +104,54 @@ data class GroupContact(
     val verifiedTone: String? = null
 )
 
+/**
+ * Complete group configuration returned from the onboarding flow.
+ */
+data class GroupCreationConfig(
+    val groupName: String,
+    val groupAvatar: String,
+    val members: List<GroupMember>,
+    val groupDescription: String,
+    val onlyAdminsCanPost: Boolean,
+    val coAdminIds: List<String> = emptyList(),
+    val disappearingHours: Int = 0,
+    val inviteCode: String? = null,
+    val isPublicGroup: Boolean = false,
+    val editInfoAdminsOnly: Boolean = true,
+    val welcomeMessage: String = ""
+)
+
 enum class GroupCreationStep {
     SELECT_PARTICIPANTS,
     GROUP_DETAILS
 }
+
+private enum class ParticipantFilter(val label: String) {
+    ALL("All"),
+    ONLINE("Online"),
+    VERIFIED("Verified")
+}
+
+private const val MAX_GROUP_PARTICIPANTS = 50
+private val DISAPPEARING_OPTIONS_HOURS = listOf(0, 24, 168, 2160)
+
+internal fun generateGroupInviteCode(seed: Long = System.nanoTime()): String {
+    val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    val rng = java.util.Random(seed)
+    return buildString(8) {
+        repeat(8) { append(alphabet[rng.nextInt(alphabet.length)]) }
+    }
+}
+
+internal fun disappearingTimerLabel(hours: Int): String = when (hours) {
+    24 -> "24h"
+    168 -> "7d"
+    2160 -> "90d"
+    else -> "Off"
+}
+
+internal fun buildGroupInviteUrl(inviteCode: String): String =
+    "https://oscellion.vercel.app/join/$inviteCode"
 
 val defaultGroupAvatarPresets = listOf(
     drawableUri(R.drawable.ic_avatar_deep_purple),
@@ -77,9 +170,9 @@ val defaultGroupAvatarPresets = listOf(
 )
 
 /**
- * Flagship Apple iOS Multi-Step Group Creation Modal.
- * Step 1: Select & search participants with horizontal shelf.
- * Step 2: Set Group Subject, Avatar, Description, and Permissions.
+ * Flagship Apple HIG Multi-Step Group Creation Onboarding Modal.
+ * Step 1: Select & filter participants with live presence, verification badges & horizontal strip.
+ * Step 2: Configure Group Identity, Photo/Icon Studio, Co-Admins, Privacy, Disappearing Timer & Invite Link.
  */
 @Composable
 fun CreateGroupModal(
@@ -87,35 +180,95 @@ fun CreateGroupModal(
     availableContacts: List<GroupContact> = emptyList(),
     onDismiss: () -> Unit,
     onDirectMessage: ((GroupContact) -> Unit)? = null,
-    onCreateGroup: (groupName: String, groupAvatar: String, members: List<GroupMember>, groupDescription: String, onlyAdminsCanPost: Boolean) -> Unit
+    onCreateGroup: (GroupCreationConfig) -> Unit
 ) {
     val colors = LocalChatColors.current
 
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colors.appBg),
+            color = colors.appBg
+        ) {
+            GroupCreationContent(
+                currentUser = currentUser,
+                availableContacts = availableContacts,
+                onDismiss = onDismiss,
+                onDirectMessage = onDirectMessage,
+                onCreateGroup = onCreateGroup
+            )
+        }
+    }
+}
+
+@Composable
+fun GroupCreationContent(
+    currentUser: User,
+    availableContacts: List<GroupContact> = emptyList(),
+    onDismiss: () -> Unit,
+    onDirectMessage: ((GroupContact) -> Unit)? = null,
+    onCreateGroup: (GroupCreationConfig) -> Unit
+) {
+    val colors = LocalChatColors.current
+    val haptic = LocalHapticFeedback.current
+
     var currentStep by remember { mutableStateOf(GroupCreationStep.SELECT_PARTICIPANTS) }
     var searchQuery by remember { mutableStateOf("") }
+    var activeFilter by remember { mutableStateOf(ParticipantFilter.ALL) }
     val selectedContacts = remember { mutableStateListOf<GroupContact>() }
+    val coAdminIds = remember { mutableStateListOf<String>() }
 
     var groupName by remember { mutableStateOf("") }
     var groupDescription by remember { mutableStateOf("") }
+    var welcomeMessage by remember { mutableStateOf("") }
     var selectedAvatar by remember { mutableStateOf(defaultGroupAvatarPresets.first()) }
-    var disappearingMessagesEnabled by remember { mutableStateOf(false) }
+    var disappearingHours by remember { mutableIntStateOf(0) }
     var onlyAdminsCanPost by remember { mutableStateOf(false) }
+    var editInfoAdminsOnly by remember { mutableStateOf(true) }
+    var isPublicGroup by remember { mutableStateOf(false) }
+    var inviteLinkEnabled by remember { mutableStateOf(true) }
+    var inviteCode by remember { mutableStateOf(generateGroupInviteCode()) }
+    var showDiscardDialog by remember { mutableStateOf(false) }
 
     val discoverRepo = remember { com.chroma.studio.data.DiscoverRepository() }
     var defaultSuggestedContacts by remember { mutableStateOf<List<GroupContact>>(emptyList()) }
     var searchResults by remember { mutableStateOf<List<GroupContact>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
 
+    val hasUnsavedChanges = selectedContacts.isNotEmpty() ||
+        groupName.isNotBlank() ||
+        groupDescription.isNotBlank() ||
+        welcomeMessage.isNotBlank() ||
+        selectedAvatar != defaultGroupAvatarPresets.first()
+
+    val requestCloseOrBack: () -> Unit = {
+        SoundManager.playReaction()
+        when {
+            currentStep == GroupCreationStep.GROUP_DETAILS -> {
+                currentStep = GroupCreationStep.SELECT_PARTICIPANTS
+            }
+            hasUnsavedChanges -> showDiscardDialog = true
+            else -> onDismiss()
+        }
+    }
+
     LaunchedEffect(Unit) {
         try {
             val suggested = discoverRepo.getSuggestedCreators(limit = 40)
             defaultSuggestedContacts = suggested.filter { it.uid != currentUser.id }.map { prof ->
+                val liveOnline = prof.online || OnlineStatusManager.isUserOnline(prof.uid)
                 GroupContact(
                     id = prof.uid,
                     name = prof.displayName.ifBlank { prof.username.ifBlank { "User" } },
                     role = if (prof.bio.isNotBlank()) prof.bio else "@${prof.username}",
                     avatar = prof.avatarUrl,
-                    status = if (prof.online) "Online" else "Active on Oscellion"
+                    status = if (liveOnline) "Online" else "Active on Oscellion",
+                    isVerified = prof.verified,
+                    verifiedTone = prof.verifiedTone
                 )
             }
         } catch (_: Exception) {}
@@ -128,18 +281,22 @@ fun CreateGroupModal(
             try {
                 val found = discoverRepo.searchUsers(q)
                 searchResults = found.filter { it.uid != currentUser.id }.map { prof ->
+                    val liveOnline = prof.online || OnlineStatusManager.isUserOnline(prof.uid)
                     GroupContact(
                         id = prof.uid,
                         name = prof.displayName.ifBlank { prof.username.ifBlank { "User" } },
                         role = if (prof.bio.isNotBlank()) prof.bio else "@${prof.username}",
                         avatar = prof.avatarUrl,
-                        status = if (prof.online) "Online" else "Active on Oscellion"
+                        status = if (liveOnline) "Online" else "Active on Oscellion",
+                        isVerified = prof.verified,
+                        verifiedTone = prof.verifiedTone
                     )
                 }
             } catch (_: Exception) {}
             isSearching = false
         } else {
             searchResults = emptyList()
+            isSearching = false
         }
     }
 
@@ -147,11 +304,12 @@ fun CreateGroupModal(
         (availableContacts + defaultSuggestedContacts).distinctBy { it.id }
     }
 
-    val filteredContacts = remember(searchQuery, allBaseContacts, searchResults) {
-        if (searchQuery.isBlank()) allBaseContacts
-        else if (searchResults.isNotEmpty()) {
+    val filteredContacts = remember(searchQuery, allBaseContacts, searchResults, activeFilter) {
+        val baseList = if (searchQuery.isBlank()) {
+            allBaseContacts
+        } else if (searchResults.isNotEmpty()) {
+            val q = searchQuery.trim().lowercase()
             (searchResults + allBaseContacts.filter {
-                val q = searchQuery.trim().lowercase()
                 it.name.lowercase().contains(q) || it.role.lowercase().contains(q)
             }).distinctBy { it.id }
         } else {
@@ -160,26 +318,52 @@ fun CreateGroupModal(
                 it.name.lowercase().contains(q) || it.role.lowercase().contains(q)
             }
         }
+
+        when (activeFilter) {
+            ParticipantFilter.ALL -> baseList
+            ParticipantFilter.ONLINE -> baseList.filter { it.status == "Online" || OnlineStatusManager.isUserOnline(it.id) }
+            ParticipantFilter.VERIFIED -> baseList.filter { it.isVerified }
+        }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    if (showDiscardDialog) {
+        IosAlertDialog(
+            title = "Discard New Group?",
+            message = "Your selected members and group settings will not be saved.",
+            actions = listOf(
+                IosAlertAction(
+                    title = "Keep Editing",
+                    isCancel = true,
+                    onClick = { showDiscardDialog = false }
+                ),
+                IosAlertAction(
+                    title = "Discard",
+                    isDestructive = true,
+                    onClick = {
+                        showDiscardDialog = false
+                        onDismiss()
+                    }
+                )
+            ),
+            onDismiss = { showDiscardDialog = false }
+        )
+    }
+
+    BackHandler(onBack = requestCloseOrBack)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.appBg)
     ) {
-        Surface(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(colors.appBg),
-            color = colors.appBg
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .imePadding()
+                .windowInsetsPadding(WindowInsets.navigationBars)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .imePadding()
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-            ) {
-                // -- iOS Navigation Bar -----------------------------------
+                // -- Apple HIG Top Navigation Bar --------------------------
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -188,46 +372,39 @@ fun CreateGroupModal(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Left Action (Cancel or Back)
                     Text(
                         text = if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS) "Cancel" else "Back",
-                        fontSize = 17.sp,
+                        fontSize = 16.5.sp,
                         fontWeight = FontWeight.Normal,
                         color = colors.iosBlue,
                         modifier = Modifier
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                SoundManager.playReaction()
-                                if (currentStep == GroupCreationStep.GROUP_DETAILS) {
-                                    currentStep = GroupCreationStep.SELECT_PARTICIPANTS
-                                } else {
-                                    onDismiss()
-                                }
-                            }
+                                indication = null,
+                                onClick = requestCloseOrBack
+                            )
                             .padding(vertical = 4.dp)
                     )
 
-                    // Navigation Center Title & Subtitle
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS) "Add Participants" else "New Group",
-                            fontSize = 17.sp,
+                            fontSize = 16.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = colors.textDark
                         )
-                        if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS) {
-                            Text(
-                                text = "${selectedContacts.size}/50 selected",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = colors.textMuted
-                            )
-                        }
+                        Text(
+                            text = if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS) {
+                                "${selectedContacts.size}/$MAX_GROUP_PARTICIPANTS selected · Step 1 of 2"
+                            } else {
+                                "${selectedContacts.size + 1} members · Step 2 of 2"
+                            },
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = colors.textMuted
+                        )
                     }
 
-                    // Right Action (Next or Create)
                     val isActionEnabled = if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS) {
                         selectedContacts.isNotEmpty()
                     } else {
@@ -237,9 +414,9 @@ fun CreateGroupModal(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS && selectedContacts.size == 1 && onDirectMessage != null) {
                             Text(
-                                text = "Direct Chat",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                text = "Chat",
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.Medium,
                                 color = colors.iosBlue,
                                 modifier = Modifier
                                     .clickable(
@@ -249,14 +426,13 @@ fun CreateGroupModal(
                                         SoundManager.playReaction()
                                         onDirectMessage.invoke(selectedContacts.first())
                                     }
-                                    .padding(vertical = 4.dp, horizontal = 6.dp)
+                                    .padding(vertical = 4.dp, horizontal = 8.dp)
                             )
-                            Spacer(Modifier.width(8.dp))
                         }
 
                         Text(
                             text = if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS) "Next" else "Create",
-                            fontSize = 17.sp,
+                            fontSize = 16.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (isActionEnabled) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
                             modifier = Modifier
@@ -265,10 +441,13 @@ fun CreateGroupModal(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null
                                 ) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     SoundManager.playReaction()
                                     if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS) {
                                         currentStep = GroupCreationStep.GROUP_DETAILS
                                     } else {
+                                        val selectedIdSet = selectedContacts.map { it.id }.toSet()
+                                        val cleanCoAdmins = coAdminIds.filter { it in selectedIdSet }.distinct()
                                         val groupMembers = listOf(
                                             GroupMember(
                                                 id = currentUser.id,
@@ -276,15 +455,29 @@ fun CreateGroupModal(
                                                 role = "Group Admin",
                                                 avatar = currentUser.avatar
                                             )
-                                        ) + selectedContacts.map {
+                                        ) + selectedContacts.map { contact ->
                                             GroupMember(
-                                                id = it.id,
-                                                name = it.name,
-                                                role = it.role,
-                                                avatar = it.avatar
+                                                id = contact.id,
+                                                name = contact.name,
+                                                role = if (contact.id in cleanCoAdmins) "Group Admin" else contact.role,
+                                                avatar = contact.avatar
                                             )
                                         }
-                                        onCreateGroup(groupName.trim(), selectedAvatar, groupMembers, groupDescription.trim(), onlyAdminsCanPost)
+                                        onCreateGroup(
+                                            GroupCreationConfig(
+                                                groupName = groupName.trim(),
+                                                groupAvatar = selectedAvatar,
+                                                members = groupMembers,
+                                                groupDescription = groupDescription.trim(),
+                                                onlyAdminsCanPost = onlyAdminsCanPost,
+                                                coAdminIds = cleanCoAdmins,
+                                                disappearingHours = disappearingHours,
+                                                inviteCode = if (inviteLinkEnabled) inviteCode else null,
+                                                isPublicGroup = isPublicGroup,
+                                                editInfoAdminsOnly = editInfoAdminsOnly,
+                                                welcomeMessage = welcomeMessage.trim()
+                                            )
+                                        )
                                     }
                                 }
                                 .padding(vertical = 4.dp)
@@ -292,9 +485,35 @@ fun CreateGroupModal(
                     }
                 }
 
+                // Subtle 2-segment Step Progress Strip
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(2.5.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(colors.iosBlue)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(2.5.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(
+                                if (currentStep == GroupCreationStep.GROUP_DETAILS) colors.iosBlue
+                                else colors.separator
+                            )
+                    )
+                }
+
                 HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
 
-                // -- Step Content Animation -------------------------------
                 AnimatedContent(
                     targetState = currentStep,
                     transitionSpec = {
@@ -312,15 +531,36 @@ fun CreateGroupModal(
                             StepSelectParticipants(
                                 searchQuery = searchQuery,
                                 onSearchQueryChanged = { searchQuery = it },
+                                isSearching = isSearching,
+                                activeFilter = activeFilter,
+                                onFilterChanged = { activeFilter = it },
                                 selectedContacts = selectedContacts,
                                 filteredContacts = filteredContacts,
                                 onToggleContact = { contact ->
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     SoundManager.playReaction()
                                     if (selectedContacts.any { it.id == contact.id }) {
                                         selectedContacts.removeAll { it.id == contact.id }
-                                    } else {
+                                        coAdminIds.removeAll { it == contact.id }
+                                    } else if (selectedContacts.size < MAX_GROUP_PARTICIPANTS) {
                                         selectedContacts.add(contact)
+                                    } else {
+                                        ToastManager.showToast("Maximum $MAX_GROUP_PARTICIPANTS participants allowed")
                                     }
+                                },
+                                onSelectAllVisible = {
+                                    val availableSlots = MAX_GROUP_PARTICIPANTS - selectedContacts.size
+                                    if (availableSlots > 0) {
+                                        val existing = selectedContacts.map { it.id }.toSet()
+                                        val toAdd = filteredContacts.filter { it.id !in existing }.take(availableSlots)
+                                        selectedContacts.addAll(toAdd)
+                                        SoundManager.playReaction()
+                                    }
+                                },
+                                onClearSelection = {
+                                    selectedContacts.clear()
+                                    coAdminIds.clear()
+                                    SoundManager.playReaction()
                                 },
                                 onDirectMessage = onDirectMessage
                             )
@@ -333,17 +573,54 @@ fun CreateGroupModal(
                                 onGroupNameChanged = { if (it.length <= 35) groupName = it },
                                 groupDescription = groupDescription,
                                 onGroupDescriptionChanged = { if (it.length <= 150) groupDescription = it },
+                                welcomeMessage = welcomeMessage,
+                                onWelcomeMessageChanged = { if (it.length <= 120) welcomeMessage = it },
                                 selectedAvatar = selectedAvatar,
                                 onAvatarSelected = { selectedAvatar = it },
                                 selectedContacts = selectedContacts,
+                                coAdminIds = coAdminIds,
+                                onToggleCoAdmin = { contactId ->
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    SoundManager.playReaction()
+                                    if (coAdminIds.contains(contactId)) coAdminIds.remove(contactId)
+                                    else coAdminIds.add(contactId)
+                                },
                                 onRemoveContact = { contact ->
                                     SoundManager.playReaction()
                                     selectedContacts.remove(contact)
+                                    coAdminIds.removeAll { it == contact.id }
                                 },
-                                disappearingMessagesEnabled = disappearingMessagesEnabled,
-                                onToggleDisappearingMessages = { disappearingMessagesEnabled = !disappearingMessagesEnabled },
+                                disappearingHours = disappearingHours,
+                                onDisappearingHoursSelected = { hours ->
+                                    SoundManager.playReaction()
+                                    disappearingHours = hours
+                                },
                                 onlyAdminsCanPost = onlyAdminsCanPost,
-                                onToggleOnlyAdminsCanPost = { onlyAdminsCanPost = !onlyAdminsCanPost }
+                                onToggleOnlyAdminsCanPost = {
+                                    SoundManager.playReaction()
+                                    onlyAdminsCanPost = !onlyAdminsCanPost
+                                },
+                                editInfoAdminsOnly = editInfoAdminsOnly,
+                                onToggleEditInfoAdminsOnly = {
+                                    SoundManager.playReaction()
+                                    editInfoAdminsOnly = !editInfoAdminsOnly
+                                },
+                                isPublicGroup = isPublicGroup,
+                                onSetPublicGroup = { isPublic ->
+                                    SoundManager.playReaction()
+                                    isPublicGroup = isPublic
+                                },
+                                inviteLinkEnabled = inviteLinkEnabled,
+                                onToggleInviteLink = {
+                                    SoundManager.playReaction()
+                                    inviteLinkEnabled = !inviteLinkEnabled
+                                },
+                                inviteCode = inviteCode,
+                                onRegenerateInviteCode = {
+                                    SoundManager.playReaction()
+                                    inviteCode = generateGroupInviteCode()
+                                    ToastManager.showToast("Invite link refreshed")
+                                }
                             )
                         }
                     }
@@ -351,7 +628,6 @@ fun CreateGroupModal(
             }
         }
     }
-}
 
 // -- STEP 1: Select Participants Screen ------------------------------
 
@@ -359,9 +635,14 @@ fun CreateGroupModal(
 private fun StepSelectParticipants(
     searchQuery: String,
     onSearchQueryChanged: (String) -> Unit,
+    isSearching: Boolean,
+    activeFilter: ParticipantFilter,
+    onFilterChanged: (ParticipantFilter) -> Unit,
     selectedContacts: List<GroupContact>,
     filteredContacts: List<GroupContact>,
     onToggleContact: (GroupContact) -> Unit,
+    onSelectAllVisible: () -> Unit,
+    onClearSelection: () -> Unit,
     onDirectMessage: ((GroupContact) -> Unit)? = null
 ) {
     val colors = LocalChatColors.current
@@ -370,7 +651,7 @@ private fun StepSelectParticipants(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        // iOS Search Field
+        // Search Input
         item {
             Box(
                 modifier = Modifier
@@ -380,7 +661,7 @@ private fun StepSelectParticipants(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(36.dp)
+                        .height(38.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(colors.surfaceSecondary)
                         .padding(horizontal = 10.dp),
@@ -402,15 +683,21 @@ private fun StepSelectParticipants(
                         decorationBox = { innerTextField ->
                             if (searchQuery.isEmpty()) {
                                 Text(
-                                    "Search by name or role",
-                                    fontSize = 15.sp,
+                                    "Search people by name or @username",
+                                    fontSize = 14.5.sp,
                                     color = colors.textMuted
                                 )
                             }
                             innerTextField()
                         }
                     )
-                    if (searchQuery.isNotEmpty()) {
+                    if (isSearching) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 1.8.dp,
+                            color = colors.iosBlue
+                        )
+                    } else if (searchQuery.isNotEmpty()) {
                         Box(
                             modifier = Modifier
                                 .size(24.dp)
@@ -424,13 +711,49 @@ private fun StepSelectParticipants(
             }
         }
 
+        // Segmented Filter Bar (Flat non-pill tabs)
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.surfaceSecondary)
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                ParticipantFilter.entries.forEach { filter ->
+                    val selected = activeFilter == filter
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (selected) colors.cardBg else Color.Transparent)
+                            .clickable {
+                                SoundManager.playReaction()
+                                onFilterChanged(filter)
+                            }
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = filter.label,
+                            fontSize = 12.5.sp,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (selected) colors.iosBlue else colors.textMuted
+                        )
+                    }
+                }
+            }
+        }
+
         // Horizontal Selected Participants Shelf
         if (selectedContacts.isNotEmpty()) {
             item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp)
+                        .padding(top = 8.dp, bottom = 4.dp)
                 ) {
                     LazyRow(
                         modifier = Modifier.fillMaxWidth(),
@@ -438,7 +761,7 @@ private fun StepSelectParticipants(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(selectedContacts, key = { it.id }) { contact ->
-                            SelectedContactPill(
+                            SelectedContactChip(
                                 contact = contact,
                                 onRemove = { onToggleContact(contact) }
                             )
@@ -454,21 +777,73 @@ private fun StepSelectParticipants(
             }
         }
 
-        // Section Title: ALL CONTACTS
+        // Contacts Section Header with Quick Actions
         item {
-            Text(
-                text = "CONTACTS",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = colors.textMuted,
-                letterSpacing = 0.5.sp,
-                modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 6.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "CONTACTS (${filteredContacts.size})",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textMuted,
+                    letterSpacing = 0.5.sp
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (selectedContacts.isNotEmpty()) {
+                        Text(
+                            text = "Clear",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFFFF3B30),
+                            modifier = Modifier.clickable { onClearSelection() }
+                        )
+                    }
+                    if (filteredContacts.isNotEmpty() && selectedContacts.size < MAX_GROUP_PARTICIPANTS) {
+                        Text(
+                            text = "Select All",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.iosBlue,
+                            modifier = Modifier.clickable { onSelectAllVisible() }
+                        )
+                    }
+                }
+            }
         }
 
-        // Contact Rows
+        if (filteredContacts.isEmpty() && !isSearching) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 40.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.Users,
+                        contentDescription = null,
+                        tint = colors.textMuted.copy(alpha = 0.5f),
+                        modifier = Modifier.size(30.dp)
+                    )
+                    Text(
+                        text = if (searchQuery.isNotBlank()) "No people matching \"$searchQuery\"" else "No contacts in this filter",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textMuted
+                    )
+                }
+            }
+        }
+
         items(filteredContacts, key = { it.id }) { contact ->
             val isSelected = selectedContacts.any { it.id == contact.id }
+            val liveOnline = contact.status == "Online" || OnlineStatusManager.isUserOnline(contact.id)
 
             Row(
                 modifier = Modifier
@@ -481,7 +856,6 @@ private fun StepSelectParticipants(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Selection Checkbox (Thin Box & Extended Tick)
                 LiquidGlassCheckbox(
                     checked = isSelected,
                     onCheckedChange = null,
@@ -490,17 +864,16 @@ private fun StepSelectParticipants(
                     uncheckedColor = colors.separatorOpaque
                 )
 
-                // Avatar
                 com.chroma.studio.ui.components.IosAvatarView(
                     name = contact.name,
                     avatarUrl = contact.avatar,
-                    size = 44.dp
+                    size = 44.dp,
+                    isOnline = liveOnline
                 )
 
-                // Name & Role Info
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy((-2).dp)
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -508,8 +881,7 @@ private fun StepSelectParticipants(
                     ) {
                         Text(
                             text = contact.name,
-                            fontSize = 16.sp,
-                            lineHeight = 18.sp,
+                            fontSize = 15.5.sp,
                             fontWeight = FontWeight.Medium,
                             color = colors.textDark,
                             maxLines = 1,
@@ -524,8 +896,7 @@ private fun StepSelectParticipants(
                     }
                     Text(
                         text = contact.role,
-                        fontSize = 13.5.sp,
-                        lineHeight = 15.sp,
+                        fontSize = 13.sp,
                         color = colors.textMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -533,28 +904,24 @@ private fun StepSelectParticipants(
                 }
 
                 if (onDirectMessage != null) {
-                    Box(
+                    Text(
+                        text = "Chat",
+                        color = colors.iosBlue,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.iosBlue.copy(alpha = 0.12f))
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(colors.iosBlue.copy(alpha = 0.10f))
                             .clickable {
                                 SoundManager.playReaction()
                                 onDirectMessage(contact)
                             }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Chat",
-                            color = colors.iosBlue,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
                 } else {
                     OnlineStatusBadge(
-                        isOnline = contact.status == "Online",
-                        statusText = contact.status,
+                        isOnline = liveOnline,
+                        statusText = if (liveOnline) "Online" else contact.status,
                         compact = true
                     )
                 }
@@ -563,7 +930,7 @@ private fun StepSelectParticipants(
             HorizontalDivider(
                 color = colors.separator,
                 thickness = 0.5.dp,
-                modifier = Modifier.padding(start = 90.dp)
+                modifier = Modifier.padding(start = 88.dp)
             )
         }
     }
@@ -578,48 +945,63 @@ private fun StepGroupDetails(
     onGroupNameChanged: (String) -> Unit,
     groupDescription: String,
     onGroupDescriptionChanged: (String) -> Unit,
+    welcomeMessage: String,
+    onWelcomeMessageChanged: (String) -> Unit,
     selectedAvatar: String,
     onAvatarSelected: (String) -> Unit,
     selectedContacts: List<GroupContact>,
+    coAdminIds: List<String>,
+    onToggleCoAdmin: (String) -> Unit,
     onRemoveContact: (GroupContact) -> Unit,
-    disappearingMessagesEnabled: Boolean,
-    onToggleDisappearingMessages: () -> Unit,
+    disappearingHours: Int,
+    onDisappearingHoursSelected: (Int) -> Unit,
     onlyAdminsCanPost: Boolean,
-    onToggleOnlyAdminsCanPost: () -> Unit
+    onToggleOnlyAdminsCanPost: () -> Unit,
+    editInfoAdminsOnly: Boolean,
+    onToggleEditInfoAdminsOnly: () -> Unit,
+    isPublicGroup: Boolean,
+    onSetPublicGroup: (Boolean) -> Unit,
+    inviteLinkEnabled: Boolean,
+    onToggleInviteLink: () -> Unit,
+    inviteCode: String,
+    onRegenerateInviteCode: () -> Unit
 ) {
     val colors = LocalChatColors.current
+    val clipboard = LocalClipboardManager.current
     var isIconStudioOpen by remember { mutableStateOf(false) }
 
-    val quickEmojis = listOf("??", "??", "?", "??", "??", "??", "??", "??", "??", "???")
+    val devicePhotoPicker = rememberOscellionMediaPicker(
+        title = "Group Photo",
+        mediaFilter = GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { pickedUri ->
+        SoundManager.playSend()
+        onAvatarSelected(pickedUri.toString())
+    }
+
+    val quickEmojis = listOf("🚀", "🔥", "🎨", "✨", "🎮", "💻", "🎧", "☕", "🏆", "🌿")
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Group Icon & Name Card
+        // 1. Borderless Identity Section (Avatar + Photo Actions + Fields)
         item {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(colors.cardBg)
-                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Large Avatar Picker with Camera Badge - unclipped and full
                 Box(
-                    modifier = Modifier
-                        .size(86.dp),
+                    modifier = Modifier.size(86.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(80.dp)
+                            .size(82.dp)
                             .clip(CircleShape)
-                            .border(1.5.dp, colors.iosBlue, CircleShape)
+                            .border(1.5.dp, colors.iosBlue.copy(alpha = 0.7f), CircleShape)
                             .clickable {
                                 isIconStudioOpen = true
                                 SoundManager.playReaction()
@@ -627,9 +1009,9 @@ private fun StepGroupDetails(
                         contentAlignment = Alignment.Center
                     ) {
                         com.chroma.studio.ui.components.IosAvatarView(
-                            name = "Group",
+                            name = groupName.ifBlank { "Group" },
                             avatarUrl = selectedAvatar,
-                            size = 80.dp,
+                            size = 82.dp,
                             isGroup = true
                         )
                     }
@@ -638,20 +1020,16 @@ private fun StepGroupDetails(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .size(26.dp)
-                            .shadow(2.dp, CircleShape)
-                            .clip(CircleShape)
-                            .background(colors.appBg)
-                            .border(1.5.dp, colors.iosBlue, CircleShape)
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(colors.iosBlue)
+                            .border(1.5.dp, colors.appBg, RoundedCornerShape(7.dp))
                             .clickable {
-                                isIconStudioOpen = true
                                 SoundManager.playReaction()
+                                devicePhotoPicker.launch("image/*")
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        PhosphorCameraIcon(
-                            tint = colors.iosBlue,
-                            size = 14.dp
-                        )
+                        PhosphorCameraIcon(tint = Color.White, size = 13.dp)
                     }
                 }
 
@@ -659,34 +1037,53 @@ private fun StepGroupDetails(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
+                    Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.surfaceSecondary)
+                            .clickable {
+                                SoundManager.playReaction()
+                                devicePhotoPicker.launch("image/*")
+                            }
+                            .padding(horizontal = 11.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(Lucide.ImagePlus, contentDescription = null, tint = colors.iosBlue, modifier = Modifier.size(14.dp))
+                        Text("Gallery Photo", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textDark)
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
                             .background(colors.iosBlue.copy(alpha = 0.12f))
                             .clickable {
                                 isIconStudioOpen = true
                                 SoundManager.playReaction()
                             }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = 11.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { LucidePalette(tint = colors.iosBlue, size = 14.dp); Text(text = "Group Icon Studio", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.iosBlue) }
+                        Icon(Lucide.Palette, contentDescription = null, tint = colors.iosBlue, modifier = Modifier.size(14.dp))
+                        Text("Icon Studio", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.iosBlue)
                     }
                 }
 
-                // Avatar Presets Row
+                // Quick Preset Avatars Row
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(vertical = 4.dp)
+                    contentPadding = PaddingValues(vertical = 2.dp)
                 ) {
                     items(defaultGroupAvatarPresets) { avatarUrl ->
                         val isSelected = avatarUrl == selectedAvatar
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(34.dp)
                                 .clip(CircleShape)
                                 .border(
-                                    width = if (isSelected) 2.dp else 0.5.dp,
-                                    color = if (isSelected) colors.iosBlue else colors.separatorOpaque,
+                                    width = if (isSelected) 2.dp else 0.dp,
+                                    color = if (isSelected) colors.iosBlue else Color.Transparent,
                                     shape = CircleShape
                                 )
                                 .clickable {
@@ -704,7 +1101,7 @@ private fun StepGroupDetails(
                     }
                 }
 
-                // Inset Group Name TextField
+                // Group Name Input
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -719,71 +1116,22 @@ private fun StepGroupDetails(
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         textStyle = TextStyle(
-                            fontSize = 16.sp,
+                            fontSize = 15.5.sp,
                             fontWeight = FontWeight.Medium,
                             color = colors.textDark
                         ),
                         cursorBrush = SolidColor(colors.iosBlue),
                         decorationBox = { innerTextField ->
                             if (groupName.isEmpty()) {
-                                Text(
-                                    "Group Name (Subject)",
-                                    fontSize = 16.sp,
-                                    color = colors.textMuted
-                                )
+                                Text("Group Name (Required)", fontSize = 15.5.sp, color = colors.textMuted)
                             }
                             innerTextField()
                         }
                     )
-
-                    Text(
-                        text = "${groupName.length}/35",
-                        fontSize = 12.sp,
-                        color = colors.textMuted
-                    )
+                    Text("${groupName.length}/35", fontSize = 11.5.sp, color = colors.textMuted)
                 }
 
-                // Inset Group Description TextField
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.surfaceSecondary)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    BasicTextField(
-                        value = groupDescription,
-                        onValueChange = onGroupDescriptionChanged,
-                        modifier = Modifier.weight(1f),
-                        singleLine = false,
-                        maxLines = 3,
-                        textStyle = TextStyle(
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = colors.textDark
-                        ),
-                        cursorBrush = SolidColor(colors.iosBlue),
-                        decorationBox = { innerTextField ->
-                            if (groupDescription.isEmpty()) {
-                                Text(
-                                    "Group Description (Optional)",
-                                    fontSize = 14.sp,
-                                    color = colors.textMuted
-                                )
-                            }
-                            innerTextField()
-                        }
-                    )
-
-                    Text(
-                        text = "${groupDescription.length}/150",
-                        fontSize = 12.sp,
-                        color = colors.textMuted
-                    )
-                }
-
-                // Quick Emoji Suggestions
+                // Quick Emojis Strip
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -792,7 +1140,7 @@ private fun StepGroupDetails(
                         Box(
                             modifier = Modifier
                                 .size(32.dp)
-                                .clip(CircleShape)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(colors.surfaceSecondary)
                                 .clickable {
                                     if (groupName.length + emoji.length <= 35) {
@@ -806,150 +1154,429 @@ private fun StepGroupDetails(
                         }
                     }
                 }
+
+                // Group Description Input
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surfaceSecondary)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    BasicTextField(
+                        value = groupDescription,
+                        onValueChange = onGroupDescriptionChanged,
+                        modifier = Modifier.weight(1f),
+                        singleLine = false,
+                        maxLines = 3,
+                        textStyle = TextStyle(fontSize = 14.sp, color = colors.textDark),
+                        cursorBrush = SolidColor(colors.iosBlue),
+                        decorationBox = { innerTextField ->
+                            if (groupDescription.isEmpty()) {
+                                Text("Group Description (Optional)", fontSize = 14.sp, color = colors.textMuted)
+                            }
+                            innerTextField()
+                        }
+                    )
+                    Text("${groupDescription.length}/150", fontSize = 11.5.sp, color = colors.textMuted)
+                }
+
+                // Custom Welcome Note Input
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surfaceSecondary)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BasicTextField(
+                        value = welcomeMessage,
+                        onValueChange = onWelcomeMessageChanged,
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        textStyle = TextStyle(fontSize = 14.sp, color = colors.textDark),
+                        cursorBrush = SolidColor(colors.iosBlue),
+                        decorationBox = { innerTextField ->
+                            if (welcomeMessage.isEmpty()) {
+                                Text("Welcome Note (Optional intro message)", fontSize = 14.sp, color = colors.textMuted)
+                            }
+                            innerTextField()
+                        }
+                    )
+                    Text("${welcomeMessage.length}/120", fontSize = 11.5.sp, color = colors.textMuted)
+                }
             }
         }
 
-        // Group Settings & Permissions (iOS Inset Grouped Table)
+        // 2. Group Privacy & Access Mode (Borderless surface with hairlines)
         item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(colors.cardBg)
-                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "PRIVACY & PERMISSIONS",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textMuted,
+                    letterSpacing = 0.5.sp
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surfaceSecondary)
+                ) {
+                    // Private vs Public Selector
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = if (isPublicGroup) Lucide.Globe else Lucide.Lock,
+                                contentDescription = null,
+                                tint = colors.iosBlue,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Group Access",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textDark
+                                )
+                                Text(
+                                    text = if (isPublicGroup) "Anyone with link can join" else "Invite-only group",
+                                    fontSize = 12.sp,
+                                    color = colors.textMuted
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.appBg)
+                                .padding(2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            listOf(false to "Private", true to "Public").forEach { (pub, label) ->
+                                val selected = isPublicGroup == pub
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (selected) Color.White else colors.textMuted,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (selected) colors.iosBlue else Color.Transparent)
+                                        .clickable { onSetPublicGroup(pub) }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
+
+                    // Disappearing Messages Multi-Timer
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Lucide.Timer, contentDescription = null, tint = colors.iosBlue, modifier = Modifier.size(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Disappearing Messages",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textDark
+                                )
+                                Text(
+                                    text = if (disappearingHours > 0) "Auto-expires after ${disappearingTimerLabel(disappearingHours)}" else "Keep message history",
+                                    fontSize = 12.sp,
+                                    color = colors.textMuted
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.appBg)
+                                .padding(3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            DISAPPEARING_OPTIONS_HOURS.forEach { hours ->
+                                val selected = disappearingHours == hours
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (selected) colors.iosBlue else Color.Transparent)
+                                        .clickable { onDisappearingHoursSelected(hours) }
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = disappearingTimerLabel(hours),
+                                        fontSize = 12.sp,
+                                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                        color = if (selected) Color.White else colors.textMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
+
+                    // Announcement Channel
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onToggleOnlyAdminsCanPost() }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Lucide.ShieldCheck, contentDescription = null, tint = colors.iosBlue, modifier = Modifier.size(16.dp))
+                            Column {
+                                Text(
+                                    text = "Announcement Channel",
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textDark
+                                )
+                                Text(
+                                    text = if (onlyAdminsCanPost) "Only group admins can send messages" else "All members can send messages",
+                                    fontSize = 12.sp,
+                                    color = colors.textMuted
+                                )
+                            }
+                        }
+                        AppleSwitch(
+                            checked = onlyAdminsCanPost,
+                            onCheckedChange = { onToggleOnlyAdminsCanPost() }
+                        )
+                    }
+
+                    HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
+
+                    // Edit Info Admins Only
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onToggleEditInfoAdminsOnly() }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Restrict Info Edits",
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = colors.textDark
+                            )
+                            Text(
+                                text = if (editInfoAdminsOnly) "Only admins can edit group name & photo" else "Any member can edit group info",
+                                fontSize = 12.sp,
+                                color = colors.textMuted
+                            )
+                        }
+                        AppleSwitch(
+                            checked = editInfoAdminsOnly,
+                            onCheckedChange = { onToggleEditInfoAdminsOnly() }
+                        )
+                    }
+
+                    HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
+
+                    // Invite Link Toggle + Live Copyable Link
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onToggleInviteLink() },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Lucide.Link2, contentDescription = null, tint = colors.iosBlue, modifier = Modifier.size(16.dp))
+                                Column {
+                                    Text(
+                                        text = "Group Invite Link",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colors.textDark
+                                    )
+                                    Text(
+                                        text = if (inviteLinkEnabled) "Share link to let friends join directly" else "Disabled",
+                                        fontSize = 12.sp,
+                                        color = colors.textMuted
+                                    )
+                                }
+                            }
+                            AppleSwitch(
+                                checked = inviteLinkEnabled,
+                                onCheckedChange = { onToggleInviteLink() }
+                            )
+                        }
+
+                        if (inviteLinkEnabled) {
+                            val inviteUrl = buildGroupInviteUrl(inviteCode)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.appBg)
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = inviteUrl,
+                                    fontSize = 12.sp,
+                                    color = colors.iosBlue,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    imageVector = Lucide.RefreshCw,
+                                    contentDescription = "New code",
+                                    tint = colors.textMuted,
+                                    modifier = Modifier
+                                        .size(15.dp)
+                                        .clickable { onRegenerateInviteCode() }
+                                )
+                                Icon(
+                                    imageVector = Lucide.Copy,
+                                    contentDescription = "Copy invite link",
+                                    tint = colors.iosBlue,
+                                    modifier = Modifier
+                                        .size(15.dp)
+                                        .clickable {
+                                            clipboard.setText(AnnotatedString(inviteUrl))
+                                            SoundManager.playReaction()
+                                            ToastManager.showToast("Invite link copied")
+                                        }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Members & Co-Admin Assignment
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Disappearing Messages Switch
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onToggleDisappearingMessages() }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Disappearing Messages",
-                            fontSize = 15.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.textDark
-                        )
-                        Text(
-                            text = if (disappearingMessagesEnabled) "Messages expire after 24 hours" else "Off",
-                            fontSize = 12.5.sp,
-                            color = colors.textMuted
-                        )
-                    }
-                    AppleSwitch(
-                        checked = disappearingMessagesEnabled,
-                        onCheckedChange = { onToggleDisappearingMessages() }
-                    )
-                }
-
-                HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
-
-                // Only Admins Can Post
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onToggleOnlyAdminsCanPost() }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Announcement Channel",
-                            fontSize = 15.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.textDark
-                        )
-                        Text(
-                            text = if (onlyAdminsCanPost) "Only group admins can send messages" else "All members can send messages",
-                            fontSize = 12.5.sp,
-                            color = colors.textMuted
-                        )
-                    }
-                    AppleSwitch(
-                        checked = onlyAdminsCanPost,
-                        onCheckedChange = { onToggleOnlyAdminsCanPost() }
-                    )
-                }
+                Text(
+                    text = "MEMBERS (${selectedContacts.size + 1})",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textMuted,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    text = "${coAdminIds.size} co-admin${if (coAdminIds.size == 1) "" else "s"}",
+                    fontSize = 11.5.sp,
+                    color = colors.iosBlue,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
 
-        // Participants Summary Header
-        item {
-            Text(
-                text = "PARTICIPANTS: ${selectedContacts.size + 1}",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = colors.textMuted,
-                letterSpacing = 0.5.sp
-            )
-        }
-
-        // Group Creator (You - Admin)
+        // Creator Row
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(colors.cardBg)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.surfaceSecondary)
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 com.chroma.studio.ui.components.IosAvatarView(
                     name = currentUser.name,
                     avatarUrl = currentUser.avatar,
-                    size = 40.dp
+                    size = 38.dp
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "${currentUser.name} (You)",
-                        fontSize = 15.sp,
+                        fontSize = 14.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = colors.textDark
                     )
                     Text(
                         text = "Group Creator",
-                        fontSize = 12.5.sp,
+                        fontSize = 12.sp,
                         color = colors.textMuted
                     )
                 }
 
-                Box(
+                Text(
+                    text = "Owner",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.iosBlue,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(9999.dp))
+                        .clip(RoundedCornerShape(6.dp))
                         .background(colors.iosBlueSubtle)
-                        .padding(horizontal = 9.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = "Admin",
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.iosBlue
-                    )
-                }
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                )
             }
         }
 
-        // Added Participants List
+        // Added Members with Co-Admin Toggle
         items(selectedContacts, key = { it.id }) { contact ->
+            val isCoAdmin = contact.id in coAdminIds
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(colors.cardBg)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 com.chroma.studio.ui.components.IosAvatarView(
                     name = contact.name,
                     avatarUrl = contact.avatar,
-                    size = 40.dp
+                    size = 38.dp
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
@@ -958,33 +1585,47 @@ private fun StepGroupDetails(
                     ) {
                         Text(
                             text = contact.name,
-                            fontSize = 15.sp,
+                            fontSize = 14.5.sp,
                             fontWeight = FontWeight.Medium,
-                            color = colors.textDark
+                            color = colors.textDark,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         if (contact.isVerified) {
-                            VerifiedBadge(
-                                size = 13.dp,
-                                tone = contact.verifiedTone
-                            )
+                            VerifiedBadge(size = 13.dp, tone = contact.verifiedTone)
                         }
                     }
                     Text(
-                        text = contact.role,
-                        fontSize = 12.5.sp,
-                        color = colors.textMuted
+                        text = if (isCoAdmin) "Co-Admin" else contact.role,
+                        fontSize = 12.sp,
+                        color = if (isCoAdmin) colors.iosBlue else colors.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
+                Text(
+                    text = if (isCoAdmin) "Admin" else "Make Admin",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isCoAdmin) Color.White else colors.iosBlue,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isCoAdmin) colors.iosBlue else colors.iosBlueSubtle)
+                        .clickable { onToggleCoAdmin(contact.id) }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+
                 Box(
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(26.dp)
                         .clickable { onRemoveContact(contact) },
                     contentAlignment = Alignment.Center
                 ) {
                     PhosphorCloseX(tint = colors.textMuted, size = 14.dp)
                 }
             }
+            HorizontalDivider(color = colors.separator, thickness = 0.5.dp, modifier = Modifier.padding(start = 50.dp))
         }
     }
 
@@ -1001,10 +1642,10 @@ private fun StepGroupDetails(
     }
 }
 
-// -- Selected Contact Avatar Pill on Shelf ----------------------------
+// -- Selected Contact Compact Tile on Shelf ----------------------------
 
 @Composable
-private fun SelectedContactPill(
+private fun SelectedContactChip(
     contact: GroupContact,
     onRemove: () -> Unit
 ) {
@@ -1013,37 +1654,38 @@ private fun SelectedContactPill(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier.width(56.dp)
+        modifier = Modifier.width(54.dp)
     ) {
-        Box(modifier = Modifier.size(48.dp)) {
+        Box(modifier = Modifier.size(46.dp)) {
             com.chroma.studio.ui.components.IosAvatarView(
                 name = contact.name,
                 avatarUrl = contact.avatar,
-                size = 48.dp,
+                size = 46.dp,
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape)
                     .border(1.dp, colors.iosBlue, CircleShape)
             )
 
-            // Remove 'X' Badge
             Box(
                 modifier = Modifier
-                    .size(20.dp)
+                    .size(18.dp)
                     .align(Alignment.TopEnd)
+                    .clip(CircleShape)
+                    .background(colors.cardBg)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) { onRemove() },
                 contentAlignment = Alignment.Center
             ) {
-                PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
+                PhosphorCloseX(tint = colors.textMuted, size = 10.dp)
             }
         }
 
         Text(
             text = contact.name.split(" ").firstOrNull() ?: contact.name,
-            fontSize = 11.5.sp,
+            fontSize = 11.sp,
             fontWeight = FontWeight.Normal,
             color = colors.textDark,
             maxLines = 1,
@@ -1051,6 +1693,3 @@ private fun SelectedContactPill(
         )
     }
 }
-
-
-

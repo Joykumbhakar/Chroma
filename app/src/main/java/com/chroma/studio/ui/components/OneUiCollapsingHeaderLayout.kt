@@ -419,8 +419,7 @@ fun OneUiSquircleSearchBar(
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .clip(CircleShape)
-                        .background(if (!isDark) Color.Black.copy(0.08f) else Color.White.copy(0.12f))
+                        .clip(RoundedCornerShape(6.dp))
                         .clickable { onClear() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -428,7 +427,7 @@ fun OneUiSquircleSearchBar(
                         imageVector = Lucide.X,
                         contentDescription = "Clear",
                         tint = textMuted,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                 }
             }

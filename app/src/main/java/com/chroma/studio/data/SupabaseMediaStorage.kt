@@ -122,24 +122,40 @@ object SupabaseMediaStorage {
     }
 
     /**
-     * Uploads an arbitrary document/file to Supabase Storage with fallback buckets.
+     * Uploads an arbitrary document/file to Supabase Storage with candidate buckets and automatic
+     * Cloudinary raw-file fallback, reporting upload progress [0..100].
      */
     suspend fun uploadFile(
         bytes: ByteArray,
         fileName: String,
-        bucket: String = "chat-media"
+        bucket: String = "chat-media",
+        onProgress: ((Int) -> Unit)? = null
     ): String? = withContext(Dispatchers.IO) {
-        val candidates = listOf(bucket, "files", "media", "avatars").distinct()
+        val cleanName = com.chroma.studio.chat.data.sanitizeStorageFileName(fileName)
+        val storageKey = "chat_files/${System.currentTimeMillis()}_$cleanName"
+        val candidates = listOf(bucket, "files", "media", "attachments").distinct()
+        onProgress?.invoke(10)
         for (bucketName in candidates) {
             try {
                 val storageBucket = SupabaseClient.client.storage[bucketName]
-                storageBucket.upload(fileName, bytes, upsert = true)
-                val publicUrl = storageBucket.publicUrl(fileName)
-                if (publicUrl.isNotBlank()) return@withContext publicUrl
+                storageBucket.upload(storageKey, bytes, upsert = true)
+                val publicUrl = storageBucket.publicUrl(storageKey)
+                if (publicUrl.isNotBlank()) {
+                    onProgress?.invoke(100)
+                    return@withContext publicUrl
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed uploading file to bucket '$bucketName': ${e.message}")
             }
         }
-        null
+
+        // Fall back to Cloudinary raw asset upload so non-media documents (PDF, ZIP, DOCX, APK) succeed reliably.
+        Log.i(TAG, "Falling back to Cloudinary raw upload for file '$cleanName'...")
+        CloudinaryClient.uploadRawFile(
+            fileBytes = bytes,
+            fileName = cleanName,
+            folder = "chat_files",
+            onProgress = onProgress
+        )
     }
 }

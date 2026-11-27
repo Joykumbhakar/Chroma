@@ -94,7 +94,7 @@ import java.util.UUID
  */
 enum class PostType(val id: String, val title: String, val subtitle: String, val icon: ImageVector) {
     PHOTO("photo", "Post", "Multi-Image & Carousel", Lucide.Image),
-    FLASH("flash", "Flash", "Short-Form Video & Reels", Lucide.Film),
+    FLASH("flash", "Flash", "Short-Form Video & Flashes", Lucide.Film),
     STORY("story", "Story", "Ephemeral 24h Status", Lucide.CirclePlus),
     WORK("work", "Work", "Portfolio Showcase & Masterwork", Lucide.Palette)
 }
@@ -286,7 +286,7 @@ fun PostCreationFlowScreen(
         mutableStateOf(
             when (currentPostType) {
                 PostType.PHOTO -> listOf("art", "creative", "photo")
-                PostType.FLASH -> listOf("flash", "reels", "motion")
+                PostType.FLASH -> listOf("flash", "flashes", "motion")
                 PostType.WORK -> listOf("design", "branding", "artwork")
                 PostType.STORY -> listOf("moment", "daily")
             }
@@ -295,6 +295,12 @@ fun PostCreationFlowScreen(
     var tagInput by remember { mutableStateOf("") }
     var mentions by remember { mutableStateOf(emptyList<String>()) }
     var mentionInput by remember { mutableStateOf("") }
+    var invitedCollaborators by remember { mutableStateOf(emptyList<com.chroma.studio.model.CollabParticipant>()) }
+    var showCollabPickerSheet by remember { mutableStateOf(false) }
+    var selectedMusic by remember {
+        mutableStateOf<com.chroma.studio.data.AttachedMusicSelection?>(com.chroma.studio.data.PendingMusicHandoff.peek())
+    }
+    var showMusicPickerSheet by remember { mutableStateOf(false) }
     var locationInput by remember { mutableStateOf("") }
     var selectedAudience by remember { mutableStateOf("Public") } // Public, Followers, Only Friends
     var allowRemix by remember { mutableStateOf(true) }
@@ -366,7 +372,9 @@ fun PostCreationFlowScreen(
                                     description = if (locationInput.isNotBlank()) "📍 $locationInput" else "",
                                     aspectRatio = selectedAspectRatio,
                                     tags = tags,
-                                    mentions = mentions
+                                    mentions = mentions,
+                                    collaborators = invitedCollaborators,
+                                    musicTrack = selectedMusic
                                 )
                             } else {
                                 val singleRaw = selectedPhotoUris.first()
@@ -379,11 +387,14 @@ fun PostCreationFlowScreen(
                                     description = if (locationInput.isNotBlank()) "📍 $locationInput" else "",
                                     aspectRatio = selectedAspectRatio,
                                     tags = tags,
-                                    mentions = mentions
+                                    mentions = mentions,
+                                    collaborators = invitedCollaborators,
+                                    musicTrack = selectedMusic
                                 )
                             }
                         }
                         if (success) {
+                            com.chroma.studio.data.PendingMusicHandoff.consume()
                             SoundManager.playSend()
                             Toast.makeText(context, "Photo post shared successfully! ✨", Toast.LENGTH_SHORT).show()
                             onFinish()
@@ -394,7 +405,7 @@ fun PostCreationFlowScreen(
 
                     PostType.FLASH -> {
                         val videoUri = editedPhotoUri ?: selectedPhotoUris.firstOrNull() ?: throw Exception("No video selected")
-                        val finalCaption = caption.ifBlank { "Untitled Flash Reel" }
+                        val finalCaption = caption.ifBlank { "Untitled Flash" }
 
                         val thumbBitmap = try {
                             VideoProcessor.extractThumbnail(context, videoUri, 100L)
@@ -403,7 +414,7 @@ fun PostCreationFlowScreen(
                         com.chroma.studio.data.FlashUploadManager.startUpload(
                             thumbnailBitmap = thumbBitmap,
                             title = finalCaption,
-                            statusText = "Posting Flash Reel to Community…",
+                            statusText = "Posting Flash to Community…",
                             draftId = null,
                             retryAction = { executePublish() }
                         )
@@ -419,10 +430,13 @@ fun PostCreationFlowScreen(
                             hashtags = tags,
                             mentions = mentions,
                             filterName = "Normal",
+                            collaborators = invitedCollaborators,
+                            musicTrack = selectedMusic,
                             onSuccess = {
+                                com.chroma.studio.data.PendingMusicHandoff.consume()
                                 isPublishing = false
                                 SoundManager.playSend()
-                                Toast.makeText(context, "Flash Reel published successfully! ⚡", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Flash published successfully! ⚡", Toast.LENGTH_SHORT).show()
                                 onFinish()
                             },
                             onError = { err ->
@@ -445,7 +459,9 @@ fun PostCreationFlowScreen(
                                     creatorId = user.uid,
                                     authorAvatarUrl = userProfile?.avatarUrl ?: "",
                                     authorVerified = userProfile?.verified ?: false,
-                                    aspectRatio = selectedAspectRatio
+                                    aspectRatio = selectedAspectRatio,
+                                    collaborators = invitedCollaborators,
+                                    musicTrack = selectedMusic
                                 )
                                 shared
                             } else {
@@ -465,11 +481,14 @@ fun PostCreationFlowScreen(
                                     description = descWithTools,
                                     aspectRatio = selectedAspectRatio,
                                     tags = tags + listOf(workCategory.lowercase().replace(" ", "")),
-                                    mentions = mentions
+                                    mentions = mentions,
+                                    collaborators = invitedCollaborators,
+                                    musicTrack = selectedMusic
                                 )
                             }
                         }
                         if (success) {
+                            com.chroma.studio.data.PendingMusicHandoff.consume()
                             SoundManager.playSend()
                             Toast.makeText(context, "Creative Work published to Portfolio! 🎨", Toast.LENGTH_SHORT).show()
                             onFinish()
@@ -488,7 +507,8 @@ fun PostCreationFlowScreen(
                                 textFormat = "story_v1",
                                 backgroundColor = bgHex,
                                 audienceType = targetAudience,
-                                customAudienceIds = emptyList()
+                                customAudienceIds = emptyList(),
+                                musicTrack = selectedMusic
                             )
                         } else {
                             val storyUri = selectedPhotoUris.first()
@@ -496,9 +516,11 @@ fun PostCreationFlowScreen(
                                 context = context,
                                 uri = storyUri,
                                 audienceType = targetAudience,
-                                textContent = caption
+                                textContent = caption,
+                                musicTrack = selectedMusic
                             )
                         }
+                        com.chroma.studio.data.PendingMusicHandoff.consume()
                         SoundManager.playSend()
                         Toast.makeText(context, "Story published! 🌟 (Expires in 24h)", Toast.LENGTH_SHORT).show()
                         onFinish()
@@ -579,6 +601,12 @@ fun PostCreationFlowScreen(
                             flashTrimEndMs = endMs
                             SoundManager.playReaction()
                             currentStep = PostCreationStep.POST_DETAILS
+                        },
+                        onMusicAttached = { attached ->
+                            selectedMusic = attached
+                            if (attached != null) {
+                                audioTrackName = "${attached.title} · ${attached.artist}"
+                            }
                         },
                         onBack = {
                             if (effectiveInitialUris.isNotEmpty()) onClose()
@@ -819,6 +847,8 @@ fun PostCreationFlowScreen(
                         mentionInput = mentionInput,
                         onMentionInputChange = { mentionInput = it },
                         suggestedCreators = suggestedCreators,
+                        invitedCollaborators = invitedCollaborators,
+                        onOpenCollabPicker = { showCollabPickerSheet = true },
                         location = locationInput,
                         onLocationChange = { locationInput = it },
                         audience = selectedAudience,
@@ -829,6 +859,9 @@ fun PostCreationFlowScreen(
                         onHighQualityChange = { highQualityUpload = it },
                         audioTrackName = audioTrackName,
                         onAudioTrackChange = { audioTrackName = it },
+                        selectedMusic = selectedMusic,
+                        onOpenMusicPicker = { showMusicPickerSheet = true },
+                        onClearMusic = { selectedMusic = null },
                         workCategory = workCategory,
                         onWorkCategoryChange = { workCategory = it },
                         allowDownload = allowDownload,
@@ -839,6 +872,33 @@ fun PostCreationFlowScreen(
                     )
                 }
             }
+        }
+
+        if (showCollabPickerSheet) {
+            com.chroma.studio.ui.components.CollabPickerModalSheet(
+                currentUserUid = FirebaseAuth.getInstance().currentUser?.uid.orEmpty(),
+                initialSelection = invitedCollaborators,
+                repository = discoverRepo,
+                onDone = { picked ->
+                    invitedCollaborators = picked
+                    showCollabPickerSheet = false
+                },
+                onDismiss = { showCollabPickerSheet = false }
+            )
+        }
+
+        if (showMusicPickerSheet) {
+            com.chroma.studio.ui.components.StoryMusicPickerModal(
+                isOpen = true,
+                initialTrackId = selectedMusic?.trackId,
+                headerTitle = "Add Music",
+                onDismiss = { showMusicPickerSheet = false },
+                onClipConfirmed = { picked ->
+                    selectedMusic = picked
+                    audioTrackName = "${picked.title} · ${picked.artist}"
+                    showMusicPickerSheet = false
+                }
+            )
         }
     }
 }
@@ -1563,6 +1623,8 @@ private fun UniversalPostDetailsInputView(
     mentionInput: String,
     onMentionInputChange: (String) -> Unit,
     suggestedCreators: List<UserProfile>,
+    invitedCollaborators: List<com.chroma.studio.model.CollabParticipant> = emptyList(),
+    onOpenCollabPicker: () -> Unit = {},
     location: String,
     onLocationChange: (String) -> Unit,
     audience: String,
@@ -1573,6 +1635,9 @@ private fun UniversalPostDetailsInputView(
     onHighQualityChange: (Boolean) -> Unit,
     audioTrackName: String,
     onAudioTrackChange: (String) -> Unit,
+    selectedMusic: com.chroma.studio.data.AttachedMusicSelection? = null,
+    onOpenMusicPicker: () -> Unit = {},
+    onClearMusic: () -> Unit = {},
     workCategory: String,
     onWorkCategoryChange: (String) -> Unit,
     allowDownload: Boolean,
@@ -1708,7 +1773,7 @@ private fun UniversalPostDetailsInputView(
                                 Text(
                                     text = when (postType) {
                                         PostType.PHOTO -> "Write a caption or thoughts..."
-                                        PostType.FLASH -> "Describe your flash reel..."
+                                        PostType.FLASH -> "Describe your flash..."
                                         PostType.WORK -> "Project title & concept..."
                                         PostType.STORY -> "Story subtext (optional)..."
                                     },
@@ -1821,32 +1886,59 @@ private fun UniversalPostDetailsInputView(
             }
         }
 
-        // 3. Audio & Track for Flash Video
-        if (postType == PostType.FLASH) {
-            OneUiSettingsGroup(title = "Audio Track & Sound") {
-                Row(
+        // 3. Music & Soundtrack Picker (Available for Photos, Flashes, Works & Stories)
+        OneUiSettingsGroup(title = "Music & Soundtrack") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenMusicPicker)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFFA2D48).copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(Lucide.Music, null, tint = Color(0xFF0381FE), modifier = Modifier.size(20.dp))
-                    TextField(
-                        value = audioTrackName,
-                        onValueChange = onAudioTrackChange,
-                        placeholder = { Text("Original Audio - @username", fontSize = 13.sp, color = textMuted) },
-                        singleLine = true,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            focusedTextColor = textMain,
-                            unfocusedTextColor = textMain
-                        ),
-                        modifier = Modifier.weight(1f)
+                    val cover = selectedMusic?.coverUrl
+                    if (!cover.isNullOrBlank()) {
+                        AsyncImage(
+                            model = cover,
+                            contentDescription = "Track art",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(Lucide.Music, null, tint = Color(0xFFFA2D48), modifier = Modifier.size(18.dp))
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = selectedMusic?.title ?: "Add Music",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textMain,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+                    Text(
+                        text = selectedMusic?.let { "${it.artist} · ${it.startSec}s clip (${it.durationSec}s)" }
+                            ?: "Choose from Music Library",
+                        fontSize = 12.sp,
+                        color = textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (selectedMusic != null) {
+                    IconButton(onClick = onClearMusic, modifier = Modifier.size(28.dp)) {
+                        Icon(Lucide.X, contentDescription = "Clear music", tint = textMuted, modifier = Modifier.size(16.dp))
+                    }
+                } else {
+                    Icon(Lucide.ChevronRight, null, tint = textMuted, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -2017,6 +2109,16 @@ private fun UniversalPostDetailsInputView(
             }
         }
 
+        // Collaborators Invite Group (Posts & Flashes)
+        if (postType != PostType.STORY) {
+            OneUiSettingsGroup(title = "Collaboration") {
+                com.chroma.studio.ui.components.CollabInviteActionRow(
+                    selectedCollaborators = invitedCollaborators,
+                    onClick = onOpenCollabPicker
+                )
+            }
+        }
+
         // 6. Location (Photo & Work)
         if (postType == PostType.PHOTO || postType == PostType.WORK) {
             OneUiSettingsGroup(title = "Location") {
@@ -2174,7 +2276,7 @@ private fun UniversalPostDetailsInputView(
         // 8. Bottom Share Action Button tailored to PostType
         val mainActionText = when (postType) {
             PostType.PHOTO -> "Share Post"
-            PostType.FLASH -> "Post Flash Reel"
+            PostType.FLASH -> "Post Flash"
             PostType.WORK -> "Publish Masterwork"
             PostType.STORY -> "Share to Story"
         }

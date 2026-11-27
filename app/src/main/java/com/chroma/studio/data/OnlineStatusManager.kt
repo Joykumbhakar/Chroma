@@ -36,6 +36,81 @@ object OnlineStatusManager {
     private val _presenceCache = MutableStateFlow<Map<String, UserPresence>>(emptyMap())
     val presenceCache: StateFlow<Map<String, UserPresence>> = _presenceCache.asStateFlow()
 
+    private val hiddenStatusUids = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+    @Volatile
+    private var selfShowOnlineStatus: Boolean = true
+    private var heartbeatJob: kotlinx.coroutines.Job? = null
+
+    fun parseLastSeenNumber(value: Any?): Long? {
+        return when (value) {
+            is Number -> value.toLong().takeIf { it > 0L }
+            is String -> value.toLongOrNull()?.takeIf { it > 0L }
+            else -> null
+        }
+    }
+
+    fun parsePresenceSnapshot(uid: String, snapshot: DataSnapshot): UserPresence {
+        if (hiddenStatusUids[uid] == true) {
+            return UserPresence(online = false, lastOnline = null)
+        }
+        val rawOnline = snapshot.child("online").getValue(Boolean::class.java) ?: false
+        val hasConnectionsNode = snapshot.hasChild("connections")
+        val hasActiveConn = if (hasConnectionsNode) snapshot.child("connections").childrenCount > 0 else true
+        val parsedLastOnline = parseLastSeenNumber(snapshot.child("lastOnline").value)
+            ?: parseLastSeenNumber(snapshot.child("lastSeen").value)
+        val cachedLastOnline = _presenceCache.value[uid]?.lastOnline
+        val lastOnline = parsedLastOnline ?: cachedLastOnline
+        // Guard against stale "online = true" when all connections are gone
+        val effectiveOnline = rawOnline && hasActiveConn
+        return UserPresence(online = effectiveOnline, lastOnline = lastOnline)
+    }
+
+    fun seedProfilePresence(profile: com.chroma.studio.model.UserProfile?) {
+        val uid = profile?.uid?.takeIf { it.isNotBlank() } ?: return
+        if (!profile.showOnlineStatus) {
+            hiddenStatusUids[uid] = true
+            _presenceCache.value = _presenceCache.value + (uid to UserPresence(online = false, lastOnline = null))
+            return
+        }
+        hiddenStatusUids.remove(uid)
+        val current = _presenceCache.value[uid]
+        val profileLastSeen = profile.lastSeen?.takeIf { it > 0L }
+        val mergedLastSeen = when {
+            current?.lastOnline != null && profileLastSeen != null -> maxOf(current.lastOnline, profileLastSeen)
+            else -> current?.lastOnline ?: profileLastSeen
+        }
+        val mergedOnline = current?.online ?: profile.online
+        _presenceCache.value = _presenceCache.value + (uid to UserPresence(online = mergedOnline, lastOnline = mergedLastSeen))
+    }
+
+    fun updateSelfShowOnlineStatus(showOnlineStatus: Boolean) {
+        selfShowOnlineStatus = showOnlineStatus
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        if (!showOnlineStatus) {
+            hiddenStatusUids[uid] = true
+            _presenceCache.value = _presenceCache.value + (uid to UserPresence(online = false, lastOnline = null))
+            presenceScope.launch {
+                try {
+                    val userRef = getDatabase().getReference("users/$uid")
+                    userRef.child("online").setValue(false)
+                } catch (_: Exception) {}
+            }
+        } else {
+            hiddenStatusUids.remove(uid)
+            val foreground = try { ChatStateManager.isAppInForeground.value } catch (_: Exception) { true }
+            presenceScope.launch {
+                try {
+                    val userRef = getDatabase().getReference("users/$uid")
+                    if (foreground) {
+                        userRef.child("online").setValue(true)
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    fun isSelfStatusVisible(): Boolean = selfShowOnlineStatus
+
     fun getUserPresence(uid: String?): UserPresence {
         if (uid.isNullOrBlank()) return UserPresence(false, null)
         return _presenceCache.value[uid] ?: UserPresence(false, null)
@@ -83,15 +158,21 @@ object OnlineStatusManager {
                 val connected = snapshot.getValue(Boolean::class.java) ?: false
                 if (connected) {
                     Log.d(TAG, "Connected to Firebase RTDB")
-                    // Only mark online if the user actually has the app open in foreground!
-                    if (ChatStateManager.isAppInForeground.value) {
+                    // Only mark online if the user has the app open AND online visibility is enabled
+                    if (ChatStateManager.isAppInForeground.value && selfShowOnlineStatus) {
                         onlineRef.setValue(true)
+                        startForegroundHeartbeat(uid)
+                    } else if (!selfShowOnlineStatus) {
+                        onlineRef.setValue(false)
                     }
-                    
+
                     // Add this device to connections list
                     val con = myConnectionsRef.push()
+                    if (selfShowOnlineStatus) {
+                        con.setValue(true)
+                    }
                     con.onDisconnect().removeValue()
-                    
+
                     // When disconnected, set online to false and update lastOnline
                     onlineRef.onDisconnect().setValue(false)
                     lastOnlineRef.onDisconnect().setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
@@ -123,10 +204,7 @@ object OnlineStatusManager {
         val ref = getDatabase().getReference("users/$uid")
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val isOnline = snapshot.child("online").getValue(Boolean::class.java) ?: false
-                val lastSeen = snapshot.child("lastOnline").getValue(Long::class.java)
-                    ?: snapshot.child("lastSeen").getValue(Long::class.java)
-                val presence = UserPresence(online = isOnline, lastOnline = lastSeen)
+                val presence = parsePresenceSnapshot(uid, snapshot)
                 _presenceCache.value = _presenceCache.value + (uid to presence)
                 onUpdate(presence)
             }
@@ -267,6 +345,20 @@ object OnlineStatusManager {
     private var backgroundGraceJob: Job? = null
     private val presenceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    private fun startForegroundHeartbeat(uid: String) {
+        heartbeatJob?.cancel()
+        heartbeatJob = presenceScope.launch {
+            while (true) {
+                delay(90_000L)
+                if (!selfShowOnlineStatus || !ChatStateManager.isAppInForeground.value) break
+                try {
+                    getDatabase().getReference("users/$uid/lastOnline")
+                        .setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     fun setAppForegrounded(isForeground: Boolean) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val db = getDatabase()
@@ -276,21 +368,43 @@ object OnlineStatusManager {
         if (isForeground) {
             backgroundGraceJob?.cancel()
             backgroundGraceJob = null
+            if (!selfShowOnlineStatus) {
+                try {
+                    onlineRef.setValue(false)
+                } catch (_: Exception) {}
+                return
+            }
             try {
                 onlineRef.setValue(true)
+                startForegroundHeartbeat(uid)
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to update foreground presence: ${e.message}")
             }
         } else {
+            heartbeatJob?.cancel()
+            heartbeatJob = null
             // WhatsApp-grade 4,000ms grace period for transient network switches/app switches
             backgroundGraceJob?.cancel()
             backgroundGraceJob = presenceScope.launch {
                 delay(4000L)
+                val now = System.currentTimeMillis()
                 try {
                     onlineRef.setValue(false)
                     lastOnlineRef.setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to update background presence: ${e.message}")
+                }
+                if (selfShowOnlineStatus) {
+                    try {
+                        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("users").document(uid)
+                            .update(
+                                mapOf(
+                                    "online" to false,
+                                    "lastSeen" to now
+                                )
+                            )
+                    } catch (_: Exception) {}
                 }
             }
         }

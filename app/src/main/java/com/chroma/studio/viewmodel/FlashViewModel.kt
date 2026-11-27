@@ -116,7 +116,16 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                 timestamp = post.timestamp,
                 hideLikesCount = post.hideLikesCount,
                 turnOffComments = post.turnOffComments,
-                turnOffRemix = post.turnOffRemix
+                turnOffRemix = post.turnOffRemix,
+                musicTrackId = post.musicTrackId,
+                musicTitle = post.musicTitle,
+                musicArtist = post.musicArtist,
+                musicAlbum = post.musicAlbum,
+                musicCoverUrl = post.musicCoverUrl,
+                musicAudioUrl = post.musicAudioUrl,
+                musicStartSec = post.musicStartSec,
+                musicDurationSec = post.musicDurationSec,
+                musicShowLyrics = post.musicShowLyrics
             )
             _flashFeed.value = listOf(video) + current
             syncLikedIds()
@@ -346,6 +355,8 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
         hideLikesCount: Boolean = false,
         turnOffComments: Boolean = false,
         turnOffRemix: Boolean = false,
+        collaborators: List<com.chroma.studio.model.CollabParticipant> = emptyList(),
+        musicTrack: com.chroma.studio.data.AttachedMusicSelection? = null,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -464,7 +475,9 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                     remixedFromAuthorUsername = remixedFromAuthorUsername,
                     hideLikesCount = hideLikesCount,
                     turnOffComments = turnOffComments,
-                    turnOffRemix = turnOffRemix
+                    turnOffRemix = turnOffRemix,
+                    collaborators = collaborators,
+                    musicTrack = musicTrack
                 )
 
                 // Cleanup temporary working files only; never delete user's rendered editor output

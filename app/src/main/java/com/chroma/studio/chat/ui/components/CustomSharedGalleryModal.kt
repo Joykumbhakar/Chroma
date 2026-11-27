@@ -1143,8 +1143,7 @@ fun CustomSharedGalleryModal(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.2f))
+                                    .clip(RoundedCornerShape(8.dp))
                                     .clickable {
                                         SoundManager.playReaction()
                                         previewMediaItem = null
@@ -1173,8 +1172,7 @@ fun CustomSharedGalleryModal(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.2f))
+                                    .clip(RoundedCornerShape(8.dp))
                                     .clickable {
                                         SoundManager.playReaction()
                                         itemForEdit = item
@@ -1334,12 +1332,11 @@ fun CustomSharedGalleryModal(
                         Box(
                             modifier = Modifier
                                 .size(30.dp)
-                                .clip(CircleShape)
-                                .background(colors.surfaceSecondary)
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable { itemForForward = null },
                             contentAlignment = Alignment.Center
                         ) {
-                            LucideX(tint = colors.textDark, size = 15.dp)
+                            LucideX(tint = colors.textDark, size = 16.dp)
                         }
                     }
 

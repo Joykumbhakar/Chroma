@@ -1,36 +1,89 @@
 rules_version = '2';
 
 // ===============================================================
-// Assumed Data Model (Updated for pro_requests & users Pro fields)
+// Assumed Data Model (ChromaStudio / Oscellion)
 // ===============================================================
 //
-// Collection: users/{userId}
-//   Pro / Admin-managed immutable fields on client update:
-//   - verified, isPro (bool), verifiedTone (string|null),
-//     proActivatedAt (number), proPlanTier (string),
-//     role, isBanned, banReason, bannedAt, suspendedUntil
+// Collection: community_works/{workId} & flash_videos/{flashId}
+//   - id: string (optional, <= 128)
+//   - creatorId: string (required, immutable, == request.auth.uid on create)
+//   - title, description, caption: string (optional; title <= 300, description/caption <= 5000)
+//   - jsonUrl: string (optional, <= 524288; compressed layer JSON)
+//   - imageUrl, videoUrl, thumbnailUrl: string|null (optional, <= 2048)
+//   - imageUrls, workUrls, tags, hashtags, mentions: list (optional, bounded)
+//   - collaborators: list<map> (optional, <= 10 entries; CollabParticipant metadata)
+//   - pendingCollaboratorIds: list<string> (optional, <= 10; UIDs with pending collab invites)
+//   - collaboratorIds: list<string> (optional, <= 10; UIDs of accepted collaborators; empty on create)
+//   - Music attachment fields (optional):
+//       musicTrackId (string|null <= 128), musicTitle (string|null <= 200),
+//       musicArtist (string|null <= 200), musicAlbum (string|null <= 200),
+//       musicCoverUrl (string|null <= 2048), musicAudioUrl (string|null <= 2048),
+//       musicStartSec (number 0..36000), musicDurationSec (number 0..36000),
+//       musicShowLyrics (bool)
+//   - Admin-managed curation/takedown fields (false/null on create, immutable on client update):
+//       isTrending, trendingExcluded, trendingOrder, isFeatured, isTakedown
+//
+// Collection: stories/{storyId}
+//   - id: string (optional, <= 128)
+//   - userId: string (required, immutable, == request.auth.uid on create)
+//   - mediaUrl: string (optional, <= 2048)
+//   - textContent: string (optional, <= 4000)
+//   - textFormat: string (optional, <= 65536; compressed text formatting JSON)
+//   - backgroundColor: string (optional, <= 200)
+//   - audienceType: string (optional: 'public' | 'followers' | 'friends' | 'only_friends' | 'custom')
+//   - customAudienceIds: list<string> (optional, <= 500)
+//   - timestamp, expiresAt: timestamp|number (optional)
+//   - views, likes, shares, viewsCount, likesCount: int (0 on create; non-owners may update engagement & +1 shares)
+//   - viewedBy, likedBy: list<string> (optional, <= 10000; empty on create)
+//   - isHighlight (bool), highlightId (<= 128), highlightTitle (<= 100), highlightCoverUrl (<= 2048)
+//   - Story Mention Resharing fields:
+//       mentionedUserIds (list <= 100), mentionedUsernames (list <= 100),
+//       repostedFromStoryId (<= 128), repostedFromUserId (<= 128),
+//       repostedFromUsername (<= 64), repostedFromDisplayName (<= 120)
+//   - Music attachment fields: musicTrackId..musicShowLyrics (same as above)
+//
+// Collection: music_tracks/{trackId}
+//   - Server-managed catalog (created/edited/banned/deleted via Admin SDK only)
+//   - useCount: int (non-negative; authenticated clients may only atomically increment by +1)
+//
+// Collection: chats/{chatId} & chats/{chatId}/messages/{messageId}
+//   - chats/{chatId}: participant-scoped rooms (DM & group); participants/participantIds list
+//   - messages/{messageId}: participant-scoped; senderId == request.auth.uid on create, immutable on update
+//     Supports E2EE (iv, encryptedAesKeys), file attachments (fileName, fileSizeBytes, fileExtension,
+//     fileSize, mediaUrl, mediaType), music attachments (musicTrackId..musicShowLyrics), story replies,
+//     flash shares, polls (pollVotes, pollData, isPollClosed), receipts (readBy, deliveredTo), deletedFor
+//
+// Collection: user_chat_prefs/{prefId}
+//   - Per-user web prefs ({uid}): readable & writable strictly by owner (userId == request.auth.uid)
+//   - Per-room mute prefs ({uid}_{roomId}, keys only ['muted','roomId','userId']):
+//       readable by owner or chat room co-participants (for push suppression)
+//
+// Collection: users/{userId} (+ notifications, highlights, followers, following, follow_requests, liked/saved/shared_posts)
+//   - Pro / Admin-managed immutable fields on client create/update:
+//       verified, isPro (bool), verifiedTone (string|null), proActivatedAt (number),
+//       proPlanTier (string), role (creator roles only), isBanned, banReason, bannedAt, suspendedUntil
+//   - users/{userId}/notifications/{notifId}: readable by owner; creatable by actor (actorUid == request.auth.uid)
+//       or by inbox owner (e.g. undo restore) with schema validation
 //
 // Collection: pro_requests/{requestId}
 //   - uid: string (required, immutable, == request.auth.uid)
-//   - status: string (required: 'submitted' on create; 'payment_sent' -> 'payment_submitted' on client update)
-//   - priceUsd: number (required, > 0 && <= 100000, immutable)
-//   - priceInr: number (optional, > 0 && <= 10000000, immutable)
-//   - badgeTone: string (required, 1..40 chars, immutable)
-//   - badgeTier, badgeLabel: string (optional, immutable)
-//   - contactEmail: string (required, valid email, 5..254 chars)
-//   - paymentProofRef: string (optional, <= 200 chars)
-//   - Admin-only fields disallowed on create and immutable on client update:
-//     activatedAt, reviewedBy, emailSentAt, reviewedAt, paymentSentAt,
-//     paymentReference, paymentQrPayload, paymentQrImageUrl,
-//     paymentAmountLabel, paymentInstructions, adminNote,
-//     emailDeliveryStatus, emailSentTo
+//   - status: 'submitted' on create; 'payment_sent' -> 'payment_submitted' on client update
+//   - Admin-only fields disallowed on create and immutable on client update
+//
+// Collection: app_config/{configId}, reports/{reportId}, calls/{callId}, usernames/{username}
+//   - app_config/trending: readable by authenticated users (server-managed; other app_config docs denied)
+//   - reports: write-only by authenticated reporters (reporterId == request.auth.uid)
+//   - calls: caller/callee scoped WebRTC signaling + callerCandidates/calleeCandidates
 //
 // ===============================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ===============================================================
     // Helper Functions
+    // ===============================================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -41,6 +94,11 @@ service cloud.firestore {
 
     function areImmutableFieldsUnchanged(fields) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function isAllowedCreatorRole(role) {
+      return role is string &&
+             role in ['', 'Creator', 'Developer', 'Designer', 'Photographer', 'Video Editor', 'Manager', 'Student', 'Artist', 'Other'];
     }
 
     function isValidEmail(email) {
@@ -56,6 +114,30 @@ service cloud.firestore {
              (data[field] is string && data[field].size() <= maxLen);
     }
 
+    function isValidOptionalBool(data, field) {
+      return !(field in data) ||
+             data[field] == null ||
+             data[field] is bool;
+    }
+
+    function isValidOptionalNumberRange(data, field, minVal, maxVal) {
+      return !(field in data) ||
+             data[field] == null ||
+             (data[field] is number && data[field] >= minVal && data[field] <= maxVal);
+    }
+
+    function isValidOptionalList(data, field, maxLen) {
+      return !(field in data) ||
+             data[field] == null ||
+             (data[field] is list && data[field].size() <= maxLen);
+    }
+
+    function isValidOptionalMap(data, field, maxLen) {
+      return !(field in data) ||
+             data[field] == null ||
+             (data[field] is map && data[field].size() <= maxLen);
+    }
+
     function isValidOptionalTimestampOrNumber(data, field) {
       return !(field in data) ||
              data[field] == null ||
@@ -63,16 +145,514 @@ service cloud.firestore {
              data[field] is timestamp;
     }
 
+    function isZeroOrAbsentInt(data, field) {
+      return !(field in data) ||
+             data[field] == null ||
+             (data[field] is int && data[field] == 0);
+    }
+
+    function isEmptyOrAbsentList(data, field) {
+      return !(field in data) ||
+             data[field] == null ||
+             (data[field] is list && data[field].size() == 0);
+    }
+
+    function isFalseOrAbsentBool(data, field) {
+      return !(field in data) ||
+             data[field] == null ||
+             data[field] == false;
+    }
+
+    // Shared Music Attachment validator across community_works, flash_videos, stories, and chat messages
+    function isValidMusicAttachment(data) {
+      return isValidOptionalString(data, 'musicTrackId', 128) &&
+             isValidOptionalString(data, 'musicTitle', 200) &&
+             isValidOptionalString(data, 'musicArtist', 200) &&
+             isValidOptionalString(data, 'musicAlbum', 200) &&
+             isValidOptionalString(data, 'musicCoverUrl', 2048) &&
+             isValidOptionalString(data, 'musicAudioUrl', 2048) &&
+             isValidOptionalNumberRange(data, 'musicStartSec', 0, 36000) &&
+             isValidOptionalNumberRange(data, 'musicDurationSec', 0, 36000) &&
+             isValidOptionalBool(data, 'musicShowLyrics');
+    }
+
     function isValidCallDoc(data) {
       return (!('type' in data) || data.type in ['audio', 'video']) &&
-             (!('status' in data) || data.status in ['calling', 'ringing', 'accepted', 'rejected', 'ended', 'busy']);
+             (!('status' in data) || data.status in ['calling', 'ringing', 'accepted', 'rejected', 'ended', 'busy', 'missed', 'error']) &&
+             isValidOptionalString(data, 'id', 128) &&
+             isValidOptionalString(data, 'roomId', 256) &&
+             isValidOptionalString(data, 'callerId', 128) &&
+             isValidOptionalString(data, 'calleeId', 128) &&
+             isValidOptionalString(data, 'callerName', 120) &&
+             isValidOptionalString(data, 'calleeName', 120) &&
+             isValidOptionalString(data, 'callerAvatar', 2048) &&
+             isValidOptionalString(data, 'calleeAvatar', 2048) &&
+             isValidOptionalTimestampOrNumber(data, 'timestamp');
     }
 
     function isChatParticipant(data) {
       return data != null && (
-        ('participantIds' in data && request.auth.uid in data.participantIds) ||
-        ('participants' in data && request.auth.uid in data.participants)
+        ('participantIds' in data && data.participantIds is list && request.auth.uid in data.participantIds) ||
+        ('participants' in data && data.participants is list && request.auth.uid in data.participants)
       );
+    }
+
+    function isOwnMapKeyUpdate(field) {
+      return !(field in request.resource.data.diff(resource.data).affectedKeys()) ||
+             (field in request.resource.data &&
+              request.resource.data[field] is map &&
+              (
+                (!(field in resource.data) || !(resource.data[field] is map))
+                  ? request.resource.data[field].keys().hasOnly([request.auth.uid])
+                  : request.resource.data[field].diff(resource.data[field]).affectedKeys().hasOnly([request.auth.uid])
+              ));
+    }
+
+    function isOwnDeletedForUpdate() {
+      let hasOld = ('deletedFor' in resource.data) && (resource.data.deletedFor is list);
+      let oldList = hasOld ? resource.data.deletedFor : [];
+      return !('deletedFor' in request.resource.data.diff(resource.data).affectedKeys()) ||
+             ('deletedFor' in request.resource.data &&
+              request.resource.data.deletedFor is list &&
+              request.resource.data.deletedFor.size() <= 200 &&
+              request.auth.uid in request.resource.data.deletedFor &&
+              request.resource.data.deletedFor.hasAll(oldList) &&
+              request.resource.data.deletedFor.hasOnly(oldList + [request.auth.uid]));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidCollabInviteResponse() {
+      let oldPending = resource.data.get('pendingCollaboratorIds', []);
+      let newPending = request.resource.data.get('pendingCollaboratorIds', []);
+      let oldAccepted = resource.data.get('collaboratorIds', []);
+      let newAccepted = request.resource.data.get('collaboratorIds', []);
+      let newCollaborators = request.resource.data.get('collaborators', []);
+      return isAuthenticated() &&
+             areImmutableFieldsUnchanged(['creatorId']) &&
+             request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['collaborators', 'pendingCollaboratorIds', 'collaboratorIds']) &&
+             oldPending is list &&
+             newPending is list &&
+             oldAccepted is list &&
+             newAccepted is list &&
+             newCollaborators is list &&
+             newCollaborators.size() <= 10 &&
+             (!('collaborators' in resource.data) || !(resource.data.collaborators is list) ||
+              newCollaborators.size() <= resource.data.collaborators.size()) &&
+             request.auth.uid in oldPending &&
+             !(request.auth.uid in newPending) &&
+             oldPending.hasAll(newPending) &&
+             oldPending.size() == newPending.size() + 1 &&
+             newAccepted.hasAll(oldAccepted) &&
+             (
+               (
+                 oldAccepted.hasAll(newAccepted) &&
+                 newAccepted.size() == oldAccepted.size()
+               ) ||
+               (
+                 !(request.auth.uid in oldAccepted) &&
+                 request.auth.uid in newAccepted &&
+                 newAccepted.hasOnly(oldAccepted + [request.auth.uid]) &&
+                 newAccepted.size() == oldAccepted.size() + 1
+               )
+             );
+    }
+
+    function isValidCollabOptOut() {
+      let oldAccepted = resource.data.get('collaboratorIds', []);
+      let newAccepted = request.resource.data.get('collaboratorIds', []);
+      let newCollaborators = request.resource.data.get('collaborators', []);
+      return isAuthenticated() &&
+             areImmutableFieldsUnchanged(['creatorId']) &&
+             request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['collaborators', 'collaboratorIds']) &&
+             oldAccepted is list &&
+             newAccepted is list &&
+             newCollaborators is list &&
+             newCollaborators.size() <= 10 &&
+             (!('collaborators' in resource.data) || !(resource.data.collaborators is list) ||
+              newCollaborators.size() <= resource.data.collaborators.size()) &&
+             request.auth.uid in oldAccepted &&
+             !(request.auth.uid in newAccepted) &&
+             oldAccepted.hasAll(newAccepted) &&
+             oldAccepted.size() == newAccepted.size() + 1;
+    }
+
+    function isValidMusicTrackUseCountUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['useCount']) &&
+             request.resource.data.useCount is int &&
+             (
+               ((!('useCount' in resource.data) || !(resource.data.useCount is int)) &&
+                request.resource.data.useCount == 1) ||
+               (('useCount' in resource.data && resource.data.useCount is int && resource.data.useCount >= 0) &&
+                request.resource.data.useCount == resource.data.useCount + 1)
+             );
+    }
+
+    function isValidUserProfileWrite(data) {
+      return isValidOptionalString(data, 'uid', 128) &&
+             isValidOptionalString(data, 'username', 64) &&
+             isValidOptionalString(data, 'displayName', 120) &&
+             isValidOptionalString(data, 'bio', 2000) &&
+             isValidOptionalString(data, 'avatarUrl', 2048) &&
+             isValidOptionalString(data, 'bannerUrl', 2048) &&
+             isValidOptionalString(data, 'bannerWorkId', 128) &&
+             isValidOptionalString(data, 'publicKey', 4096) &&
+             isValidOptionalString(data, 'fcmToken', 1024) &&
+             isValidOptionalString(data, 'email', 254) &&
+             isValidOptionalString(data, 'customEmail', 254) &&
+             isValidOptionalString(data, 'googleId', 128) &&
+             isValidOptionalString(data, 'gender', 40) &&
+             isValidOptionalString(data, 'statusEmoji', 32) &&
+             isValidOptionalString(data, 'statusText', 200) &&
+             isValidOptionalString(data, 'location', 200) &&
+             isValidOptionalString(data, 'officeLocation', 200) &&
+             isValidOptionalString(data, 'homeLocation', 200) &&
+             isValidOptionalString(data, 'countryLocation', 120) &&
+             isValidOptionalList(data, 'interests', 50) &&
+             isValidOptionalList(data, 'contentTags', 50) &&
+             isValidOptionalList(data, 'onlyFriends', 500) &&
+             isValidOptionalList(data, 'blockedUsers', 500) &&
+             isValidOptionalList(data, 'blockedUserIds', 500) &&
+             isValidOptionalMap(data, 'socialLinks', 20) &&
+             isValidOptionalMap(data, 'dataVisibility', 30) &&
+             isValidOptionalBool(data, 'online') &&
+             isValidOptionalBool(data, 'showLocation') &&
+             isValidOptionalBool(data, 'isOnboarded') &&
+             isValidOptionalBool(data, 'privateAccount') &&
+             isValidOptionalBool(data, 'isPrivateAccount') &&
+             isValidOptionalBool(data, 'allowTagging') &&
+             isValidOptionalBool(data, 'showOnlineStatus') &&
+             isValidOptionalBool(data, 'pushNotificationsEnabled') &&
+             isValidOptionalBool(data, 'emailNotificationsEnabled') &&
+             isValidOptionalBool(data, 'quietModeEnabled') &&
+             isValidOptionalBool(data, 'unrecognizedLoginsEnabled') &&
+             isValidOptionalTimestampOrNumber(data, 'lastSeen') &&
+             isValidOptionalTimestampOrNumber(data, 'createdAt') &&
+             isValidOptionalTimestampOrNumber(data, 'updatedAt') &&
+             isValidOptionalTimestampOrNumber(data, 'lastTokenUpdate') &&
+             isValidOptionalTimestampOrNumber(data, 'agreedToTermsAt');
+    }
+
+    function isValidNotification(data) {
+      return 'actorUid' in data && data.actorUid is string && data.actorUid.size() > 0 && data.actorUid.size() <= 128 &&
+             'type' in data && data.type is string && data.type.size() > 0 && data.type.size() <= 40 &&
+             'actionText' in data && data.actionText is string && data.actionText.size() <= 300 &&
+             isValidOptionalString(data, 'id', 128) &&
+             isValidOptionalString(data, 'actorName', 120) &&
+             isValidOptionalString(data, 'actorHandle', 64) &&
+             isValidOptionalString(data, 'actorAvatarUrl', 2048) &&
+             isValidOptionalString(data, 'actorGender', 40) &&
+             isValidOptionalString(data, 'actorVerifiedTone', 40) &&
+             isValidOptionalString(data, 'detailText', 1000) &&
+             isValidOptionalString(data, 'targetPreviewUrl', 2048) &&
+             isValidOptionalString(data, 'targetId', 256) &&
+             isValidOptionalBool(data, 'isVerified') &&
+             isValidOptionalBool(data, 'isRead') &&
+             isValidOptionalBool(data, 'following') &&
+             isValidOptionalBool(data, 'likedComment') &&
+             isValidOptionalBool(data, 'likedBack') &&
+             isValidOptionalTimestampOrNumber(data, 'timestamp');
+    }
+
+    function isValidHighlight(data, userId) {
+      return (!('userId' in data) || data.userId == userId) &&
+             isValidOptionalString(data, 'id', 128) &&
+             isValidOptionalString(data, 'title', 100) &&
+             isValidOptionalString(data, 'emoji', 16) &&
+             isValidOptionalString(data, 'coverUrl', 2048) &&
+             isValidOptionalList(data, 'storyIds', 100) &&
+             isValidOptionalNumberRange(data, 'gradientIndex', 0, 50) &&
+             isValidOptionalTimestampOrNumber(data, 'createdAt') &&
+             isValidOptionalTimestampOrNumber(data, 'updatedAt');
+    }
+
+    function isValidPostOrFlash(data) {
+      return 'creatorId' in data && data.creatorId is string && data.creatorId.size() > 0 && data.creatorId.size() <= 128 &&
+             isValidOptionalString(data, 'id', 128) &&
+             isValidOptionalString(data, 'authorUsername', 64) &&
+             isValidOptionalString(data, 'authorDisplayName', 120) &&
+             isValidOptionalString(data, 'authorAvatarUrl', 2048) &&
+             isValidOptionalBool(data, 'authorVerified') &&
+             isValidOptionalString(data, 'authorVerifiedTone', 40) &&
+             isValidOptionalString(data, 'title', 300) &&
+             isValidOptionalString(data, 'description', 5000) &&
+             isValidOptionalString(data, 'caption', 5000) &&
+             isValidOptionalString(data, 'aspectRatio', 32) &&
+             isValidOptionalString(data, 'postType', 32) &&
+             isValidOptionalString(data, 'jsonUrl', 524288) &&
+             isValidOptionalString(data, 'imageUrl', 2048) &&
+             isValidOptionalString(data, 'videoUrl', 2048) &&
+             isValidOptionalString(data, 'thumbnailUrl', 2048) &&
+             isValidOptionalString(data, 'location', 200) &&
+             isValidOptionalString(data, 'trendingTag', 80) &&
+             isValidOptionalString(data, 'remixedFromPostId', 128) &&
+             isValidOptionalString(data, 'remixedFromAuthorId', 128) &&
+             isValidOptionalString(data, 'remixedFromAuthorUsername', 64) &&
+             isValidOptionalString(data, 'remixedFromAuthorDisplayName', 120) &&
+             isValidOptionalString(data, 'remixedFromAuthorAvatar', 2048) &&
+             isValidOptionalBool(data, 'remixedFromAuthorVerified') &&
+             isValidOptionalList(data, 'imageUrls', 20) &&
+             isValidOptionalList(data, 'workUrls', 20) &&
+             isValidOptionalList(data, 'tags', 30) &&
+             isValidOptionalList(data, 'hashtags', 30) &&
+             isValidOptionalList(data, 'mentions', 50) &&
+             isValidOptionalList(data, 'collaborators', 10) &&
+             isValidOptionalList(data, 'pendingCollaboratorIds', 10) &&
+             isValidOptionalList(data, 'collaboratorIds', 10) &&
+             isValidOptionalNumberRange(data, 'grain', 0, 1000) &&
+             isValidOptionalNumberRange(data, 'duration', 0, 600000) &&
+             isValidOptionalBool(data, 'hideLikesCount') &&
+             isValidOptionalBool(data, 'hideSharesCount') &&
+             isValidOptionalBool(data, 'hideRemixesCount') &&
+             isValidOptionalBool(data, 'hideDownloadsCount') &&
+             isValidOptionalBool(data, 'hideSavesCount') &&
+             isValidOptionalBool(data, 'turnOffComments') &&
+             isValidOptionalBool(data, 'turnOffRemix') &&
+             isValidOptionalBool(data, 'archived') &&
+             isValidOptionalBool(data, 'isArchived') &&
+             isValidOptionalTimestampOrNumber(data, 'timestamp') &&
+             isValidMusicAttachment(data);
+    }
+
+    function isValidPostOrFlashOnCreate(data) {
+      return isValidPostOrFlash(data) &&
+             isFalseOrAbsentBool(data, 'isTrending') &&
+             isFalseOrAbsentBool(data, 'trendingExcluded') &&
+             (!('trendingOrder' in data) || data.trendingOrder == null) &&
+             isFalseOrAbsentBool(data, 'isFeatured') &&
+             isFalseOrAbsentBool(data, 'isTakedown') &&
+             isEmptyOrAbsentList(data, 'collaboratorIds') &&
+             isEmptyOrAbsentList(data, 'likedBy') &&
+             isEmptyOrAbsentList(data, 'dislikedBy') &&
+             isEmptyOrAbsentList(data, 'remixedBy') &&
+             isEmptyOrAbsentList(data, 'downloadedBy') &&
+             isEmptyOrAbsentList(data, 'sharedBy') &&
+             isEmptyOrAbsentList(data, 'savedBy') &&
+             isEmptyOrAbsentList(data, 'viewedBy') &&
+             isZeroOrAbsentInt(data, 'likesCount') &&
+             isZeroOrAbsentInt(data, 'likes') &&
+             isZeroOrAbsentInt(data, 'remixCount') &&
+             isZeroOrAbsentInt(data, 'remixes') &&
+             isZeroOrAbsentInt(data, 'downloadCount') &&
+             isZeroOrAbsentInt(data, 'downloads') &&
+             isZeroOrAbsentInt(data, 'shareCount') &&
+             isZeroOrAbsentInt(data, 'shares') &&
+             isZeroOrAbsentInt(data, 'saveCount') &&
+             isZeroOrAbsentInt(data, 'commentsCount') &&
+             isZeroOrAbsentInt(data, 'commentCount');
+    }
+
+    function isValidComment(data) {
+      return 'userId' in data && data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             isValidOptionalString(data, 'id', 128) &&
+             isValidOptionalString(data, 'videoId', 128) &&
+             isValidOptionalString(data, 'postId', 128) &&
+             isValidOptionalString(data, 'username', 64) &&
+             isValidOptionalString(data, 'displayName', 120) &&
+             isValidOptionalString(data, 'avatarUrl', 2048) &&
+             isValidOptionalString(data, 'verifiedTone', 40) &&
+             isValidOptionalString(data, 'role', 64) &&
+             isValidOptionalString(data, 'text', 4000) &&
+             isValidOptionalString(data, 'replyToCommentId', 128) &&
+             isValidOptionalString(data, 'replyToUsername', 64) &&
+             isValidOptionalString(data, 'replyFlashVideoUrl', 2048) &&
+             isValidOptionalString(data, 'mediaUrl', 2048) &&
+             isValidOptionalList(data, 'likedBy', 10000) &&
+             isValidOptionalList(data, 'dislikedBy', 10000) &&
+             isValidOptionalTimestampOrNumber(data, 'timestamp');
+    }
+
+    function isValidStory(data) {
+      return 'userId' in data && data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             isValidOptionalString(data, 'id', 128) &&
+             isValidOptionalString(data, 'mediaUrl', 2048) &&
+             isValidOptionalString(data, 'textContent', 4000) &&
+             isValidOptionalString(data, 'textFormat', 65536) &&
+             isValidOptionalString(data, 'backgroundColor', 200) &&
+             (!('audienceType' in data) || data.audienceType == null ||
+              (data.audienceType is string && data.audienceType in ['public', 'followers', 'friends', 'only_friends', 'custom'])) &&
+             isValidOptionalList(data, 'customAudienceIds', 500) &&
+             isValidOptionalList(data, 'viewedBy', 10000) &&
+             isValidOptionalList(data, 'likedBy', 10000) &&
+             isValidOptionalList(data, 'mentionedUserIds', 100) &&
+             isValidOptionalList(data, 'mentionedUsernames', 100) &&
+             isValidOptionalBool(data, 'isHighlight') &&
+             isValidOptionalString(data, 'highlightId', 128) &&
+             isValidOptionalString(data, 'highlightTitle', 100) &&
+             isValidOptionalString(data, 'highlightCoverUrl', 2048) &&
+             isValidOptionalString(data, 'repostedFromStoryId', 128) &&
+             isValidOptionalString(data, 'repostedFromUserId', 128) &&
+             isValidOptionalString(data, 'repostedFromUsername', 64) &&
+             isValidOptionalString(data, 'repostedFromDisplayName', 120) &&
+             isValidOptionalTimestampOrNumber(data, 'timestamp') &&
+             isValidOptionalTimestampOrNumber(data, 'expiresAt') &&
+             isValidMusicAttachment(data);
+    }
+
+    function isValidStoryOnCreate(data) {
+      return isValidStory(data) &&
+             isZeroOrAbsentInt(data, 'views') &&
+             isZeroOrAbsentInt(data, 'likes') &&
+             isZeroOrAbsentInt(data, 'shares') &&
+             isZeroOrAbsentInt(data, 'viewsCount') &&
+             isZeroOrAbsentInt(data, 'likesCount') &&
+             isEmptyOrAbsentList(data, 'viewedBy') &&
+             isEmptyOrAbsentList(data, 'likedBy');
+    }
+
+    function isValidStoryNonOwnerCounterUpdate() {
+      let affected = request.resource.data.diff(resource.data).affectedKeys();
+      return affected.hasOnly(['viewedBy', 'likedBy', 'views', 'likes', 'shares', 'viewsCount', 'likesCount']) &&
+             (!('shares' in affected) || (
+               'shares' in request.resource.data &&
+               request.resource.data.shares is int &&
+               (
+                 ((!('shares' in resource.data) || !(resource.data.shares is int)) &&
+                  request.resource.data.shares == 1) ||
+                 (('shares' in resource.data && resource.data.shares is int && resource.data.shares >= 0) &&
+                  request.resource.data.shares == resource.data.shares + 1)
+               )
+             )) &&
+             (!('views' in affected) || ('views' in request.resource.data && request.resource.data.views is int)) &&
+             (!('viewsCount' in affected) || ('viewsCount' in request.resource.data && request.resource.data.viewsCount is int)) &&
+             (!('likes' in affected) || ('likes' in request.resource.data && request.resource.data.likes is int)) &&
+             (!('likesCount' in affected) || ('likesCount' in request.resource.data && request.resource.data.likesCount is int)) &&
+             (!('viewedBy' in affected) || ('viewedBy' in request.resource.data && request.resource.data.viewedBy is list && request.resource.data.viewedBy.size() <= 10000)) &&
+             (!('likedBy' in affected) || ('likedBy' in request.resource.data && request.resource.data.likedBy is list && request.resource.data.likedBy.size() <= 10000));
+    }
+
+    function isValidChatRoom(data) {
+      return isValidOptionalString(data, 'id', 256) &&
+             isValidOptionalString(data, 'name', 120) &&
+             isValidOptionalString(data, 'groupDescription', 1000) &&
+             isValidOptionalString(data, 'avatarUrl', 2048) &&
+             isValidOptionalString(data, 'createdBy', 128) &&
+             isValidOptionalString(data, 'lastMessage', 1000) &&
+             isValidOptionalString(data, 'lastSender', 128) &&
+             isValidOptionalString(data, 'lastMessageId', 128) &&
+             isValidOptionalString(data, 'pinnedMessageId', 128) &&
+             isValidOptionalString(data, 'pinnedMessageText', 500) &&
+             isValidOptionalString(data, 'pinnedMessageBy', 128) &&
+             isValidOptionalString(data, 'inviteCode', 64) &&
+             isValidOptionalList(data, 'participants', 500) &&
+             isValidOptionalList(data, 'participantIds', 500) &&
+             isValidOptionalList(data, 'admins', 100) &&
+             isValidOptionalList(data, 'favoritedBy', 500) &&
+             isValidOptionalList(data, 'archivedBy', 500) &&
+             isValidOptionalList(data, 'deletedBy', 500) &&
+             isValidOptionalList(data, 'mutedBy', 500) &&
+             isValidOptionalBool(data, 'isGroup') &&
+             isValidOptionalBool(data, 'lastMessageIsRead') &&
+             isValidOptionalBool(data, 'lastMessageIsDelivered') &&
+             isValidOptionalBool(data, 'onlyAdminsCanPost') &&
+             isValidOptionalBool(data, 'isPublicGroup') &&
+             isValidOptionalBool(data, 'editInfoAdminsOnly') &&
+             isValidOptionalNumberRange(data, 'disappearingHours', 0, 8760) &&
+             isValidOptionalTimestampOrNumber(data, 'lastMessageTime') &&
+             isValidOptionalTimestampOrNumber(data, 'pinnedAt');
+    }
+
+    function isValidChatMessage(data) {
+      return 'senderId' in data && data.senderId is string && data.senderId.size() > 0 && data.senderId.size() <= 128 &&
+             isValidOptionalString(data, 'id', 128) &&
+             isValidOptionalString(data, 'text', 32768) &&
+             isValidOptionalString(data, 'iv', 256) &&
+             isValidOptionalString(data, 'messageType', 40) &&
+             isValidOptionalString(data, 'imageUrl', 2048) &&
+             isValidOptionalString(data, 'mediaUrl', 2048) &&
+             isValidOptionalString(data, 'mediaType', 128) &&
+             isValidOptionalString(data, 'workId', 128) &&
+             isValidOptionalString(data, 'replyToMessageId', 128) &&
+             isValidOptionalString(data, 'replyToAuthor', 120) &&
+             isValidOptionalString(data, 'replyToPreview', 500) &&
+             isValidOptionalString(data, 'storyId', 128) &&
+             isValidOptionalString(data, 'storyThumbnailUrl', 2048) &&
+             isValidOptionalString(data, 'flashVideoId', 128) &&
+             isValidOptionalString(data, 'flashVideoThumbnailUrl', 2048) &&
+             isValidOptionalString(data, 'flashVideoUrl', 2048) &&
+             isValidOptionalString(data, 'flashVideoCaption', 2000) &&
+             isValidOptionalString(data, 'flashVideoAuthorUsername', 64) &&
+             isValidOptionalString(data, 'flashVideoAuthorAvatarUrl', 2048) &&
+             isValidOptionalNumberRange(data, 'flashVideoDurationMs', 0, 600000) &&
+             isValidOptionalString(data, 'callDuration', 64) &&
+             isValidOptionalString(data, 'callType', 32) &&
+             isValidOptionalString(data, 'fontStyle', 64) &&
+             isValidOptionalString(data, 'fileName', 255) &&
+             isValidOptionalNumberRange(data, 'fileSizeBytes', 0, 2147483648) &&
+             isValidOptionalString(data, 'fileExtension', 32) &&
+             isValidOptionalString(data, 'fileSize', 64) &&
+             isValidOptionalNumberRange(data, 'durationSeconds', 0, 36000) &&
+             isValidOptionalBool(data, 'isRead') &&
+             isValidOptionalBool(data, 'read') &&
+             isValidOptionalBool(data, 'isDelivered') &&
+             isValidOptionalBool(data, 'delivered') &&
+             isValidOptionalBool(data, 'isEdited') &&
+             isValidOptionalBool(data, 'isPollClosed') &&
+             isValidOptionalBool(data, 'isForwarded') &&
+             isValidOptionalList(data, 'deletedFor', 200) &&
+             isValidOptionalMap(data, 'encryptedAesKeys', 505) &&
+             isValidOptionalMap(data, 'reactions', 500) &&
+             isValidOptionalMap(data, 'pollVotes', 500) &&
+             isValidOptionalMap(data, 'deliveredTo', 500) &&
+             isValidOptionalMap(data, 'readBy', 500) &&
+             isValidOptionalTimestampOrNumber(data, 'timestamp') &&
+             isValidMusicAttachment(data);
+    }
+
+    function isValidMessageParticipantUpdate() {
+      let affected = request.resource.data.diff(resource.data).affectedKeys();
+      return affected.hasOnly([
+               'delivered', 'isDelivered', 'read', 'isRead', 'readAt', 'deliveredAt',
+               'status', 'reactions', 'reactionCounts', 'pollVotes', 'pollData',
+               'isPollClosed', 'readBy', 'deliveredTo', 'deletedFor'
+             ]) &&
+             isOwnMapKeyUpdate('readBy') &&
+             isOwnMapKeyUpdate('deliveredTo') &&
+             isOwnMapKeyUpdate('pollVotes') &&
+             isOwnMapKeyUpdate('reactions') &&
+             isOwnDeletedForUpdate();
+    }
+
+    function isValidUserChatPrefs(data) {
+      return 'userId' in data && data.userId is string && data.userId == request.auth.uid &&
+             isValidOptionalBool(data, 'muted') &&
+             isValidOptionalString(data, 'roomId', 256) &&
+             isValidOptionalString(data, 'defaultRatio', 32) &&
+             isValidOptionalString(data, 'hiddenChatPinHash', 256) &&
+             isValidOptionalList(data, 'blockedUserIds', 500) &&
+             isValidOptionalList(data, 'hiddenPostIds', 1000) &&
+             isValidOptionalList(data, 'drafts', 100) &&
+             isValidOptionalList(data, 'pinnedChatIds', 200) &&
+             isValidOptionalList(data, 'mutedChatIds', 200) &&
+             isValidOptionalList(data, 'hiddenChatIds', 200) &&
+             isValidOptionalMap(data, 'chatAppearance', 30) &&
+             isValidOptionalTimestampOrNumber(data, 'updatedAt');
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasOnly([
+               'id', 'reporterId', 'workId', 'targetId', 'targetType', 'targetAuthorId',
+               'reportedUserId', 'reportedUsername', 'roomId', 'snippetMessages',
+               'type', 'reason', 'status', 'timestamp'
+             ]) &&
+             'reporterId' in data && data.reporterId == request.auth.uid &&
+             (!('status' in data) || data.status == 'pending') &&
+             isValidOptionalString(data, 'id', 128) &&
+             isValidOptionalString(data, 'workId', 128) &&
+             isValidOptionalString(data, 'targetId', 128) &&
+             isValidOptionalString(data, 'targetType', 64) &&
+             isValidOptionalString(data, 'targetAuthorId', 128) &&
+             isValidOptionalString(data, 'reportedUserId', 128) &&
+             isValidOptionalString(data, 'reportedUsername', 64) &&
+             isValidOptionalString(data, 'roomId', 256) &&
+             isValidOptionalString(data, 'type', 64) &&
+             isValidOptionalString(data, 'reason', 2000) &&
+             isValidOptionalList(data, 'snippetMessages', 50) &&
+             isValidOptionalTimestampOrNumber(data, 'timestamp');
     }
 
     function isValidProRequest(data) {
@@ -126,12 +706,17 @@ service cloud.firestore {
              isValidOptionalTimestampOrNumber(data, 'updatedAt');
     }
 
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
     // 1. Users Collection
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && (
+      allow create: if isOwner(userId) &&
+        isValidUserProfileWrite(request.resource.data) && (
         (!('uid' in request.resource.data) || request.resource.data.uid == userId) &&
-        (!('role' in request.resource.data) || request.resource.data.role == '' || request.resource.data.role == 'Creator') &&
+        (!('role' in request.resource.data) || isAllowedCreatorRole(request.resource.data.role)) &&
         (!('verified' in request.resource.data) || request.resource.data.verified == false) &&
         (!('isPro' in request.resource.data) || request.resource.data.isPro == false) &&
         (!('verifiedTone' in request.resource.data) || request.resource.data.verifiedTone == null || request.resource.data.verifiedTone == '') &&
@@ -146,7 +731,14 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         (
           isOwner(userId) &&
-          areImmutableFieldsUnchanged(['role', 'isBanned', 'banReason', 'bannedAt', 'suspendedUntil', 'verified', 'isPro', 'verifiedTone', 'proActivatedAt', 'proPlanTier']) &&
+          isValidUserProfileWrite(request.resource.data) &&
+          areImmutableFieldsUnchanged(['isBanned', 'banReason', 'bannedAt', 'suspendedUntil', 'verified', 'isPro', 'verifiedTone', 'proActivatedAt', 'proPlanTier']) &&
+          (
+            areImmutableFieldsUnchanged(['role']) ||
+            ('role' in request.resource.data &&
+             isAllowedCreatorRole(request.resource.data.role) &&
+             (!('role' in resource.data) || isAllowedCreatorRole(resource.data.role)))
+          ) &&
           (!('uid' in request.resource.data) || request.resource.data.uid == userId)
         ) ||
         (
@@ -180,7 +772,8 @@ service cloud.firestore {
 
       match /highlights/{highlightId} {
         allow read: if isAuthenticated();
-        allow write: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidHighlight(request.resource.data, userId);
+        allow delete: if isOwner(userId);
       }
 
       match /liked_posts/{workId} {
@@ -197,18 +790,31 @@ service cloud.firestore {
 
       match /notifications/{notifId} {
         allow read: if isOwner(userId);
-        allow update: if isOwner(userId) && areImmutableFieldsUnchanged(['actorUid']);
-        allow delete: if isAuthenticated() && (request.auth.uid == userId || (resource != null && resource.data.actorUid == request.auth.uid));
-        allow create: if isAuthenticated() && request.resource.data.actorUid == request.auth.uid;
+        allow update: if isOwner(userId) &&
+          isValidNotification(request.resource.data) &&
+          areImmutableFieldsUnchanged(['actorUid']);
+        allow delete: if isAuthenticated() &&
+          (request.auth.uid == userId || (resource != null && resource.data.actorUid == request.auth.uid));
+        allow create: if isAuthenticated() &&
+          isValidNotification(request.resource.data) &&
+          (request.resource.data.actorUid == request.auth.uid || isOwner(userId));
       }
     }
 
     // 2. Community Works Collection
     match /community_works/{workId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.creatorId;
+      allow create: if isAuthenticated() &&
+        request.auth.uid == request.resource.data.creatorId &&
+        isValidPostOrFlashOnCreate(request.resource.data);
       allow update: if isAuthenticated() && (
-        (request.auth.uid == resource.data.creatorId && areImmutableFieldsUnchanged(['creatorId'])) ||
+        (
+          request.auth.uid == resource.data.creatorId &&
+          areImmutableFieldsUnchanged(['creatorId', 'isTrending', 'trendingExcluded', 'trendingOrder', 'isFeatured', 'isTakedown']) &&
+          isValidPostOrFlash(request.resource.data)
+        ) ||
+        isValidCollabInviteResponse() ||
+        isValidCollabOptOut() ||
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['likes', 'likesCount', 'likedBy', 'dislikedBy', 'views', 'viewsCount', 'viewedBy', 'shares', 'shareCount', 'sharesCount', 'sharedBy', 'remixes', 'remixCount', 'remixesCount', 'remixedBy', 'downloads', 'downloadCount', 'downloadsCount', 'downloadedBy', 'saveCount', 'savedBy', 'commentCount', 'commentsCount'])
       );
@@ -225,9 +831,13 @@ service cloud.firestore {
 
       match /comments/{commentId} {
         allow read: if isAuthenticated();
-        allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+        allow create: if isAuthenticated() &&
+          request.auth.uid == request.resource.data.userId &&
+          isValidComment(request.resource.data);
         allow update: if isAuthenticated() && (
-          (request.auth.uid == resource.data.userId && areImmutableFieldsUnchanged(['userId'])) ||
+          (request.auth.uid == resource.data.userId &&
+           areImmutableFieldsUnchanged(['userId']) &&
+           isValidComment(request.resource.data)) ||
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['likedBy', 'likesCount', 'dislikedBy', 'isPinned', 'pinned', 'isCreatorHearted', 'creatorHearted', 'replyCount', 'reactions', 'reactionCounts', 'poll'])
         );
@@ -242,8 +852,12 @@ service cloud.firestore {
     // 3. Usernames Uniqueness Collection
     match /usernames/{username} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated() &&
+        request.resource.data.uid == request.auth.uid &&
+        username.size() <= 64;
+      allow update: if isAuthenticated() &&
+        resource.data.uid == request.auth.uid &&
+        request.resource.data.uid == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
     }
 
@@ -251,8 +865,12 @@ service cloud.firestore {
     match /chats/{chatId} {
       allow get: if isAuthenticated() && (resource == null || isChatParticipant(resource.data));
       allow list: if isAuthenticated() && isChatParticipant(resource.data);
-      allow create: if isAuthenticated() && isChatParticipant(request.resource.data);
-      allow update: if isAuthenticated() && isChatParticipant(resource.data);
+      allow create: if isAuthenticated() &&
+        isChatParticipant(request.resource.data) &&
+        isValidChatRoom(request.resource.data);
+      allow update: if isAuthenticated() &&
+        isChatParticipant(resource.data) &&
+        isValidChatRoom(request.resource.data);
       allow delete: if isAuthenticated() && isChatParticipant(resource.data);
 
       match /messages/{messageId} {
@@ -260,13 +878,17 @@ service cloud.firestore {
           isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data);
         allow create: if isAuthenticated() &&
           isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data) &&
-          request.auth.uid == request.resource.data.senderId;
+          request.auth.uid == request.resource.data.senderId &&
+          isValidChatMessage(request.resource.data);
         allow update: if isAuthenticated() &&
           isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data) &&
           (
-            (request.auth.uid == resource.data.senderId && areImmutableFieldsUnchanged(['senderId'])) ||
-            request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['delivered', 'isDelivered', 'read', 'isRead', 'readAt', 'deliveredAt', 'status', 'reactions', 'reactionCounts', 'pollVotes'])
+            (
+              request.auth.uid == resource.data.senderId &&
+              areImmutableFieldsUnchanged(['senderId']) &&
+              isValidChatMessage(request.resource.data)
+            ) ||
+            isValidMessageParticipantUpdate()
           );
         allow delete: if isAuthenticated() &&
           isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data) &&
@@ -277,9 +899,17 @@ service cloud.firestore {
     // 5. Flash Videos Collection
     match /flash_videos/{flashId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.creatorId;
+      allow create: if isAuthenticated() &&
+        request.auth.uid == request.resource.data.creatorId &&
+        isValidPostOrFlashOnCreate(request.resource.data);
       allow update: if isAuthenticated() && (
-        (request.auth.uid == resource.data.creatorId && areImmutableFieldsUnchanged(['creatorId'])) ||
+        (
+          request.auth.uid == resource.data.creatorId &&
+          areImmutableFieldsUnchanged(['creatorId', 'isTrending', 'trendingExcluded', 'trendingOrder', 'isFeatured', 'isTakedown']) &&
+          isValidPostOrFlash(request.resource.data)
+        ) ||
+        isValidCollabInviteResponse() ||
+        isValidCollabOptOut() ||
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['likes', 'likesCount', 'likedBy', 'dislikedBy', 'views', 'viewsCount', 'viewedBy', 'shares', 'shareCount', 'sharesCount', 'sharedBy', 'remixes', 'remixCount', 'remixesCount', 'remixedBy', 'downloads', 'downloadCount', 'downloadsCount', 'downloadedBy', 'saveCount', 'savedBy', 'commentCount', 'commentsCount'])
       );
@@ -296,9 +926,13 @@ service cloud.firestore {
 
       match /comments/{commentId} {
         allow read: if isAuthenticated();
-        allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+        allow create: if isAuthenticated() &&
+          request.auth.uid == request.resource.data.userId &&
+          isValidComment(request.resource.data);
         allow update: if isAuthenticated() && (
-          (request.auth.uid == resource.data.userId && areImmutableFieldsUnchanged(['userId'])) ||
+          (request.auth.uid == resource.data.userId &&
+           areImmutableFieldsUnchanged(['userId']) &&
+           isValidComment(request.resource.data)) ||
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['likedBy', 'likesCount', 'dislikedBy', 'isPinned', 'pinned', 'isCreatorHearted', 'creatorHearted', 'replyCount', 'reactions', 'reactionCounts', 'poll'])
         );
@@ -313,9 +947,13 @@ service cloud.firestore {
     // 6. Flash Comments Collection
     match /flash_comments/{commentId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+      allow create: if isAuthenticated() &&
+        request.auth.uid == request.resource.data.userId &&
+        isValidComment(request.resource.data);
       allow update: if isAuthenticated() && (
-        (request.auth.uid == resource.data.userId && areImmutableFieldsUnchanged(['userId'])) ||
+        (request.auth.uid == resource.data.userId &&
+         areImmutableFieldsUnchanged(['userId']) &&
+         isValidComment(request.resource.data)) ||
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['likedBy', 'likesCount', 'dislikedBy', 'isPinned', 'pinned', 'isCreatorHearted', 'creatorHearted', 'replyCount', 'reactions', 'reactionCounts', 'poll'])
       );
@@ -336,37 +974,59 @@ service cloud.firestore {
     // 7. Stories Collection
     match /stories/{storyId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+      allow create: if isAuthenticated() &&
+        request.auth.uid == request.resource.data.userId &&
+        isValidStoryOnCreate(request.resource.data);
       allow update: if isAuthenticated() && (
-        (request.auth.uid == resource.data.userId && areImmutableFieldsUnchanged(['userId'])) ||
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['viewedBy', 'likedBy', 'views', 'likes', 'shares', 'viewsCount', 'likesCount'])
+        (
+          request.auth.uid == resource.data.userId &&
+          areImmutableFieldsUnchanged(['userId']) &&
+          isValidStory(request.resource.data)
+        ) ||
+        isValidStoryNonOwnerCounterUpdate()
       );
       allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
     }
 
     // 8. User Chat Preferences Collection
     match /user_chat_prefs/{prefId} {
-      allow get: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid);
+      allow get: if isAuthenticated() && (
+        resource == null ||
+        resource.data.userId == request.auth.uid ||
+        (
+          'roomId' in resource.data &&
+          resource.data.roomId is string &&
+          resource.data.keys().hasOnly(['muted', 'roomId', 'userId']) &&
+          exists(/databases/$(database)/documents/chats/$(resource.data.roomId)) &&
+          isChatParticipant(get(/databases/$(database)/documents/chats/$(resource.data.roomId)).data)
+        )
+      );
       allow list: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() &&
+        isValidUserChatPrefs(request.resource.data) &&
+        (
+          prefId == request.auth.uid ||
+          ('roomId' in request.resource.data &&
+           request.resource.data.roomId is string &&
+           prefId == request.auth.uid + '_' + request.resource.data.roomId)
+        );
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        isValidUserChatPrefs(request.resource.data);
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
     // 9. Reports Collection
     match /reports/{reportId} {
       allow read: if false;
-      allow create: if isAuthenticated() &&
-        request.resource.data.reporterId == request.auth.uid &&
-        (!('status' in request.resource.data) || request.resource.data.status == 'pending') &&
-        (!('reason' in request.resource.data) || (request.resource.data.reason is string && request.resource.data.reason.size() <= 2000));
+      allow create: if isAuthenticated() && isValidReport(request.resource.data);
       allow update, delete: if false;
     }
 
-    // 10. App Config Collection
+    // 10. App Config Collection (trending config readable by clients; global admin metadata denied)
     match /app_config/{configId} {
-      allow read: if isAuthenticated();
+      allow get: if isAuthenticated() && configId == 'trending';
+      allow list: if false;
       allow write: if false;
     }
 
@@ -436,6 +1096,9 @@ service cloud.firestore {
         resource.data.uid == request.auth.uid &&
         resource.data.status == 'payment_sent' &&
         request.resource.data.status == 'payment_submitted' &&
+        request.resource.data.paymentProofRef is string &&
+        request.resource.data.paymentProofRef.size() > 0 &&
+        request.resource.data.paymentProofRef.size() <= 200 &&
         areImmutableFieldsUnchanged([
           'uid', 'badgeTone', 'badgeTier', 'badgeLabel',
           'priceUsd', 'priceInr', 'paymentReference',
@@ -448,6 +1111,13 @@ service cloud.firestore {
         ]);
 
       allow delete: if false;
+    }
+
+    // 11c. Music Tracks Collection (Admin-managed catalog; clients may read and +1 increment useCount)
+    match /music_tracks/{trackId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if false;
+      allow update: if isAuthenticated() && isValidMusicTrackUseCountUpdate();
     }
 
     // 12. Backend / Admin / Security / Telemetry Collections (Server-only via Firebase Admin SDK)

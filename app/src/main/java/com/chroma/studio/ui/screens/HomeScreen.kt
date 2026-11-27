@@ -439,12 +439,12 @@ fun HomeScreen(
 
 
 
-    val photoEditorPicker = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    val photoEditorPicker = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Open in Photo Editor",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
     ) { uri ->
-        if (uri != null) {
-            onNavigateToImageEditor?.invoke(uri)
-        }
+        onNavigateToImageEditor?.invoke(uri)
     }
 
     val importWorkLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -723,7 +723,8 @@ fun HomeScreen(
                     avatarUrl = drawerAvatarUrl,
                     bannerUrl = drawerBannerUrl,
                     isVerified = drawerVerified,
-                    isOnline = !isGuestUser,
+                    verifiedTone = drawerUserProfile?.verifiedTone,
+                    isOnline = !isGuestUser && (drawerUserProfile?.showOnlineStatus != false),
                     draftsBadgeCount = if (savedDrafts.isNotEmpty()) savedDrafts.size.toString() else null,
                     onCloseClick = { scope.launch { drawerState.close() } },
                     onProfileClick = {
@@ -957,6 +958,7 @@ fun HomeScreen(
 
                 val currentHeroHeight = (expandedHeroHeight - with(density) { collapseOffsetPx.toDp() }).coerceAtLeast(collapsedHeroHeight)
                 val currentBottomPadding = (16.dp * (1f - collapseProgress * 0.5f)).coerceAtLeast(8.dp)
+                val headerHorizontalPadding = (20f - (4f * collapseProgress)).dp
 
                 Column(
                     modifier = Modifier
@@ -966,18 +968,26 @@ fun HomeScreen(
                         .clipToBounds()
                         .background(Color.Transparent)
                         .padding(
-                            start = 20.dp,
-                            end = 20.dp,
+                            start = headerHorizontalPadding,
+                            end = headerHorizontalPadding,
                             top = if (showHeader) (16.dp - (4.dp * collapseProgress)).coerceAtLeast(12.dp) else 12.dp,
                             bottom = if (showHeader) currentBottomPadding else 12.dp
                         )
                 ) {
 
                     val isDarkTheme = colors.isDark
-                    val heroTextColor = if (isDarkTheme) Color.White else if (collapseProgress > 0.35f) colors.textMain else Color.White
-                    val heroMutedColor = if (isDarkTheme) Color.White.copy(alpha = 0.85f) else if (collapseProgress > 0.35f) colors.textMuted else Color.White.copy(alpha = 0.9f)
-                    val heroIconBg = if (isDarkTheme) Color.White.copy(alpha = 0.16f) else if (collapseProgress > 0.35f) colors.glassBg else Color.White.copy(alpha = 0.25f)
-                    val heroIconBorder = if (isDarkTheme) Color.White.copy(alpha = 0.35f) else if (collapseProgress > 0.35f) colors.glassBorder else Color.White.copy(alpha = 0.45f)
+                    val isHeaderCollapsed = collapseProgress > 0.35f
+                    val heroTextColor = if (isDarkTheme) Color.White else if (isHeaderCollapsed) colors.textMain else Color.White
+                    val heroMutedColor = if (isDarkTheme) Color.White.copy(alpha = 0.85f) else if (isHeaderCollapsed) colors.textMuted else Color.White.copy(alpha = 0.9f)
+                    val heroIconBg = if (isDarkTheme) {
+                        Color.White.copy(alpha = 0.16f)
+                    } else if (isHeaderCollapsed) {
+                        Color(0xFFF3F4F8)
+                    } else {
+                        Color.White.copy(alpha = 0.25f)
+                    }
+                    val heroIconShadow = if (!isDarkTheme && isHeaderCollapsed) 2.dp else 0.dp
+                    val heroIconBorder = if (isDarkTheme) Color.White.copy(alpha = 0.35f) else if (isHeaderCollapsed) colors.glassBorder else Color.White.copy(alpha = 0.45f)
 
                     // Top Bar with Animated Search
                     if (showHeader) {
@@ -994,7 +1004,7 @@ fun HomeScreen(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 val menuInteraction = remember { MutableInteractionSource() }
                                 val isMenuPressed by menuInteraction.collectIsPressedAsState()
@@ -1007,6 +1017,7 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .scale(menuScale)
+                                        .shadow(heroIconShadow, CircleShape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.10f))
                                         .clip(CircleShape)
                                         .background(heroIconBg)
                                         .clickable(
@@ -1023,11 +1034,37 @@ fun HomeScreen(
                                     )
                                 }
 
-                                OscellionBrandLockup(
-                                    iconSize = 22.dp,
-                                    fontSize = 18.dp,
-                                    textColor = heroTextColor
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AnimatedVisibility(
+                                        visible = !isHeaderCollapsed,
+                                        enter = fadeIn() + expandHorizontally(),
+                                        exit = fadeOut() + shrinkHorizontally()
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            OscellionWebLogo(
+                                                modifier = Modifier.size(22.dp),
+                                                size = 22.dp
+                                            )
+                                            Spacer(Modifier.width(10.dp))
+                                        }
+                                    }
+                                    val brandFontSize = if (isHeaderCollapsed) 21.sp else 18.sp
+                                    Text(
+                                        text = "Oscellion",
+                                        fontSize = brandFontSize,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = InterFontFamily,
+                                        color = heroTextColor,
+                                        letterSpacing = (-0.5).sp
+                                    )
+                                    Text(
+                                        text = ".",
+                                        fontSize = brandFontSize,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = InterFontFamily,
+                                        color = Color(0xFF0381FE)
+                                    )
+                                }
                             }
                         }
 
@@ -1051,6 +1088,7 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .scale(importScale)
+                                        .shadow(heroIconShadow, CircleShape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.10f))
                                         .clip(CircleShape)
                                         .background(heroIconBg)
                                         .clickable(
@@ -1076,6 +1114,7 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .scale(pasteScale)
+                                        .shadow(heroIconShadow, CircleShape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.10f))
                                         .clip(CircleShape)
                                         .background(heroIconBg)
                                         .clickable(
@@ -1122,6 +1161,7 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .scale(viewModeScale)
+                                        .shadow(heroIconShadow, CircleShape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.10f))
                                         .clip(CircleShape)
                                         .background(heroIconBg)
                                         .combinedClickable(
@@ -1189,6 +1229,7 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .scale(searchScale)
+                                        .shadow(heroIconShadow, CircleShape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.10f))
                                         .clip(CircleShape)
                                         .background(heroIconBg)
                                         .clickable(
@@ -1287,145 +1328,75 @@ fun HomeScreen(
                         
 
                         Column(
-
                             modifier = Modifier
-
                                 .weight(1.5f)
-
                                 .fillMaxHeight()
-
                                 .clip(RoundedCornerShape(24.dp))
-
                                 .background(cardBrush)
-
                                 .border(1.dp, cardBorderColor, RoundedCornerShape(24.dp))
-
                                 .clickable { onNewWork() },
-
                             horizontalAlignment = Alignment.CenterHorizontally,
-
                             verticalArrangement = Arrangement.Center
-
                         ) {
-
                             Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
-
                                 Icon(Lucide.Plus, null, tint = Color.White, modifier = Modifier.size(20.dp))
-
                             }
-
                             Spacer(Modifier.height(12.dp))
-
                             Text("New gradient", color = cardTextColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-
                         }
-
-
 
                         // Button 2: Generate (AI)
-
                         val generateButtonLayers = remember(GENERATE_BUTTON_BG_JSON) {
-
                             repository.deserializeLayers(GENERATE_BUTTON_BG_JSON)
-
                         }
-
                         Box(
-
                             modifier = Modifier
-
                                 .weight(1.0f)
-
                                 .fillMaxHeight()
-
                         ) {
-
                             Box(
-
                                 modifier = Modifier
-
                                     .fillMaxSize()
-
                                     .clip(RoundedCornerShape(24.dp))
-
                                     .border(2.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
-
                                     .clickable { 
-
                                         if (FirebaseAuth.getInstance().currentUser != null) {
-
                                             val intent = Intent(context, MainActivity::class.java).apply {
-
                                                 putExtra("EXTRA_START_AI_GENERATOR", true)
-
                                             }
-
                                             context.startActivity(intent)
-
                                         } else {
-
                                             onRequireLogin()
-
                                         }
-
                                     }
-
                             ) {
-
                                 CanvasPreview(layers = generateButtonLayers, shape = "full", borderColor = Color.Transparent, modifier = Modifier.fillMaxSize())
-
                                 // Glossy highlight overlay
-
                                 Box(modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.3f), Color.Transparent))))
 
-                                
-
                                 Column(
-
                                     modifier = Modifier.fillMaxSize(),
-
                                     horizontalAlignment = Alignment.CenterHorizontally,
-
                                     verticalArrangement = Arrangement.Center
-
                                 ) {
-
                                     Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
-
                                         FluentDiamondGemIcon(modifier = Modifier.size(24.dp))
-
                                     }
-
                                     Spacer(Modifier.height(12.dp))
-
                                     Text("Generate", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-
                                 }
-
                             }
-
-                            
 
                             Box(
-
                                 modifier = Modifier
-
                                     .align(Alignment.TopCenter)
-
                                     .offset(y = (-8).dp)
-
                                     .clip(RoundedCornerShape(50))
-
                                     .background(Color.White)
-
                                     .padding(horizontal = 10.dp, vertical = 4.dp)
-
                             ) {
-
                                 Text("Pro Magic", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-
                             }
-
                         }
 
                     }
@@ -1704,11 +1675,11 @@ fun HomeScreen(
 
                         ViewMode.LIST, ViewMode.LIST_DETAILS -> GridCells.Fixed(1)
 
-                        ViewMode.GRID, ViewMode.GRID_DETAILS -> GridCells.Fixed(2)
+                        ViewMode.GRID, ViewMode.GRID_DETAILS -> GridCells.Fixed(3)
 
                     }
 
-
+                    val isTableGridMode = viewMode == ViewMode.GRID || viewMode == ViewMode.GRID_DETAILS
 
                     val currentSelectedIds by rememberUpdatedState(selectedWorkIds)
 
@@ -1722,11 +1693,15 @@ fun HomeScreen(
 
                         state = gridState,
 
-                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 180.dp),
+                        contentPadding = if (isTableGridMode) {
+                            PaddingValues(start = 0.dp, end = 0.dp, top = 2.dp, bottom = 180.dp)
+                        } else {
+                            PaddingValues(start = 0.dp, end = 0.dp, top = 4.dp, bottom = 180.dp)
+                        },
 
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isTableGridMode) 1.5.dp else 0.dp),
 
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(if (isTableGridMode) 1.5.dp else 0.dp),
 
                         modifier = Modifier
 
@@ -2338,7 +2313,7 @@ fun HomeSkeletonGrid(
 
         ViewMode.LIST, ViewMode.LIST_DETAILS -> GridCells.Fixed(1)
 
-        ViewMode.GRID, ViewMode.GRID_DETAILS -> GridCells.Fixed(2)
+        ViewMode.GRID, ViewMode.GRID_DETAILS -> GridCells.Fixed(3)
 
     }
 
@@ -2348,9 +2323,11 @@ fun HomeSkeletonGrid(
 
         ViewMode.LIST, ViewMode.LIST_DETAILS -> 7
 
-        ViewMode.GRID, ViewMode.GRID_DETAILS -> 6
+        ViewMode.GRID, ViewMode.GRID_DETAILS -> 9
 
     }
+
+    val isTableGridMode = viewMode == ViewMode.GRID || viewMode == ViewMode.GRID_DETAILS
 
 
 
@@ -2358,11 +2335,15 @@ fun HomeSkeletonGrid(
 
         columns = gridColumns,
 
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 180.dp),
+        contentPadding = if (isTableGridMode) {
+            PaddingValues(start = 0.dp, end = 0.dp, top = 2.dp, bottom = 180.dp)
+        } else {
+            PaddingValues(start = 0.dp, end = 0.dp, top = 4.dp, bottom = 180.dp)
+        },
 
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isTableGridMode) 1.5.dp else 0.dp),
 
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (isTableGridMode) 1.5.dp else 0.dp),
 
         modifier = Modifier.fillMaxSize(),
 
@@ -2399,6 +2380,8 @@ fun SkeletonWorkCard(
 ) {
 
     val colors = LocalOscellionColors.current
+    val dividerColor = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
+    val isTableGridMode = viewMode == ViewMode.GRID || viewMode == ViewMode.GRID_DETAILS
 
 
 
@@ -2408,11 +2391,7 @@ fun SkeletonWorkCard(
 
             .fillMaxWidth()
 
-            .clip(RoundedCornerShape(12.dp))
-
-            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-
-            .background(colors.glassBg)
+            .background(colors.bg)
 
     ) {
 
@@ -2420,7 +2399,7 @@ fun SkeletonWorkCard(
 
             ViewMode.GRID -> {
 
-                Column {
+                Column(modifier = Modifier.fillMaxWidth().background(colors.bg)) {
 
                     Box(
 
@@ -2430,8 +2409,6 @@ fun SkeletonWorkCard(
 
                             .aspectRatio(1.0f)
 
-                            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-
                             .background(shimmerBrush)
 
                     )
@@ -2442,167 +2419,17 @@ fun SkeletonWorkCard(
 
                             .fillMaxWidth()
 
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .background(colors.bg)
+
+                            .padding(horizontal = 6.dp, vertical = 6.dp)
 
                     ) {
-
-                        Row(
-
-                            modifier = Modifier.fillMaxWidth(),
-
-                            horizontalArrangement = Arrangement.SpaceBetween,
-
-                            verticalAlignment = Alignment.CenterVertically
-
-                        ) {
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .fillMaxWidth(0.68f)
-
-                                    .height(15.dp)
-
-                                    .clip(RoundedCornerShape(4.dp))
-
-                                    .background(shimmerBrush)
-
-                            )
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .size(24.dp)
-
-                                    .clip(CircleShape)
-
-                                    .background(shimmerBrush)
-
-                            )
-
-                        }
-
-                        Spacer(Modifier.height(7.dp))
-
-                        Row(
-
-                            verticalAlignment = Alignment.CenterVertically,
-
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-
-                        ) {
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .size(11.dp)
-
-                                    .clip(CircleShape)
-
-                                    .background(shimmerBrush)
-
-                            )
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .width(64.dp)
-
-                                    .height(10.dp)
-
-                                    .clip(RoundedCornerShape(3.dp))
-
-                                    .background(shimmerBrush)
-
-                            )
-
-                        }
-
-                    }
-
-                }
-
-            }
-
-
-
-            ViewMode.GRID_DETAILS -> {
-
-                Column {
-
-                    Box(
-
-                        modifier = Modifier
-
-                            .fillMaxWidth()
-
-                            .aspectRatio(1.22f)
-
-                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
-
-                            .background(shimmerBrush)
-
-                    )
-
-                    Column(
-
-                        modifier = Modifier
-
-                            .fillMaxWidth()
-
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
-
-                    ) {
-
-                        Row(
-
-                            modifier = Modifier.fillMaxWidth(),
-
-                            horizontalArrangement = Arrangement.SpaceBetween,
-
-                            verticalAlignment = Alignment.CenterVertically
-
-                        ) {
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .fillMaxWidth(0.68f)
-
-                                    .height(15.dp)
-
-                                    .clip(RoundedCornerShape(4.dp))
-
-                                    .background(shimmerBrush)
-
-                            )
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .size(24.dp)
-
-                                    .clip(CircleShape)
-
-                                    .background(shimmerBrush)
-
-                            )
-
-                        }
-
-                        Spacer(Modifier.height(6.dp))
 
                         Box(
 
                             modifier = Modifier
 
-                                .fillMaxWidth(0.92f)
+                                .fillMaxWidth(0.75f)
 
                                 .height(11.dp)
 
@@ -2620,6 +2447,56 @@ fun SkeletonWorkCard(
 
                                 .fillMaxWidth(0.55f)
 
+                                .height(9.dp)
+
+                                .clip(RoundedCornerShape(3.dp))
+
+                                .background(shimmerBrush)
+
+                        )
+
+                    }
+
+                }
+
+            }
+
+
+
+            ViewMode.GRID_DETAILS -> {
+
+                Column(modifier = Modifier.fillMaxWidth().background(colors.bg)) {
+
+                    Box(
+
+                        modifier = Modifier
+
+                            .fillMaxWidth()
+
+                            .aspectRatio(1.0f)
+
+                            .background(shimmerBrush)
+
+                    )
+
+                    Column(
+
+                        modifier = Modifier
+
+                            .fillMaxWidth()
+
+                            .background(colors.bg)
+
+                            .padding(horizontal = 6.dp, vertical = 6.dp)
+
+                    ) {
+
+                        Box(
+
+                            modifier = Modifier
+
+                                .fillMaxWidth(0.75f)
+
                                 .height(11.dp)
 
                                 .clip(RoundedCornerShape(3.dp))
@@ -2628,47 +2505,37 @@ fun SkeletonWorkCard(
 
                         )
 
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(4.dp))
 
-                        Row(
+                        Box(
 
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
 
-                            verticalAlignment = Alignment.CenterVertically,
+                                .fillMaxWidth(0.90f)
 
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .height(9.dp)
 
-                        ) {
+                                .clip(RoundedCornerShape(3.dp))
 
-                            Box(
+                                .background(shimmerBrush)
 
-                                modifier = Modifier
+                        )
 
-                                    .width(44.dp)
+                        Spacer(Modifier.height(4.dp))
 
-                                    .height(16.dp)
+                        Box(
 
-                                    .clip(RoundedCornerShape(6.dp))
+                            modifier = Modifier
 
-                                    .background(shimmerBrush)
+                                .fillMaxWidth(0.55f)
 
-                            )
+                                .height(9.dp)
 
-                            Box(
+                                .clip(RoundedCornerShape(3.dp))
 
-                                modifier = Modifier
+                                .background(shimmerBrush)
 
-                                    .width(55.dp)
-
-                                    .height(10.dp)
-
-                                    .clip(RoundedCornerShape(3.dp))
-
-                                    .background(shimmerBrush)
-
-                            )
-
-                        }
+                        )
 
                     }
 
@@ -2680,84 +2547,52 @@ fun SkeletonWorkCard(
 
             ViewMode.LIST -> {
 
-                Row(
-
-                    modifier = Modifier
-
-                        .fillMaxWidth()
-
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-
-                    verticalAlignment = Alignment.CenterVertically
-
-                ) {
-
-                    Box(
-
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
                         modifier = Modifier
-
-                            .size(56.dp)
-
-                            .clip(RoundedCornerShape(13.dp))
-
-                            .background(shimmerBrush)
-
-                    )
-
-                    Spacer(Modifier.width(12.dp))
-
-                    Column(
-
-                        modifier = Modifier.weight(1f),
-
-                        verticalArrangement = Arrangement.Center
-
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-
                         Box(
-
                             modifier = Modifier
-
-                                .fillMaxWidth(0.58f)
-
-                                .height(15.dp)
-
-                                .clip(RoundedCornerShape(4.dp))
-
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(shimmerBrush)
-
                         )
-
-                        Spacer(Modifier.height(6.dp))
-
+                        Spacer(Modifier.width(12.dp))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.58f)
+                                    .height(15.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(shimmerBrush)
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.38f)
+                                    .height(11.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(shimmerBrush)
+                            )
+                        }
                         Box(
-
                             modifier = Modifier
-
-                                .fillMaxWidth(0.38f)
-
-                                .height(11.dp)
-
-                                .clip(RoundedCornerShape(3.dp))
-
+                                .size(24.dp)
+                                .clip(CircleShape)
                                 .background(shimmerBrush)
-
                         )
-
                     }
-
-                    Box(
-
-                        modifier = Modifier
-
-                            .size(24.dp)
-
-                            .clip(CircleShape)
-
-                            .background(shimmerBrush)
-
+                    HorizontalDivider(
+                        thickness = 0.6.dp,
+                        color = dividerColor,
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
-
                 }
 
             }
@@ -2766,134 +2601,65 @@ fun SkeletonWorkCard(
 
             ViewMode.LIST_DETAILS -> {
 
-                Row(
-
-                    modifier = Modifier
-
-                        .fillMaxWidth()
-
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-
-                    verticalAlignment = Alignment.CenterVertically
-
-                ) {
-
-                    Box(
-
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
                         modifier = Modifier
-
-                            .size(76.dp)
-
-                            .clip(RoundedCornerShape(15.dp))
-
-                            .background(shimmerBrush)
-
-                    )
-
-                    Spacer(Modifier.width(12.dp))
-
-                    Column(
-
-                        modifier = Modifier.weight(1f),
-
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-
-                        Row(
-
-                            modifier = Modifier.fillMaxWidth(),
-
-                            horizontalArrangement = Arrangement.SpaceBetween,
-
-                            verticalAlignment = Alignment.CenterVertically
-
-                        ) {
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .fillMaxWidth(0.6f)
-
-                                    .height(15.dp)
-
-                                    .clip(RoundedCornerShape(4.dp))
-
-                                    .background(shimmerBrush)
-
-                            )
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .size(24.dp)
-
-                                    .clip(CircleShape)
-
-                                    .background(shimmerBrush)
-
-                            )
-
-                        }
-
                         Box(
-
                             modifier = Modifier
-
-                                .fillMaxWidth(0.85f)
-
-                                .height(11.dp)
-
-                                .clip(RoundedCornerShape(3.dp))
-
+                                .size(72.dp)
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(shimmerBrush)
-
                         )
-
-                        Spacer(Modifier.height(2.dp))
-
-                        Row(
-
-                            verticalAlignment = Alignment.CenterVertically,
-
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-
+                        Spacer(Modifier.width(12.dp))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.6f)
+                                        .height(15.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(shimmerBrush)
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(shimmerBrush)
+                                )
+                            }
                             Box(
-
                                 modifier = Modifier
-
-                                    .width(42.dp)
-
-                                    .height(15.dp)
-
-                                    .clip(RoundedCornerShape(5.dp))
-
-                                    .background(shimmerBrush)
-
-                            )
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .width(60.dp)
-
-                                    .height(10.dp)
-
+                                    .fillMaxWidth(0.85f)
+                                    .height(11.dp)
                                     .clip(RoundedCornerShape(3.dp))
-
                                     .background(shimmerBrush)
-
                             )
-
+                            Spacer(Modifier.height(2.dp))
+                            Box(
+                                modifier = Modifier
+                                    .width(84.dp)
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(shimmerBrush)
+                            )
                         }
-
                     }
-
+                    HorizontalDivider(
+                        thickness = 0.6.dp,
+                        color = dividerColor,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
                 }
 
             }
@@ -2907,6 +2673,7 @@ fun SkeletonWorkCard(
 
 
 private val cachedCardDateFormat by lazy { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
+private val cachedCardCompactDateFormat by lazy { SimpleDateFormat("MMM d", Locale.getDefault()) }
 private val cachedCardDateTimeFormat by lazy { SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()) }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -2960,60 +2727,56 @@ fun WorkCard(
     val isDark = colors.isDark
 
     val scale by animateFloatAsState(
-        targetValue = if (isSelected) 0.95f else 1f,
+        targetValue = if (isSelected) 0.96f else 1f,
         animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
         label = "cardScale"
     )
 
-    val cardShape = RoundedCornerShape(12.dp)
-
-    val borderWidth = if (isSelected) 2.dp else 0.5.dp
-
-    val borderColor = if (isSelected) colors.primary else (if (isDark) Color(0x22FFFFFF) else Color(0x14000000))
-
-
+    val isTableGridMode = viewMode == ViewMode.GRID || viewMode == ViewMode.GRID_DETAILS
+    val dividerColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)
+    val plainSurface = if (isDark) colors.bg else Color.White
+    val selectedOverlayBg = colors.primary.copy(alpha = 0.08f)
 
     val dateString = remember(work.lastModifiedAt) { cachedCardDateFormat.format(java.util.Date(work.lastModifiedAt)) }
-
+    val compactDateString = remember(work.lastModifiedAt) { cachedCardCompactDateFormat.format(java.util.Date(work.lastModifiedAt)) }
     val dateTimeString = remember(work.lastModifiedAt) { cachedCardDateTimeFormat.format(java.util.Date(work.lastModifiedAt)) }
 
     val layers = remember(work.layersJson) { repository.deserializeLayers(work.layersJson) }
 
-
-
     Box(
-
         modifier = Modifier
-
             .fillMaxWidth()
-
             .scale(scale)
-
-            .clip(cardShape)
-
-            .border(borderWidth, borderColor, cardShape)
-
-            .background(colors.glassBg)
-
-            .combinedClickable(
-
-                onClick = onClick,
-
-                onLongClick = {
-
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-
-                    onLongClick()
-
+            .background(if (isSelected) selectedOverlayBg else plainSurface)
+            .then(
+                if (isSelected) {
+                    Modifier.border(
+                        width = if (isTableGridMode) 1.5.dp else 1.dp,
+                        color = colors.primary,
+                        shape = androidx.compose.ui.graphics.RectangleShape
+                    )
+                } else if (isTableGridMode) {
+                    Modifier.border(
+                        width = 0.5.dp,
+                        color = dividerColor,
+                        shape = androidx.compose.ui.graphics.RectangleShape
+                    )
+                } else {
+                    Modifier
                 }
-
             )
-
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                }
+            )
     ) {
 
         @Composable
 
-        fun ActionMenu() {
+        fun ActionMenu(compact: Boolean = false) {
 
             if (!selectionMode) {
 
@@ -3023,7 +2786,7 @@ fun WorkCard(
 
                         modifier = Modifier
 
-                            .size(24.dp)
+                            .size(if (compact) 20.dp else 28.dp)
 
                             .clip(CircleShape)
 
@@ -3041,7 +2804,7 @@ fun WorkCard(
 
                             tint = colors.textMuted.copy(alpha = 0.70f),
 
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(if (compact) 12.dp else 16.dp)
 
                         )
 
@@ -3451,7 +3214,11 @@ fun WorkCard(
 
             ViewMode.GRID -> {
 
-                Column {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(plainSurface)
+                ) {
 
                     CanvasBox(
 
@@ -3461,7 +3228,7 @@ fun WorkCard(
 
                             .aspectRatio(1.0f)
 
-                            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                            .clip(androidx.compose.ui.graphics.RectangleShape)
 
                     )
 
@@ -3471,7 +3238,9 @@ fun WorkCard(
 
                             .fillMaxWidth()
 
-                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                            .background(plainSurface)
+
+                            .padding(horizontal = 6.dp, vertical = 5.dp)
 
                     ) {
 
@@ -3491,7 +3260,7 @@ fun WorkCard(
 
                                 color = colors.textMain,
 
-                                fontSize = 13.5.sp,
+                                fontSize = 11.5.sp,
 
                                 fontWeight = FontWeight.SemiBold,
 
@@ -3505,29 +3274,36 @@ fun WorkCard(
 
                             )
 
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(2.dp))
 
-                            ActionMenu()
+                            ActionMenu(compact = true)
 
                         }
 
-                        Spacer(Modifier.height(2.dp))
+                        Spacer(Modifier.height(1.dp))
 
                         Row(
 
                             verticalAlignment = Alignment.CenterVertically,
 
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
 
                         ) {
 
+                            Icon(
+                                imageVector = Lucide.Layers,
+                                contentDescription = null,
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(9.5.dp)
+                            )
+
                             Text(
 
-                                text = "${layers.size} layer${if (layers.size != 1) "s" else ""} • $dateString",
+                                text = "${layers.size} • $compactDateString",
 
                                 color = colors.textMuted,
 
-                                fontSize = 11.5.sp,
+                                fontSize = 10.sp,
 
                                 fontFamily = InterFontFamily,
 
@@ -3549,7 +3325,11 @@ fun WorkCard(
 
             ViewMode.GRID_DETAILS -> {
 
-                Column {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(plainSurface)
+                ) {
 
                     CanvasBox(
 
@@ -3559,7 +3339,7 @@ fun WorkCard(
 
                             .aspectRatio(1.0f)
 
-                            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                            .clip(androidx.compose.ui.graphics.RectangleShape)
 
                     )
 
@@ -3569,7 +3349,9 @@ fun WorkCard(
 
                             .fillMaxWidth()
 
-                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                            .background(plainSurface)
+
+                            .padding(horizontal = 6.dp, vertical = 5.dp)
 
                     ) {
 
@@ -3589,7 +3371,7 @@ fun WorkCard(
 
                                 color = colors.textMain,
 
-                                fontSize = 14.5.sp,
+                                fontSize = 11.5.sp,
 
                                 fontWeight = FontWeight.Bold,
 
@@ -3603,15 +3385,15 @@ fun WorkCard(
 
                             )
 
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(2.dp))
 
-                            ActionMenu()
+                            ActionMenu(compact = true)
 
                         }
 
                         if (work.description.isNotBlank()) {
 
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(1.5.dp))
 
                             Text(
 
@@ -3619,13 +3401,11 @@ fun WorkCard(
 
                                 color = colors.textMuted,
 
-                                fontSize = 11.5.sp,
+                                fontSize = 9.5.sp,
 
                                 fontFamily = InterFontFamily,
 
-                                maxLines = 2,
-
-                                lineHeight = 15.sp,
+                                maxLines = 1,
 
                                 overflow = TextOverflow.Ellipsis
 
@@ -3633,7 +3413,7 @@ fun WorkCard(
 
                         }
 
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(2.dp))
 
                         Row(
 
@@ -3641,73 +3421,32 @@ fun WorkCard(
 
                             verticalAlignment = Alignment.CenterVertically,
 
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
 
                         ) {
 
-                            Box(
+                            Icon(
+                                imageVector = Lucide.Layers,
+                                contentDescription = null,
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(9.5.dp)
+                            )
 
-                                modifier = Modifier
+                            Text(
 
-                                    .clip(RoundedCornerShape(9999.dp))
+                                text = "${layers.size}L • ${work.canvasShape.replaceFirstChar { it.uppercase() }} • $compactDateString",
 
-                                    .background(colors.glassBgHover.copy(alpha = 0.7f))
+                                color = colors.textMuted,
 
-                                    .padding(horizontal = 8.dp, vertical = 2.5.dp)
+                                fontSize = 9.5.sp,
 
-                            ) {
+                                fontFamily = InterFontFamily,
 
-                                Text(
+                                maxLines = 1,
 
-                                    text = work.canvasShape.replaceFirstChar { it.uppercase() },
+                                overflow = TextOverflow.Ellipsis
 
-                                    color = colors.textMuted,
-
-                                    fontSize = 9.5.sp,
-
-                                    fontWeight = FontWeight.Medium,
-
-                                    fontFamily = InterFontFamily
-
-                                )
-
-                            }
-
-                            Row(
-
-                                verticalAlignment = Alignment.CenterVertically,
-
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-
-                            ) {
-
-                                Icon(
-
-                                    imageVector = Lucide.Clock,
-
-                                    contentDescription = null,
-
-                                    tint = colors.textMuted.copy(alpha = 0.65f),
-
-                                    modifier = Modifier.size(10.dp)
-
-                                )
-
-                                Text(
-
-                                    text = dateString,
-
-                                    color = colors.textMuted.copy(alpha = 0.70f),
-
-                                    fontSize = 10.5.sp,
-
-                                    fontFamily = InterFontFamily,
-
-                                    maxLines = 1
-
-                                )
-
-                            }
+                            )
 
                         }
 
@@ -3721,118 +3460,83 @@ fun WorkCard(
 
             ViewMode.LIST -> {
 
-                Row(
-
-                    modifier = Modifier
-
-                        .fillMaxWidth()
-
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-
-                    verticalAlignment = Alignment.CenterVertically
-
-                ) {
-
-                    CanvasBox(
-
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
                         modifier = Modifier
-
-                            .size(56.dp)
-
-                            .clip(RoundedCornerShape(13.dp))
-
-                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(13.dp))
-
-                    )
-
-                    Spacer(Modifier.width(12.dp))
-
-                    Column(
-
-                        modifier = Modifier.weight(1f),
-
-                        verticalArrangement = Arrangement.Center
-
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-
-                        Text(
-
-                            text = work.name,
-
-                            color = colors.textMain,
-
-                            fontSize = 15.sp,
-
-                            fontWeight = FontWeight.SemiBold,
-
-                            fontFamily = InterFontFamily,
-
-                            maxLines = 1,
-
-                            overflow = TextOverflow.Ellipsis
-
+                        CanvasBox(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(14.dp))
                         )
 
-                        Spacer(Modifier.height(3.dp))
+                        Spacer(Modifier.width(12.dp))
 
-                        Row(
-
-                            verticalAlignment = Alignment.CenterVertically,
-
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.Center
                         ) {
-
                             Text(
-
-                                text = "${layers.size} ${if (layers.size == 1) "layer" else "layers"} • $dateString",
-
-                                color = colors.textMuted,
-
-                                fontSize = 11.5.sp,
-
+                                text = work.name,
+                                color = colors.textMain,
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 fontFamily = InterFontFamily,
-
-                                maxLines = 1
-
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
 
-                            if (work.isHomeBackground) {
+                            Spacer(Modifier.height(4.dp))
 
-                                Box(
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Layers,
+                                    contentDescription = null,
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(12.dp)
+                                )
 
-                                    modifier = Modifier
+                                Text(
+                                    text = "${layers.size} ${if (layers.size == 1) "layer" else "layers"} • $dateString",
+                                    color = colors.textMuted,
+                                    fontSize = 12.sp,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
 
-                                        .clip(RoundedCornerShape(4.dp))
-
-                                        .background(Color(0xFFFFD60A).copy(alpha = 0.15f))
-
-                                        .padding(horizontal = 4.dp, vertical = 1.dp)
-
-                                ) {
-
-                                    Text(
-
-                                        text = "Wallpaper",
-
-                                        color = Color(0xFFD97706),
-
-                                        fontSize = 9.sp,
-
-                                        fontWeight = FontWeight.Bold
-
-                                    )
-
+                                if (work.isHomeBackground) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF0381FE).copy(alpha = 0.12f))
+                                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "Wallpaper",
+                                            color = Color(0xFF0381FE),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                 }
-
                             }
-
                         }
 
+                        ActionMenu(compact = false)
                     }
 
-                    ActionMenu()
-
+                    HorizontalDivider(
+                        thickness = 0.6.dp,
+                        color = dividerColor,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
                 }
 
             }
@@ -3841,150 +3545,83 @@ fun WorkCard(
 
             ViewMode.LIST_DETAILS -> {
 
-                Row(
-
-                    modifier = Modifier
-
-                        .fillMaxWidth()
-
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-
-                    verticalAlignment = Alignment.CenterVertically
-
-                ) {
-
-                    CanvasBox(
-
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
                         modifier = Modifier
-
-                            .size(76.dp)
-
-                            .clip(RoundedCornerShape(15.dp))
-
-                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(15.dp))
-
-                    )
-
-                    Spacer(Modifier.width(12.dp))
-
-                    Column(
-
-                        modifier = Modifier.weight(1f),
-
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        CanvasBox(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                        )
 
-                        Row(
+                        Spacer(Modifier.width(12.dp))
 
-                            modifier = Modifier.fillMaxWidth(),
-
-                            horizontalArrangement = Arrangement.SpaceBetween,
-
-                            verticalAlignment = Alignment.CenterVertically
-
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
-
-                            Text(
-
-                                text = work.name,
-
-                                color = colors.textMain,
-
-                                fontSize = 15.sp,
-
-                                fontWeight = FontWeight.Bold,
-
-                                fontFamily = InterFontFamily,
-
-                                maxLines = 1,
-
-                                overflow = TextOverflow.Ellipsis,
-
-                                modifier = Modifier.weight(1f)
-
-                            )
-
-                            ActionMenu()
-
-                        }
-
-                        if (work.description.isNotBlank()) {
-
-                            Text(
-
-                                text = work.description,
-
-                                color = colors.textMuted,
-
-                                fontSize = 12.sp,
-
-                                fontFamily = InterFontFamily,
-
-                                maxLines = 2,
-
-                                overflow = TextOverflow.Ellipsis
-
-                            )
-
-                        }
-
-                        Row(
-
-                            verticalAlignment = Alignment.CenterVertically,
-
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-
-                        ) {
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .clip(RoundedCornerShape(5.dp))
-
-                                    .background(colors.glassBgHover.copy(alpha = 0.7f))
-
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(5.dp))
-
-                                    .padding(horizontal = 5.dp, vertical = 1.5.dp)
-
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-
                                 Text(
-
-                                    text = work.canvasShape.replaceFirstChar { it.uppercase() },
-
-                                    color = colors.textMuted,
-
-                                    fontSize = 9.5.sp,
-
-                                    fontWeight = FontWeight.Medium,
-
-                                    fontFamily = InterFontFamily
-
+                                    text = work.name,
+                                    color = colors.textMain,
+                                    fontSize = 15.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
                                 )
 
+                                ActionMenu(compact = false)
                             }
 
-                            Text(
+                            if (work.description.isNotBlank()) {
+                                Text(
+                                    text = work.description,
+                                    color = colors.textMuted,
+                                    fontSize = 12.sp,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
 
-                                text = dateTimeString,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Layers,
+                                    contentDescription = null,
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(12.dp)
+                                )
 
-                                color = colors.textMuted.copy(alpha = 0.75f),
-
-                                fontSize = 11.sp,
-
-                                fontFamily = InterFontFamily,
-
-                                maxLines = 1
-
-                            )
-
+                                Text(
+                                    text = "${layers.size} ${if (layers.size == 1) "layer" else "layers"} • ${work.canvasShape.replaceFirstChar { it.uppercase() }} • $dateTimeString",
+                                    color = colors.textMuted,
+                                    fontSize = 11.5.sp,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
-
                     }
 
+                    HorizontalDivider(
+                        thickness = 0.6.dp,
+                        color = dividerColor,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
                 }
 
             }

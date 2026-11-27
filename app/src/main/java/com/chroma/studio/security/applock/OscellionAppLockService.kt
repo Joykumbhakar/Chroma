@@ -74,7 +74,7 @@ class OscellionAppLockService : AccessibilityService() {
             targetPackage == "com.android.systemui") {
             AppLockerManager.shieldPackage = null
             lastInterceptedPackage = null
-            AppLockerManager.onForegroundPackageChanged(targetPackage)
+            AppLockerManager.onForegroundPackageChanged(this, targetPackage)
             hideCoverInternal()
             return
         }
@@ -90,7 +90,7 @@ class OscellionAppLockService : AccessibilityService() {
                 cls.startsWith("android.view.") ||
                 cls.startsWith("android.app.Dialog"))
         if (isActivityWindow) {
-            AppLockerManager.onForegroundPackageChanged(targetPackage)
+            AppLockerManager.onForegroundPackageChanged(this, targetPackage)
         }
 
         // Not a locked app (home screen, other apps): make sure no cover is left up.
@@ -100,7 +100,7 @@ class OscellionAppLockService : AccessibilityService() {
         }
 
         // Already unlocked in this session.
-        if (AppLockerManager.isPackageSessionUnlocked(targetPackage)) {
+        if (AppLockerManager.isPackageSessionUnlocked(this, targetPackage)) {
             hideCoverInternal()
             return
         }

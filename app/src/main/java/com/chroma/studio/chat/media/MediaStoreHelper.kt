@@ -67,7 +67,7 @@ object MediaStoreHelper {
     /**
      * Loads images and videos from device MediaStore asynchronously with dimensions and metadata.
      */
-    suspend fun loadDeviceMedia(context: Context, maxCount: Int = 2000): List<GalleryMediaItem> = withContext(Dispatchers.IO) {
+    suspend fun loadDeviceMedia(context: Context, maxCount: Int = 5000): List<GalleryMediaItem> = withContext(Dispatchers.IO) {
         val mediaList = ArrayList<GalleryMediaItem>(minOf(maxCount, 1200))
 
         // 1. Fetch Images

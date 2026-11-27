@@ -40,6 +40,8 @@ import com.chroma.studio.data.OnlineStatusManager
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.components.ToastManager
 import com.chroma.studio.ui.components.VerifiedBadge
+import com.chroma.studio.ui.storystudio.StoryWidgetResponseStore
+import com.chroma.studio.ui.storystudio.decodePublishedStoryWidgetsEnvelope
 import com.chroma.studio.ui.theme.ChromaIcons
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
@@ -48,6 +50,90 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
+
+/** Option bar entry inside the compact Story Insights Poll Graph. */
+data class StoryPollOptionStat(
+    val label: String,
+    val votes: Int,
+    val fraction: Float,
+    val percentage: Int,
+    val isWinner: Boolean,
+    val isCorrectQuizAnswer: Boolean = false
+)
+
+/** Compact summary model for a single Poll or Quiz widget embedded in a Story. */
+data class StoryPollSummary(
+    val widgetId: String,
+    val question: String,
+    val isQuiz: Boolean,
+    val totalVotes: Int,
+    val options: List<StoryPollOptionStat>
+)
+
+/**
+ * Pure extractor for Poll & Quiz analytics from a Story's serialized interactive widgets payload.
+ */
+fun buildStoryPollSummaries(
+    decompressedTextFormat: String,
+    voteCountsLookup: (widgetId: String, isQuiz: Boolean) -> Map<Int, Int> = { _, _ -> emptyMap() }
+): List<StoryPollSummary> {
+    val envelope = decodePublishedStoryWidgetsEnvelope(decompressedTextFormat) ?: return emptyList()
+    return envelope.studioWidgets.mapNotNull { widget ->
+        when (widget.widgetType) {
+            "POLL" -> {
+                val labels = listOf(widget.optA.ifBlank { "Option A" }, widget.optB.ifBlank { "Option B" })
+                val voteMap = voteCountsLookup(widget.id, false)
+                val totalVotes = labels.indices.sumOf { voteMap[it] ?: 0 }
+                val maxVotes = labels.indices.maxOfOrNull { voteMap[it] ?: 0 } ?: 0
+                val stats = labels.mapIndexed { idx, lbl ->
+                    val count = voteMap[idx] ?: 0
+                    val frac = if (totalVotes > 0) count.toFloat() / totalVotes.toFloat() else 0f
+                    StoryPollOptionStat(
+                        label = lbl,
+                        votes = count,
+                        fraction = frac,
+                        percentage = (frac * 100f).roundToInt(),
+                        isWinner = totalVotes > 0 && count == maxVotes && count > 0
+                    )
+                }
+                StoryPollSummary(
+                    widgetId = widget.id,
+                    question = widget.question.ifBlank { "Poll" },
+                    isQuiz = false,
+                    totalVotes = totalVotes,
+                    options = stats
+                )
+            }
+            "QUIZ" -> {
+                val labels = widget.quizOpts.ifEmpty { return@mapNotNull null }
+                val voteMap = voteCountsLookup(widget.id, true)
+                val totalVotes = labels.indices.sumOf { voteMap[it] ?: 0 }
+                val maxVotes = labels.indices.maxOfOrNull { voteMap[it] ?: 0 } ?: 0
+                val stats = labels.mapIndexed { idx, lbl ->
+                    val count = voteMap[idx] ?: 0
+                    val frac = if (totalVotes > 0) count.toFloat() / totalVotes.toFloat() else 0f
+                    StoryPollOptionStat(
+                        label = lbl,
+                        votes = count,
+                        fraction = frac,
+                        percentage = (frac * 100f).roundToInt(),
+                        isWinner = totalVotes > 0 && count == maxVotes && count > 0,
+                        isCorrectQuizAnswer = idx == widget.correctIndex
+                    )
+                }
+                StoryPollSummary(
+                    widgetId = widget.id,
+                    question = widget.question.ifBlank { "Quiz" },
+                    isQuiz = true,
+                    totalVotes = totalVotes,
+                    options = stats
+                )
+            }
+            else -> null
+        }
+    }
+}
 
 /**
  * Flagship Story Insights & Analytics Bottom Sheet.
@@ -144,15 +230,13 @@ fun StoryAnalyticsModal(
         onDeleteStory = onDeleteStory,
         isLoading = isLoadingViewers,
         audienceType = story.audienceType,
-        storyTimestamp = story.timestamp
+        storyTimestamp = story.timestamp,
+        decompressedTextFormat = story.decompressedTextFormat
     )
 }
 
 /**
- * Flagship Story Insights & Analytics Bottom Sheet.
- * Implemented using ModalBottomSheet with swipe down to dismiss,
- * design system components & variables (LocalOscellionColors),
- * modular KPI cards, dynamic hourly engagement curve, and live viewer presence.
+ * Compact, borderless Apple HIG Story Insights & Analytics Bottom Sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,17 +247,29 @@ fun StoryAnalyticsModal(
     isLoading: Boolean = false,
     audienceType: String = "public",
     storyTimestamp: Long = 0L,
-    onDirectMessage: ((String) -> Unit)? = null
+    onDirectMessage: ((String) -> Unit)? = null,
+    decompressedTextFormat: String = ""
 ) {
     val colors = LocalOscellionColors.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     val isDark = colors.isDark
 
     val sheetBg = if (isDark) Color(0xFF141519) else Color.White
     val textPrimary = colors.textMain
     val textSecondary = colors.textMuted
     val ytBlue = colors.primary
-    val surfacePillBg = if (isDark) Color(0xFF1E212A) else Color(0xFFF1F5F9)
     val dragHandleColor = if (isDark) Color(0xFF3F3F46) else Color(0xFFD1D5DB)
+
+    val pollSummaries = remember(story.id, decompressedTextFormat) {
+        buildStoryPollSummaries(decompressedTextFormat) { widgetId, isQuiz ->
+            StoryWidgetResponseStore.aggregateChoicesForWidget(
+                context = context,
+                storyId = story.id,
+                widgetId = widgetId,
+                suffix = if (isQuiz) "quiz" else "poll"
+            )
+        }
+    }
 
     var selectedFilter by remember { mutableStateOf("all") } // "all", "reactions"
     var searchQuery by remember { mutableStateOf("") }
@@ -225,12 +321,12 @@ fun StoryAnalyticsModal(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.90f)
+                .fillMaxHeight(0.84f)
                 .background(sheetBg)
                 .navigationBarsPadding()
-                .padding(horizontal = 18.dp)
+                .padding(horizontal = 16.dp)
         ) {
-            // ── Top Header ──────────────────────────────────────────────────────────
+            // ── Compact Top Header (Zero Box Clutter) ───────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -240,15 +336,15 @@ fun StoryAnalyticsModal(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    // Story Thumbnail Squircle
+                    // Compact Story Thumbnail
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isDark) Color(0xFF242731) else Color(0xFFE2E8F0))
-                            .border(0.5.dp, colors.cardBorderSubtle, RoundedCornerShape(12.dp))
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.inputBg)
                     ) {
                         if (story.image != null) {
                             AsyncImage(
@@ -267,12 +363,12 @@ fun StoryAnalyticsModal(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Brush.linearGradient(listOf(ytBlue, Color(0xFF0056B3)))),
+                                    .background(ytBlue),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = story.caption.take(15),
-                                    fontSize = 9.sp,
+                                    text = story.caption.take(12),
+                                    fontSize = 8.sp,
                                     color = Color.White,
                                     maxLines = 2,
                                     fontWeight = FontWeight.Bold,
@@ -286,248 +382,63 @@ fun StoryAnalyticsModal(
                     Column {
                         Text(
                             text = "Story Insights",
-                            fontSize = 18.sp,
+                            fontSize = 16.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = textPrimary,
                             letterSpacing = (-0.3).sp
                         )
                         val audienceLabel = when (audienceType.lowercase()) {
-                            "custom", "only_friends", "close_friends" -> "⭐ Only Friends"
-                            "followers" -> "Followers only"
-                            else -> "Public story"
+                            "custom", "only_friends", "close_friends" -> "Only Friends"
+                            "followers" -> "Followers"
+                            else -> "Public"
                         }
                         Text(
-                            text = "Posted ${story.timeAgo} • $audienceLabel",
-                            fontSize = 12.sp,
+                            text = "${story.timeAgo} • $audienceLabel",
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Normal,
                             color = textSecondary
                         )
                     }
                 }
 
-                // Actions: Delete Story & Close Button
+                // Compact Ghost Actions: Delete & Close
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = Color(0xFFFF3B30).copy(alpha = 0.12f),
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                SoundManager.playReaction()
-                                showDeleteConfirmDialog = true
-                            }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Lucide.Trash2,
-                                contentDescription = "Delete Story",
-                                tint = Color(0xFFFF3B30),
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = CircleShape,
-                        color = surfacePillBg,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                SoundManager.playReaction()
-                                onClose()
-                            }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Lucide.X,
-                                contentDescription = "Close",
-                                tint = textPrimary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // ── 1. Modular KPI Metric Cards ───────────────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Card 1: Views
-                val totalViews = story.viewCount
-                ProfessionalKpiCard(
-                    title = "Views",
-                    value = totalViews.toString(),
-                    badgeText = "${story.viewers.size} unique",
-                    badgeColor = ytBlue,
-                    icon = { Icon(Lucide.Eye, contentDescription = null, tint = ytBlue, modifier = Modifier.size(14.dp)) },
-                    modifier = Modifier.weight(1f)
-                )
-
-                // Card 2: Reactions (Likes)
-                val totalLikes = story.likesCount
-                val reactionRate = if (totalViews > 0) {
-                    ((totalLikes.toFloat() / totalViews.toFloat()) * 100f).coerceAtMost(100f)
-                } else 0f
-                ProfessionalKpiCard(
-                    title = "Likes",
-                    value = totalLikes.toString(),
-                    badgeText = "%.0f%% rate".format(reactionRate),
-                    badgeColor = Color(0xFFFF2D55),
-                    icon = { Icon(ChromaIcons.HeartFilled, contentDescription = null, tint = Color(0xFFFF2D55), modifier = Modifier.size(14.dp)) },
-                    modifier = Modifier.weight(1f)
-                )
-
-                // Card 3: Audience Scope
-                val isOnlyFriends = audienceType.equals("custom", ignoreCase = true) || audienceType.equals("only_friends", ignoreCase = true)
-                val audienceTitle = if (isOnlyFriends) "Only Friends" else if (audienceType.equals("followers", ignoreCase = true)) "Followers" else "Public"
-                val audienceBadge = if (isOnlyFriends) "Close circle" else "Active reach"
-                val audienceColor = if (isOnlyFriends) Color(0xFF00C853) else ytBlue
-
-                ProfessionalKpiCard(
-                    title = "Audience",
-                    value = audienceTitle,
-                    badgeText = audienceBadge,
-                    badgeColor = audienceColor,
-                    icon = {
-                        Icon(
-                            imageVector = if (isOnlyFriends) Lucide.Star else Lucide.Users,
-                            contentDescription = null,
-                            tint = audienceColor,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            // ── 2. Dynamic Engagement Activity Curve ─────────────────────────────
-            StoryEngagementGraph(
-                viewCount = story.viewCount,
-                timestamp = storyTimestamp
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            // ── 3. Segmented Filter Tabs ──────────────────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(CircleShape)
-                    .background(surfacePillBg)
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                val tabs = listOf(
-                    "all" to "All Viewers (${story.viewers.size})",
-                    "reactions" to "Likes (${story.viewers.count { it.reactedEmoji != null }})"
-                )
-                tabs.forEach { (key, title) ->
-                    val isSelected = selectedFilter == key
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSelected) (if (isDark) Color(0xFF2C303B) else Color.White)
-                                else Color.Transparent
-                            )
-                            .then(
-                                if (isSelected) {
-                                    Modifier.shadow(
-                                        elevation = 1.dp,
-                                        shape = CircleShape,
-                                        ambientColor = Color.Black.copy(alpha = 0.08f),
-                                        spotColor = Color.Black.copy(alpha = 0.08f)
-                                    )
-                                } else Modifier
-                            )
-                            .clickable {
-                                SoundManager.playReaction()
-                                selectedFilter = key
-                            }
-                            .padding(vertical = 7.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = title,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) textPrimary else textSecondary
-                        )
-                    }
-                }
-            }
-
-            // Optional Search Bar for Viewers (shown when there are viewers)
-            if (story.viewers.size >= 2) {
-                Spacer(Modifier.height(8.dp))
-                Surface(
-                    shape = CircleShape,
-                    color = surfacePillBg,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(38.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                    IconButton(
+                        onClick = {
+                            SoundManager.playReaction()
+                            showDeleteConfirmDialog = true
+                        },
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
-                            imageVector = Lucide.Search,
-                            contentDescription = "Search",
-                            tint = textSecondary,
-                            modifier = Modifier.size(15.dp)
+                            imageVector = Lucide.Trash2,
+                            contentDescription = "Delete Story",
+                            tint = colors.error,
+                            modifier = Modifier.size(16.dp)
                         )
-                        Spacer(Modifier.width(8.dp))
-                        androidx.compose.foundation.text.BasicTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            singleLine = true,
-                            textStyle = androidx.compose.ui.text.TextStyle(
-                                color = textPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Normal
-                            ),
-                            decorationBox = { innerTextField ->
-                                if (searchQuery.isEmpty()) {
-                                    Text(
-                                        text = "Search viewers by name or handle...",
-                                        color = textSecondary,
-                                        fontSize = 12.5.sp
-                                    )
-                                }
-                                innerTextField()
-                            },
-                            modifier = Modifier.weight(1f)
+                    }
+
+                    IconButton(
+                        onClick = {
+                            SoundManager.playReaction()
+                            onClose()
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.X,
+                            contentDescription = "Close",
+                            tint = textPrimary,
+                            modifier = Modifier.size(17.dp)
                         )
-                        if (searchQuery.isNotEmpty()) {
-                            Icon(
-                                imageVector = Lucide.X,
-                                contentDescription = "Clear",
-                                tint = textSecondary,
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clickable { searchQuery = "" }
-                            )
-                        }
                     }
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
-
-            // ── 4. Viewers Interaction List ───────────────────────────────────────
+            // ── Single Compact Scrollable Analytics & Viewer Feed ───────────────────
             val filteredByTab = when (selectedFilter) {
                 "reactions" -> story.viewers.filter { it.reactedEmoji != null }
                 else -> story.viewers
@@ -543,110 +454,292 @@ fun StoryAnalyticsModal(
                 }
             }
 
-            if (displayedViewers.isEmpty()) {
-                if (isLoading) {
-                    Column(
+            val totalViews = story.viewCount
+            val totalLikes = story.likesCount
+            val reactionRate = if (totalViews > 0) {
+                ((totalLikes.toFloat() / totalViews.toFloat()) * 100f).coerceAtMost(100f)
+            } else 0f
+            val isOnlyFriends = audienceType.equals("custom", ignoreCase = true) || audienceType.equals("only_friends", ignoreCase = true)
+            val audienceTitle = if (isOnlyFriends) "Only Friends" else if (audienceType.equals("followers", ignoreCase = true)) "Followers" else "Public"
+            val audienceBadge = if (isOnlyFriends) "Close circle" else "Active reach"
+            val audienceColor = if (isOnlyFriends) colors.success else ytBlue
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(bottom = 14.dp)
+            ) {
+                // ── 1. Compact 3-Column Metrics Strip ───────────────────────────────
+                item(key = "metrics_row") {
+                    HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorderSubtle)
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f)
-                            .padding(vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                            .height(IntrinsicSize.Min)
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        repeat(4) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .clip(CircleShape)
-                                        .background(colors.cardBorderSubtle.copy(alpha = 0.5f))
+                        ProfessionalKpiCard(
+                            title = "Views",
+                            value = totalViews.toString(),
+                            badgeText = "${story.viewers.size} unique",
+                            badgeColor = ytBlue,
+                            icon = { Icon(Lucide.Eye, contentDescription = null, tint = ytBlue, modifier = Modifier.size(12.dp)) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(0.5.dp)
+                                .fillMaxHeight()
+                                .padding(vertical = 3.dp)
+                                .background(colors.cardBorderSubtle)
+                        )
+                        ProfessionalKpiCard(
+                            title = "Likes",
+                            value = totalLikes.toString(),
+                            badgeText = "%.0f%% rate".format(reactionRate),
+                            badgeColor = Color(0xFFFF2D55),
+                            icon = { Icon(ChromaIcons.HeartFilled, contentDescription = null, tint = Color(0xFFFF2D55), modifier = Modifier.size(12.dp)) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(0.5.dp)
+                                .fillMaxHeight()
+                                .padding(vertical = 3.dp)
+                                .background(colors.cardBorderSubtle)
+                        )
+                        ProfessionalKpiCard(
+                            title = "Audience",
+                            value = audienceTitle,
+                            badgeText = audienceBadge,
+                            badgeColor = audienceColor,
+                            icon = {
+                                Icon(
+                                    imageVector = if (isOnlyFriends) Lucide.Star else Lucide.Users,
+                                    contentDescription = null,
+                                    tint = audienceColor,
+                                    modifier = Modifier.size(12.dp)
                                 )
-                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Box(
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorderSubtle)
+                }
+
+                // ── 2. Small Compact Poll Graph (when Poll / Quiz is present) ───────
+                if (pollSummaries.isNotEmpty()) {
+                    item(key = "poll_graph") {
+                        Spacer(Modifier.height(10.dp))
+                        StoryCompactPollGraph(summaries = pollSummaries)
+                        Spacer(Modifier.height(8.dp))
+                        HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorderSubtle)
+                    }
+                }
+
+                // ── 3. Compact Hourly Activity Chart ────────────────────────────────
+                item(key = "activity_graph") {
+                    Spacer(Modifier.height(10.dp))
+                    StoryEngagementGraph(
+                        viewCount = story.viewCount,
+                        timestamp = storyTimestamp
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+
+                // ── 4. Compact Segmented Tabs & Search ──────────────────────────────
+                item(key = "tabs_and_search") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.inputBg)
+                            .padding(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val tabs = listOf(
+                            "all" to "All Viewers (${story.viewers.size})",
+                            "reactions" to "Likes (${story.viewers.count { it.reactedEmoji != null }})"
+                        )
+                        tabs.forEach { (key, title) ->
+                            val isSelected = selectedFilter == key
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (isSelected) colors.cardSurfaceElevated else Color.Transparent)
+                                    .clickable {
+                                        SoundManager.playReaction()
+                                        selectedFilter = key
+                                    }
+                                    .padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = title,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (isSelected) textPrimary else textSecondary
+                                )
+                            }
+                        }
+                    }
+
+                    if (story.viewers.size >= 2) {
+                        Spacer(Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(34.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.inputBg),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Search,
+                                    contentDescription = "Search",
+                                    tint = textSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                androidx.compose.foundation.text.BasicTextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    singleLine = true,
+                                    textStyle = androidx.compose.ui.text.TextStyle(
+                                        color = textPrimary,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Normal
+                                    ),
+                                    decorationBox = { innerTextField ->
+                                        if (searchQuery.isEmpty()) {
+                                            Text(
+                                                text = "Search viewers...",
+                                                color = textSecondary,
+                                                fontSize = 12.5.sp
+                                            )
+                                        }
+                                        innerTextField()
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (searchQuery.isNotEmpty()) {
+                                    Icon(
+                                        imageVector = Lucide.X,
+                                        contentDescription = "Clear",
+                                        tint = textSecondary,
                                         modifier = Modifier
-                                            .width(120.dp)
-                                            .height(14.dp)
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(colors.cardBorderSubtle.copy(alpha = 0.5f))
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .width(80.dp)
-                                            .height(10.dp)
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(colors.cardBorderSubtle.copy(alpha = 0.3f))
+                                            .size(14.dp)
+                                            .clickable { searchQuery = "" }
                                     )
                                 }
                             }
                         }
                     }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (selectedFilter == "reactions") Lucide.Heart else Lucide.Eye,
-                                contentDescription = null,
-                                tint = textSecondary.copy(alpha = 0.5f),
-                                modifier = Modifier.size(36.dp)
-                            )
-                            Text(
-                                text = if (searchQuery.isNotEmpty()) "No viewers match \"$searchQuery\""
-                                else if (selectedFilter == "reactions") "No reactions on this story yet"
-                                else "No viewers yet • Views will appear here as friends watch your story",
-                                fontSize = 13.sp,
-                                color = textSecondary,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 24.dp)
-                            )
+
+                    Spacer(Modifier.height(6.dp))
+                }
+
+                // ── 5. Viewers List / Loading / Compact Empty State ─────────────────
+                if (displayedViewers.isEmpty()) {
+                    item(key = "empty_or_loading") {
+                        if (isLoading) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                repeat(3) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(colors.cardBorderSubtle.copy(alpha = 0.5f))
+                                        )
+                                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(110.dp)
+                                                    .height(12.dp)
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(colors.cardBorderSubtle.copy(alpha = 0.5f))
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(70.dp)
+                                                    .height(9.dp)
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(colors.cardBorderSubtle.copy(alpha = 0.3f))
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 22.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (selectedFilter == "reactions") Lucide.Heart else Lucide.Eye,
+                                    contentDescription = null,
+                                    tint = textSecondary.copy(alpha = 0.55f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = if (searchQuery.isNotEmpty()) "No viewers match \"$searchQuery\""
+                                    else if (selectedFilter == "reactions") "No reactions on this story yet"
+                                    else "No viewers yet",
+                                    fontSize = 12.5.sp,
+                                    color = textSecondary
+                                )
+                            }
                         }
                     }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                ) {
+                } else {
                     itemsIndexed(displayedViewers, key = { _, v -> v.id }) { index, viewer ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 7.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                // Avatar with live unified online dot
                                 val isOnline = OnlineStatusManager.rememberUserPresence(viewer.id).online
                                 IosAvatarView(
                                     name = viewer.name,
                                     avatarUrl = viewer.avatar,
-                                    size = 42.dp,
+                                    size = 36.dp,
                                     isOnline = isOnline,
                                     statusRingColor = sheetBg
                                 )
 
-                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             text = viewer.name,
-                                            fontSize = 14.5.sp,
+                                            fontSize = 13.5.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = textPrimary,
                                             maxLines = 1,
@@ -662,66 +755,53 @@ fun StoryAnalyticsModal(
                                     }
                                     Text(
                                         text = "${viewer.username} • ${viewer.timeAgo}",
-                                        fontSize = 11.5.sp,
+                                        fontSize = 11.sp,
                                         color = textSecondary
                                     )
                                 }
                             }
 
-                            // Right Reaction / Interaction Pill & Quick DM
+                            // Clean Inline Like Indicator & Borderless DM Action
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 if (viewer.reactedEmoji != null) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = Color(0xFFFF2D55).copy(alpha = 0.12f)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
                                     ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = ChromaIcons.HeartFilled,
-                                                contentDescription = "Liked",
-                                                tint = Color(0xFFFF2D55),
-                                                modifier = Modifier.size(11.dp)
-                                            )
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(
-                                                text = "Liked",
-                                                fontSize = 11.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFFFF2D55)
-                                            )
-                                        }
+                                        Icon(
+                                            imageVector = ChromaIcons.HeartFilled,
+                                            contentDescription = "Liked",
+                                            tint = Color(0xFFFF2D55),
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                        Text(
+                                            text = "Liked",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFFFF2D55)
+                                        )
                                     }
                                 }
 
-                                // Quick Message Shortcut
-                                Surface(
-                                    shape = CircleShape,
-                                    color = surfacePillBg,
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .clickable {
-                                            if (onDirectMessage != null) {
-                                                onDirectMessage(viewer.id)
-                                            } else {
-                                                ToastManager.showToast("Message @${viewer.username.removePrefix("@")}")
-                                            }
+                                IconButton(
+                                    onClick = {
+                                        if (onDirectMessage != null) {
+                                            onDirectMessage(viewer.id)
+                                        } else {
+                                            ToastManager.showToast("Message @${viewer.username.removePrefix("@")}")
                                         }
+                                    },
+                                    modifier = Modifier.size(28.dp)
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Lucide.Send,
-                                            contentDescription = "Send message",
-                                            tint = ytBlue,
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = Lucide.Send,
+                                        contentDescription = "Send message",
+                                        tint = ytBlue,
+                                        modifier = Modifier.size(14.dp)
+                                    )
                                 }
                             }
                         }
@@ -730,7 +810,7 @@ fun StoryAnalyticsModal(
                             HorizontalDivider(
                                 color = colors.cardBorderSubtle,
                                 thickness = 0.5.dp,
-                                modifier = Modifier.padding(start = 54.dp)
+                                modifier = Modifier.padding(start = 46.dp)
                             )
                         }
                     }
@@ -743,6 +823,106 @@ fun StoryAnalyticsModal(
 /**
  * Clean Professional KPI Metric Card with Borderless Design System Capsule styling.
  */
+/**
+ * Small & Compact Poll Graph for Story Insights (borderless proportional horizontal bar chart).
+ */
+@Composable
+fun StoryCompactPollGraph(
+    summaries: List<StoryPollSummary>,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalOscellionColors.current
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        summaries.forEach { poll ->
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = (if (poll.isQuiz) "QUIZ • " else "POLL • ") + poll.question,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (poll.totalVotes > 0) "${poll.totalVotes} ${if (poll.totalVotes == 1) "vote" else "votes"}" else "No votes yet",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (poll.totalVotes > 0) colors.primary else colors.textMuted
+                    )
+                }
+
+                poll.options.forEach { option ->
+                    val animFrac by animateFloatAsState(
+                        targetValue = option.fraction.coerceIn(0f, 1f),
+                        animationSpec = tween(360, easing = FastOutSlowInEasing),
+                        label = "pollBarFrac"
+                    )
+                    val barColor = when {
+                        option.isCorrectQuizAnswer && poll.totalVotes > 0 -> colors.success.copy(alpha = 0.24f)
+                        option.isWinner -> colors.primary.copy(alpha = 0.22f)
+                        else -> colors.textMuted.copy(alpha = 0.14f)
+                    }
+                    val accentText = when {
+                        option.isCorrectQuizAnswer && poll.totalVotes > 0 -> colors.success
+                        option.isWinner -> colors.primary
+                        else -> colors.textMain
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(22.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(colors.inputBg)
+                    ) {
+                        if (animFrac > 0.01f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(animFrac)
+                                    .background(barColor)
+                            )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = option.label,
+                                fontSize = 11.sp,
+                                fontWeight = if (option.isWinner) FontWeight.SemiBold else FontWeight.Medium,
+                                color = accentText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = if (poll.totalVotes > 0) "${option.percentage}% (${option.votes})" else "0%",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (poll.totalVotes > 0) accentText else colors.textMuted
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun ProfessionalKpiCard(
     title: String,
@@ -753,25 +933,19 @@ private fun ProfessionalKpiCard(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = colors.isDark
-    val surfacePillBg = if (isDark) Color(0xFF1E212A) else Color(0xFFF1F5F9)
 
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(surfacePillBg)
-            .border(0.5.dp, colors.cardBorderSubtle, RoundedCornerShape(16.dp))
-            .padding(vertical = 10.dp, horizontal = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier = modifier.padding(horizontal = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             icon()
             Text(
                 text = title,
-                fontSize = 11.5.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = colors.textMuted
             )
@@ -779,34 +953,27 @@ private fun ProfessionalKpiCard(
 
         Text(
             text = value,
-            fontSize = 18.sp,
+            fontSize = 17.5.sp,
             fontWeight = FontWeight.Bold,
             color = colors.textMain,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
 
-        Surface(
-            shape = CircleShape,
-            color = badgeColor.copy(alpha = 0.12f)
-        ) {
-            Text(
-                text = badgeText,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = badgeColor,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Text(
+            text = badgeText,
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.Medium,
+            color = badgeColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
 /**
  * Animated Engagement & Hourly Activity Graph.
- * Displays real hourly view velocity when views are present,
- * or a clean empty-state baseline when views are zero.
+ * Clean borderless Apple layout with hairline divider, zero boxed container.
  */
 @Composable
 fun StoryEngagementGraph(
@@ -815,9 +982,7 @@ fun StoryEngagementGraph(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = colors.isDark
     val ytBlue = colors.primary
-    val cardBg = if (isDark) Color(0xFF1E212A) else Color(0xFFF9F9FB)
 
     var animationTrigger by remember { mutableStateOf(false) }
     val animProgress by animateFloatAsState(
@@ -845,10 +1010,7 @@ fun StoryEngagementGraph(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(cardBg)
-            .border(0.5.dp, colors.cardBorderSubtle, RoundedCornerShape(16.dp))
-            .padding(14.dp)
+            .padding(vertical = 4.dp)
     ) {
         // Graph Header
         Row(
@@ -856,24 +1018,13 @@ fun StoryEngagementGraph(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(ytBlue)
-                )
-                Text(
-                    text = "HOURLY VIEW ACTIVITY",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textMuted,
-                    letterSpacing = 0.5.sp
-                )
-            }
+            Text(
+                text = "HOURLY VIEW ACTIVITY",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textMuted,
+                letterSpacing = 0.6.sp
+            )
 
             if (viewCount > 0) {
                 val hoursActive = if (timestamp > 0L) {
@@ -881,42 +1032,30 @@ fun StoryEngagementGraph(
                 } else 1L
                 val viewsPerHour = (viewCount.toFloat() / hoursActive.toFloat()).coerceAtLeast(0.5f)
 
-                Surface(
-                    shape = CircleShape,
-                    color = Color(0xFF34C759).copy(alpha = 0.12f)
-                ) {
-                    Text(
-                        text = "Peak: %.0f views/hr".format(viewsPerHour * 1.5f),
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF34C759),
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
-                    )
-                }
+                Text(
+                    text = "Peak: %.0f views/hr".format(viewsPerHour * 1.5f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.success
+                )
             } else {
-                Surface(
-                    shape = CircleShape,
-                    color = colors.textMuted.copy(alpha = 0.10f)
-                ) {
-                    Text(
-                        text = "Waiting for views",
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = colors.textMuted,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
-                    )
-                }
+                Text(
+                    text = "Waiting for views",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.textMuted
+                )
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
 
         if (viewCount == 0) {
-            // Empty state baseline
+            // Compact empty state baseline
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp),
+                    .height(34.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {

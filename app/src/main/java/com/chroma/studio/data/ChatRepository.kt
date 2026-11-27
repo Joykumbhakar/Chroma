@@ -30,14 +30,14 @@ class ChatRepository {
         return try {
             val doc = chatsCollection.document(roomId).get().await()
             if (doc.exists()) {
-                doc.toObject(ChatRoom::class.java)
+                doc.toChatRoomSafe()
             } else {
                 // Fetch lightweight profiles
                 val currentUserDoc = usersCollection.document(currentUser.uid).get().await()
                 val otherUserDoc = usersCollection.document(otherUserId).get().await()
                 
-                val currentRaw = currentUserDoc.toObject(UserProfile::class.java)
-                val otherRaw = otherUserDoc.toObject(UserProfile::class.java)
+                val currentRaw = currentUserDoc.toUserProfileSafe()
+                val otherRaw = otherUserDoc.toUserProfileSafe()
                 
                 val currentUserProfile = UserProfile(
                     uid = currentUser.uid,
@@ -169,7 +169,7 @@ class ChatRepository {
             val roomRef = chatsCollection.document(roomId)
             firestore.runTransaction { transaction ->
                 val roomSnapshot = transaction.get(roomRef)
-                val room = roomSnapshot.toObject(ChatRoom::class.java)
+                val room = roomSnapshot.toChatRoomSafe()
                 if (room != null) {
                     val otherUserIds = room.participants.filter { it != currentUser.uid }
                     val updatedUnreadCount = room.unreadCount.toMutableMap()
@@ -195,6 +195,20 @@ class ChatRepository {
                     transaction.update(roomRef, "deletedBy", emptyList<String>())
                 }
             }.await()
+            if (messageType != "system" && messageType != "call" && text.isNotBlank() && !text.startsWith("[POLL]:")) {
+                try {
+                    val surface = if (storyId != null) MentionSurface.STORY_REPLY else MentionSurface.CHAT
+                    NotificationDispatcher.dispatchMentionNotifications(
+                        texts = listOf(text),
+                        surface = surface,
+                        targetId = roomId,
+                        targetPreviewUrl = storyThumbnailUrl ?: imageUrl,
+                        detailSnippet = text
+                    )
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                }
+            }
             true
         } catch (e: Exception) {
             Log.e("ChatRepository", "Error sending message", e)
@@ -228,7 +242,7 @@ class ChatRepository {
             val roomRef = chatsCollection.document(roomId)
             firestore.runTransaction { transaction ->
                 val roomSnapshot = transaction.get(roomRef)
-                val room = roomSnapshot.toObject(ChatRoom::class.java)
+                val room = roomSnapshot.toChatRoomSafe()
                 if (room != null) {
                     val updatedUnreadCount = room.unreadCount.toMutableMap()
                     updatedUnreadCount[currentUser.uid] = 0
@@ -276,7 +290,7 @@ class ChatRepository {
             val roomRef = chatsCollection.document(roomId)
             firestore.runTransaction { transaction ->
                 val roomSnapshot = transaction.get(roomRef)
-                val room = roomSnapshot.toObject(ChatRoom::class.java)
+                val room = roomSnapshot.toChatRoomSafe()
                 if (room != null && room.lastSender != null && room.lastSender != currentUser.uid && !room.lastMessageIsDelivered) {
                     transaction.update(roomRef, "lastMessageIsDelivered", true)
                 }
@@ -326,7 +340,7 @@ class ChatRepository {
                     return@addSnapshotListener
                 }
                 
-                val chats = snapshot?.documents?.mapNotNull { it.toObject(ChatRoom::class.java) } ?: emptyList()
+                val chats = snapshot?.documents?.mapNotNull { it.toChatRoomSafe() } ?: emptyList()
                 val activeChats = chats.filter { !it.deletedBy.contains(currentUser.uid) }
                 trySend(activeChats)
             }
@@ -344,7 +358,7 @@ class ChatRepository {
                     return@addSnapshotListener
                 }
                 
-                val messages = snapshot?.documents?.mapNotNull { it.toObject(ChatMessage::class.java) } ?: emptyList()
+                val messages = snapshot?.documents?.mapNotNull { it.toChatMessageSafe() } ?: emptyList()
                 trySend(messages)
             }
             
@@ -367,7 +381,7 @@ class ChatRepository {
     suspend fun getRoom(roomId: String): ChatRoom? {
         return try {
             val doc = chatsCollection.document(roomId).get().await()
-            if (doc.exists()) doc.toObject(ChatRoom::class.java) else null
+            if (doc.exists()) doc.toChatRoomSafe() else null
         } catch (e: Exception) {
             Log.e("ChatRepository", "Error getting room $roomId", e)
             null

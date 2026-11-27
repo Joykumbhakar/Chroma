@@ -64,7 +64,7 @@ private val DefaultCreatorTestimonials = listOf(
     CreatorTestimonial(
         name = "Mateo Rossi",
         username = "@mat",
-        body = "Flash reels & optical blur curves feel buttery smooth.",
+        body = "Flashes & optical blur curves feel buttery smooth.",
         regionTag = "IT",
         avatarRes = R.drawable.onboard_art_architecture,
         remixCount = "210"
@@ -136,7 +136,7 @@ private val DefaultCreatorTestimonials = listOf(
     CreatorTestimonial(
         name = "Sofia Silva",
         username = "@sofia",
-        body = "Clean optical presets that export crisp straight to Reels.",
+        body = "Clean optical presets that export crisp straight to Flashes.",
         regionTag = "BR",
         avatarRes = R.drawable.wallpaper_windows,
         remixCount = "264"

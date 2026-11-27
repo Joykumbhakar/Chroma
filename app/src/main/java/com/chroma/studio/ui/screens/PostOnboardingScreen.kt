@@ -99,7 +99,7 @@ fun PostOnboardingScreen(
             "Color Grading",
             "Motion Graphics",
             "Sound Design",
-            "Cinematic Reels",
+            "Cinematic Flashes",
             "3D & VFX",
             "Typography",
             "Analog 35mm",
@@ -108,7 +108,7 @@ fun PostOnboardingScreen(
             "Spatial Audio"
         )
     }
-    val selectedTopics = remember { mutableStateListOf("Color Grading", "Cinematic Reels", "Motion Graphics") }
+    val selectedTopics = remember { mutableStateListOf("Color Grading", "Cinematic Flashes", "Motion Graphics") }
 
     // Curated Creators
     val discoverRepo = remember { com.chroma.studio.data.DiscoverRepository() }
@@ -125,7 +125,9 @@ fun PostOnboardingScreen(
                         name = u.displayName.ifBlank { u.username.ifBlank { "Visual Creator" } },
                         handle = if (u.username.isNotBlank()) "@${u.username}" else "@creator",
                         tagline = if (u.bio.isNotBlank()) u.bio else "Digital Artist & Visual Storyteller",
-                        avatarUrl = u.avatarUrl
+                        avatarUrl = u.avatarUrl,
+                        verified = u.verified,
+                        verifiedTone = u.verifiedTone
                     )
                 }
             } else {
@@ -1075,7 +1077,13 @@ private fun OneUiCommunityStep(
                                     overflow = TextOverflow.Ellipsis,
                                     fontFamily = InterFontFamily
                                 )
-                                VerifiedBadge(size = 13.dp)
+                                if (creator.verified) {
+                                    VerifiedBadge(
+                                        size = 13.dp,
+                                        tone = creator.verifiedTone,
+                                        userId = creator.id
+                                    )
+                                }
                             }
                             Text(
                                 text = "${creator.handle} • ${creator.tagline}",
@@ -1388,8 +1396,10 @@ data class FeaturedCreatorItem(
     val handle: String,
     val tagline: String,
     val avatarUrl: String,
-    val featuredReelTitle: String = "4K Cinematic Reel",
-    val reelDuration: String = "0:30"
+    val featuredReelTitle: String = "4K Cinematic Flash",
+    val reelDuration: String = "0:30",
+    val verified: Boolean = false,
+    val verifiedTone: String? = null
 )
 
 private val defaultCuratedCreators = listOf(

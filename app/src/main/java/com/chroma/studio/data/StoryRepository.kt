@@ -1,10 +1,13 @@
 package com.chroma.studio.data
 
 import android.util.Log
+import com.chroma.studio.model.NotificationActionType
 import com.chroma.studio.model.Story
 import com.chroma.studio.model.StoryHighlight
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.model.UserStoryGroup
+import com.chroma.studio.model.buildRepostedMentionStory
+import com.chroma.studio.model.extractStoryMentionHandles
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
@@ -123,6 +126,42 @@ class StoryRepository {
         }
     }
 
+    private suspend fun resolveStoryMentions(
+        textContent: String,
+        textFormat: String
+    ): Pair<List<String>, List<String>> {
+        val handles = extractStoryMentionHandles(textContent, textFormat)
+        if (handles.isEmpty()) return emptyList<String>() to emptyList()
+        val resolvedIds = try {
+            NotificationDispatcher.resolveUserIdsByUsernames(handles)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            emptyList()
+        }
+        return handles to resolvedIds
+    }
+
+    private suspend fun dispatchStoryMentions(
+        handles: List<String>,
+        textContent: String,
+        storyId: String,
+        mediaUrl: String
+    ) {
+        if (handles.isEmpty()) return
+        try {
+            NotificationDispatcher.dispatchMentionNotifications(
+                texts = listOf(textContent),
+                explicitMentions = handles,
+                surface = MentionSurface.STORY,
+                targetId = storyId,
+                targetPreviewUrl = mediaUrl.takeIf { it.isNotBlank() && it != "text:story" },
+                detailSnippet = textContent.takeIf { it.isNotBlank() } ?: handles.joinToString(" ") { "@$it" }
+            )
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+        }
+    }
+
     /** Publish a new story for the current user. Returns the story ID. */
     suspend fun publishStory(
         mediaUrl: String,
@@ -133,13 +172,15 @@ class StoryRepository {
         backgroundColor: String = "",
         isHighlight: Boolean = false,
         highlightTitle: String = "",
-        highlightCoverUrl: String = ""
+        highlightCoverUrl: String = "",
+        musicTrack: AttachedMusicSelection? = null
     ): String {
         val user = auth.currentUser ?: throw Exception("Not authenticated")
         val docRef = storiesCol.document()
         val now = System.currentTimeMillis()
         // All stories expire after 24 hrs — highlights fetch stories by ID separately
         val expiryTime = now + 86_400_000L
+        val (mentionHandles, mentionedIds) = resolveStoryMentions(textContent, textFormat)
 
         val story = Story(
             id = docRef.id,
@@ -154,9 +195,23 @@ class StoryRepository {
             expiresAt = expiryTime,
             isHighlight = isHighlight,
             highlightTitle = highlightTitle,
-            highlightCoverUrl = if (highlightCoverUrl.isNotBlank()) highlightCoverUrl else mediaUrl
+            highlightCoverUrl = if (highlightCoverUrl.isNotBlank()) highlightCoverUrl else mediaUrl,
+            mentionedUserIds = mentionedIds,
+            mentionedUsernames = mentionHandles,
+            musicTrackId = musicTrack?.trackId,
+            musicTitle = musicTrack?.title,
+            musicArtist = musicTrack?.artist,
+            musicAlbum = musicTrack?.album,
+            musicCoverUrl = musicTrack?.coverUrl,
+            musicAudioUrl = musicTrack?.audioUrl,
+            musicStartSec = musicTrack?.startSec ?: 0,
+            musicDurationSec = musicTrack?.durationSec ?: 0,
+            musicShowLyrics = musicTrack?.showLyricsSticker ?: false
         )
         docRef.set(story).await()
+        if (musicTrack != null) {
+            try { MusicRepository.getInstance().incrementTrackUsage(musicTrack.trackId) } catch (_: Exception) {}
+        }
 
         if (isHighlight && highlightTitle.isNotBlank()) {
             try {
@@ -174,6 +229,13 @@ class StoryRepository {
             }
         }
 
+        dispatchStoryMentions(
+            handles = mentionHandles,
+            textContent = textContent,
+            storyId = docRef.id,
+            mediaUrl = mediaUrl
+        )
+
         return docRef.id
     }
 
@@ -184,13 +246,15 @@ class StoryRepository {
         audienceType: String,
         customAudienceIds: List<String>,
         isHighlight: Boolean = false,
-        highlightTitle: String = ""
+        highlightTitle: String = "",
+        musicTrack: AttachedMusicSelection? = null
     ): String {
         val user = auth.currentUser ?: throw Exception("Not authenticated")
         val docRef = storiesCol.document()
         val now = System.currentTimeMillis()
         // All stories expire after 24 hrs — highlights fetch stories by ID separately
         val expiryTime = now + 86_400_000L
+        val (mentionHandles, mentionedIds) = resolveStoryMentions(textContent, textFormat)
 
         val story = Story(
             id = docRef.id,
@@ -204,9 +268,23 @@ class StoryRepository {
             timestamp = now,
             expiresAt = expiryTime,
             isHighlight = isHighlight,
-            highlightTitle = highlightTitle
+            highlightTitle = highlightTitle,
+            mentionedUserIds = mentionedIds,
+            mentionedUsernames = mentionHandles,
+            musicTrackId = musicTrack?.trackId,
+            musicTitle = musicTrack?.title,
+            musicArtist = musicTrack?.artist,
+            musicAlbum = musicTrack?.album,
+            musicCoverUrl = musicTrack?.coverUrl,
+            musicAudioUrl = musicTrack?.audioUrl,
+            musicStartSec = musicTrack?.startSec ?: 0,
+            musicDurationSec = musicTrack?.durationSec ?: 0,
+            musicShowLyrics = musicTrack?.showLyricsSticker ?: false
         )
         docRef.set(story).await()
+        if (musicTrack != null) {
+            try { MusicRepository.getInstance().incrementTrackUsage(musicTrack.trackId) } catch (_: Exception) {}
+        }
 
         if (isHighlight && highlightTitle.isNotBlank()) {
             try {
@@ -223,7 +301,105 @@ class StoryRepository {
             }
         }
 
+        dispatchStoryMentions(
+            handles = mentionHandles,
+            textContent = textContent,
+            storyId = docRef.id,
+            mediaUrl = "text:story"
+        )
+
         return docRef.id
+    }
+
+    /** Fetch a single story and its author profile by ID. */
+    suspend fun fetchStoryById(storyId: String): Pair<Story, UserProfile?>? {
+        if (storyId.isBlank()) return null
+        return try {
+            val snap = storiesCol.document(storyId).get().await()
+            val story = snap.toObject(Story::class.java)?.copy(id = snap.id) ?: return null
+            val authorProfile = if (story.userId.isNotBlank()) {
+                try {
+                    usersCol.document(story.userId).get().await().toObject(UserProfile::class.java)
+                } catch (_: Exception) {
+                    null
+                }
+            } else null
+            story to authorProfile
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error fetching story $storyId", e)
+            null
+        }
+    }
+
+    /**
+     * Reposts a story that mentioned the current user to their own 24-hour story ring,
+     * preserving visual styling, recording creator attribution, incrementing shares, and
+     * notifying the original creator.
+     */
+    suspend fun repostMentionedStory(
+        sourceStoryId: String,
+        audienceType: String = "public",
+        customAudienceIds: List<String> = emptyList()
+    ): Result<Story> {
+        val currentUser = auth.currentUser ?: return Result.failure(Exception("Not signed in"))
+        if (sourceStoryId.isBlank()) return Result.failure(Exception("Invalid story"))
+
+        return try {
+            val fetched = fetchStoryById(sourceStoryId)
+                ?: return Result.failure(Exception("This story is no longer available"))
+            val (sourceStory, authorProfile) = fetched
+
+            if (sourceStory.userId == currentUser.uid) {
+                return Result.failure(Exception("You already own this story"))
+            }
+            if (!isStoryActiveInFeed(sourceStory)) {
+                return Result.failure(Exception("This story has expired"))
+            }
+
+            val newDocRef = storiesCol.document()
+            val now = System.currentTimeMillis()
+            val repostedStory = buildRepostedMentionStory(
+                sourceStory = sourceStory,
+                sharerUid = currentUser.uid,
+                newStoryId = newDocRef.id,
+                originalAuthorUsername = authorProfile?.username.orEmpty(),
+                originalAuthorDisplayName = authorProfile?.displayName.orEmpty(),
+                audienceType = audienceType,
+                customAudienceIds = customAudienceIds,
+                nowMs = now
+            )
+
+            newDocRef.set(repostedStory).await()
+
+            try {
+                storiesCol.document(sourceStory.id)
+                    .update("shares", FieldValue.increment(1L))
+                    .await()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.w("StoryRepository", "Failed to increment share count on ${sourceStory.id}", e)
+            }
+
+            try {
+                NotificationDispatcher.sendNotification(
+                    targetUserId = sourceStory.userId,
+                    type = NotificationActionType.MENTION,
+                    actionText = "added your mentioned story to their story",
+                    detailText = sourceStory.textContent.takeIf { it.isNotBlank() }?.take(120),
+                    targetPreviewUrl = sourceStory.mediaUrl.takeIf { it.isNotBlank() && it != "text:story" },
+                    targetId = "story:${newDocRef.id}"
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+
+            Result.success(repostedStory)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "Error reposting mentioned story $sourceStoryId", e)
+            Result.failure(e)
+        }
     }
 
     /** Fetch non-expired stories for a list of userIds, grouped by user. */

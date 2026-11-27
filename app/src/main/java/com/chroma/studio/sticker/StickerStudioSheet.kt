@@ -68,37 +68,37 @@ fun StickerStudioModal(
     val eraserHistory = remember { mutableStateListOf<Bitmap>() }
 
     // Gallery Picker Launcher
-    val galleryLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            selectedImageUri = uri
-            isProcessing = true
-            scope.launch {
-                val bmp = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.use { stream ->
-                        BitmapFactory.decodeStream(stream)
-                    }
+    val galleryLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Sticker Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        selectedImageUri = uri
+        isProcessing = true
+        scope.launch {
+            val bmp = withContext(Dispatchers.IO) {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream)
                 }
-                if (bmp != null) {
-                    val fixedBmp = bmp.copy(Bitmap.Config.ARGB_8888, true)
-                    originalBitmap = fixedBmp
-                    // Automatically execute background removal on selection
-                    val autoCut = withContext(Dispatchers.Default) {
-                        StickerStudioEngine.autoCutoutSubject(fixedBmp, tolerance = 32)
-                    }
-                    cutoutBitmap = autoCut
-                    eraserHistory.clear()
-                    eraserHistory.add(autoCut.copy(Bitmap.Config.ARGB_8888, true))
-
-                    // Automatically generate 5px white border preview
-                    val bordered = withContext(Dispatchers.Default) {
-                        StickerStudioEngine.apply5pxWhiteBorder(autoCut, borderPx = 5)
-                    }
-                    previewWithBorderBitmap = bordered
-                }
-                isProcessing = false
             }
+            if (bmp != null) {
+                val fixedBmp = bmp.copy(Bitmap.Config.ARGB_8888, true)
+                originalBitmap = fixedBmp
+                // Automatically execute background removal on selection
+                val autoCut = withContext(Dispatchers.Default) {
+                    StickerStudioEngine.autoCutoutSubject(fixedBmp, tolerance = 32)
+                }
+                cutoutBitmap = autoCut
+                eraserHistory.clear()
+                eraserHistory.add(autoCut.copy(Bitmap.Config.ARGB_8888, true))
+
+                // Automatically generate 5px white border preview
+                val bordered = withContext(Dispatchers.Default) {
+                    StickerStudioEngine.apply5pxWhiteBorder(autoCut, borderPx = 5)
+                }
+                previewWithBorderBitmap = bordered
+            }
+            isProcessing = false
         }
     }
 
@@ -144,12 +144,11 @@ fun StickerStudioModal(
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            .clip(CircleShape)
-                            .background(iconBtnBg)
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable(onClick = onDismiss),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(19.dp))
+                        Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(20.dp))
                     }
 
                     Row(
@@ -160,8 +159,7 @@ fun StickerStudioModal(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(iconBtnBg)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .clickable {
                                         if (eraserHistory.size > 1) {
                                             eraserHistory.removeAt(eraserHistory.lastIndex)
@@ -172,7 +170,7 @@ fun StickerStudioModal(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Lucide.Undo2, contentDescription = "Undo", tint = colors.textMain, modifier = Modifier.size(17.dp))
+                                Icon(Lucide.Undo2, contentDescription = "Undo", tint = colors.textMain, modifier = Modifier.size(19.dp))
                             }
                         }
 
@@ -180,12 +178,11 @@ fun StickerStudioModal(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(iconBtnBg)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .clickable { galleryLauncher.launch("image/*") },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Lucide.ImagePlus, contentDescription = "Replace Image", tint = colors.textMain, modifier = Modifier.size(17.dp))
+                                Icon(Lucide.ImagePlus, contentDescription = "Replace Image", tint = colors.textMain, modifier = Modifier.size(19.dp))
                             }
                         }
 
@@ -247,20 +244,12 @@ fun StickerStudioModal(
                             verticalArrangement = Arrangement.Center,
                             modifier = Modifier.padding(24.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.primary.copy(alpha = 0.12f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Lucide.Sticker,
-                                    contentDescription = "Sticker",
-                                    tint = colors.primary,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
+                            Icon(
+                                Lucide.Sticker,
+                                contentDescription = "Sticker",
+                                tint = colors.primary,
+                                modifier = Modifier.size(40.dp)
+                            )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 "Create a Custom Sticker",

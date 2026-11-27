@@ -53,6 +53,7 @@ fun OscellionSplashScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val animTime = remember { Animatable(0f) }
+    val isLuxuryBrand by com.chroma.studio.ui.components.OscellionLuxuryBrandController.isLuxuryEnabled.collectAsState()
 
     fun startAnimation() {
         coroutineScope.launch {
@@ -247,7 +248,8 @@ fun OscellionSplashScreen(
                     bottomDepthAlpha = bottomDepthAlpha,
                     mainFaceAlpha = mainFaceAlpha,
                     sheenProgress = logoSheenProgress,
-                    sheenAlpha = logoSheenAlpha
+                    sheenAlpha = logoSheenAlpha,
+                    isLuxuryBrand = isLuxuryBrand
                 )
             }
 
@@ -269,11 +271,12 @@ fun OscellionSplashScreen(
                     },
                 contentAlignment = Alignment.CenterStart
             ) {
-                // High-resolution metallic wordmark
+                // High-resolution metallic wordmark (24K Champagne-Gold tint for Verified Pro users)
                 Image(
                     painter = painterResource(R.drawable.oscellion_wordmark),
                     contentDescription = null,
                     contentScale = ContentScale.FillBounds,
+                    colorFilter = if (isLuxuryBrand) ColorFilter.tint(Color(0xFFF7E3A1), ComposeBlendMode.Modulate) else null,
                     modifier = Modifier.fillMaxSize()
                 )
 
@@ -288,7 +291,7 @@ fun OscellionSplashScreen(
                                 val sheenBrush = Brush.linearGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color.White.copy(alpha = 0.88f * wordmarkSheenAlpha),
+                                        (if (isLuxuryBrand) Color(0xFFFFFDF5) else Color.White).copy(alpha = 0.88f * wordmarkSheenAlpha),
                                         Color.Transparent
                                     ),
                                     start = Offset(sweepX - 45.dp.toPx(), 0f),
@@ -308,7 +311,7 @@ fun OscellionSplashScreen(
  * Faithfully mirrors the SVG structure from oscellion_reveal_variation_v2.html:
  * viewBox: 100 180 740 660
  * - 2-pass wireframe perimeter trace ignition
- * - 3-layer bevel ignition (top-left highlight, bottom-right depth, vertical silver gradient face)
+ * - 3-layer bevel ignition (top-left highlight, bottom-right depth, vertical silver or 24K gold gradient face)
  * - Inner specular rim stroke
  * - Masked diagonal specular sheen sweep
  */
@@ -321,32 +324,41 @@ private fun EmblemVectorCanvas(
     bottomDepthAlpha: Float,
     mainFaceAlpha: Float,
     sheenProgress: Float,
-    sheenAlpha: Float
+    sheenAlpha: Float,
+    isLuxuryBrand: Boolean = false
 ) {
-    val parsedPath = remember {
-        PathParser().parsePathString(OscellionBrand.PATH_DATA).toPath().apply {
+    val parsedPath = remember(isLuxuryBrand) {
+        val rawPath = if (isLuxuryBrand) OscellionBrand.LUXURY_PATH_DATA else OscellionBrand.PATH_DATA
+        PathParser().parsePathString(rawPath).toPath().apply {
             fillType = PathFillType.EvenOdd
         }
     }
 
-    // Exact vertical white-to-silver gradient from HTML specification:
-    // 0%: #FFFFFF, 48%: #F7F7F9, 82%: #D4D4DA, 100%: #A8A8B0
-    val faceGradient = remember {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFFFFFFF),
-                Color(0xFFF7F7F9),
-                Color(0xFFD4D4DA),
-                Color(0xFFA8A8B0)
+    // Standard vertical metallic gradient vs 24K Champagne-Gold gradient for Verified Pro users
+    val faceGradient = remember(isLuxuryBrand) {
+        if (isLuxuryBrand) {
+            Brush.linearGradient(
+                colorStops = OscellionBrand.LuxuryGoldFillStops,
+                start = Offset(122.88f, 81.92f),
+                end = Offset(901.12f, 942.08f)
             )
-        )
+        } else {
+            Brush.verticalGradient(
+                listOf(
+                    Color(0xFFFFFFFF),
+                    Color(0xFFF7F7F9),
+                    Color(0xFFD4D4DA),
+                    Color(0xFFA8A8B0)
+                )
+            )
+        }
     }
 
     Canvas(modifier = modifier) {
-        // SVG viewBox: x=100, y=180, width=740, height=660
-        val scale = size.height / 660f
-        val offsetX = -100f * scale
-        val offsetY = -180f * scale
+        // SVG viewBox: x=100, y=180, width=740, height=660 (or fitted 1024x1024 for luxury path)
+        val scale = if (isLuxuryBrand) size.height / 820f else size.height / 660f
+        val offsetX = if (isLuxuryBrand) (size.width - 1024f * scale) / 2f else -100f * scale
+        val offsetY = if (isLuxuryBrand) (size.height - 1024f * scale) / 2f else -180f * scale
 
         drawIntoCanvas { canvas ->
             canvas.save()
@@ -359,7 +371,7 @@ private fun EmblemVectorCanvas(
                 canvas.save()
                 canvas.translate(7f, 7f)
                 val depthPaint = Paint().apply {
-                    color = Color(0xFF5A5A60).copy(alpha = 0.9f * bottomDepthAlpha)
+                    color = (if (isLuxuryBrand) Color(0xFF6E4E10) else Color(0xFF5A5A60)).copy(alpha = 0.9f * bottomDepthAlpha)
                     isAntiAlias = true
                     style = PaintingStyle.Fill
                 }
@@ -372,7 +384,7 @@ private fun EmblemVectorCanvas(
                 canvas.save()
                 canvas.translate(-7f, -7f)
                 val highlightPaint = Paint().apply {
-                    color = Color.White.copy(alpha = 0.95f * topHighlightAlpha)
+                    color = (if (isLuxuryBrand) Color(0xFFFFFDF5) else Color.White).copy(alpha = 0.95f * topHighlightAlpha)
                     isAntiAlias = true
                     style = PaintingStyle.Fill
                 }
@@ -381,7 +393,7 @@ private fun EmblemVectorCanvas(
             }
 
             if (mainFaceAlpha > 0f) {
-                // Main metallic vertical gradient face
+                // Main metallic vertical / 24K gold gradient face
                 canvas.save()
                 canvas.clipPath(parsedPath)
 
@@ -399,7 +411,7 @@ private fun EmblemVectorCanvas(
                     val sheenBrush = Brush.linearGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.White.copy(alpha = 0.98f * sheenAlpha),
+                            (if (isLuxuryBrand) Color(0xFFFFF2C6) else Color.White).copy(alpha = 0.98f * sheenAlpha),
                             Color.Transparent
                         ),
                         start = Offset(sheenX, 150f),
@@ -420,8 +432,8 @@ private fun EmblemVectorCanvas(
                 val strokePaint = Paint().apply {
                     isAntiAlias = true
                     style = PaintingStyle.Stroke
-                    strokeWidth = 5f
-                    color = Color.White.copy(alpha = 0.45f * mainFaceAlpha)
+                    strokeWidth = if (isLuxuryBrand) 14f else 5f
+                    color = (if (isLuxuryBrand) Color(0xFFFCEBB6) else Color.White).copy(alpha = 0.55f * mainFaceAlpha)
                 }
                 canvas.drawPath(parsedPath, strokePaint)
             }
@@ -434,7 +446,7 @@ private fun EmblemVectorCanvas(
                     strokeWidth = 11f
                     strokeCap = StrokeCap.Round
                     strokeJoin = StrokeJoin.Round
-                    color = Color.White.copy(alpha = wireframeAlpha)
+                    color = (if (isLuxuryBrand) Color(0xFFF7E3A1) else Color.White).copy(alpha = wireframeAlpha)
                     pathEffect = PathEffect.dashPathEffect(
                         floatArrayOf(2600f, 2600f),
                         2600f * (1f - wireframeProgress)

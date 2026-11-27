@@ -249,7 +249,7 @@ fun ProfileSettingsScreen(
                                 contentScale = ContentScale.Crop
                             )
                             OnlineStatusDot(
-                                isOnline = true,
+                                isOnline = com.chroma.studio.data.OnlineStatusManager.isSelfStatusVisible(),
                                 size = 15.dp,
                                 showPulse = true,
                                 ringColor = colors.cardBg,
@@ -786,22 +786,22 @@ fun EditProfileModal(
     var pendingCropUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var pendingCropTarget by remember { mutableStateOf(ProfileCropTarget.AVATAR) }
 
-    val bannerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    val bannerLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Cover Banner",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
     ) { uri ->
-        if (uri != null) {
-            pendingCropUri = uri
-            pendingCropTarget = ProfileCropTarget.BANNER
-        }
+        pendingCropUri = uri
+        pendingCropTarget = ProfileCropTarget.BANNER
     }
 
-    val avatarLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    val avatarLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Profile Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
     ) { uri ->
-        if (uri != null) {
-            pendingCropUri = uri
-            pendingCropTarget = ProfileCropTarget.AVATAR
-        }
+        pendingCropUri = uri
+        pendingCropTarget = ProfileCropTarget.AVATAR
     }
 
     if (pendingCropUri != null) {

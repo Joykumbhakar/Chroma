@@ -358,4 +358,81 @@ class FlashCommentViewModel(application: Application) : AndroidViewModel(applica
             }
         }
     }
+
+    fun editComment(commentId: String, newText: String) {
+        val cleaned = newText.trim()
+        if (cleaned.isEmpty()) return
+        val target = _comments.value.firstOrNull { it.id == commentId } ?: return
+        val prevComments = _comments.value
+
+        _comments.value = _comments.value.map { c ->
+            if (c.id == commentId) c.copy(text = cleaned, edited = true) else c
+        }
+        videoCommentsCache[target.videoId] = _comments.value
+
+        viewModelScope.launch {
+            val success = repository.editComment(
+                commentId = commentId,
+                videoId = target.videoId,
+                newText = cleaned
+            )
+            if (!success) {
+                _comments.value = prevComments
+                videoCommentsCache[target.videoId] = prevComments
+                ToastManager.showToast("Couldn't save edit.")
+            }
+        }
+    }
+
+    fun toggleReaction(commentId: String, emoji: String) {
+        val userId = auth.currentUser?.uid ?: return
+        val comment = _comments.value.firstOrNull { it.id == commentId } ?: return
+        val existingUsers = comment.reactions[emoji].orEmpty()
+        val desiredAdd = !existingUsers.contains(userId)
+        val prevComments = _comments.value
+
+        mutationCoordinator.mutate(
+            key = "comment_react:$commentId:$emoji",
+            desiredState = desiredAdd,
+            onOptimisticApply = { shouldAdd ->
+                _comments.value = _comments.value.map { c ->
+                    if (c.id == commentId) {
+                        val updatedMap = c.reactions.toMutableMap()
+                        val list = updatedMap[emoji].orEmpty()
+                        val nextList = if (shouldAdd) (list + userId).distinct() else list - userId
+                        if (nextList.isEmpty()) updatedMap.remove(emoji) else updatedMap[emoji] = nextList
+                        c.copy(reactions = updatedMap)
+                    } else c
+                }
+                videoCommentsCache[comment.videoId] = _comments.value
+            },
+            performServerSync = { shouldAdd ->
+                repository.setCommentReaction(
+                    commentId = commentId,
+                    videoId = comment.videoId,
+                    userId = userId,
+                    emoji = emoji,
+                    add = shouldAdd
+                )
+            },
+            onRollback = {
+                _comments.value = prevComments
+                videoCommentsCache[comment.videoId] = prevComments
+            },
+            onError = {
+                ToastManager.showToast("Could not update reaction.")
+            }
+        )
+    }
+
+    fun reportComment(commentId: String, videoId: String, reason: String) {
+        viewModelScope.launch {
+            val success = repository.reportComment(commentId, videoId, reason)
+            if (success) {
+                ToastManager.showToast("Report submitted: $reason")
+            } else {
+                ToastManager.showToast("Couldn't submit report. Try again.")
+            }
+        }
+    }
 }

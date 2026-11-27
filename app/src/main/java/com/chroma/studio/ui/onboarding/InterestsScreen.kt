@@ -18,7 +18,7 @@ private val topics = listOf(
     Topic("Color Grading", Icons.Rounded.ColorLens),
     Topic("Motion Graphics", Icons.Rounded.Animation),
     Topic("Sound Design", Icons.Rounded.GraphicEq),
-    Topic("Cinematic Reels", Icons.Rounded.MovieFilter),
+    Topic("Cinematic Flashes", Icons.Rounded.MovieFilter),
     Topic("3D & VFX", Icons.Rounded.ViewInAr),
     Topic("Typography", Icons.Rounded.TextFields),
     Topic("Film Emulation", Icons.Rounded.CameraRoll),

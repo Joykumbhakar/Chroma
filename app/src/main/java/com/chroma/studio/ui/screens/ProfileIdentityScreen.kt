@@ -91,7 +91,7 @@ fun ProfileIdentityScreen(
     var username by remember { mutableStateOf(profile.username) }
     var avatarUrl by remember { mutableStateOf(profile.avatarUrl) }
     var bio by remember { mutableStateOf(profile.bio) }
-    var role by remember { mutableStateOf(profile.role.ifBlank { "Developer" }) }
+    var role by remember { mutableStateOf(profile.role.ifBlank { "Creator" }) }
     var dob by remember { mutableStateOf(profile.dateOfBirthAsLong ?: profile.dob) }
     var gender by remember { mutableStateOf(profile.gender.ifBlank { "Prefer not to say" }) }
     
@@ -117,6 +117,7 @@ fun ProfileIdentityScreen(
     // Navigation and Upload states
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var isSaving by remember { mutableStateOf(false) }
+    var showRemoveBannerConfirm by remember { mutableStateOf(false) }
 
 
     var selectedBannerUri by remember { mutableStateOf<Uri?>(null) }
@@ -232,18 +233,22 @@ fun ProfileIdentityScreen(
     var pendingEditorUri by remember { mutableStateOf<Uri?>(null) }
     var pendingEditorTarget by remember { mutableStateOf(ProfileCropTarget.AVATAR) }
 
-    val bannerGalleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            pendingEditorUri = uri
-            pendingEditorTarget = ProfileCropTarget.BANNER
-        }
+    val bannerGalleryLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Cover Banner",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        pendingEditorUri = uri
+        pendingEditorTarget = ProfileCropTarget.BANNER
     }
 
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            pendingEditorUri = uri
-            pendingEditorTarget = ProfileCropTarget.AVATAR
-        }
+    val galleryLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Choose Profile Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        pendingEditorUri = uri
+        pendingEditorTarget = ProfileCropTarget.AVATAR
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
@@ -617,8 +622,8 @@ fun ProfileIdentityScreen(
                                 if (profile.verified) {
                                     VerifiedBadge(
                                         size = 17.dp,
-                                        tier = VerifiedBadgeTier.BLUE,
                                         tone = profile.verifiedTone,
+                                        userId = profile.uid,
                                         animated = true
                                     )
                                 }
@@ -656,7 +661,7 @@ fun ProfileIdentityScreen(
                                 ) {
                                     Icon(Lucide.Briefcase, null, tint = Color(0xFF0381FE), modifier = Modifier.size(12.dp))
                                     Text(
-                                        text = role.ifBlank { "Developer" },
+                                        text = role.ifBlank { "Creator" },
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = Color(0xFF0381FE)
@@ -1041,11 +1046,7 @@ fun ProfileIdentityScreen(
 
 
                                 ChromaPillButton(
-                                    onClick = {
-                                        bannerUrl = ""
-                                        selectedBannerUri = null
-                                        Toast.makeText(context, "Cover banner removed", Toast.LENGTH_SHORT).show()
-                                    },
+                                    onClick = { showRemoveBannerConfirm = true },
                                     variant = ChromaPillVariant.Secondary,
                                     height = 38.dp,
                                     modifier = Modifier.weight(1f)
@@ -1054,6 +1055,23 @@ fun ProfileIdentityScreen(
                                     Spacer(Modifier.width(6.dp))
                                     Text("Remove Banner", color = Color(0xFFFF3B30), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
                                 }
+                            }
+
+                            if (showRemoveBannerConfirm) {
+                                IosAlertDialog(
+                                    title = "Remove Cover Banner?",
+                                    message = "Are you sure you want to remove your profile cover banner?",
+                                    confirmText = "Remove",
+                                    isDestructive = true,
+                                    onConfirm = {
+                                        showRemoveBannerConfirm = false
+                                        bannerUrl = ""
+                                        selectedBannerUri = null
+                                        Toast.makeText(context, "Cover banner removed", Toast.LENGTH_SHORT).show()
+                                    },
+                                    dismissText = "Cancel",
+                                    onDismiss = { showRemoveBannerConfirm = false }
+                                )
                             }
 
 

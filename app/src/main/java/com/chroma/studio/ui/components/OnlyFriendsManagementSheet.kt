@@ -132,20 +132,12 @@ fun OnlyFriendsManagementSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(26.dp)
-                            .clip(CircleShape)
-                            .background(OnlyFriendEmerald),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Lucide.Star,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Lucide.Star,
+                        contentDescription = null,
+                        tint = OnlyFriendEmerald,
+                        modifier = Modifier.size(20.dp)
+                    )
 
                     Text(
                         text = "Only Friend",
@@ -159,8 +151,7 @@ fun OnlyFriendsManagementSheet(
                 Box(
                     modifier = Modifier
                         .size(32.dp)
-                        .clip(CircleShape)
-                        .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable { onDismissRequest() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -168,7 +159,7 @@ fun OnlyFriendsManagementSheet(
                         imageVector = Lucide.X,
                         contentDescription = "Close",
                         tint = colors.textMain,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }

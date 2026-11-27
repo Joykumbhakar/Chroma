@@ -224,12 +224,12 @@ fun StoryEditorScreen(
     var headlineText by remember { mutableStateOf("") }
     var bodyContent by remember { mutableStateOf("") }
     var backgroundImageUri by remember { mutableStateOf<Uri?>(initialBackgroundUri) }
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia()
+    val photoPickerLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Story Background",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
     ) { uri ->
-        if (uri != null) {
-            backgroundImageUri = uri
-        }
+        backgroundImageUri = uri
     }
     var selectedCategory by remember { mutableStateOf("") }
     var selectedMood by remember { mutableStateOf("") }
@@ -237,6 +237,10 @@ fun StoryEditorScreen(
     var showOnlyFriendsSheet by remember { mutableStateOf(false) }
     var saveAsProfileHighlight by remember { mutableStateOf(false) }
     var highlightFolderTitle by remember { mutableStateOf("Highlights") }
+    var selectedMusic by remember {
+        mutableStateOf<com.chroma.studio.data.AttachedMusicSelection?>(com.chroma.studio.data.PendingMusicHandoff.peek())
+    }
+    var showMusicPickerSheet by remember { mutableStateOf(false) }
 
     // Formatting State
     var isBold by remember { mutableStateOf(false) }
@@ -394,7 +398,8 @@ fun StoryEditorScreen(
                     textFormat = jsonFormat,
                     backgroundColor = formatState.backgroundColorHex,
                     isHighlight = saveAsProfileHighlight,
-                    highlightTitle = highlightFolderTitle
+                    highlightTitle = highlightFolderTitle,
+                    musicTrack = selectedMusic
                 )
             } else {
                 storyViewModel.publishTextStory(
@@ -404,9 +409,11 @@ fun StoryEditorScreen(
                     audienceType = audienceType,
                     customAudienceIds = targetAudienceIds,
                     isHighlight = saveAsProfileHighlight,
-                    highlightTitle = highlightFolderTitle
+                    highlightTitle = highlightFolderTitle,
+                    musicTrack = selectedMusic
                 )
             }
+            com.chroma.studio.data.PendingMusicHandoff.consume()
 
             isPublishing = false
             if (saveAsProfileHighlight) {
@@ -474,17 +481,23 @@ fun StoryEditorScreen(
                     }
                 }
 
-                // Right: Templates, Preview, Publish
+                // Right: Music, Templates, Preview, Publish
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(CircleShape)
-                            .background(topBtnBg)
-                            .clickable { showTemplatesSheet = true },
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (selectedMusic != null) Color(0xFFFA2D48).copy(alpha = 0.14f)
+                                else Color.Transparent
+                            )
+                            .clickable { showMusicPickerSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
-                        AiWaveSphereIcon(
+                        Icon(
+                            imageVector = Lucide.Music,
+                            contentDescription = "Add Music",
+                            tint = if (selectedMusic != null) Color(0xFFFA2D48) else themeColors.textMain,
                             modifier = Modifier.size(19.dp)
                         )
                     }
@@ -492,8 +505,19 @@ fun StoryEditorScreen(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(CircleShape)
-                            .background(if (showLivePreview) Color(0xFF0381FE).copy(alpha = 0.14f) else topBtnBg)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showTemplatesSheet = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AiWaveSphereIcon(
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable { showLivePreview = !showLivePreview },
                         contentAlignment = Alignment.Center
                     ) {
@@ -501,7 +525,7 @@ fun StoryEditorScreen(
                             imageVector = Lucide.Eye,
                             contentDescription = "Preview",
                             tint = if (showLivePreview) Color(0xFF0381FE) else themeColors.textMain,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(19.dp)
                         )
                     }
 
@@ -509,7 +533,7 @@ fun StoryEditorScreen(
                     Box(
                         modifier = Modifier
                             .height(36.dp)
-                            .clip(RoundedCornerShape(999.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .background(if (canPublish) Color(0xFF0381FE) else Color(0xFF0381FE).copy(alpha = 0.4f))
                             .clickable(enabled = canPublish, onClick = onPublishAction)
                             .padding(horizontal = 16.dp),
@@ -1525,6 +1549,19 @@ fun StoryEditorScreen(
         OnlyFriendsManagementSheet(
             storyViewModel = storyViewModel,
             onDismissRequest = { showOnlyFriendsSheet = false }
+        )
+    }
+
+    if (showMusicPickerSheet) {
+        com.chroma.studio.ui.components.StoryMusicPickerModal(
+            isOpen = true,
+            initialTrackId = selectedMusic?.trackId,
+            headerTitle = "Story Music",
+            onDismiss = { showMusicPickerSheet = false },
+            onClipConfirmed = { picked ->
+                selectedMusic = picked
+                showMusicPickerSheet = false
+            }
         )
     }
 }

@@ -229,14 +229,24 @@ fun AccountCenterScreen(
         (maxCollapsePx - collapseOffsetPx).coerceAtLeast(0f).toDp()
     }
 
-    LaunchedEffect(currentUserId) {
-        if (currentUserId != null) {
+    val savedAccount = remember { com.chroma.studio.data.SavedAccountManager.getSavedAccounts(context).firstOrNull() }
+    val effectiveUid = currentUserId ?: savedAccount?.uid
+
+    LaunchedEffect(effectiveUid) {
+        if (effectiveUid != null) {
             try {
-                val db = FirebaseFirestore.getInstance()
-                val snap = db.collection("users").document(currentUserId).get().await()
-                profile = snap.toObject(UserProfile::class.java)
+                profile = com.chroma.studio.data.DiscoverRepository.getInstance().getUserProfile(effectiveUid)
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+            if (profile == null) {
+                val authUser = FirebaseAuth.getInstance().currentUser
+                profile = UserProfile(
+                    uid = effectiveUid,
+                    displayName = authUser?.displayName?.takeIf { it.isNotBlank() } ?: savedAccount?.displayName.orEmpty(),
+                    username = savedAccount?.username.orEmpty(),
+                    avatarUrl = savedAccount?.avatarUrl.orEmpty()
+                )
             }
         }
         isLoading = false
@@ -519,7 +529,14 @@ fun AccountCenterScreen(
                             cardBorderColor = cardBorderColor,
                             textDark = textDark,
                             textMuted = textMuted,
-                            onClick = { profile?.let { onNavigateToProfileIdentity(it) } }
+                            onClick = {
+                                val p = profile
+                                if (p != null) {
+                                    onNavigateToProfileIdentity(p)
+                                } else {
+                                    ToastManager.showToast("Please sign in to customize your profile identity")
+                                }
+                            }
                         )
                     }
 
@@ -532,8 +549,10 @@ fun AccountCenterScreen(
                             val p = profile
                             if (p != null) {
                                 action(p)
-                            } else {
+                            } else if (isLoading) {
                                 ToastManager.showToast("Loading profile... please try again in a moment")
+                            } else {
+                                ToastManager.showToast("Please sign in to edit profile settings")
                             }
                         }
 

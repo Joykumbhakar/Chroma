@@ -92,8 +92,7 @@ fun PostDetailDeepLinkScreen(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(CircleShape)
-                        .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFF1F5F9))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable { onBack() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -101,7 +100,7 @@ fun PostDetailDeepLinkScreen(
                         imageVector = Lucide.ArrowLeft,
                         contentDescription = "Back",
                         tint = colors.textMain,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
@@ -115,8 +114,25 @@ fun PostDetailDeepLinkScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                     if (post != null) {
+                        val currentPost = post!!
+                        val acceptedCollabs = remember(currentPost.collaborators, currentPost.collaboratorIds) {
+                            com.chroma.studio.model.resolveAcceptedCollaborators(
+                                currentPost.collaborators,
+                                currentPost.collaboratorIds
+                            )
+                        }
+                        val collabAttr = remember(currentPost.authorUsername, acceptedCollabs) {
+                            com.chroma.studio.model.formatCollabHeaderAttribution(
+                                "@${currentPost.authorUsername}",
+                                acceptedCollabs.map { "@${it.username.ifBlank { it.displayName }}" }
+                            )
+                        }
                         Text(
-                            text = "@${post!!.authorUsername}",
+                            text = if (collabAttr.connector != null && collabAttr.secondaryLabel != null) {
+                                "${collabAttr.primaryLabel}${collabAttr.connector}${collabAttr.secondaryLabel}"
+                            } else {
+                                "@${currentPost.authorUsername}"
+                            },
                             color = colors.textMuted,
                             fontSize = 11.5.sp,
                             maxLines = 1,
@@ -156,6 +172,38 @@ fun PostDetailDeepLinkScreen(
         }
 
         HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
+
+        val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        val activePost = post
+        var isRespondingCollab by remember(activePost?.id) { mutableStateOf(false) }
+        if (activePost != null && !currentUid.isNullOrBlank() && activePost.pendingCollaboratorIds.contains(currentUid)) {
+            com.chroma.studio.ui.components.PendingCollabReviewStrip(
+                creatorHandle = activePost.authorUsername,
+                isProcessing = isRespondingCollab,
+                onAccept = {
+                    isRespondingCollab = true
+                    scope.launch {
+                        val ok = discoverViewModel.repository.respondToCollabInvite(activePost.id, accept = true)
+                        if (ok) {
+                            post = discoverViewModel.repository.fetchPostById(activePost.id)
+                            ToastManager.showToast("Joined collaboration!")
+                        }
+                        isRespondingCollab = false
+                    }
+                },
+                onDecline = {
+                    isRespondingCollab = true
+                    scope.launch {
+                        val ok = discoverViewModel.repository.respondToCollabInvite(activePost.id, accept = false)
+                        if (ok) {
+                            post = discoverViewModel.repository.fetchPostById(activePost.id)
+                            ToastManager.showToast("Invite declined")
+                        }
+                        isRespondingCollab = false
+                    }
+                }
+            )
+        }
 
         when {
             isLoading -> {

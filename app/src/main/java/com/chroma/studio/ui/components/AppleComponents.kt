@@ -666,11 +666,14 @@ fun IosAlertDialog(
 ) {
     val colors = LocalOscellionColors.current
     val isDark = colors.isDark
+    val haptic = LocalHapticFeedback.current
 
-    val dialogBg = if (isDark) Color(0xF22C2C2E) else Color(0xF2FFFFFF)
+    val dialogBg = if (isDark) Color(0xF52C2C2E) else Color(0xF8FFFFFF)
     val titleColor = if (isDark) Color.White else Color.Black
-    val messageColor = if (isDark) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.8f)
-    val dividerColor = if (isDark) Color(0x36545458) else Color(0x363C3C43)
+    val messageColor = if (isDark) Color.White.copy(alpha = 0.78f) else Color.Black.copy(alpha = 0.75f)
+    val dividerColor = if (isDark) Color(0x36545458) else Color(0x2E3C3C43)
+    val hairlineBorder = if (isDark) Color(0x28FFFFFF) else Color(0x16000000)
+    val pressedTint = if (isDark) Color(0x1AFFFFFF) else Color(0x12000000)
     val blueColor = Color(0xFF0381FE)
     val redColor = Color(0xFFFF3B30)
 
@@ -699,7 +702,8 @@ fun IosAlertDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.4f * alphaAnim.value))
+                .background(Color.Black.copy(alpha = 0.42f * alphaAnim.value))
+                .imePadding()
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -709,15 +713,15 @@ fun IosAlertDialog(
         ) {
             Column(
                 modifier = Modifier
-                    .width(270.dp)
+                    .width(276.dp)
                     .graphicsLayer {
                         scaleX = scaleAnim.value
                         scaleY = scaleAnim.value
                         alpha = alphaAnim.value
                     }
-                    .shadow(24.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.35f))
                     .clip(RoundedCornerShape(14.dp))
                     .background(dialogBg)
+                    .border(0.5.dp, hairlineBorder, RoundedCornerShape(14.dp))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -761,19 +765,31 @@ fun IosAlertDialog(
                 // Actions Area
                 if (isDestructive) {
                     // Stacked Actions for Destructive (Destructive action top, Cancel bottom)
+                    val confirmInteraction = remember { MutableInteractionSource() }
+                    val confirmPressed by confirmInteraction.collectIsPressedAsState()
+                    val dismissInteraction = remember { MutableInteractionSource() }
+                    val dismissPressed by dismissInteraction.collectIsPressedAsState()
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(44.dp)
-                                .clickable { onConfirm() },
+                                .height(45.dp)
+                                .background(if (confirmPressed && confirmEnabled) pressedTint else Color.Transparent)
+                                .clickable(
+                                    interactionSource = confirmInteraction,
+                                    indication = null,
+                                    enabled = confirmEnabled
+                                ) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onConfirm()
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = confirmText,
-                                color = redColor,
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Normal,
+                                color = if (confirmEnabled) redColor else redColor.copy(alpha = 0.38f),
+                                fontSize = 16.5.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 fontFamily = InterFontFamily
                             )
                         }
@@ -782,14 +798,21 @@ fun IosAlertDialog(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(44.dp)
-                                    .clickable { onDismiss() },
+                                    .height(45.dp)
+                                    .background(if (dismissPressed) pressedTint else Color.Transparent)
+                                    .clickable(
+                                        interactionSource = dismissInteraction,
+                                        indication = null
+                                    ) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onDismiss()
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = dismissText,
                                     color = blueColor,
-                                    fontSize = 17.sp,
+                                    fontSize = 16.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     fontFamily = InterFontFamily
                                 )
@@ -798,18 +821,29 @@ fun IosAlertDialog(
                     }
                 } else if (dismissText != null) {
                     // Standard 2-Button Horizontal Layout
-                    Row(modifier = Modifier.fillMaxWidth().height(44.dp)) {
+                    val dismissInteraction = remember { MutableInteractionSource() }
+                    val dismissPressed by dismissInteraction.collectIsPressedAsState()
+                    val confirmInteraction = remember { MutableInteractionSource() }
+                    val confirmPressed by confirmInteraction.collectIsPressedAsState()
+                    Row(modifier = Modifier.fillMaxWidth().height(45.dp)) {
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .clickable { onDismiss() },
+                                .background(if (dismissPressed) pressedTint else Color.Transparent)
+                                .clickable(
+                                    interactionSource = dismissInteraction,
+                                    indication = null
+                                ) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onDismiss()
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = dismissText,
                                 color = blueColor,
-                                fontSize = 17.sp,
+                                fontSize = 16.5.sp,
                                 fontWeight = FontWeight.Normal,
                                 fontFamily = InterFontFamily
                             )
@@ -819,13 +853,21 @@ fun IosAlertDialog(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .clickable(enabled = confirmEnabled) { onConfirm() },
+                                .background(if (confirmPressed && confirmEnabled) pressedTint else Color.Transparent)
+                                .clickable(
+                                    interactionSource = confirmInteraction,
+                                    indication = null,
+                                    enabled = confirmEnabled
+                                ) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onConfirm()
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = confirmText,
                                 color = if (confirmEnabled) blueColor else blueColor.copy(alpha = 0.35f),
-                                fontSize = 17.sp,
+                                fontSize = 16.5.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 fontFamily = InterFontFamily
                             )
@@ -833,17 +875,27 @@ fun IosAlertDialog(
                     }
                 } else {
                     // Single Button Dismiss Alert
+                    val confirmInteraction = remember { MutableInteractionSource() }
+                    val confirmPressed by confirmInteraction.collectIsPressedAsState()
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(44.dp)
-                            .clickable(enabled = confirmEnabled) { onConfirm() },
+                            .height(45.dp)
+                            .background(if (confirmPressed && confirmEnabled) pressedTint else Color.Transparent)
+                            .clickable(
+                                interactionSource = confirmInteraction,
+                                indication = null,
+                                enabled = confirmEnabled
+                            ) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                onConfirm()
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = confirmText,
-                            color = blueColor,
-                            fontSize = 17.sp,
+                            color = if (confirmEnabled) blueColor else blueColor.copy(alpha = 0.35f),
+                            fontSize = 16.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             fontFamily = InterFontFamily
                         )
@@ -1508,13 +1560,10 @@ fun IosDynamicIslandHost(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Box(
-                                    modifier = Modifier
-                                        .size(26.dp)
-                                        .clip(CircleShape)
-                                        .background(iconTint.copy(alpha = 0.18f)),
+                                    modifier = Modifier.size(22.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(event.icon ?: Lucide.Check, null, tint = iconTint, modifier = Modifier.size(15.dp))
+                                    Icon(event.icon ?: Lucide.Check, null, tint = iconTint, modifier = Modifier.size(16.dp))
                                 }
                                 Text(
                                     text = event.title,
@@ -2335,14 +2384,10 @@ fun IosDynamicIslandHost(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Box(
-                                        modifier = Modifier
-                                            .size(34.dp)
-                                            .clip(CircleShape)
-                                            .background(iconTint.copy(alpha = 0.18f))
-                                            .border(0.8.dp, iconTint.copy(alpha = 0.35f), CircleShape),
+                                        modifier = Modifier.size(28.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(event.icon ?: Lucide.Check, null, tint = iconTint, modifier = Modifier.size(18.dp))
+                                        Icon(event.icon ?: Lucide.Check, null, tint = iconTint, modifier = Modifier.size(20.dp))
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
@@ -2447,8 +2492,7 @@ private fun IslandCloseButton(
     Box(
         modifier = Modifier
             .size(size)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.12f))
+            .clip(RoundedCornerShape(6.dp))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -2478,17 +2522,14 @@ private fun IslandBadgeAvatar(
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .size((size.value * 0.45f).coerceAtLeast(12f).dp)
-                .clip(CircleShape)
-                .background(badgeBg)
-                .border(1.dp, Color.Black, CircleShape),
+                .size((size.value * 0.44f).coerceAtLeast(12f).dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = badgeIcon,
                 contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size((size.value * 0.25f).coerceAtLeast(7f).dp)
+                tint = badgeBg,
+                modifier = Modifier.size((size.value * 0.38f).coerceAtLeast(10f).dp)
             )
         }
     }
@@ -2504,6 +2545,8 @@ private fun IslandAlertHeader(
     badgeIcon: ImageVector,
     metaLabel: String? = null,
     thumbnailUrl: String = "",
+    verifiedTone: String? = null,
+    userId: String? = null,
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
@@ -2537,7 +2580,7 @@ private fun IslandAlertHeader(
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 if (isVerified) {
-                    VerifiedBadge(size = 13.dp)
+                    VerifiedBadge(size = 13.dp, tone = verifiedTone, userId = userId)
                 }
                 if (!metaLabel.isNullOrBlank()) {
                     Spacer(Modifier.weight(1f))

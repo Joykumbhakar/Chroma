@@ -44,6 +44,10 @@ import com.chroma.studio.ui.components.ShareStoryAudienceSheet
 
 import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
 
+import com.chroma.studio.ui.components.LiveStudioSheet
+
+import com.composables.icons.lucide.Radio
+
 import androidx.compose.foundation.pager.rememberPagerState
 
 import android.content.Context
@@ -358,7 +362,7 @@ object LayerCache {
 
 enum class CommunityFeedTab(val label: String, val icon: ImageVector) {
 
-    ALL("Latest", Lucide.Clock),
+    ALL("For You", Lucide.Sparkles),
 
     FOLLOWING("Following", Lucide.Users),
 
@@ -373,6 +377,8 @@ enum class CommunityFeedTab(val label: String, val icon: ImageVector) {
 
 
 enum class CommunitySortOrder(val label: String, val icon: ImageVector) {
+
+    FOR_YOU("For You", Lucide.Sparkles),
 
     LATEST("Latest Drops", Lucide.Clock),
 
@@ -549,6 +555,8 @@ fun DiscoverScreen(
     var showShareStoryAudienceSheet by remember { mutableStateOf(false) }
 
     var showOnlyFriendsManagementSheet by remember { mutableStateOf(false) }
+
+    var showLiveStudioSheet by remember { mutableStateOf(false) }
 
 
 
@@ -737,7 +745,12 @@ fun DiscoverScreen(
 
     }
 
-
+    // Record scrolled-past / actively viewed posts silently so next refresh promotes unseen content
+    LaunchedEffect(activePlayingPostId) {
+        val postId = activePlayingPostId ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(650L)
+        discoverViewModel?.markPostSeen(postId)
+    }
 
     fun showToast(msg: String) {
 
@@ -829,7 +842,7 @@ fun DiscoverScreen(
                     listState.animateScrollToItem(0)
                 }
                 com.chroma.studio.chat.sound.SoundManager.playRefresh(context)
-                showToast("Feed refreshed • Synced latest creations")
+                showToast("Feed refreshed • Fresh picks loaded")
             }
 
             slideInOffsetAnim.snapTo(-90f)
@@ -853,10 +866,12 @@ fun DiscoverScreen(
 
 
     val followingUserIds by (discoverViewModel?.followingUserIds ?: com.chroma.studio.data.mutation.OptimisticFollowManager.followingUserIds).collectAsState()
+    val feedRefreshSeed by (discoverViewModel?.feedRefreshSeed ?: kotlinx.coroutines.flow.MutableStateFlow(0L)).collectAsState()
+    val seenPostIdsSnapshot by (discoverViewModel?.seenPostIdsSnapshot ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet())).collectAsState()
 
     var selectedFeedTab by remember { mutableStateOf(CommunityFeedTab.ALL) }
 
-    var selectedSortOrder by remember { mutableStateOf(CommunitySortOrder.LATEST) }
+    var selectedSortOrder by remember { mutableStateOf(CommunitySortOrder.FOR_YOU) }
 
     var showCommunityGuidelines by remember { mutableStateOf(false) }
 
@@ -882,7 +897,15 @@ fun DiscoverScreen(
 
 
 
-    val filteredWorks = remember(works, searchQuery, selectedFeedTab, selectedSortOrder, qualifyingMasterworks, followingUserIds, savedWorkIds) {
+    val preferredTags = remember(works, likedWorkIds, savedWorkIds) {
+        com.chroma.studio.data.CommunityFeedRanker.extractPreferredTags(
+            works = works,
+            likedWorkIds = likedWorkIds,
+            savedWorkIds = savedWorkIds
+        )
+    }
+
+    val filteredWorks = remember(works, searchQuery, selectedFeedTab, selectedSortOrder, qualifyingMasterworks, followingUserIds, savedWorkIds, preferredTags, seenPostIdsSnapshot, feedRefreshSeed, currentUserId) {
 
         val baseList = when (selectedFeedTab) {
 
@@ -927,6 +950,24 @@ fun DiscoverScreen(
 
 
         when (selectedSortOrder) {
+
+            CommunitySortOrder.FOR_YOU -> {
+                if (selectedFeedTab == CommunityFeedTab.TRENDING) {
+                    // Preserve Trending rank order (#1..#N pinned first, then top engagement)
+                    searchFiltered
+                } else {
+                    com.chroma.studio.data.CommunityFeedRanker.rank(
+                        candidates = searchFiltered,
+                        signals = com.chroma.studio.data.FeedRankingSignals(
+                            followingUserIds = followingUserIds,
+                            preferredTags = preferredTags,
+                            seenPostIds = seenPostIdsSnapshot,
+                            currentUserId = currentUserId,
+                            refreshSeed = feedRefreshSeed
+                        )
+                    )
+                }
+            }
 
             CommunitySortOrder.LATEST -> {
                 if (selectedFeedTab == CommunityFeedTab.TRENDING) {
@@ -1029,6 +1070,12 @@ fun DiscoverScreen(
 
         }
 
+        BackHandler(enabled = showLiveStudioSheet) {
+
+            showLiveStudioSheet = false
+
+        }
+
 
 
 
@@ -1039,7 +1086,7 @@ fun DiscoverScreen(
 
             when (selectedFeedTab) {
 
-                CommunityFeedTab.ALL -> "${filteredWorks.size} creations • Latest feed"
+                CommunityFeedTab.ALL -> "${filteredWorks.size} creations • For You"
 
                 CommunityFeedTab.FOLLOWING -> "From creators you follow"
 
@@ -1180,6 +1227,8 @@ fun DiscoverScreen(
                                     }
 
                                     "Work", "Create or post work" -> onPublishWork()
+
+                                    "Live Studio" -> showLiveStudioSheet = true
 
                                 }
 
@@ -1355,6 +1404,68 @@ fun DiscoverScreen(
 
                     )
 
+                }
+
+                item(key = "live_studio_entry_row") {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showLiveStudioSheet = true }
+                                .padding(horizontal = 16.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Radio,
+                                    contentDescription = "Live Studio",
+                                    tint = Color(0xFF0381FE),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Live Studio Lounge",
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = colors.textMain
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF10B981))
+                                        )
+                                    }
+                                    Text(
+                                        text = "Real-time palettes, critique & live polls",
+                                        fontSize = 11.5.sp,
+                                        color = colors.textMuted,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Join",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF0381FE)
+                            )
+                        }
+                        HorizontalDivider(
+                            thickness = 0.5.dp,
+                            color = colors.glassBorder.copy(alpha = 0.6f)
+                        )
+                    }
                 }
 
 
@@ -1859,6 +1970,18 @@ fun DiscoverScreen(
 
         // Story Creation Options Bottom Sheet
 
+        if (showLiveStudioSheet) {
+
+            LiveStudioSheet(
+
+                onDismiss = { showLiveStudioSheet = false },
+
+                onRequireLogin = onRequireLogin
+
+            )
+
+        }
+
         if (showStoryCreationSheet) {
 
             StoryCreationBottomSheet(
@@ -1892,6 +2015,20 @@ fun DiscoverScreen(
         if (showStoryGalleryPicker) {
 
             com.chroma.studio.chat.ui.components.CustomGalleryPickerModal(
+
+                title = "Choose Story Photo",
+
+                maxSelection = 1,
+
+                allowedMediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+
+                showCaptionInput = false,
+
+                showAlbumsTab = true,
+
+                lockMediaFilter = true,
+
+                singleTapImmediate = true,
 
                 onDismiss = { showStoryGalleryPicker = false },
 
@@ -2685,7 +2822,7 @@ fun CommunityFeedTabBar(
 
         listOf(
 
-            CommunityFeedTab.ALL to "Latest",
+            CommunityFeedTab.ALL to "For You",
 
             CommunityFeedTab.TRENDING to "Trending",
 
@@ -2945,7 +3082,7 @@ fun CommunityFeedTabBar(
 
                         contentDescription = "Sort Feed",
 
-                        tint = if (selectedSort != CommunitySortOrder.LATEST) activeBlue else textMuted,
+                        tint = if (selectedSort != CommunitySortOrder.FOR_YOU) activeBlue else textMuted,
 
                         modifier = Modifier.size(13.dp)
 
@@ -2954,6 +3091,8 @@ fun CommunityFeedTabBar(
                     Text(
 
                         text = when (selectedSort) {
+
+                            CommunitySortOrder.FOR_YOU -> "For You"
 
                             CommunitySortOrder.LATEST -> "Latest"
 
@@ -2969,7 +3108,7 @@ fun CommunityFeedTabBar(
 
                         fontWeight = FontWeight.SemiBold,
 
-                        color = if (selectedSort != CommunitySortOrder.LATEST) activeBlue else textMuted
+                        color = if (selectedSort != CommunitySortOrder.FOR_YOU) activeBlue else textMuted
 
                     )
 
@@ -4189,7 +4328,7 @@ fun CreatorFeedHeader(
 
     selectedFeedTab: CommunityFeedTab = CommunityFeedTab.ALL,
 
-    selectedSortOrder: CommunitySortOrder = CommunitySortOrder.LATEST,
+    selectedSortOrder: CommunitySortOrder = CommunitySortOrder.FOR_YOU,
 
     savedCount: Int = 0,
 
@@ -4473,7 +4612,7 @@ fun CreatorFeedHeader(
 
                             }
 
-                            if (selectedSortOrder != CommunitySortOrder.LATEST) {
+                            if (selectedSortOrder != CommunitySortOrder.FOR_YOU) {
 
                                 if (isNotEmpty()) append(" • ")
 
@@ -4563,7 +4702,7 @@ fun CreatorFeedHeader(
 
                     val feedTabs = listOf(
 
-                        CommunityFeedTab.ALL to "Latest",
+                        CommunityFeedTab.ALL to "For You",
 
                         CommunityFeedTab.TRENDING to "Trending",
 
@@ -4642,6 +4781,8 @@ fun CreatorFeedHeader(
 
 
                     val sortOrders = listOf(
+
+                        CommunitySortOrder.FOR_YOU to "For You",
 
                         CommunitySortOrder.LATEST to "Latest Drops",
 
@@ -5191,7 +5332,9 @@ fun PlusCreatePopoverMenu(
 
             Pair("Story", Lucide.CirclePlus),
 
-            Pair("Work", Lucide.Palette)
+            Pair("Work", Lucide.Palette),
+
+            Pair("Live Studio", Lucide.Radio)
 
         )
 
@@ -5411,7 +5554,9 @@ fun ScallopedVerifiedBadge(
 
     tone: String? = null,
 
-    badgeColor: Color? = null
+    badgeColor: Color? = null,
+
+    userId: String? = null
 
 ) {
 
@@ -5423,7 +5568,9 @@ fun ScallopedVerifiedBadge(
 
         tone = tone,
 
-        badgeColor = badgeColor
+        badgeColor = badgeColor,
+
+        userId = userId
 
     )
 
@@ -5517,6 +5664,10 @@ private fun FeedPostHeader(
 
     verified: Boolean,
 
+    verifiedTone: String? = null,
+
+    authorId: String? = null,
+
     isRemixPost: Boolean,
 
     remixedFromAuthorUsername: String?,
@@ -5527,7 +5678,11 @@ private fun FeedPostHeader(
 
     isOnline: Boolean = false,
 
+    acceptedCollaborators: List<com.chroma.studio.model.CollabParticipant> = emptyList(),
+
     onAvatarClick: () -> Unit,
+
+    onCollabClick: () -> Unit = onAvatarClick,
 
     onRemixTagClick: () -> Unit,
 
@@ -5553,7 +5708,7 @@ private fun FeedPostHeader(
 
     }
 
-
+    val firstCollab = acceptedCollaborators.firstOrNull()
 
     Row(
 
@@ -5567,25 +5722,33 @@ private fun FeedPostHeader(
 
     ) {
 
-        IosAvatarView(
+        if (firstCollab != null) {
+            com.chroma.studio.ui.components.CollabStackedAvatars(
+                primaryName = safeDisplayName,
+                primaryAvatarUrl = avatarUrl,
+                secondaryName = firstCollab.displayName.ifBlank { firstCollab.username },
+                secondaryAvatarUrl = firstCollab.avatarUrl,
+                cutoutRingColor = colors.cardSurface,
+                size = 30.dp,
+                onClick = onCollabClick
+            )
+        } else {
+            IosAvatarView(
 
-            name = safeDisplayName,
+                name = safeDisplayName,
 
-            avatarUrl = avatarUrl,
+                avatarUrl = avatarUrl,
 
-            size = 34.dp,
+                size = 34.dp,
 
-            isOnline = isOnline,
+                isOnline = isOnline,
 
-            modifier = Modifier.clickable { onAvatarClick() }
+                modifier = Modifier.clickable { onAvatarClick() }
 
-        )
-
-
+            )
+        }
 
         Spacer(Modifier.width(8.dp))
-
-
 
         Column(
 
@@ -5593,44 +5756,63 @@ private fun FeedPostHeader(
 
                 .weight(1f)
 
-                .clickable { onAvatarClick() },
+                .clickable { if (acceptedCollaborators.isNotEmpty()) onCollabClick() else onAvatarClick() },
 
             verticalArrangement = Arrangement.Center
 
         ) {
 
-            Row(
-
-                verticalAlignment = Alignment.CenterVertically,
-
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
-
-            ) {
-
-                Text(
-
-                    text = safeDisplayName,
-
-                    color = colors.textMain,
-
+            if (acceptedCollaborators.isNotEmpty()) {
+                com.chroma.studio.ui.components.CollabCoAuthorTitleRow(
+                    primaryLabel = safeUsername,
+                    primaryVerified = verified,
+                    primaryVerifiedTone = verifiedTone,
+                    acceptedCollaborators = acceptedCollaborators,
+                    textColor = colors.textMain,
+                    mutedColor = Color(0xFF8E8E93),
                     fontSize = 13.sp,
-
-                    lineHeight = 15.sp,
-
-                    fontWeight = FontWeight.Bold,
-
-                    maxLines = 1,
-
-                    overflow = TextOverflow.Ellipsis
-
+                    onPrimaryClick = onAvatarClick,
+                    onCollaboratorClick = onCollabClick,
+                    modifier = Modifier.fillMaxWidth()
                 )
+            } else {
+                Row(
 
-                if (verified) {
+                    verticalAlignment = Alignment.CenterVertically,
 
-                    ScallopedVerifiedBadge(size = 13.dp)
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+
+                ) {
+
+                    Text(
+
+                        text = safeDisplayName,
+
+                        color = colors.textMain,
+
+                        fontSize = 13.sp,
+
+                        lineHeight = 15.sp,
+
+                        fontWeight = FontWeight.Bold,
+
+                        maxLines = 1,
+
+                        overflow = TextOverflow.Ellipsis
+
+                    )
+
+                    if (verified) {
+
+                        ScallopedVerifiedBadge(
+                            size = 13.dp,
+                            tone = verifiedTone,
+                            userId = authorId
+                        )
+
+                    }
 
                 }
-
             }
 
 
@@ -6506,7 +6688,9 @@ private fun FeedPostMetadata(
 
     onMentionClick: ((String) -> Unit)?,
 
-    onAuthorClick: ((String) -> Unit)? = null
+    onAuthorClick: ((String) -> Unit)? = null,
+
+    onMusicClick: (() -> Unit)? = null
 
 ) {
 
@@ -6884,7 +7068,10 @@ private fun FeedPostMetadata(
 
                     if (work.remixedFromAuthorVerified) {
 
-                        VerifiedBadge(size = 10.dp)
+                        VerifiedBadge(
+                            size = 10.dp,
+                            userId = work.remixedFromAuthorId
+                        )
 
                     }
 
@@ -6906,6 +7093,55 @@ private fun FeedPostMetadata(
 
             }
 
+        }
+
+        if (!work.musicTrackId.isNullOrBlank() || !work.musicTitle.isNullOrBlank()) {
+            val musicTitle = work.musicTitle?.takeIf { it.isNotBlank() } ?: "Soundtrack"
+            val musicArtist = work.musicArtist?.takeIf { it.isNotBlank() } ?: "Chroma Music"
+            val pillShape = RoundedCornerShape(999.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier
+                        .clip(pillShape)
+                        .background(if (colors.isDark) Color(0xFF1D1D24) else Color(0xFFF3F4F6))
+                        .border(
+                            0.5.dp,
+                            if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.08f),
+                            pillShape
+                        )
+                        .clickable { onMusicClick?.invoke() }
+                        .padding(horizontal = 9.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.Music,
+                        contentDescription = "Audio",
+                        tint = Color(0xFFFA2D48),
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = "$musicTitle · $musicArtist",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textMain,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Icon(
+                        imageVector = Lucide.ChevronRight,
+                        contentDescription = null,
+                        tint = colors.textMuted,
+                        modifier = Modifier.size(11.dp)
+                    )
+                }
+            }
         }
 
 
@@ -7096,7 +7332,13 @@ private fun FeedPostModals(
 
     onRemixWork: ((DiscoverPost) -> Unit)?,
 
-    onUpdateVisibility: ((hideLikes: Boolean, hideShares: Boolean, hideRemixes: Boolean, hideDownloads: Boolean, hideSaves: Boolean) -> Unit)?
+    onUpdateVisibility: ((hideLikes: Boolean, hideShares: Boolean, hideRemixes: Boolean, hideDownloads: Boolean, hideSaves: Boolean) -> Unit)?,
+
+    isAcceptedCollaborator: Boolean = false,
+
+    onStopSharing: () -> Unit = {},
+
+    onManageCollaborators: () -> Unit = {}
 
 ) {
 
@@ -7107,6 +7349,18 @@ private fun FeedPostModals(
             work = work,
 
             isOwner = isOwner,
+
+            isAcceptedCollaborator = isAcceptedCollaborator,
+
+            onStopSharing = {
+                modalState.showMenu = false
+                onStopSharing()
+            },
+
+            onManageCollaborators = {
+                modalState.showMenu = false
+                if (isOwner) onManageCollaborators()
+            },
 
             onDismiss = { modalState.showMenu = false },
 
@@ -7630,6 +7884,23 @@ fun FeedPostCard(
     val creatorPresence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(work.creatorId)
     val isCreatorOnline = creatorPresence.online
 
+    val cardScope = rememberCoroutineScope()
+    val discoverRepo = remember { com.chroma.studio.data.DiscoverRepository.getInstance() }
+    var localCollabs by remember(work.id, work.collaborators) { mutableStateOf(work.collaborators) }
+    var localPendingCollabIds by remember(work.id, work.pendingCollaboratorIds) { mutableStateOf(work.pendingCollaboratorIds) }
+    var localAcceptedCollabIds by remember(work.id, work.collaboratorIds) { mutableStateOf(work.collaboratorIds) }
+    var isRespondingCollab by remember(work.id) { mutableStateOf(false) }
+    var showCollabSheet by remember(work.id) { mutableStateOf(false) }
+    var showAudioDetailModal by remember(work.id) { mutableStateOf(false) }
+    var showStopSharingConfirm by remember(work.id) { mutableStateOf(false) }
+    var showManageCollabPicker by remember(work.id) { mutableStateOf(false) }
+
+    val acceptedCollaborators = remember(localCollabs, localAcceptedCollabIds) {
+        com.chroma.studio.model.resolveAcceptedCollaborators(localCollabs, localAcceptedCollabIds)
+    }
+    val isPendingInvitee = !currentUserId.isNullOrBlank() && localPendingCollabIds.contains(currentUserId)
+    val isAcceptedCollaborator = !currentUserId.isNullOrBlank() && localAcceptedCollabIds.contains(currentUserId)
+
     Column(
 
         modifier = Modifier
@@ -7641,6 +7912,55 @@ fun FeedPostCard(
             .padding(top = 2.dp)
 
     ) {
+
+        if (isPendingInvitee && currentUserId != null) {
+            com.chroma.studio.ui.components.PendingCollabReviewStrip(
+                creatorHandle = resolvedUsername,
+                isProcessing = isRespondingCollab,
+                onAccept = {
+                    isRespondingCollab = true
+                    cardScope.launch {
+                        val ok = discoverRepo.respondToCollabInvite(work.id, accept = true)
+                        if (ok) {
+                            val nextState = com.chroma.studio.model.applyCollabInviteResponse(
+                                participants = localCollabs,
+                                pendingIds = localPendingCollabIds,
+                                acceptedIds = localAcceptedCollabIds,
+                                responderUid = currentUserId,
+                                accept = true
+                            )
+                            localCollabs = nextState.collaborators
+                            localPendingCollabIds = nextState.pendingCollaboratorIds
+                            localAcceptedCollabIds = nextState.collaboratorIds
+                            onShowToast?.invoke("Joined collaboration!")
+                        } else {
+                            onShowToast?.invoke("Could not accept invite")
+                        }
+                        isRespondingCollab = false
+                    }
+                },
+                onDecline = {
+                    isRespondingCollab = true
+                    cardScope.launch {
+                        val ok = discoverRepo.respondToCollabInvite(work.id, accept = false)
+                        if (ok) {
+                            val nextState = com.chroma.studio.model.applyCollabInviteResponse(
+                                participants = localCollabs,
+                                pendingIds = localPendingCollabIds,
+                                acceptedIds = localAcceptedCollabIds,
+                                responderUid = currentUserId,
+                                accept = false
+                            )
+                            localCollabs = nextState.collaborators
+                            localPendingCollabIds = nextState.pendingCollaboratorIds
+                            localAcceptedCollabIds = nextState.collaboratorIds
+                            onShowToast?.invoke("Invite declined")
+                        }
+                        isRespondingCollab = false
+                    }
+                }
+            )
+        }
 
         // 1. POST HEADER
 
@@ -7656,6 +7976,10 @@ fun FeedPostCard(
 
             verified = resolvedVerified,
 
+            verifiedTone = work.authorVerifiedTone,
+
+            authorId = work.creatorId,
+
             isRemixPost = isRemixPost,
 
             remixedFromAuthorUsername = work.remixedFromAuthorUsername,
@@ -7666,7 +7990,11 @@ fun FeedPostCard(
 
             isOnline = isCreatorOnline,
 
+            acceptedCollaborators = acceptedCollaborators,
+
             onAvatarClick = { modalState.showCreatorProfileModal = true },
+
+            onCollabClick = { showCollabSheet = true },
 
             onRemixTagClick = { modalState.showOriginalPostModal = true },
 
@@ -7862,7 +8190,9 @@ fun FeedPostCard(
 
             onMentionClick = onMentionClick,
 
-            onAuthorClick = onAuthorClick
+            onAuthorClick = onAuthorClick,
+
+            onMusicClick = { showAudioDetailModal = true }
 
         )
 
@@ -7920,9 +8250,96 @@ fun FeedPostCard(
 
         onRemixWork = onRemixWork,
 
-        onUpdateVisibility = onUpdateVisibility
+        onUpdateVisibility = onUpdateVisibility,
+
+        isAcceptedCollaborator = isAcceptedCollaborator,
+
+        onStopSharing = { showStopSharingConfirm = true },
+
+        onManageCollaborators = { showManageCollabPicker = true }
 
     )
+
+    if (showCollabSheet) {
+        com.chroma.studio.ui.components.CollaboratorsDetailSheet(
+            creatorUid = work.creatorId,
+            creatorDisplayName = resolvedDisplayName.ifBlank { resolvedUsername },
+            creatorUsername = resolvedUsername,
+            creatorAvatarUrl = resolvedAvatarUrl,
+            creatorVerified = resolvedVerified,
+            creatorVerifiedTone = work.authorVerifiedTone,
+            collaborators = acceptedCollaborators,
+            isCurrentUserCollaborator = isAcceptedCollaborator,
+            onStopSharing = { showStopSharingConfirm = true },
+            onAuthorClick = onAuthorClick,
+            onDismiss = { showCollabSheet = false }
+        )
+    }
+
+    if (showStopSharingConfirm && currentUserId != null) {
+        com.chroma.studio.ui.components.IosAlertDialog(
+            title = "Stop Sharing Post?",
+            message = "This removes you as a collaborator and removes the post from your profile. It will stay on @${resolvedUsername}'s profile.",
+            confirmText = "Stop Sharing",
+            isDestructive = true,
+            onConfirm = {
+                showStopSharingConfirm = false
+                cardScope.launch {
+                    val ok = discoverRepo.leaveCollab(work.id)
+                    if (ok) {
+                        val nextState = com.chroma.studio.model.removeCollabParticipant(
+                            participants = localCollabs,
+                            pendingIds = localPendingCollabIds,
+                            acceptedIds = localAcceptedCollabIds,
+                            targetUid = currentUserId
+                        )
+                        localCollabs = nextState.collaborators
+                        localAcceptedCollabIds = nextState.collaboratorIds
+                        onShowToast?.invoke("Removed from your profile")
+                    } else {
+                        onShowToast?.invoke("Could not update collaboration")
+                    }
+                }
+            },
+            onDismiss = { showStopSharingConfirm = false }
+        )
+    }
+
+    if (showManageCollabPicker && isOwner && currentUserId != null) {
+        com.chroma.studio.ui.components.CollabPickerModalSheet(
+            currentUserUid = currentUserId,
+            initialSelection = localCollabs,
+            repository = discoverRepo,
+            onDone = { picked ->
+                showManageCollabPicker = false
+                val pickedUids = picked.map { it.uid }.toSet()
+                val existingUids = localCollabs.map { it.uid }.toSet()
+                val added = picked.filter { it.uid !in existingUids }
+                val removed = localCollabs.filter { it.uid !in pickedUids }.map { it.uid }
+                if (added.isNotEmpty() || removed.isNotEmpty()) {
+                    cardScope.launch {
+                        val ok = discoverRepo.updateCollaboratorsAsCreator(
+                            postId = work.id,
+                            addedCollaborators = added,
+                            removedUids = removed
+                        )
+                        if (ok) {
+                            val refreshed = discoverRepo.fetchPostById(work.id)
+                            if (refreshed != null) {
+                                localCollabs = refreshed.collaborators
+                                localPendingCollabIds = refreshed.pendingCollaboratorIds
+                                localAcceptedCollabIds = refreshed.collaboratorIds
+                            }
+                            onShowToast?.invoke("Collaborators updated")
+                        } else {
+                            onShowToast?.invoke("Failed to update collaborators")
+                        }
+                    }
+                }
+            },
+            onDismiss = { showManageCollabPicker = false }
+        )
+    }
 
 
 
@@ -7968,6 +8385,49 @@ fun FeedPostCard(
 
     }
 
+    if (showAudioDetailModal && !work.musicTrackId.isNullOrBlank()) {
+        com.chroma.studio.ui.components.AudioDetailModal(
+            trackId = work.musicTrackId,
+            fallbackTitle = work.musicTitle,
+            fallbackArtist = work.musicArtist,
+            fallbackCoverUrl = work.musicCoverUrl,
+            fallbackAudioUrl = work.musicAudioUrl,
+            onDismiss = { showAudioDetailModal = false },
+            onUseAudio = { track ->
+                showAudioDetailModal = false
+                if (currentUserId != null) {
+                    com.chroma.studio.data.PendingMusicHandoff.set(
+                        com.chroma.studio.data.AttachedMusicSelection(
+                            trackId = track.id,
+                            title = track.title,
+                            artist = track.artist,
+                            album = track.album,
+                            coverUrl = track.coverUrl,
+                            audioUrl = track.audioUrl,
+                            startSec = track.bestPartStartSec,
+                            durationSec = (track.bestPartEndSec - track.bestPartStartSec).coerceIn(5, maxOf(5, track.durationSec)),
+                            totalTrackSec = track.durationSec,
+                            showLyricsSticker = true
+                        )
+                    )
+                    ToastManager.showToast("Audio selected: ${track.title} — tap Flash or Post to record")
+                } else {
+                    onRequireLogin()
+                }
+            },
+            onFlashClick = { clickedFlash ->
+                showAudioDetailModal = false
+                onFlashVideoClick?.invoke(clickedFlash.id)
+            },
+            onPostClick = { clickedPost ->
+                showAudioDetailModal = false
+                if (!clickedPost.creatorId.isBlank()) {
+                    onAuthorClick(clickedPost.creatorId)
+                }
+            }
+        )
+    }
+
 }
 
 
@@ -7995,23 +8455,13 @@ fun OwnerAnalyticsModal(
 
 
     Dialog(onDismissRequest = onDismiss) {
-
         Surface(
-
-            shape = RoundedCornerShape(24.dp),
-
-            color = if (colors.isDark) Color(0xFF1C1C1E) else Color.White,
-
+            shape = RoundedCornerShape(18.dp),
+            color = colors.cardSurfaceElevated,
             modifier = Modifier
-
                 .fillMaxWidth()
-
-                .clip(RoundedCornerShape(24.dp))
-
-                .border(1.dp, colors.glassBorder, RoundedCornerShape(24.dp))
-
+                .clip(RoundedCornerShape(18.dp))
                 .imePadding()
-
         ) {
 
             Column(modifier = Modifier.padding(18.dp)) {
@@ -8064,13 +8514,7 @@ fun OwnerAnalyticsModal(
 
                         onClick = onDismiss,
 
-                        modifier = Modifier
-
-                            .size(28.dp)
-
-                            .clip(CircleShape)
-
-                            .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF1F5F9))
+                        modifier = Modifier.size(28.dp)
 
                     ) {
 
@@ -8301,21 +8745,12 @@ fun EditPostModal(
 
 
     Dialog(onDismissRequest = onDismiss) {
-
         Surface(
-
-            shape = RoundedCornerShape(24.dp),
-
-            color = if (colors.isDark) Color(0xFF1C1C1E) else Color.White,
-
+            shape = RoundedCornerShape(18.dp),
+            color = colors.cardSurfaceElevated,
             modifier = Modifier
-
                 .fillMaxWidth()
-
-                .clip(RoundedCornerShape(24.dp))
-
-                .border(1.dp, colors.glassBorder, RoundedCornerShape(24.dp))
-
+                .clip(RoundedCornerShape(18.dp))
         ) {
 
             Column(modifier = Modifier.padding(18.dp)) {
@@ -8347,23 +8782,13 @@ fun EditPostModal(
                         val isSelected = selectedRatio == ratio
 
                         Box(
-
                             modifier = Modifier
-
                                 .weight(1f)
-
                                 .clip(RoundedCornerShape(8.dp))
-
-                                .background(if (isSelected) Color(0xFF0381FE) else (if (colors.isDark) Color(0xFF252528) else Color(0xFFF8FAFC)))
-
-                                .border(1.dp, if (isSelected) Color(0xFF0381FE) else colors.glassBorder, RoundedCornerShape(8.dp))
-
+                                .background(if (isSelected) colors.primary else colors.inputBg)
                                 .clickable { selectedRatio = ratio }
-
                                 .padding(vertical = 7.dp),
-
                             contentAlignment = Alignment.Center
-
                         ) {
 
                             Text(
@@ -8393,30 +8818,16 @@ fun EditPostModal(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 BasicTextField(
-
                     value = titleText,
-
                     onValueChange = { titleText = it },
-
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = colors.textMain),
-
-                    cursorBrush = SolidColor(Color(0xFF0381FE)),
-
+                    cursorBrush = SolidColor(colors.primary),
                     modifier = Modifier
-
                         .fillMaxWidth()
-
-                        .clip(RoundedCornerShape(12.dp))
-
-                        .background(if (colors.isDark) Color(0xFF252528) else Color(0xFFF8FAFC), RoundedCornerShape(12.dp))
-
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.inputBg, RoundedCornerShape(10.dp))
                         .padding(10.dp)
-
                 )
-
-
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -8425,55 +8836,29 @@ fun EditPostModal(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 BasicTextField(
-
                     value = descText,
-
                     onValueChange = { descText = it },
-
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = colors.textMain),
-
-                    cursorBrush = SolidColor(Color(0xFF0381FE)),
-
+                    cursorBrush = SolidColor(colors.primary),
                     modifier = Modifier
-
                         .fillMaxWidth()
-
                         .height(64.dp)
-
-                        .clip(RoundedCornerShape(12.dp))
-
-                        .background(if (colors.isDark) Color(0xFF252528) else Color(0xFFF8FAFC), RoundedCornerShape(12.dp))
-
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.inputBg, RoundedCornerShape(10.dp))
                         .padding(10.dp)
-
                 )
-
-
 
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-
                     Box(
-
                         modifier = Modifier
-
                             .weight(1f)
-
                             .clip(RoundedCornerShape(10.dp))
-
-                            .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF1F5F9))
-
-                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
-
+                            .background(colors.inputBg)
                             .clickable { onDismiss() }
-
                             .padding(vertical = 10.dp),
-
                         contentAlignment = Alignment.Center
-
                     ) {
 
                         Text("Cancel", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
@@ -8533,21 +8918,12 @@ fun CreatorProfileModal(
     val colors = LocalOscellionColors.current
 
     Dialog(onDismissRequest = onDismiss) {
-
         Surface(
-
-            shape = RoundedCornerShape(24.dp),
-
-            color = if (colors.isDark) Color(0xFF1C1C1E) else Color.White,
-
+            shape = RoundedCornerShape(18.dp),
+            color = colors.cardSurfaceElevated,
             modifier = Modifier
-
                 .fillMaxWidth()
-
-                .clip(RoundedCornerShape(24.dp))
-
-                .border(1.dp, colors.glassBorder, RoundedCornerShape(24.dp))
-
+                .clip(RoundedCornerShape(18.dp))
         ) {
 
             Column(modifier = Modifier.padding(18.dp)) {
@@ -8942,7 +9318,13 @@ fun PostOptionsDrawerSheet(
 
     onOpenGuidelines: (() -> Unit)? = null,
 
-    onShowToast: ((String) -> Unit)? = null
+    onShowToast: ((String) -> Unit)? = null,
+
+    isAcceptedCollaborator: Boolean = false,
+
+    onStopSharing: () -> Unit = {},
+
+    onManageCollaborators: () -> Unit = {}
 
 ) {
 
@@ -9243,6 +9625,17 @@ fun PostOptionsDrawerSheet(
 
                 )
 
+                if (isAcceptedCollaborator) {
+                    HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder.copy(alpha = 0.5f))
+                    DrawerActionItem(
+                        icon = Lucide.UserMinus,
+                        title = "Stop sharing",
+                        subtitle = "Remove this collaboration post from your profile",
+                        tint = Color(0xFFFF3B30),
+                        onClick = onStopSharing
+                    )
+                }
+
             } else {
 
                 DrawerActionItem(
@@ -9294,6 +9687,20 @@ fun PostOptionsDrawerSheet(
                     subtitle = "Update title, description, or tags",
 
                     onClick = onEditPost
+
+                )
+
+                HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder.copy(alpha = 0.5f))
+
+                DrawerActionItem(
+
+                    icon = Lucide.Users,
+
+                    title = "Manage Collaborators",
+
+                    subtitle = "Invite or remove co-authors for this post",
+
+                    onClick = onManageCollaborators
 
                 )
 
@@ -9603,13 +10010,7 @@ fun OriginalPostInspectorSheet(
 
                     Box(
 
-                        modifier = Modifier
-
-                            .size(32.dp)
-
-                            .clip(CircleShape)
-
-                            .background(Color(0xFF0381FE).copy(alpha = 0.12f)),
+                        modifier = Modifier.size(24.dp),
 
                         contentAlignment = Alignment.Center
 
@@ -9631,7 +10032,7 @@ fun OriginalPostInspectorSheet(
 
                             tint = Color.Unspecified,
 
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp)
 
                         )
 
@@ -9769,7 +10170,10 @@ fun OriginalPostInspectorSheet(
 
                         if (origVerified) {
 
-                            ScallopedVerifiedBadge()
+                            ScallopedVerifiedBadge(
+                                size = 14.dp,
+                                userId = origAuthorId
+                            )
 
                         }
 

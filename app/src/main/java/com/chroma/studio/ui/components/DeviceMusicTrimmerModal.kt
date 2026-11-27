@@ -808,36 +808,35 @@ fun DeviceMusicTrimmerModal(
 
                 IconButton(
                     onClick = onDismiss,
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(if (colors.isDark) Color(0xFF232736) else Color(0xFFE5E7EB))
+                    modifier = Modifier.size(34.dp)
                 ) {
-                    Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(16.dp))
+                    Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(18.dp))
                 }
             }
 
             Spacer(Modifier.height(14.dp))
 
             // ================================================================
-            // SECTION 1: SEARCH & BROWSE BAR
+            // SECTION 1: SEARCH & BROWSE BAR (Borderless Apple Input + Flat Browse Action)
             // ================================================================
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Search Input Box
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = colors.glassBg,
-                    border = BorderStroke(1.dp, colors.glassBorder),
-                    modifier = Modifier.weight(1f)
+                // Search Input Box (Borderless SystemGray6 style)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.inputBg),
+                    contentAlignment = Alignment.CenterStart
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                            .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -857,7 +856,7 @@ fun DeviceMusicTrimmerModal(
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Normal
                             ),
-                            cursorBrush = SolidColor(Color(0xFF0381FE)),
+                            cursorBrush = SolidColor(colors.primary),
                             decorationBox = { innerTextField ->
                                 if (searchQuery.isEmpty()) {
                                     Text(
@@ -882,20 +881,21 @@ fun DeviceMusicTrimmerModal(
                     }
                 }
 
-                // File Picker fallback button
-                Surface(
-                    onClick = { customFilePickerLauncher.launch("audio/*") },
-                    shape = RoundedCornerShape(14.dp),
-                    color = colors.glassBg,
-                    border = BorderStroke(1.dp, buttonGlassBorder),
-                    modifier = Modifier.height(42.dp)
+                // File Picker fallback button (Borderless)
+                Box(
+                    modifier = Modifier
+                        .height(40.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.inputBg)
+                        .clickable { customFilePickerLauncher.launch("audio/*") }
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(Lucide.Folder, contentDescription = null, tint = Color(0xFF0381FE), modifier = Modifier.size(16.dp))
+                        Icon(Lucide.Folder, contentDescription = null, tint = colors.primary, modifier = Modifier.size(16.dp))
                         Text(
                             text = "Browse",
                             fontSize = 12.5.sp,
@@ -906,9 +906,9 @@ fun DeviceMusicTrimmerModal(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
 
-            // Category Length Tabs
+            // Category Length Tabs (Clean flat segments, no boxes or borders)
             val categoryTabs = listOf("All", "Short (<30s)", "Standard (30s-2m)", "Long (>2m)")
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -916,34 +916,34 @@ fun DeviceMusicTrimmerModal(
             ) {
                 items(categoryTabs) { tab ->
                     val isSelected = selectedCategoryTab == tab
-                    Surface(
-                        onClick = { selectedCategoryTab = tab },
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isSelected) Color(0xFF0381FE) else colors.glassBgHover,
-                        border = BorderStroke(0.5.dp, if (isSelected) Color(0xFF0381FE) else colors.glassBorder)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) colors.primary else colors.inputBg)
+                            .clickable { selectedCategoryTab = tab }
+                            .padding(horizontal = 11.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = tab,
-                            fontSize = 11.5.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else colors.textMuted,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.5.dp)
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else colors.textMuted
                         )
                     }
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
 
             // ================================================================
             // SECTION 2: PERMISSION BANNER (IF NOT GRANTED)
             // ================================================================
             if (!hasPermission) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFF0381FE).copy(alpha = 0.12f),
-                    border = BorderStroke(1.dp, Color(0xFF0381FE).copy(alpha = 0.35f)),
-                    modifier = Modifier.fillMaxWidth()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.primary.copy(alpha = 0.09f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -967,26 +967,29 @@ fun DeviceMusicTrimmerModal(
                         }
                         Spacer(Modifier.width(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedButton(
-                                onClick = {
-                                    val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = android.net.Uri.fromParts("package", context.packageName, null)
-                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.inputBg)
+                                    .clickable {
+                                        val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = android.net.Uri.fromParts("package", context.packageName, null)
+                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(intent)
                                     }
-                                    context.startActivity(intent)
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
                             ) {
-                                Text("Settings", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Settings", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
                             }
-                            Button(
-                                onClick = { permissionLauncher.launch(permissionString) },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0381FE)),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.primary)
+                                    .clickable { permissionLauncher.launch(permissionString) }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
                             ) {
-                                Text("Grant", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Grant", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
                     }
@@ -994,16 +997,15 @@ fun DeviceMusicTrimmerModal(
                 Spacer(Modifier.height(10.dp))
             }
 
+            HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorderSubtle)
+
             // ================================================================
-            // SECTION 3: MUSIC LIST (DEVICE TRACKS)
+            // SECTION 3: MUSIC LIST (OPEN EDGE-TO-EDGE LIST, ZERO CARD BOX)
             // ================================================================
-            Surface(
-                shape = RoundedCornerShape(18.dp),
-                color = colors.glassBg,
-                border = BorderStroke(1.dp, colors.glassBorder),
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 130.dp, max = if (selectedTrack != null) 170.dp else 320.dp)
+                    .heightIn(min = 120.dp, max = if (selectedTrack != null) 168.dp else 320.dp)
             ) {
                 if (isLoadingTracks) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1100,15 +1102,7 @@ fun DeviceMusicTrimmerModal(
                                 }
 
                                 if (isSelected) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(22.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF0381FE)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.Check, null, tint = Color.White, modifier = Modifier.size(13.dp))
-                                    }
+                                    Icon(Lucide.Check, null, tint = Color(0xFF0381FE), modifier = Modifier.size(18.dp))
                                 }
                             }
 
@@ -1127,26 +1121,19 @@ fun DeviceMusicTrimmerModal(
             }
 
             // ================================================================
-            // SECTION 4: INTEGRATED ENHANCED MUSIC PLAYER & TRIMMER
+            // SECTION 4: INTEGRATED ENHANCED MUSIC PLAYER & TRIMMER (OPEN CLEAN LAYOUT)
             // ================================================================
             if (selectedTrack != null) {
                 val track = selectedTrack!!
                 val maxDuration = track.durationSec.coerceAtLeast(1f)
                 val trackWaveform = remember(track.id) { generateTrackWaveform(track.id) }
 
+                HorizontalDivider(thickness = 0.5.dp, color = colors.cardBorderSubtle)
                 Spacer(Modifier.height(12.dp))
 
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = if (colors.isDark) Color(0xFF171920) else Color.White,
-                    border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE5E7EB)),
+                Column(
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp)
-                    ) {
                         // Top Deck: Animated Vinyl Disc + Song Details + Frequency Equalizer
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1364,19 +1351,12 @@ fun DeviceMusicTrimmerModal(
                             }
 
                             val selectedDuration = (trimEndSec - trimStartSec).coerceAtLeast(0.1f)
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFF0381FE).copy(alpha = 0.11f),
-                                border = BorderStroke(0.5.dp, Color(0xFF0381FE).copy(alpha = 0.28f))
-                            ) {
-                                Text(
-                                    text = "${formatAudioTime(trimStartSec)} - ${formatAudioTime(trimEndSec)} (${String.format(Locale.US, "%.1fs", selectedDuration)})",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (colors.isDark) Color(0xFF60A5FA) else Color(0xFF0072DE),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.5.dp)
-                                )
-                            }
+                            Text(
+                                text = "${formatAudioTime(trimStartSec)} - ${formatAudioTime(trimEndSec)} (${String.format(Locale.US, "%.1fs", selectedDuration)})",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.primary
+                            )
                         }
 
                         Spacer(Modifier.height(6.dp))
@@ -1454,8 +1434,8 @@ fun DeviceMusicTrimmerModal(
 
                         Spacer(Modifier.height(4.dp))
 
-                        // Smart Presets (Horizontally scrollable & full-height — never clipped!)
-                        val chipBg = if (colors.isDark) Color(0xFF232732) else Color(0xFFF1F5F9)
+                        // Smart Presets (Borderless Flat Rectangles)
+                        val chipBg = colors.inputBg
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1463,108 +1443,110 @@ fun DeviceMusicTrimmerModal(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (videoDurationSec > 0f) {
-                                Surface(
-                                    onClick = {
-                                        trimEndSec = min(maxDuration, trimStartSec + videoDurationSec)
-                                    },
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = Color(0xFF0381FE).copy(alpha = 0.12f),
-                                    border = BorderStroke(0.8.dp, Color(0xFF0381FE).copy(alpha = 0.35f))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(colors.primary.copy(alpha = 0.12f))
+                                        .clickable {
+                                            trimEndSec = min(maxDuration, trimStartSec + videoDurationSec)
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 7.dp)
                                 ) {
                                     Text(
                                         text = "Fit Video (${videoDurationSec.toInt()}s)",
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = if (colors.isDark) Color(0xFF60A5FA) else Color(0xFF0072DE),
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                                        color = colors.primary
                                     )
                                 }
                             }
 
-                            Surface(
-                                onClick = {
-                                    trimStartSec = 0f
-                                    trimEndSec = min(maxDuration, 15f)
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                color = chipBg
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(chipBg)
+                                    .clickable {
+                                        trimStartSec = 0f
+                                        trimEndSec = min(maxDuration, 15f)
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 7.dp)
                             ) {
                                 Text(
                                     text = "Intro 15s",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = colors.textMain,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                                    color = colors.textMain
                                 )
                             }
 
-                            Surface(
-                                onClick = {
-                                    val mid = maxDuration / 2f
-                                    trimStartSec = max(0f, mid - 15f)
-                                    trimEndSec = min(maxDuration, mid + 15f)
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                color = chipBg
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(chipBg)
+                                    .clickable {
+                                        val mid = maxDuration / 2f
+                                        trimStartSec = max(0f, mid - 15f)
+                                        trimEndSec = min(maxDuration, mid + 15f)
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 7.dp)
                             ) {
                                 Text(
                                     text = "Hook 30s",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = colors.textMain,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                                    color = colors.textMain
                                 )
                             }
 
-                            Surface(
-                                onClick = {
-                                    trimStartSec = 0f
-                                    trimEndSec = maxDuration
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                color = chipBg
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(chipBg)
+                                    .clickable {
+                                        trimStartSec = 0f
+                                        trimEndSec = maxDuration
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 7.dp)
                             ) {
                                 Text(
                                     text = "Full Track",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = colors.textMain,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                                    color = colors.textMain
                                 )
                             }
                         }
 
                         Spacer(Modifier.height(14.dp))
 
-                        // Preview Trim Loop Button & One-Click Apply Button
+                        // Preview Trim Loop Button & One-Click Apply Button (Borderless 10.dp Apple HIG)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             // Audition Trimmed Segment Loop
-                            Surface(
-                                onClick = {
-                                    isPreviewingTrimOnly = true
-                                    previewPlayer.seekTo((trimStartSec * 1000f).toLong())
-                                    previewPlayer.play()
-                                    isPlaying = true
-                                },
+                            Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                color = chipBg,
-                                border = BorderStroke(1.dp, colors.glassBorder)
+                                    .height(46.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(chipBg)
+                                    .clickable {
+                                        isPreviewingTrimOnly = true
+                                        previewPlayer.seekTo((trimStartSec * 1000f).toLong())
+                                        previewPlayer.play()
+                                        isPlaying = true
+                                    },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Row(
-                                    modifier = Modifier.fillMaxSize(),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
                                     Icon(
                                         imageVector = if (isPreviewingTrimOnly && isPlaying) Lucide.Pause else Lucide.Play,
                                         contentDescription = null,
-                                        tint = Color(0xFF0381FE),
+                                        tint = colors.primary,
                                         modifier = Modifier.size(15.dp)
                                     )
                                     Spacer(Modifier.width(6.dp))
@@ -1577,48 +1559,44 @@ fun DeviceMusicTrimmerModal(
                                 }
                             }
 
-                            // One-Click Use in Video Editor CTA (Solid One UI Primary Blue)
-                            Surface(
-                                onClick = {
-                                    try {
-                                        previewPlayer.stop()
-                                    } catch (_: Throwable) {}
-                                    onAudioSelected(
-                                        track.uri,
-                                        track.title,
-                                        track.durationSec,
-                                        trimStartSec,
-                                        trimEndSec
-                                    )
-                                },
+                            // One-Click Use in Video Editor CTA
+                            Box(
                                 modifier = Modifier
                                     .weight(1.3f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                color = Color(0xFF0381FE)
+                                    .height(46.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(colors.primary)
+                                    .clickable {
+                                        try {
+                                            previewPlayer.stop()
+                                        } catch (_: Throwable) {}
+                                        onAudioSelected(
+                                            track.uri,
+                                            track.title,
+                                            track.durationSec,
+                                            trimStartSec,
+                                            trimEndSec
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Lucide.Check,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(
-                                            text = "Use in Editor",
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color.White
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = Lucide.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Use in Editor",
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
                                 }
                             }
                         }
@@ -1627,4 +1605,3 @@ fun DeviceMusicTrimmerModal(
             }
         }
     }
-}

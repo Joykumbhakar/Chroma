@@ -206,6 +206,7 @@ private fun ActionMenuOption.glassLabel(): String = when (this) {
     ActionMenuOption.POLL -> "Poll"
     ActionMenuOption.STICKER -> "Sticker"
     ActionMenuOption.FLASH_VIDEO -> "Flash Video"
+    ActionMenuOption.MUSIC -> "Music"
 }
 
 private fun ActionMenuOption.glassGradient(): GlassGradient = when (this) {
@@ -215,6 +216,7 @@ private fun ActionMenuOption.glassGradient(): GlassGradient = when (this) {
     ActionMenuOption.POLL -> GlassGradient.Purple
     ActionMenuOption.STICKER -> GlassGradient.Orange
     ActionMenuOption.FLASH_VIDEO -> GlassGradient.Pink
+    ActionMenuOption.MUSIC -> GlassGradient.Pink
 }
 
 private fun ActionMenuOption.glassGlyph(): DrawScope.(Color) -> Unit = when (this) {
@@ -224,6 +226,7 @@ private fun ActionMenuOption.glassGlyph(): DrawScope.(Color) -> Unit = when (thi
     ActionMenuOption.POLL -> { ink -> glyphPoll(ink) }
     ActionMenuOption.STICKER -> { ink -> glyphSticker(ink) }
     ActionMenuOption.FLASH_VIDEO -> { ink -> glyphFlashVideo(ink) }
+    ActionMenuOption.MUSIC -> { ink -> glyphMusic(ink) }
 }
 
 // ── One tile ─────────────────────────────────────────────────────────────────
@@ -735,4 +738,14 @@ internal fun DrawScope.glyphFlashVideo(ink: Color) = withGlyphShadow(ink) { c ->
         close()
     }
     drawPath(zap, color = c, style = st)
+}
+
+internal fun DrawScope.glyphMusic(ink: Color) = withGlyphShadow(ink) { c ->
+    val k = size.width / 24f
+    val st = glyphStroke(k)
+    drawCircle(color = c, radius = 2.4f * k, center = Offset(8.2f * k, 17.5f * k), style = st)
+    drawCircle(color = c, radius = 2.4f * k, center = Offset(16.2f * k, 15.8f * k), style = st)
+    drawLine(c, Offset(10.4f * k, 17.5f * k), Offset(10.4f * k, 6.2f * k), st.width, StrokeCap.Round)
+    drawLine(c, Offset(18.4f * k, 15.8f * k), Offset(18.4f * k, 4.5f * k), st.width, StrokeCap.Round)
+    drawLine(c, Offset(10.4f * k, 6.2f * k), Offset(18.4f * k, 4.5f * k), st.width, StrokeCap.Round)
 }

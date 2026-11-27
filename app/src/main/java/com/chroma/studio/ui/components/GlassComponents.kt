@@ -77,41 +77,42 @@ fun GlassPanel(
     val useBlur = rememberUseRealtimeBlur()
     val resolvedRadius = if (cornerRadius > 0) cornerRadius.dp else colors.cardCornerRadius
     val shape = RoundedCornerShape(resolvedRadius)
-    val resolvedBg = backgroundColor ?: if (useBlur) colors.glassBg else colors.glassBg.copy(alpha = maxOf(colors.glassBg.alpha, 0.94f))
+    val resolvedBg = backgroundColor ?: colors.glassBg
 
     Box(
         modifier = modifier
-            .shadow(elevation = if (useBlur) 8.dp else 4.dp, shape = shape, ambientColor = Color(0x0D1F2687), spotColor = Color(0x0D1F2687))
             .clip(shape)
             .adaptiveHazeChild(state = hazeState, shape = shape)
             .background(resolvedBg, shape)
-            .glossyBorder(shape, colors)
     ) {
         content()
     }
 }
 
 @Composable
-fun glassCircleShape() = RoundedCornerShape(50)
+fun glassCircleShape() = RoundedCornerShape(10.dp)
 
 @Composable
 fun GlassButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    shape: Shape = RoundedCornerShape(50),
+    shape: Shape = RoundedCornerShape(10.dp),
     colors: androidx.compose.material3.ButtonColors = androidx.compose.material3.ButtonDefaults.buttonColors(
-        containerColor = LocalOscellionColors.current.primary.copy(alpha = 0.8f)
+        containerColor = LocalOscellionColors.current.primary
     ),
-    borderColor: Color = LocalOscellionColors.current.primary.copy(alpha = 0.5f),
-    elevation: androidx.compose.material3.ButtonElevation? = androidx.compose.material3.ButtonDefaults.buttonElevation(),
+    borderColor: Color = Color.Transparent,
+    elevation: androidx.compose.material3.ButtonElevation? = androidx.compose.material3.ButtonDefaults.buttonElevation(
+        defaultElevation = 0.dp,
+        pressedElevation = 0.dp
+    ),
     border: androidx.compose.foundation.BorderStroke? = null,
     contentPadding: androidx.compose.foundation.layout.PaddingValues = androidx.compose.material3.ButtonDefaults.ContentPadding,
     interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
     val hazeState = LocalHazeState.current
-    
+
     androidx.compose.material3.Button(
         onClick = onClick,
         modifier = modifier.adaptiveHazeChild(state = hazeState, shape = shape),
@@ -119,7 +120,7 @@ fun GlassButton(
         shape = shape,
         colors = colors,
         elevation = elevation,
-        border = border ?: androidx.compose.foundation.BorderStroke(0.5.dp, borderColor),
+        border = border,
         contentPadding = contentPadding,
         interactionSource = interactionSource,
         content = content
@@ -275,20 +276,14 @@ fun GlassIconButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     colors: androidx.compose.material3.IconButtonColors = androidx.compose.material3.IconButtonDefaults.iconButtonColors(
-        containerColor = LocalOscellionColors.current.glassBg
+        containerColor = Color.Transparent
     ),
     interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
     content: @Composable () -> Unit
 ) {
-    val chromaColors = LocalOscellionColors.current
-    val hazeState = LocalHazeState.current
-    val shape = RoundedCornerShape(50)
-    
     androidx.compose.material3.IconButton(
         onClick = onClick,
-        modifier = modifier
-            .adaptiveHazeChild(state = hazeState, shape = shape)
-            .glossyBorder(shape, chromaColors),
+        modifier = modifier,
         enabled = enabled,
         colors = colors,
         interactionSource = interactionSource,
@@ -301,7 +296,7 @@ fun GlassTextButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    shape: Shape = RoundedCornerShape(50),
+    shape: Shape = RoundedCornerShape(8.dp),
     colors: androidx.compose.material3.ButtonColors = androidx.compose.material3.ButtonDefaults.textButtonColors(),
     elevation: androidx.compose.material3.ButtonElevation? = null,
     border: androidx.compose.foundation.BorderStroke? = null,
@@ -572,11 +567,8 @@ val PrimaryPillBorderGradient = ChromaPillColors.BlueBorder
 val PrimaryPillBodyGradient = ChromaPillColors.BlueBody
 
 /**
- * Chroma Gaming Pill Button:
- * - Outer border: 1.5dp padding with vertical gradient highlight
- * - Inner body: 3-stop rich vertical gradient fill
- * - Shape: 100% pill rounded-full (CircleShape)
- * - Supported color variants: Blue, Purple, Emerald, Amber, Rose, Cyan, DarkGlass
+ * Clean Apple HIG Action Button (replaces heavy gradient pills globally while preserving API).
+ * Uses a flat solid tint with crisp 10.dp rounded corners and zero heavy gradient borders.
  */
 @Composable
 fun ChromaPillButton(
@@ -590,20 +582,31 @@ fun ChromaPillButton(
     contentPadding: androidx.compose.foundation.layout.PaddingValues = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 6.dp),
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
 ) {
-    val activeBorder = borderBrush ?: ChromaPillColors.getBorder(variant)
-    val activeBody = bodyBrush ?: ChromaPillColors.getBody(variant)
-    val disabledBorder = Brush.verticalGradient(listOf(Color(0xFF8E8E93), Color(0xFF636366)))
-    val disabledBody = Brush.verticalGradient(listOf(Color(0xFF636366), Color(0xFF48484A)))
-    val strokeWidth = if (variant == ChromaPillVariant.Secondary) 1.dp else 1.5.dp
-    val defaultContentColor = if (variant == ChromaPillVariant.Secondary) Color.Black else Color.White
+    val palette = LocalOscellionColors.current
+    val buttonShape = RoundedCornerShape(10.dp)
+    val fillColor = when {
+        !enabled -> palette.glassBgHover
+        variant == ChromaPillVariant.Blue -> palette.primary
+        variant == ChromaPillVariant.Secondary -> palette.glassBg
+        variant == ChromaPillVariant.Purple -> Color(0xFF5856D6)
+        variant == ChromaPillVariant.Emerald -> palette.success
+        variant == ChromaPillVariant.Amber -> palette.warning
+        variant == ChromaPillVariant.Rose -> palette.error
+        variant == ChromaPillVariant.Cyan -> Color(0xFF32ADE6)
+        variant == ChromaPillVariant.DarkGlass -> if (palette.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+        else -> palette.primary
+    }
+    val defaultContentColor = when {
+        !enabled -> palette.textMuted
+        variant == ChromaPillVariant.Secondary -> palette.textMain
+        variant == ChromaPillVariant.DarkGlass -> palette.textMain
+        else -> Color.White
+    }
 
     Box(
         modifier = modifier
-            .clip(androidx.compose.foundation.shape.CircleShape)
-            .background(if (enabled) activeBorder else disabledBorder)
-            .padding(strokeWidth)
-            .clip(androidx.compose.foundation.shape.CircleShape)
-            .background(if (enabled) activeBody else disabledBody)
+            .clip(buttonShape)
+            .background(fillColor)
             .clickable(enabled = enabled, onClick = onClick)
             .then(if (height > 0.dp) Modifier.height(height) else Modifier)
             .padding(contentPadding),

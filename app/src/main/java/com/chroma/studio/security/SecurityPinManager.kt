@@ -17,9 +17,48 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
+ * Immutable representation of the persisted PIN lockout state.
+ */
+data class PinLockoutState(
+    val failedAttempts: Int,
+    val lockoutUntilMs: Long,
+    val lockoutSeconds: Int
+)
+
+/**
+ * Computes escalating cooldown durations after consecutive wrong PIN attempts:
+ * - Attempts 1-4: warning only (0s)
+ * - Attempt 5: 30s lockout
+ * - Attempt 6: 60s lockout
+ * - Attempt 7+: 120s lockout
+ */
+fun computeNextPinLockoutState(currentAttempts: Int, nowMs: Long): PinLockoutState {
+    val nextAttempts = currentAttempts + 1
+    val lockoutSeconds = when {
+        nextAttempts < 5 -> 0
+        nextAttempts == 5 -> 30
+        nextAttempts == 6 -> 60
+        else -> 120
+    }
+    val lockoutUntilMs = if (lockoutSeconds > 0) nowMs + lockoutSeconds * 1000L else 0L
+    return PinLockoutState(
+        failedAttempts = nextAttempts,
+        lockoutUntilMs = lockoutUntilMs,
+        lockoutSeconds = lockoutSeconds
+    )
+}
+
+/** Computes remaining whole seconds before PIN entry can resume. */
+fun computeRemainingLockoutSeconds(lockoutUntilMs: Long, nowMs: Long): Int {
+    if (lockoutUntilMs <= nowMs) return 0
+    val remainingMs = lockoutUntilMs - nowMs
+    return ((remainingMs + 999L) / 1000L).toInt().coerceAtLeast(1)
+}
+
+/**
  * Enterprise-grade Security & PIN Manager for Oscellion App Lock.
  * Manages 4-digit PIN setup, salt + SHA-256 hash storage, constant-time validation,
- * and session unlock lifecycle alongside Biometrics.
+ * persistent anti-brute-force lockout state, and session unlock lifecycle alongside Biometrics.
  */
 object SecurityPinManager {
     private const val PREFS_NAME = "chroma_chat_security_prefs"
@@ -33,6 +72,10 @@ object SecurityPinManager {
     private const val KEY_WALLPAPER_DIMMING = "app_lock_wallpaper_dimming"
     private const val KEY_CUSTOM_WALLPAPERS = "app_lock_custom_wallpapers"
     private const val KEY_AUTO_LOCK_DELAY_MS = "app_lock_auto_lock_delay_ms"
+    private const val KEY_FAILED_ATTEMPTS = "app_lock_failed_attempts"
+    private const val KEY_LOCKOUT_UNTIL_MS = "app_lock_lockout_until_ms"
+    private const val KEY_INTRUDER_ALERT_COUNT = "app_lock_intruder_alert_count"
+    private const val KEY_LAST_FAILED_AT_MS = "app_lock_last_failed_at_ms"
 
     const val DEFAULT_WALLPAPER = "file:///android_asset/wallpaper/wallpaper_2.jpg"
     const val DEFAULT_DIMMING = 0.45f
@@ -192,6 +235,58 @@ object SecurityPinManager {
     /** Saves auto-lock timeout preference. */
     fun setAutoLockDelayMs(context: Context, delayMs: Long) {
         getPrefs(context).edit().putLong(KEY_AUTO_LOCK_DELAY_MS, delayMs).apply()
+    }
+
+    /** Returns persisted failed PIN attempts for anti-brute-force lockout. */
+    fun getFailedAttempts(context: Context): Int {
+        return getPrefs(context).getInt(KEY_FAILED_ATTEMPTS, 0)
+    }
+
+    /** Returns remaining lockout cooldown seconds persisted across screen closures. */
+    fun getRemainingLockoutSeconds(context: Context, nowMs: Long = System.currentTimeMillis()): Int {
+        val until = getPrefs(context).getLong(KEY_LOCKOUT_UNTIL_MS, 0L)
+        return computeRemainingLockoutSeconds(until, nowMs)
+    }
+
+    /** Records an incorrect PIN attempt, persisting lockout & security alert metadata. */
+    fun recordFailedPinAttempt(context: Context, nowMs: Long = System.currentTimeMillis()): PinLockoutState {
+        val prefs = getPrefs(context)
+        val current = prefs.getInt(KEY_FAILED_ATTEMPTS, 0)
+        val next = computeNextPinLockoutState(current, nowMs)
+        val alertCount = prefs.getInt(KEY_INTRUDER_ALERT_COUNT, 0) + 1
+        prefs.edit()
+            .putInt(KEY_FAILED_ATTEMPTS, next.failedAttempts)
+            .putLong(KEY_LOCKOUT_UNTIL_MS, next.lockoutUntilMs)
+            .putInt(KEY_INTRUDER_ALERT_COUNT, alertCount)
+            .putLong(KEY_LAST_FAILED_AT_MS, nowMs)
+            .apply()
+        return next
+    }
+
+    /** Clears active brute-force failed-attempt counter & lockout cooldown after valid unlock. */
+    fun resetFailedPinAttempts(context: Context) {
+        getPrefs(context).edit()
+            .putInt(KEY_FAILED_ATTEMPTS, 0)
+            .putLong(KEY_LOCKOUT_UNTIL_MS, 0L)
+            .apply()
+    }
+
+    /** Returns total wrong PIN attempts logged since the user last cleared security alerts. */
+    fun getIntruderAlertCount(context: Context): Int {
+        return getPrefs(context).getInt(KEY_INTRUDER_ALERT_COUNT, 0)
+    }
+
+    /** Returns timestamp (ms) of the most recent wrong PIN attempt, or 0 if none. */
+    fun getLastFailedAttemptAtMs(context: Context): Long {
+        return getPrefs(context).getLong(KEY_LAST_FAILED_AT_MS, 0L)
+    }
+
+    /** Dismisses failed-attempt security alert history after user review. */
+    fun clearIntruderAlerts(context: Context) {
+        getPrefs(context).edit()
+            .putInt(KEY_INTRUDER_ALERT_COUNT, 0)
+            .putLong(KEY_LAST_FAILED_AT_MS, 0L)
+            .apply()
     }
 
     /** Human-readable label for configured auto-lock delay. */

@@ -112,6 +112,7 @@ fun PrivacyScreen(
                     .clickable {
                         SoundManager.playReaction()
                         if (hasChanges) {
+                            com.chroma.studio.data.OnlineStatusManager.updateSelfShowOnlineStatus(showOnline)
                             // onSave pops the back stack in HomeActivity — do not call onBack() twice
                             onSave(
                                 profile.copy(

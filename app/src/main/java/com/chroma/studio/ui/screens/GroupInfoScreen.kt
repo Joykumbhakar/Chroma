@@ -103,6 +103,7 @@ fun GroupInfoScreen(
     var showEditNameDialog by remember { mutableStateOf(false) }
     var showEditDescDialog by remember { mutableStateOf(false) }
     var showLeaveGroupConfirm by remember { mutableStateOf(false) }
+    var memberPendingRemove by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showWallpaperPicker by remember { mutableStateOf(false) }
     var newGroupName by remember { mutableStateOf(room.name ?: "") }
     var newGroupDesc by remember { mutableStateOf(room.groupDescription ?: "") }
@@ -116,17 +117,17 @@ fun GroupInfoScreen(
 
     val settingsManager = remember { ChatSettingsManager(context) }
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            val inputStream = context.contentResolver.openInputStream(uri)
-            val bytes = inputStream?.readBytes()
-            inputStream?.close()
-            if (bytes != null) {
-                val extension = context.contentResolver.getType(uri)?.substringAfter("/") ?: "jpg"
-                chatViewModel.uploadGroupImage(roomId, bytes, extension)
-            }
+    val imagePickerLauncher = com.chroma.studio.ui.components.rememberOscellionMediaPicker(
+        title = "Group Photo",
+        mediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+        showAlbumsTab = true
+    ) { uri ->
+        val inputStream = context.contentResolver.openInputStream(uri)
+        val bytes = inputStream?.readBytes()
+        inputStream?.close()
+        if (bytes != null) {
+            val extension = context.contentResolver.getType(uri)?.substringAfter("/") ?: "jpg"
+            chatViewModel.uploadGroupImage(roomId, bytes, extension)
         }
     }
 
@@ -171,11 +172,10 @@ fun GroupInfoScreen(
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .size(28.dp)
-                                    .shadow(3.dp, CircleShape)
-                                    .clip(CircleShape)
+                                    .size(26.dp)
+                                    .clip(RoundedCornerShape(7.dp))
                                     .background(colors.cardSurfaceElevated)
-                                    .border(2.dp, colors.bg, CircleShape)
+                                    .border(1.5.dp, colors.bg, RoundedCornerShape(7.dp))
                                     .clickable { imagePickerLauncher.launch("image/*") },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -378,6 +378,127 @@ fun GroupInfoScreen(
                                 }
                             )
                         }
+
+                        HorizontalDivider(
+                            color = colors.cardBorderSubtle,
+                            modifier = Modifier.padding(vertical = 10.dp)
+                        )
+
+                        // Disappearing Messages Timer
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Lucide.Timer, null, tint = colors.primary, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Disappearing Messages",
+                                        color = colors.textMain,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = if (room.disappearingHours > 0) "Auto-expires after ${com.chroma.studio.chat.ui.components.disappearingTimerLabel(room.disappearingHours)}" else "Keep message history",
+                                        color = colors.textMuted,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.inputBg)
+                                    .padding(3.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                listOf(0, 24, 168, 2160).forEach { hours ->
+                                    val selected = room.disappearingHours == hours
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (selected) colors.primary else Color.Transparent)
+                                            .clickable { chatViewModel.updateDisappearingHours(room.id, hours) }
+                                            .padding(vertical = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = com.chroma.studio.chat.ui.components.disappearingTimerLabel(hours),
+                                            fontSize = 12.sp,
+                                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                            color = if (selected) Color.White else colors.textMuted
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(
+                            color = colors.cardBorderSubtle,
+                            modifier = Modifier.padding(vertical = 10.dp)
+                        )
+
+                        // Invite Link Copy & Toggle
+                        val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                    Icon(Lucide.Link2, null, tint = colors.primary, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(10.dp))
+                                    Column {
+                                        Text("Group Invite Link", color = colors.textMain, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Text(
+                                            if (!room.inviteCode.isNullOrBlank()) "Active link ready to share" else "Disabled",
+                                            color = colors.textMuted,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                                AppleSwitch(
+                                    checked = !room.inviteCode.isNullOrBlank(),
+                                    onCheckedChange = { enable ->
+                                        val nextCode = if (enable) com.chroma.studio.chat.ui.components.generateGroupInviteCode() else null
+                                        chatViewModel.updateInviteCode(room.id, nextCode)
+                                    }
+                                )
+                            }
+                            if (!room.inviteCode.isNullOrBlank()) {
+                                val url = com.chroma.studio.chat.ui.components.buildGroupInviteUrl(room.inviteCode)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(colors.inputBg)
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = url,
+                                        fontSize = 12.sp,
+                                        color = colors.primary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Icon(
+                                        imageVector = Lucide.Copy,
+                                        contentDescription = "Copy Link",
+                                        tint = colors.primary,
+                                        modifier = Modifier
+                                            .size(15.dp)
+                                            .clickable {
+                                                clipboard.setText(androidx.compose.ui.text.AnnotatedString(url))
+                                                ToastManager.showToast("Invite link copied")
+                                            }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -508,8 +629,8 @@ fun GroupInfoScreen(
                                                 text = { Text("Remove from Group", color = colors.error) },
                                                 leadingIcon = { Icon(Lucide.UserMinus, null, tint = colors.error) },
                                                 onClick = {
-                                                    chatViewModel.removeParticipant(room.id, userId)
                                                     expanded = false
+                                                    memberPendingRemove = userId to (profile?.displayName?.ifBlank { "this member" } ?: "this member")
                                                 }
                                             )
                                         }
@@ -562,6 +683,22 @@ fun GroupInfoScreen(
             showBackButton = true,
             onBack = onBack,
             modifier = Modifier.align(Alignment.TopCenter)
+        )
+    }
+
+    // Remove Member Confirmation Dialog
+    memberPendingRemove?.let { (targetUid, targetName) ->
+        IosAlertDialog(
+            title = "Remove Member?",
+            message = "Remove $targetName from \"${room.name ?: "this group"}\"?",
+            confirmText = "Remove",
+            isDestructive = true,
+            onConfirm = {
+                memberPendingRemove = null
+                chatViewModel.removeParticipant(room.id, targetUid)
+            },
+            dismissText = "Cancel",
+            onDismiss = { memberPendingRemove = null }
         )
     }
 

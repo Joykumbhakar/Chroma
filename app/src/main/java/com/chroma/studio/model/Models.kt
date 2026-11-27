@@ -124,6 +124,9 @@ data class DiscoverPost(
     val postType: String = "work", // "work" for JSON, "image" for photos, "video" for video posts
     val tags: List<String> = emptyList(),
     val mentions: List<String> = emptyList(),
+    val collaborators: List<CollabParticipant> = emptyList(),
+    val pendingCollaboratorIds: List<String> = emptyList(),
+    val collaboratorIds: List<String> = emptyList(),
     val trendingTag: String? = null,
     val timestamp: Long = System.currentTimeMillis(),
     
@@ -158,7 +161,18 @@ data class DiscoverPost(
     var isFeatured: Boolean = false,
     @get:com.google.firebase.firestore.PropertyName("isTakedown")
     @set:com.google.firebase.firestore.PropertyName("isTakedown")
-    var isTakedown: Boolean = false
+    var isTakedown: Boolean = false,
+
+    // Music Attachment Metadata (Firebase text metadata pointing to Music Cloudinary audio)
+    val musicTrackId: String? = null,
+    val musicTitle: String? = null,
+    val musicArtist: String? = null,
+    val musicAlbum: String? = null,
+    val musicCoverUrl: String? = null,
+    val musicAudioUrl: String? = null,
+    val musicStartSec: Int = 0,
+    val musicDurationSec: Int = 15,
+    val musicShowLyrics: Boolean = true
 ) {
     @get:com.google.firebase.firestore.Exclude
     val effectiveCommentsCount: Int
@@ -197,7 +211,21 @@ data class CreatorPostDraft(
     val audienceVisibility: String = "public",
     val includeOriginalAudio: Boolean = true,
     val allowDownloads: Boolean = true,
-    val highQualityUpload: Boolean = true
+    val highQualityUpload: Boolean = true,
+    val collaborators: List<CollabParticipant> = emptyList()
+)
+
+@Immutable
+data class CollabParticipant(
+    val uid: String = "",
+    val username: String = "",
+    val displayName: String = "",
+    val avatarUrl: String = "",
+    val verified: Boolean = false,
+    val verifiedTone: String? = null,
+    val status: String = "pending", // "pending" | "accepted" | "declined"
+    val invitedAt: Long = System.currentTimeMillis(),
+    val respondedAt: Long? = null
 )
 
 data class ChatRoom(
@@ -226,11 +254,20 @@ data class ChatRoom(
     val deletedAt: Map<String, Long> = emptyMap(),
     val pinnedMessageId: String? = null,
     val pinnedMessageText: String? = null,
-    val pinnedBy: String? = null,
+    val pinnedBy: Any? = null, // Web stores pinned conversations as List<String>, legacy Android stored String?
+    val pinnedMessageBy: String? = null,
     val pinnedAt: Long = 0L,
     @get:com.google.firebase.firestore.PropertyName("onlyAdminsCanPost")
     @set:com.google.firebase.firestore.PropertyName("onlyAdminsCanPost")
-    var onlyAdminsCanPost: Boolean = false
+    var onlyAdminsCanPost: Boolean = false,
+    val disappearingHours: Int = 0,
+    val inviteCode: String? = null,
+    @get:com.google.firebase.firestore.PropertyName("isPublicGroup")
+    @set:com.google.firebase.firestore.PropertyName("isPublicGroup")
+    var isPublicGroup: Boolean = false,
+    @get:com.google.firebase.firestore.PropertyName("editInfoAdminsOnly")
+    @set:com.google.firebase.firestore.PropertyName("editInfoAdminsOnly")
+    var editInfoAdminsOnly: Boolean = true
 )
 
 data class ChatMessage(
@@ -281,7 +318,21 @@ data class ChatMessage(
     val flashVideoAuthorAvatarUrl: String? = null,
     val flashVideoDurationMs: Long? = null,
     val callDuration: String? = null,
-    val callType: String? = null
+    val callType: String? = null,
+    val deliveredTo: Map<String, Long> = emptyMap(), // userId -> delivery timestamp
+    val readBy: Map<String, Long> = emptyMap(),      // userId -> read timestamp
+    val fontStyle: String? = null,                   // Optional chat font style key
+    val fileName: String? = null,
+    val fileSizeBytes: Long? = null,
+    val fileExtension: String? = null,
+    val musicTrackId: String? = null,
+    val musicTitle: String? = null,
+    val musicArtist: String? = null,
+    val musicAlbum: String? = null,
+    val musicCoverUrl: String? = null,
+    val musicAudioUrl: String? = null,
+    val musicStartSec: Int = 0,
+    val musicDurationSec: Int = 15
 )
 
 @kotlinx.serialization.Serializable
@@ -314,6 +365,21 @@ data class Story(
     val highlightId: String = "",
     val highlightTitle: String = "",
     val highlightCoverUrl: String = "",
+    val mentionedUserIds: List<String> = emptyList(),
+    val mentionedUsernames: List<String> = emptyList(),
+    val repostedFromStoryId: String = "",
+    val repostedFromUserId: String = "",
+    val repostedFromUsername: String = "",
+    val repostedFromDisplayName: String = "",
+    val musicTrackId: String? = null,
+    val musicTitle: String? = null,
+    val musicArtist: String? = null,
+    val musicAlbum: String? = null,
+    val musicCoverUrl: String? = null,
+    val musicAudioUrl: String? = null,
+    val musicStartSec: Int = 0,
+    val musicDurationSec: Int = 15,
+    val musicShowLyrics: Boolean = true,
     @get:com.google.firebase.firestore.Exclude
     val isUploading: Boolean = false,
     @get:com.google.firebase.firestore.Exclude
@@ -434,6 +500,8 @@ data class FlashComment(
     val replyToUsername: String? = null,
     val replyCount: Int = 0,
     val replyFlashVideoUrl: String? = null,
+    val edited: Boolean = false,
+    val reactions: Map<String, List<String>> = emptyMap(),
     val isPending: Boolean = false,
     val isError: Boolean = false
 )
@@ -452,6 +520,9 @@ data class FlashVideo(
     val caption: String = "",
     val hashtags: List<String> = emptyList(),
     val mentions: List<String> = emptyList(),
+    val collaborators: List<CollabParticipant> = emptyList(),
+    val pendingCollaboratorIds: List<String> = emptyList(),
+    val collaboratorIds: List<String> = emptyList(),
     val likesCount: Int = 0,
     val likedBy: List<String> = emptyList(),
     val commentCount: Int = 0,
@@ -482,7 +553,18 @@ data class FlashVideo(
     var isFeatured: Boolean = false,
     @get:com.google.firebase.firestore.PropertyName("isTakedown")
     @set:com.google.firebase.firestore.PropertyName("isTakedown")
-    var isTakedown: Boolean = false
+    var isTakedown: Boolean = false,
+
+    // Music Attachment Metadata
+    val musicTrackId: String? = null,
+    val musicTitle: String? = null,
+    val musicArtist: String? = null,
+    val musicAlbum: String? = null,
+    val musicCoverUrl: String? = null,
+    val musicAudioUrl: String? = null,
+    val musicStartSec: Int = 0,
+    val musicDurationSec: Int = 15,
+    val musicShowLyrics: Boolean = true
 )
 
 /** Locally persisted draft before publishing a Flash. */

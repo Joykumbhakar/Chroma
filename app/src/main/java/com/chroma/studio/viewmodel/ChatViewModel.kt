@@ -60,7 +60,9 @@ class ChatViewModel : ViewModel() {
     val currentMessages: StateFlow<List<ChatMessage>> = combine(_serverMessages, _localMessages) { server, local ->
         val serverIds = server.map { it.id }.toSet()
         val remainingLocal = local.filter { it.id !in serverIds }
-        (server + remainingLocal).sortedByDescending { it.timestamp }
+        (server + remainingLocal)
+            .distinctBy { it.id }
+            .sortedByDescending { it.timestamp }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     private val _activeRoomId = MutableStateFlow<String?>(null)
@@ -117,12 +119,23 @@ class ChatViewModel : ViewModel() {
                     val profile = discoverRepository.getUserProfile(uid)
                     if (profile != null) {
                         currentMap[uid] = profile
+                        com.chroma.studio.ui.components.VerifiedBadgeRegistry.register(profile)
+                        com.chroma.studio.data.OnlineStatusManager.seedProfilePresence(profile)
+                        if (uid == currentAuthUserId) {
+                            com.chroma.studio.data.OnlineStatusManager.updateSelfShowOnlineStatus(profile.showOnlineStatus)
+                        }
                     }
                 } catch (e: Exception) {
                     // ignore
                 }
             }
             _userProfiles.value = currentMap
+            try {
+                com.chroma.studio.data.OfflineDataCacheManager.saveUserProfiles(
+                    com.chroma.studio.ChromaApp.instance,
+                    currentMap.values
+                )
+            } catch (_: Exception) {}
         }
     }
 
@@ -150,6 +163,15 @@ class ChatViewModel : ViewModel() {
         val initialUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         val initialUid = initialUser?.uid
         if (!initialUid.isNullOrBlank()) {
+            // Preload cached user profiles for instant offline display of names, avatars, badges & last seen
+            try {
+                val cachedProfiles = com.chroma.studio.data.OfflineDataCacheManager.getAllCachedProfiles(
+                    com.chroma.studio.ChromaApp.instance
+                )
+                if (cachedProfiles.isNotEmpty()) {
+                    _userProfiles.value = cachedProfiles
+                }
+            } catch (_: Exception) {}
             // Immediately load recent chats strictly scoped to this UID for Frame 0 offline launch
             try {
                 val cachedChats = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedRecentChats(
@@ -241,8 +263,17 @@ class ChatViewModel : ViewModel() {
         // Add listeners for new users
         for (uid in currentUids) {
             if (listeners.containsKey(uid)) continue
+            // Seed with cached Firestore profile lastSeen if available
+            _userProfiles.value[uid]?.let { com.chroma.studio.data.OnlineStatusManager.seedProfilePresence(it) }
             try {
-                val unsubscribe = com.chroma.studio.data.OnlineStatusManager.observeUserPresence(uid) { presence ->
+                val unsubscribe = com.chroma.studio.data.OnlineStatusManager.observeUserPresence(uid) { rawPresence ->
+                    val profile = _userProfiles.value[uid]
+                    val presence = if (profile != null && !profile.showOnlineStatus) {
+                        com.chroma.studio.data.UserPresence(online = false, lastOnline = null)
+                    } else {
+                        val fallbackLastSeen = rawPresence.lastOnline ?: profile?.lastSeen?.takeIf { it > 0L }
+                        com.chroma.studio.data.UserPresence(online = rawPresence.online, lastOnline = fallbackLastSeen)
+                    }
                     _onlineUsersPresence.value = _onlineUsersPresence.value + (uid to presence)
                     if (uid == currentOtherUserId) {
                         _isOtherUserOnline.value = presence.online
@@ -266,16 +297,31 @@ class ChatViewModel : ViewModel() {
         }
 
         currentOtherUserId = uid
+        val initialProfile = _userProfiles.value[uid]
+        if (initialProfile != null) {
+            com.chroma.studio.data.OnlineStatusManager.seedProfilePresence(initialProfile)
+            if (!initialProfile.showOnlineStatus) {
+                _isOtherUserOnline.value = false
+                _otherUserLastSeen.value = null
+            } else if (initialProfile.lastSeen != null && initialProfile.lastSeen > 0L && _otherUserLastSeen.value == null) {
+                _otherUserLastSeen.value = initialProfile.lastSeen
+            }
+        }
         val ref = com.chroma.studio.data.OnlineStatusManager.getDatabase().getReference("users/$uid")
 
         onlineStatusListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val isOnline = snapshot.child("online").getValue(Boolean::class.java) ?: false
-                val lastSeen = snapshot.child("lastOnline").getValue(Long::class.java)
-                    ?: snapshot.child("lastSeen").getValue(Long::class.java)
-                _isOtherUserOnline.value = isOnline
-                _otherUserLastSeen.value = lastSeen
-                _onlineUsersPresence.value = _onlineUsersPresence.value + (uid to com.chroma.studio.data.UserPresence(isOnline, lastSeen))
+                val parsed = com.chroma.studio.data.OnlineStatusManager.parsePresenceSnapshot(uid, snapshot)
+                val profile = _userProfiles.value[uid]
+                val finalPresence = if (profile != null && !profile.showOnlineStatus) {
+                    com.chroma.studio.data.UserPresence(online = false, lastOnline = null)
+                } else {
+                    val lastSeen = parsed.lastOnline ?: profile?.lastSeen?.takeIf { it > 0L }
+                    com.chroma.studio.data.UserPresence(online = parsed.online, lastOnline = lastSeen)
+                }
+                _isOtherUserOnline.value = finalPresence.online
+                _otherUserLastSeen.value = finalPresence.lastOnline
+                _onlineUsersPresence.value = _onlineUsersPresence.value + (uid to finalPresence)
             }
             override fun onCancelled(error: DatabaseError) {
                 android.util.Log.w("ChatViewModel", "observeUserOnlineStatus cancelled for $uid: ${error.message}")
@@ -373,11 +419,21 @@ class ChatViewModel : ViewModel() {
             )
         } catch (_: Exception) { emptyList() }
         _recentChats.value = scopedCached
+        if (scopedCached.isNotEmpty()) {
+            try {
+                com.chroma.studio.chat.data.ChatLocalCacheManager.preloadRooms(
+                    com.chroma.studio.ChromaApp.instance,
+                    scopedCached.map { it.id },
+                    uid
+                )
+            } catch (_: Exception) {}
+        }
 
         observeChats(uid)
         loadStories()
         loadMutedChats()
         loadBlockedUsers()
+        callManager?.startListeningForIncomingCalls(uid)
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -395,6 +451,7 @@ class ChatViewModel : ViewModel() {
 
     fun resetForLogout() {
         currentAuthUserId = null
+        callManager?.stopListeningForIncomingCalls()
         chatsJob?.cancel()
         chatsJob = null
         messagesJob?.cancel()
@@ -521,8 +578,10 @@ class ChatViewModel : ViewModel() {
         // This guarantees that when entering a chat, historical messages appear on Frame 0 (0ms)
         // with ZERO blank screen, ZERO opening from zero, and 100% offline access in Airplane mode.
         val cached = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedMessages(
-            com.chroma.studio.ChromaApp.instance,
-            roomId
+            context = com.chroma.studio.ChromaApp.instance,
+            roomId = roomId,
+            userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
+            limit = 40
         )
         _serverMessages.value = cached
         _localMessages.value = emptyList()
@@ -543,8 +602,8 @@ class ChatViewModel : ViewModel() {
         }
         com.chroma.studio.ChatStateManager.setActiveChat(recipientId = otherUid, roomId = roomId)
 
-        // 2. Viewport limit: start with 30 messages or size of cached
-        messageLimit = 30L.coerceAtLeast(cached.size.toLong())
+        // 2. Viewport limit: start with 30-40 messages on Firestore while older messages page from SQLite
+        messageLimit = 30L.coerceAtLeast(cached.size.toLong().coerceAtMost(40L))
         observeMessages(roomId)
 
         // Optimistically mark as read in local state
@@ -590,8 +649,71 @@ class ChatViewModel : ViewModel() {
 
     fun loadMoreMessages() {
         val roomId = _activeRoomId.value ?: return
+        val oldestLoadedTs = _serverMessages.value.minOfOrNull { it.timestamp }
+        if (oldestLoadedTs != null) {
+            try {
+                val olderCached = com.chroma.studio.chat.data.ChatLocalCacheManager.getOlderCachedMessages(
+                    context = com.chroma.studio.ChromaApp.instance,
+                    roomId = roomId,
+                    beforeTimestamp = oldestLoadedTs,
+                    limit = 40,
+                    userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                )
+                if (olderCached.isNotEmpty()) {
+                    _serverMessages.value = (_serverMessages.value + olderCached)
+                        .distinctBy { it.id }
+                        .sortedByDescending { it.timestamp }
+                }
+            } catch (_: Exception) {}
+        }
         messageLimit += 30L
         observeMessages(roomId)
+    }
+
+    fun createGroupFromConfig(
+        context: android.content.Context,
+        config: com.chroma.studio.chat.ui.components.GroupCreationConfig,
+        preGeneratedRoomId: String? = null,
+        onRoomReady: (String) -> Unit
+    ) {
+        val currentUserUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val realParticipantIds = config.members
+            .mapNotNull { it.id.takeIf { id -> id.isNotBlank() && id != currentUserUid } }
+            .distinct()
+        val roomId = preGeneratedRoomId ?: "group_${java.util.UUID.randomUUID()}"
+
+        viewModelScope.launch {
+            var localBytes: ByteArray? = null
+            var localExt = "jpg"
+            val avatarStr = config.groupAvatar
+            if (avatarStr.startsWith("content://") || avatarStr.startsWith("file://")) {
+                try {
+                    val parsedUri = android.net.Uri.parse(avatarStr)
+                    localBytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        context.contentResolver.openInputStream(parsedUri)?.use { it.readBytes() }
+                    }
+                    localExt = context.contentResolver.getType(parsedUri)?.substringAfter("/")
+                        ?: if (avatarStr.endsWith(".png", ignoreCase = true)) "png" else "jpg"
+                } catch (_: Exception) {}
+            }
+            createGroup(
+                groupName = config.groupName,
+                groupDescription = config.groupDescription.ifBlank { null },
+                participantIds = realParticipantIds,
+                imageUrl = avatarStr,
+                preGeneratedRoomId = roomId,
+                onlyAdminsCanPost = config.onlyAdminsCanPost,
+                coAdminIds = config.coAdminIds,
+                disappearingHours = config.disappearingHours,
+                inviteCode = config.inviteCode,
+                isPublicGroup = config.isPublicGroup,
+                editInfoAdminsOnly = config.editInfoAdminsOnly,
+                welcomeMessage = config.welcomeMessage.ifBlank { null },
+                localImageBytes = localBytes,
+                localImageExt = localExt,
+                onRoomReady = onRoomReady
+            )
+        }
     }
 
     fun createGroup(
@@ -601,14 +723,23 @@ class ChatViewModel : ViewModel() {
         imageUrl: String? = null,
         preGeneratedRoomId: String? = null,
         onlyAdminsCanPost: Boolean = false,
+        coAdminIds: List<String> = emptyList(),
+        disappearingHours: Int = 0,
+        inviteCode: String? = null,
+        isPublicGroup: Boolean = false,
+        editInfoAdminsOnly: Boolean = true,
+        welcomeMessage: String? = null,
+        localImageBytes: ByteArray? = null,
+        localImageExt: String = "jpg",
         onRoomReady: (String) -> Unit
     ) {
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
         val roomId = preGeneratedRoomId ?: "group_${java.util.UUID.randomUUID()}"
 
         // Optimistic UI update
-        val allUsers = participantIds.toMutableList()
-        if (!allUsers.contains(currentUser.uid)) allUsers.add(currentUser.uid)
+        val allUsers = (participantIds + currentUser.uid).filter { it.isNotBlank() }.distinct()
+        val allAdmins = (listOf(currentUser.uid) + coAdminIds).filter { it in allUsers }.distinct()
+        val initPreview = welcomeMessage?.trim()?.takeIf { it.isNotBlank() }?.let { "👋 Welcome to $groupName! $it" } ?: "Group created"
 
         val optimisticRoom = ChatRoom(
             id = roomId,
@@ -617,11 +748,15 @@ class ChatViewModel : ViewModel() {
             isGroup = true,
             avatarUrl = imageUrl,
             participants = allUsers,
-            admins = listOf(currentUser.uid),
+            admins = allAdmins,
             createdBy = currentUser.uid,
-            lastMessage = "Group created",
+            lastMessage = initPreview,
             lastMessageTime = System.currentTimeMillis(),
-            onlyAdminsCanPost = onlyAdminsCanPost
+            onlyAdminsCanPost = onlyAdminsCanPost,
+            disappearingHours = disappearingHours,
+            inviteCode = inviteCode,
+            isPublicGroup = isPublicGroup,
+            editInfoAdminsOnly = editInfoAdminsOnly
         )
         val currentChats = _recentChats.value.toMutableList()
         currentChats.add(0, optimisticRoom)
@@ -631,7 +766,33 @@ class ChatViewModel : ViewModel() {
         // parent room document write before attaching the messages subcollection listener.
         val creationDeferred = viewModelScope.async {
             try {
-                repository.createGroup(groupName, groupDescription, participantIds, imageUrl, roomId, onlyAdminsCanPost)
+                val uploadedUrl = if (localImageBytes != null) {
+                    uploadGroupImageBytes(localImageBytes, localImageExt) ?: imageUrl
+                } else {
+                    imageUrl
+                }
+                if (!uploadedUrl.isNullOrBlank() && uploadedUrl != imageUrl) {
+                    val updatedList = _recentChats.value.toMutableList()
+                    val idx = updatedList.indexOfFirst { it.id == roomId }
+                    if (idx != -1) {
+                        updatedList[idx] = updatedList[idx].copy(avatarUrl = uploadedUrl)
+                        _recentChats.value = updatedList
+                    }
+                }
+                repository.createGroup(
+                    groupName = groupName,
+                    groupDescription = groupDescription,
+                    participantIds = participantIds,
+                    imageUrl = uploadedUrl,
+                    preGeneratedId = roomId,
+                    onlyAdminsCanPost = onlyAdminsCanPost,
+                    coAdminIds = coAdminIds,
+                    disappearingHours = disappearingHours,
+                    inviteCode = inviteCode,
+                    isPublicGroup = isPublicGroup,
+                    editInfoAdminsOnly = editInfoAdminsOnly,
+                    welcomeMessage = welcomeMessage
+                )
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 android.util.Log.w("ChatViewModel", "createGroup error for $roomId", e)
@@ -646,6 +807,25 @@ class ChatViewModel : ViewModel() {
         onRoomReady(roomId)
         fetchProfilesForUsers(allUsers)
     }
+
+    fun createGroup(
+        groupName: String,
+        groupDescription: String? = null,
+        participantIds: List<String>,
+        imageUrl: String? = null,
+        preGeneratedRoomId: String? = null,
+        onlyAdminsCanPost: Boolean = false,
+        onRoomReady: (String) -> Unit
+    ) = createGroup(
+        groupName = groupName,
+        groupDescription = groupDescription,
+        participantIds = participantIds,
+        imageUrl = imageUrl,
+        preGeneratedRoomId = preGeneratedRoomId,
+        onlyAdminsCanPost = onlyAdminsCanPost,
+        coAdminIds = emptyList(),
+        onRoomReady = onRoomReady
+    )
 
     fun createGroup(
         groupName: String,
@@ -705,7 +885,15 @@ class ChatViewModel : ViewModel() {
                     // Only update server messages if new messages arrived from server or Firestore cache.
                     // Never wipe out non-empty cached messages if an empty list arrives during offline transitions.
                     if (msgs.isNotEmpty()) {
-                        _serverMessages.value = msgs
+                        val minServerTs = msgs.minOfOrNull { it.timestamp } ?: Long.MAX_VALUE
+                        val serverIds = msgs.map { it.id }.toSet()
+                        val preservedOlderLocal = _serverMessages.value.filter {
+                            it.id !in serverIds && it.timestamp < minServerTs
+                        }
+                        _serverMessages.value = (msgs + preservedOlderLocal)
+                            .distinctBy { it.id }
+                            .sortedByDescending { it.timestamp }
+
                         // WhatsApp-grade immediate eviction of typing indicator on message arrival
                         val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                         if (currentUserId != null) {
@@ -714,16 +902,24 @@ class ChatViewModel : ViewModel() {
                                 evictUserTypingActivity(roomId, senderId)
                             }
 
+                            val isGroupChat = roomId.startsWith("group_") ||
+                                (_recentChats.value.find { it.id == roomId }?.isGroup == true)
                             // Auto-mark incoming messages as read when user is actively viewing this room, or delivered otherwise
                             if (_activeRoomId.value == roomId) {
-                                val hasUnreadFromOther = msgs.any { it.senderId != currentUserId && !it.isRead }
+                                val hasUnreadFromOther = msgs.any {
+                                    it.senderId != currentUserId &&
+                                        if (isGroupChat) !it.readBy.containsKey(currentUserId) else !it.isRead
+                                }
                                 if (hasUnreadFromOther) {
                                     launch(Dispatchers.IO) {
                                         repository.markAsRead(roomId)
                                     }
                                 }
                             } else {
-                                val hasUndeliveredFromOther = msgs.any { it.senderId != currentUserId && !it.isDelivered }
+                                val hasUndeliveredFromOther = msgs.any {
+                                    it.senderId != currentUserId &&
+                                        if (isGroupChat) !it.deliveredTo.containsKey(currentUserId) else !it.isDelivered
+                                }
                                 if (hasUndeliveredFromOther) {
                                     launch(Dispatchers.IO) {
                                         repository.markAsDelivered(roomId)
@@ -734,9 +930,10 @@ class ChatViewModel : ViewModel() {
                         // Asynchronously save to local offline cache so next open is instant and media is cached
                         try {
                             com.chroma.studio.chat.data.ChatLocalCacheManager.saveMessages(
-                                com.chroma.studio.ChromaApp.instance,
-                                roomId,
-                                msgs
+                                context = com.chroma.studio.ChromaApp.instance,
+                                roomId = roomId,
+                                messages = msgs,
+                                userId = currentUserId
                             )
                         } catch (e: Exception) {
                             // ignore
@@ -757,10 +954,11 @@ class ChatViewModel : ViewModel() {
         workId: String? = null,
         replyToMessageId: String? = null,
         storyId: String? = null,
-        storyThumbnailUrl: String? = null
+        storyThumbnailUrl: String? = null,
+        fontStyle: String? = null
     ) {
         val roomId = _activeRoomId.value ?: return
-        sendMessageToRoom(roomId, text, workId, replyToMessageId, storyId, storyThumbnailUrl)
+        sendMessageToRoom(roomId, text, workId, replyToMessageId, storyId, storyThumbnailUrl, fontStyle)
     }
 
     fun sendStoryReply(
@@ -855,13 +1053,95 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    fun sendMusicTrack(
+        roomId: String,
+        selection: com.chroma.studio.data.AttachedMusicSelection
+    ) {
+        val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        if (_activeRoomId.value == roomId) {
+            setTypingStatus(false)
+        }
+        val msgId = java.util.UUID.randomUUID().toString()
+        val timestamp = System.currentTimeMillis()
+        val displayTitle = "${selection.title} · ${selection.artist}"
+        val pendingMsg = ChatMessage(
+            id = msgId,
+            senderId = currentUserId,
+            text = displayTitle,
+            timestamp = timestamp,
+            isPending = true,
+            imageUrl = selection.coverUrl.takeIf { it.isNotBlank() },
+            mediaUrl = selection.audioUrl,
+            messageType = "music",
+            musicTrackId = selection.trackId,
+            musicTitle = selection.title,
+            musicArtist = selection.artist,
+            musicAlbum = selection.album,
+            musicCoverUrl = selection.coverUrl,
+            musicAudioUrl = selection.audioUrl,
+            musicStartSec = selection.startSec,
+            musicDurationSec = selection.durationSec
+        )
+
+        if (_activeRoomId.value == roomId) {
+            _localMessages.value = listOf(pendingMsg) + _localMessages.value
+        }
+
+        try {
+            com.chroma.studio.chat.data.ChatLocalCacheManager.appendOrUpdateMessage(
+                com.chroma.studio.ChromaApp.instance,
+                roomId,
+                pendingMsg
+            )
+        } catch (_: Exception) {}
+
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        val previewText = "🎵 ${selection.title}"
+        if (index != -1) {
+            val chat = currentChats.removeAt(index)
+            currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
+            _recentChats.value = currentChats
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try { pendingRoomCreations[roomId]?.await() } catch (_: Exception) {}
+            val success = repository.sendMessage(
+                roomId = roomId,
+                text = displayTitle,
+                preGeneratedId = msgId,
+                messageType = "music",
+                imageUrl = selection.coverUrl.takeIf { it.isNotBlank() },
+                musicTrackId = selection.trackId,
+                musicTitle = selection.title,
+                musicArtist = selection.artist,
+                musicAlbum = selection.album,
+                musicCoverUrl = selection.coverUrl,
+                musicAudioUrl = selection.audioUrl,
+                musicStartSec = selection.startSec,
+                musicDurationSec = selection.durationSec
+            )
+            if (success) {
+                try {
+                    com.chroma.studio.data.MusicRepository.getInstance().incrementTrackUsage(selection.trackId)
+                } catch (_: Exception) {}
+            }
+            if (_activeRoomId.value == roomId) {
+                _localMessages.value = _localMessages.value.map {
+                    if (it.id == msgId) it.copy(isPending = false, isError = !success) else it
+                }
+            }
+        }
+    }
+
     fun sendMessageToRoom(
         roomId: String,
         text: String,
         workId: String? = null,
         replyToMessageId: String? = null,
         storyId: String? = null,
-        storyThumbnailUrl: String? = null
+        storyThumbnailUrl: String? = null,
+        fontStyle: String? = null
     ) {
         val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
         if (text.isBlank() && workId == null && storyThumbnailUrl == null) return
@@ -886,7 +1166,8 @@ class ChatViewModel : ViewModel() {
             replyToMessageId = replyToMessageId,
             messageType = resolvedMessageType,
             storyId = storyId,
-            storyThumbnailUrl = storyThumbnailUrl
+            storyThumbnailUrl = storyThumbnailUrl,
+            fontStyle = fontStyle
         )
         // Add to local immediately if this room is actively open
         if (_activeRoomId.value == roomId) {
@@ -928,7 +1209,8 @@ class ChatViewModel : ViewModel() {
                 replyToMessageId = replyToMessageId,
                 messageType = resolvedMessageType,
                 storyId = storyId,
-                storyThumbnailUrl = storyThumbnailUrl
+                storyThumbnailUrl = storyThumbnailUrl,
+                fontStyle = fontStyle
             )
             if (_activeRoomId.value == roomId) {
                 _localMessages.value = _localMessages.value.map {
@@ -1009,6 +1291,63 @@ class ChatViewModel : ViewModel() {
                         } else false
                     } else false
                 }
+                "file" -> {
+                    val sourceUriStr = targetMsg.mediaUrl ?: targetMsg.imageUrl
+                    val resolvedName = targetMsg.fileName?.takeIf { it.isNotBlank() } ?: "Document"
+                    val ext = (targetMsg.fileExtension?.takeIf { it.isNotBlank() }
+                        ?: resolvedName.substringAfterLast('.', "bin")).lowercase()
+                    if (sourceUriStr != null && (sourceUriStr.startsWith("http://") || sourceUriStr.startsWith("https://"))) {
+                        repository.sendMessage(
+                            roomId = roomId,
+                            text = targetMsg.text,
+                            imageUrl = sourceUriStr,
+                            preGeneratedId = msgId,
+                            messageType = "file",
+                            replyToMessageId = targetMsg.replyToMessageId,
+                            fileName = resolvedName,
+                            fileSizeBytes = targetMsg.fileSizeBytes,
+                            fileExtension = ext.uppercase()
+                        )
+                    } else if (!sourceUriStr.isNullOrBlank()) {
+                        val uri = android.net.Uri.parse(sourceUriStr)
+                        val bytes = try {
+                            if (uri.scheme == "file" && !uri.path.isNullOrBlank()) {
+                                java.io.File(uri.path!!).takeIf { it.exists() }?.readBytes()
+                            } else if (uri.scheme == "content") {
+                                com.chroma.studio.ChromaApp.instance.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            } else {
+                                java.io.File(sourceUriStr).takeIf { it.exists() }?.readBytes()
+                            }
+                        } catch (_: Exception) { null }
+                        if (bytes != null && bytes.isNotEmpty()) {
+                            updateLocalUploadProgress(msgId, 8)
+                            val uploadedUrl = com.chroma.studio.data.SupabaseMediaStorage.uploadFile(
+                                bytes = bytes,
+                                fileName = resolvedName,
+                                bucket = "chat-media",
+                                onProgress = { pct ->
+                                    if (_activeRoomId.value == roomId) {
+                                        updateLocalUploadProgress(msgId, (8 + (pct * 92) / 100).coerceIn(8, 100))
+                                    }
+                                }
+                            )
+                            if (uploadedUrl != null) {
+                                updateLocalUploadProgress(msgId, 100)
+                                repository.sendMessage(
+                                    roomId = roomId,
+                                    text = targetMsg.text,
+                                    imageUrl = uploadedUrl,
+                                    preGeneratedId = msgId,
+                                    messageType = "file",
+                                    replyToMessageId = targetMsg.replyToMessageId,
+                                    fileName = resolvedName,
+                                    fileSizeBytes = targetMsg.fileSizeBytes ?: bytes.size.toLong(),
+                                    fileExtension = ext.uppercase()
+                                )
+                            } else false
+                        } else false
+                    } else false
+                }
                 else -> {
                     repository.sendMessage(
                         roomId,
@@ -1019,9 +1358,13 @@ class ChatViewModel : ViewModel() {
                     )
                 }
             }
-            if (!success) {
+            if (success) {
                 _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = true) else it
+                    if (it.id == msgId) it.copy(isPending = false, isError = false, uploadProgress = null) else it
+                }
+            } else {
+                _localMessages.value = _localMessages.value.map {
+                    if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
                 }
                 com.chroma.studio.ui.components.ToastManager.showToast("Message failed to send. Tap to retry.")
             }
@@ -1324,13 +1667,15 @@ class ChatViewModel : ViewModel() {
         messageType: String,
         text: String,
         replyToMessageId: String?,
-        scaleMinPct: Int = 0
+        scaleMinPct: Int = 0,
+        fileName: String? = null,
+        fileSizeBytes: Long? = null
     ) {
         val scalePct: (Int) -> Int = { raw ->
             if (scaleMinPct <= 0) raw
             else (scaleMinPct + ((raw.coerceIn(0, 100) * (100 - scaleMinPct)) / 100)).coerceIn(scaleMinPct, 100)
         }
-        val trackProgress: ((Int) -> Unit)? = if (messageType == "image" || messageType == "video") {
+        val trackProgress: ((Int) -> Unit)? = if (messageType == "image" || messageType == "video" || messageType == "file") {
             { pct ->
                 if (_activeRoomId.value == roomId) {
                     updateLocalUploadProgress(msgId, scalePct(pct))
@@ -1345,9 +1690,10 @@ class ChatViewModel : ViewModel() {
             "file" -> {
                 com.chroma.studio.data.SupabaseMediaStorage.uploadFile(
                     bytes = mediaBytes,
-                    fileName = "chat_${msgId}.$extLower",
-                    bucket = "chat-media"
-                ) ?: repository.uploadVideoToSupabase(mediaBytes, extLower)
+                    fileName = fileName?.takeIf { it.isNotBlank() } ?: "chat_${msgId}.$extLower",
+                    bucket = "chat-media",
+                    onProgress = trackProgress
+                )
             }
             else -> {
                 val compressedBytes = com.chroma.studio.utils.ImageUtils.compressChatImageBytes(mediaBytes) ?: mediaBytes
@@ -1365,16 +1711,24 @@ class ChatViewModel : ViewModel() {
                 imageUrl = mediaUrl,
                 preGeneratedId = msgId,
                 messageType = messageType,
-                replyToMessageId = replyToMessageId
+                replyToMessageId = replyToMessageId,
+                fileName = fileName,
+                fileSizeBytes = fileSizeBytes,
+                fileExtension = if (messageType == "file") extLower.uppercase() else null
             )
             if (_activeRoomId.value == roomId) {
                 _localMessages.value = _localMessages.value.map {
                     if (it.id == msgId) it.copy(isPending = false, isError = !success, uploadProgress = null) else it
                 }
             }
-        } else if (_activeRoomId.value == roomId) {
-            _localMessages.value = _localMessages.value.map {
-                if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
+        } else {
+            if (_activeRoomId.value == roomId) {
+                _localMessages.value = _localMessages.value.map {
+                    if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
+                }
+            }
+            if (messageType == "file") {
+                com.chroma.studio.ui.components.ToastManager.showToast("File upload failed. Tap message to retry.")
             }
         }
     }
@@ -1515,11 +1869,14 @@ class ChatViewModel : ViewModel() {
             text = text,
             timestamp = timestamp,
             isPending = true,
-            uploadProgress = if (messageType == "image" || messageType == "video") 0 else null,
+            uploadProgress = if (messageType == "image" || messageType == "video" || messageType == "file") 0 else null,
             messageType = messageType,
             imageUrl = localPreviewUri,
             mediaUrl = localPreviewUri,
-            replyToMessageId = replyToMessageId
+            replyToMessageId = replyToMessageId,
+            fileName = if (messageType == "file") text.takeIf { it.isNotBlank() } else null,
+            fileSizeBytes = if (messageType == "file") imageBytes.size.toLong() else null,
+            fileExtension = if (messageType == "file") extLower.uppercase() else null
         )
         // Add to local immediately
         _localMessages.value = listOf(pendingMsg) + _localMessages.value
@@ -1540,11 +1897,12 @@ class ChatViewModel : ViewModel() {
         val index = currentChats.indexOfFirst { it.id == roomId }
         if (index != -1) {
             val chat = currentChats.removeAt(index)
-            val previewText = if (text.isNotBlank()) text else when (messageType) {
+            val previewText = if (messageType == "file") {
+                com.chroma.studio.chat.data.formatFileRoomPreview(text, null)
+            } else if (text.isNotBlank()) text else when (messageType) {
                 "video" -> "Video"
                 "sticker" -> "Sticker"
                 "audio" -> "Audio"
-                "file" -> "File"
                 else -> "Image"
             }
             currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
@@ -1559,8 +1917,139 @@ class ChatViewModel : ViewModel() {
                 extLower = extLower,
                 messageType = messageType,
                 text = text,
-                replyToMessageId = replyToMessageId
+                replyToMessageId = replyToMessageId,
+                fileName = if (messageType == "file") text.takeIf { it.isNotBlank() } else null,
+                fileSizeBytes = if (messageType == "file") imageBytes.size.toLong() else null
             )
+        }
+    }
+
+    /**
+     * Validates, caches optimistically, and uploads one or more picked files/documents
+     * as structured `"file"` messages with real progress tracking and optional caption.
+     */
+    fun sendFileItems(
+        context: android.content.Context,
+        files: List<com.chroma.studio.chat.data.ChatFileItem>,
+        caption: String = "",
+        replyToMessageId: String? = null
+    ) {
+        val roomId = _activeRoomId.value ?: return
+        val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        if (files.isEmpty()) return
+
+        setTypingStatus(false)
+        val cleanCaption = caption.trim()
+
+        files.forEachIndexed { index, file ->
+            val rawUri = file.uri ?: return@forEachIndexed
+            val parsedUri = android.net.Uri.parse(rawUri)
+            val probedSize = com.chroma.studio.chat.media.ChatMediaLimiter.getMediaSizeBytes(context, parsedUri)
+            if (probedSize > com.chroma.studio.chat.media.ChatMediaLimiter.MAX_FILE_SIZE_BYTES) {
+                val formatted = com.chroma.studio.chat.media.ChatMediaLimiter.formatFileSize(probedSize)
+                com.chroma.studio.ui.components.ToastManager.showToast("'${file.name}' exceeds 100 MB limit ($formatted).")
+                return@forEachIndexed
+            }
+
+            val msgId = java.util.UUID.randomUUID().toString()
+            val timestamp = System.currentTimeMillis() + index
+            val extLower = file.extension.ifBlank {
+                file.name.substringAfterLast('.', "bin")
+            }.lowercase()
+            val perFileCaption = if (index == files.lastIndex && cleanCaption.isNotBlank()) cleanCaption else ""
+
+            val pendingMsg = ChatMessage(
+                id = msgId,
+                senderId = currentUserId,
+                text = perFileCaption,
+                timestamp = timestamp,
+                isPending = true,
+                uploadProgress = 0,
+                messageType = "file",
+                imageUrl = rawUri,
+                mediaUrl = rawUri,
+                replyToMessageId = if (index == 0) replyToMessageId else null,
+                fileName = file.name,
+                fileSizeBytes = probedSize.takeIf { it > 0L },
+                fileExtension = extLower.uppercase()
+            )
+            _localMessages.value = listOf(pendingMsg) + _localMessages.value
+            try {
+                com.chroma.studio.chat.data.ChatLocalCacheManager.appendOrUpdateMessage(
+                    com.chroma.studio.ChromaApp.instance,
+                    roomId,
+                    pendingMsg
+                )
+            } catch (_: Exception) {}
+
+            val currentChats = _recentChats.value.toMutableList()
+            val roomIdx = currentChats.indexOfFirst { it.id == roomId }
+            if (roomIdx != -1) {
+                val chat = currentChats.removeAt(roomIdx)
+                currentChats.add(
+                    0,
+                    chat.copy(
+                        lastMessage = com.chroma.studio.chat.data.formatFileRoomPreview(file.name, null),
+                        lastMessageTime = timestamp
+                    )
+                )
+                _recentChats.value = currentChats
+            }
+
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                updateLocalUploadProgress(msgId, 5)
+                val bytes = try {
+                    if (parsedUri.scheme == "file" && !parsedUri.path.isNullOrBlank()) {
+                        java.io.File(parsedUri.path!!).takeIf { it.exists() }?.readBytes()
+                    } else {
+                        context.contentResolver.openInputStream(parsedUri)?.use { it.readBytes() }
+                    }
+                } catch (_: Exception) {
+                    null
+                }
+
+                if (bytes == null || bytes.isEmpty()) {
+                    if (_activeRoomId.value == roomId) {
+                        _localMessages.value = _localMessages.value.map {
+                            if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
+                        }
+                    }
+                    com.chroma.studio.ui.components.ToastManager.showToast("Could not read '${file.name}'.")
+                    return@launch
+                }
+
+                if (bytes.size.toLong() > com.chroma.studio.chat.media.ChatMediaLimiter.MAX_FILE_SIZE_BYTES) {
+                    val formatted = com.chroma.studio.chat.media.ChatMediaLimiter.formatFileSize(bytes.size.toLong())
+                    com.chroma.studio.ui.components.ToastManager.showToast("'${file.name}' exceeds 100 MB limit ($formatted).")
+                    if (_activeRoomId.value == roomId) {
+                        _localMessages.value = _localMessages.value.map {
+                            if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
+                        }
+                    }
+                    return@launch
+                }
+
+                val resolvedByteSize = bytes.size.toLong()
+                if (_activeRoomId.value == roomId && pendingMsg.fileSizeBytes == null) {
+                    _localMessages.value = _localMessages.value.map {
+                        if (it.id == msgId) it.copy(fileSizeBytes = resolvedByteSize) else it
+                    }
+                }
+
+                updateLocalUploadProgress(msgId, 10)
+                uploadAndCommitMedia(
+                    roomId = roomId,
+                    msgId = msgId,
+                    mediaBytes = bytes,
+                    extLower = extLower,
+                    messageType = "file",
+                    text = perFileCaption,
+                    replyToMessageId = if (index == 0) replyToMessageId else null,
+                    scaleMinPct = 10,
+                    fileName = file.name,
+                    fileSizeBytes = resolvedByteSize
+                )
+            }
         }
     }
 
@@ -1648,6 +2137,53 @@ class ChatViewModel : ViewModel() {
             _recentChats.value = currentChats
         }
         viewModelScope.launch { repository.updateOnlyAdminsCanPost(roomId, onlyAdminsCanPost) }
+    }
+
+    fun updateDisappearingHours(roomId: String, hours: Int) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            currentChats[index] = currentChats[index].copy(disappearingHours = hours)
+            _recentChats.value = currentChats
+        }
+        viewModelScope.launch { repository.updateDisappearingHours(roomId, hours) }
+    }
+
+    fun updateInviteCode(roomId: String, inviteCode: String?) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            currentChats[index] = currentChats[index].copy(inviteCode = inviteCode)
+            _recentChats.value = currentChats
+        }
+        viewModelScope.launch { repository.updateInviteCode(roomId, inviteCode) }
+    }
+
+    fun updateEditInfoAdminsOnly(roomId: String, adminsOnly: Boolean) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            currentChats[index] = currentChats[index].copy(editInfoAdminsOnly = adminsOnly)
+            _recentChats.value = currentChats
+        }
+        viewModelScope.launch { repository.updateEditInfoAdminsOnly(roomId, adminsOnly) }
+    }
+
+    fun joinGroupByInviteCode(codeOrRoomId: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            val room = repository.joinGroupByInviteCode(codeOrRoomId)
+            if (room != null) {
+                val list = _recentChats.value.toMutableList()
+                val idx = list.indexOfFirst { it.id == room.id }
+                if (idx != -1) list[idx] = room else list.add(0, room)
+                _recentChats.value = list
+                fetchProfilesForUsers(room.participants)
+                openChat(room.id)
+                onResult(room.id)
+            } else {
+                onResult(null)
+            }
+        }
     }
 
     fun demoteAdmin(roomId: String, userId: String) {
@@ -1865,7 +2401,7 @@ class ChatViewModel : ViewModel() {
             currentChats[index] = room.copy(
                 pinnedMessageId = messageId,
                 pinnedMessageText = messageText,
-                pinnedBy = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
+                pinnedMessageBy = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
                 pinnedAt = System.currentTimeMillis()
             )
             _recentChats.value = currentChats
@@ -2003,7 +2539,7 @@ class ChatViewModel : ViewModel() {
             currentChats[index] = room.copy(
                 pinnedMessageId = null,
                 pinnedMessageText = null,
-                pinnedBy = null,
+                pinnedMessageBy = null,
                 pinnedAt = 0L
             )
             _recentChats.value = currentChats

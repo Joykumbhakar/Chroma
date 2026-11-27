@@ -80,7 +80,9 @@ class FlashRepository {
         remixedFromAuthorUsername: String? = null,
         hideLikesCount: Boolean = false,
         turnOffComments: Boolean = false,
-        turnOffRemix: Boolean = false
+        turnOffRemix: Boolean = false,
+        collaborators: List<com.chroma.studio.model.CollabParticipant> = emptyList(),
+        musicTrack: com.chroma.studio.data.AttachedMusicSelection? = null
     ): String {
         val user = auth.currentUser ?: throw Exception("User not authenticated")
         val userDoc = usersCollection.document(user.uid).get().await()
@@ -89,6 +91,9 @@ class FlashRepository {
         val avatarUrl = userDoc.getString("avatarUrl") ?: ""
         val verified = userDoc.getBoolean("verified") ?: false
         val verifiedTone = userDoc.getString("verifiedTone")
+
+        val normalizedCollabs = com.chroma.studio.model.normalizeInvitedCollaborators(user.uid, collaborators)
+        val pendingCollabIds = normalizedCollabs.map { it.uid }
 
         val docRef = collection.document()
         val flash = FlashVideo(
@@ -104,6 +109,9 @@ class FlashRepository {
             caption = caption,
             hashtags = hashtags,
             mentions = mentions,
+            collaborators = normalizedCollabs,
+            pendingCollaboratorIds = pendingCollabIds,
+            collaboratorIds = emptyList(),
             duration = duration.coerceAtMost(60_000L),
             remixedFromPostId = remixedFromPostId,
             remixedFromAuthorUsername = remixedFromAuthorUsername,
@@ -111,7 +119,16 @@ class FlashRepository {
             isArchived = false,
             hideLikesCount = hideLikesCount,
             turnOffComments = turnOffComments,
-            turnOffRemix = turnOffRemix
+            turnOffRemix = turnOffRemix,
+            musicTrackId = musicTrack?.trackId,
+            musicTitle = musicTrack?.title,
+            musicArtist = musicTrack?.artist,
+            musicAlbum = musicTrack?.album,
+            musicCoverUrl = musicTrack?.coverUrl,
+            musicAudioUrl = musicTrack?.audioUrl,
+            musicStartSec = musicTrack?.startSec ?: 0,
+            musicDurationSec = musicTrack?.durationSec ?: 0,
+            musicShowLyrics = musicTrack?.showLyricsSticker ?: false
         )
         docRef.set(flash).await()
 
@@ -133,16 +150,58 @@ class FlashRepository {
                 postType = "video",
                 tags = hashtags,
                 mentions = mentions,
+                collaborators = normalizedCollabs,
+                pendingCollaboratorIds = pendingCollabIds,
+                collaboratorIds = emptyList(),
                 remixedFromPostId = remixedFromPostId,
                 remixedFromAuthorUsername = remixedFromAuthorUsername,
                 timestamp = flash.timestamp,
                 hideLikesCount = hideLikesCount,
                 turnOffComments = turnOffComments,
-                turnOffRemix = turnOffRemix
+                turnOffRemix = turnOffRemix,
+                musicTrackId = musicTrack?.trackId,
+                musicTitle = musicTrack?.title,
+                musicArtist = musicTrack?.artist,
+                musicAlbum = musicTrack?.album,
+                musicCoverUrl = musicTrack?.coverUrl,
+                musicAudioUrl = musicTrack?.audioUrl,
+                musicStartSec = musicTrack?.startSec ?: 0,
+                musicDurationSec = musicTrack?.durationSec ?: 0,
+                musicShowLyrics = musicTrack?.showLyricsSticker ?: false
             )
             db.collection("community_works").document(docRef.id).set(communityPost).await()
         } catch (ce: Exception) {
             Log.e("FlashRepository", "Error syncing flash to community_works", ce)
+        }
+
+        if (musicTrack != null) {
+            try {
+                com.chroma.studio.data.MusicRepository.getInstance().incrementTrackUsage(musicTrack.trackId)
+            } catch (me: Exception) {
+                if (me is kotlinx.coroutines.CancellationException) throw me
+            }
+        }
+
+        try {
+            if (pendingCollabIds.isNotEmpty()) {
+                NotificationDispatcher.dispatchCollabInviteNotifications(
+                    invitedUids = pendingCollabIds,
+                    postId = docRef.id,
+                    isFlash = true,
+                    previewUrl = thumbnailUrl.ifBlank { null },
+                    titleSnippet = caption
+                )
+            }
+            NotificationDispatcher.dispatchMentionNotifications(
+                texts = listOf(caption),
+                explicitMentions = mentions,
+                surface = MentionSurface.POST,
+                targetId = docRef.id,
+                targetPreviewUrl = thumbnailUrl.ifBlank { null },
+                detailSnippet = caption
+            )
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
         }
 
         return docRef.id
@@ -237,11 +296,14 @@ class FlashRepository {
                     val videoDoc = collection.document(videoId).get().await()
                     val creatorId = videoDoc.getString("creatorId")
                     val thumb = videoDoc.getString("thumbnailUrl")
-                    if (!creatorId.isNullOrBlank() && creatorId != userId) {
+                    @Suppress("UNCHECKED_CAST")
+                    val collabIds = videoDoc.get("collaboratorIds") as? List<String> ?: emptyList()
+                    val recipients = (listOfNotNull(creatorId) + collabIds).filter { it.isNotBlank() && it != userId }.distinct()
+                    for (recipientUid in recipients) {
                         NotificationDispatcher.sendNotification(
-                            targetUserId = creatorId,
+                            targetUserId = recipientUid,
                             type = com.chroma.studio.model.NotificationActionType.LIKE,
-                            actionText = "liked your video",
+                            actionText = if (recipientUid == creatorId) "liked your video" else "liked your collab video",
                             targetPreviewUrl = thumb,
                             targetId = videoId
                         )
@@ -516,17 +578,20 @@ class FlashRepository {
             Log.d("FlashRepository", "community_works document count update skipped: ${e.message}")
         }
 
-        // Dispatch real notification to video creator
+        // Dispatch real notification to video creator & accepted collaborators
         try {
             val videoDoc = collection.document(videoId).get().await().takeIf { it.exists() }
                 ?: db.collection("community_works").document(videoId).get().await()
             val creatorId = videoDoc.getString("creatorId")
             val thumb = videoDoc.getString("thumbnailUrl") ?: videoDoc.getString("imageUrl")
-            if (!creatorId.isNullOrBlank() && creatorId != user.uid) {
+            @Suppress("UNCHECKED_CAST")
+            val collabIds = videoDoc.get("collaboratorIds") as? List<String> ?: emptyList()
+            val recipients = (listOfNotNull(creatorId) + collabIds).filter { it.isNotBlank() && it != user.uid }.distinct()
+            for (recipientUid in recipients) {
                 NotificationDispatcher.sendNotification(
-                    targetUserId = creatorId,
+                    targetUserId = recipientUid,
                     type = com.chroma.studio.model.NotificationActionType.COMMENT,
-                    actionText = "commented on your post",
+                    actionText = if (recipientUid == creatorId) "commented on your post" else "commented on your collab post",
                     detailText = text,
                     targetPreviewUrl = thumb,
                     targetId = videoId
@@ -559,30 +624,19 @@ class FlashRepository {
 
         // Dispatch mention notifications for any @username in comment
         try {
-            val mentionRegex = Regex("""@([a-zA-Z0-9_.]+)""")
-            val matches = mentionRegex.findAll(text).map { it.groupValues[1].lowercase() }.toSet()
-            if (matches.isNotEmpty()) {
-                val videoDoc = collection.document(videoId).get().await().takeIf { it.exists() }
-                    ?: db.collection("community_works").document(videoId).get().await()
-                val thumb = videoDoc.getString("thumbnailUrl") ?: videoDoc.getString("imageUrl")
-                for (targetUsername in matches) {
-                    try {
-                        val usernameDoc = db.collection("usernames").document(targetUsername).get().await()
-                        val mentionedUid = usernameDoc.getString("uid")
-                        if (!mentionedUid.isNullOrBlank() && mentionedUid != user.uid) {
-                            NotificationDispatcher.sendNotification(
-                                targetUserId = mentionedUid,
-                                type = com.chroma.studio.model.NotificationActionType.MENTION,
-                                actionText = "mentioned you in a comment",
-                                detailText = text,
-                                targetPreviewUrl = thumb,
-                                targetId = videoId
-                            )
-                        }
-                    } catch (_: Exception) {}
-                }
-            }
-        } catch (_: Exception) {}
+            val videoDoc = collection.document(videoId).get().await().takeIf { it.exists() }
+                ?: db.collection("community_works").document(videoId).get().await()
+            val thumb = videoDoc.getString("thumbnailUrl") ?: videoDoc.getString("imageUrl")
+            NotificationDispatcher.dispatchMentionNotifications(
+                texts = listOf(text),
+                surface = MentionSurface.COMMENT,
+                targetId = videoId,
+                targetPreviewUrl = thumb,
+                detailSnippet = text
+            )
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+        }
 
         return comment
     }
@@ -749,10 +803,33 @@ class FlashRepository {
 
     suspend fun deleteComment(commentId: String, videoId: String, replyToCommentId: String? = null): Boolean {
         return try {
+            var deletedCount = 1L
             try {
                 db.collection("flash_comments").document(commentId).delete().await()
             } catch (e: Exception) {
                 Log.w("FlashRepository", "Could not delete root comment $commentId", e)
+            }
+            if (replyToCommentId.isNullOrBlank()) {
+                try {
+                    val childReplies = db.collection("flash_comments")
+                        .whereEqualTo("replyToCommentId", commentId)
+                        .get()
+                        .await()
+                    deletedCount += childReplies.documents.size
+                    for (childDoc in childReplies.documents) {
+                        try {
+                            childDoc.reference.delete().await()
+                            if (videoId.isNotBlank()) {
+                                try {
+                                    collection.document(videoId).collection("comments").document(childDoc.id).delete().await()
+                                } catch (_: Exception) {}
+                                try {
+                                    db.collection("community_works").document(videoId).collection("comments").document(childDoc.id).delete().await()
+                                } catch (_: Exception) {}
+                            }
+                        } catch (_: Exception) {}
+                    }
+                } catch (_: Exception) {}
             }
             if (videoId.isNotBlank()) {
                 try {
@@ -764,13 +841,13 @@ class FlashRepository {
                 try {
                     val flashDoc = collection.document(videoId).get().await()
                     if (flashDoc.exists()) {
-                        collection.document(videoId).update("commentCount", FieldValue.increment(-1)).await()
+                        collection.document(videoId).update("commentCount", FieldValue.increment(-deletedCount)).await()
                     }
                 } catch (_: Exception) {}
                 try {
                     val commDoc = db.collection("community_works").document(videoId).get().await()
                     if (commDoc.exists()) {
-                        db.collection("community_works").document(videoId).update("commentsCount", FieldValue.increment(-1)).await()
+                        db.collection("community_works").document(videoId).update("commentsCount", FieldValue.increment(-deletedCount)).await()
                     }
                 } catch (_: Exception) {}
             }
@@ -788,6 +865,94 @@ class FlashRepository {
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("FlashRepository", "deleteComment error", e)
+            false
+        }
+    }
+
+    suspend fun editComment(commentId: String, videoId: String = "", newText: String): Boolean {
+        val cleaned = newText.trim()
+        if (commentId.isBlank() || cleaned.isEmpty()) return false
+        return try {
+            val existingDoc = try { db.collection("flash_comments").document(commentId).get().await() } catch (_: Exception) { null }
+            val oldText = existingDoc?.getString("text")
+            val resolvedVideoId = videoId.ifBlank { existingDoc?.getString("videoId").orEmpty() }
+
+            val updates = mapOf(
+                "text" to cleaned,
+                "edited" to true
+            )
+            db.collection("flash_comments").document(commentId).update(updates).await()
+            if (resolvedVideoId.isNotBlank()) {
+                try {
+                    collection.document(resolvedVideoId).collection("comments").document(commentId).update(updates).await()
+                } catch (_: Exception) {}
+                try {
+                    db.collection("community_works").document(resolvedVideoId).collection("comments").document(commentId).update(updates).await()
+                } catch (_: Exception) {}
+            }
+            try {
+                NotificationDispatcher.dispatchMentionNotifications(
+                    texts = listOf(cleaned),
+                    previousTexts = listOf(oldText),
+                    surface = MentionSurface.COMMENT,
+                    targetId = resolvedVideoId.ifBlank { commentId },
+                    detailSnippet = cleaned
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "editComment error", e)
+            false
+        }
+    }
+
+    suspend fun setCommentReaction(
+        commentId: String,
+        videoId: String = "",
+        userId: String,
+        emoji: String,
+        add: Boolean
+    ): Boolean {
+        if (commentId.isBlank() || userId.isBlank() || emoji.isBlank()) return false
+        return try {
+            val fieldPath = com.google.firebase.firestore.FieldPath.of("reactions", emoji)
+            val op = if (add) FieldValue.arrayUnion(userId) else FieldValue.arrayRemove(userId)
+            db.collection("flash_comments").document(commentId).update(fieldPath, op).await()
+            if (videoId.isNotBlank()) {
+                try {
+                    collection.document(videoId).collection("comments").document(commentId).update(fieldPath, op).await()
+                } catch (_: Exception) {}
+                try {
+                    db.collection("community_works").document(videoId).collection("comments").document(commentId).update(fieldPath, op).await()
+                } catch (_: Exception) {}
+            }
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "setCommentReaction error", e)
+            false
+        }
+    }
+
+    suspend fun reportComment(commentId: String, videoId: String, reason: String): Boolean {
+        val reporterId = auth.currentUser?.uid ?: return false
+        if (commentId.isBlank()) return false
+        return try {
+            val reportPayload = hashMapOf(
+                "commentId" to commentId,
+                "videoId" to videoId,
+                "reporterId" to reporterId,
+                "reason" to reason,
+                "timestamp" to System.currentTimeMillis()
+            )
+            db.collection("comment_reports").add(reportPayload).await()
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "reportComment error", e)
             false
         }
     }
@@ -885,12 +1050,23 @@ class FlashRepository {
 
     suspend fun getFlashesByUser(userId: String): List<FlashVideo> {
         return try {
-            val snapshot = collection
+            val ownSnap = collection
                 .whereEqualTo("creatorId", userId)
                 .get().await()
-            snapshot.toObjects(FlashVideo::class.java)
-                .filter { !it.isArchived }
-                .sortedByDescending { it.timestamp }
+            val ownList = ownSnap.toObjects(FlashVideo::class.java)
+                .filter { !it.isArchived && !it.isTakedown }
+
+            val collabList = try {
+                collection
+                    .whereArrayContains("collaboratorIds", userId)
+                    .get().await()
+                    .toObjects(FlashVideo::class.java)
+                    .filter { !it.isArchived && !it.isTakedown }
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            com.chroma.studio.model.mergeCreatorAndCollabFlashes(ownList, collabList)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             emptyList()

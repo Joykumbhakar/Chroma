@@ -187,7 +187,7 @@ fun PinSetupDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Top Header Row with Close Button
+                // Top Header Row with borderless Close Button
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -196,17 +196,13 @@ fun PinSetupDialog(
                 ) {
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.12f))
-                            .border(0.75.dp, Color.White.copy(alpha = 0.20f), CircleShape)
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
                             imageVector = Lucide.X,
                             contentDescription = "Close",
                             tint = Color.White,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }

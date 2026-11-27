@@ -211,7 +211,15 @@ fun FlashVideoChatCard(
                         )
                     )
 
-                    VerifiedBadge(size = 11.dp)
+                    val flashCreatorUid = message.senderId
+                    val registryTone = com.chroma.studio.ui.components.VerifiedBadgeRegistry.resolveTone(flashCreatorUid, null)
+                    if (registryTone != null) {
+                        VerifiedBadge(
+                            size = 11.dp,
+                            tone = registryTone,
+                            userId = flashCreatorUid
+                        )
+                    }
                 }
             }
         }

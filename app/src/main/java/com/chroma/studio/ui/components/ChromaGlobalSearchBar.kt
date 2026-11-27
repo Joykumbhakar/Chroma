@@ -73,27 +73,12 @@ fun ChromaGlobalExpandingSearchBar(
     )
 
     val bgColor by animateColorAsState(
-        targetValue = if (isExpanded) {
-            if (isDark) Color(0xFF16161A) else Color(0xFFEFF2F6)
-        } else {
-            Color.Transparent
-        },
+        targetValue = if (isExpanded) colors.inputBg else Color.Transparent,
         animationSpec = tween(240),
         label = "globalSearchBarBg"
     )
 
-    // No border when not active / not focused!
-    val borderColor by animateColorAsState(
-        targetValue = if (isExpanded && (isFocused || query.isNotEmpty())) {
-            if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
-        } else {
-            Color.Transparent
-        },
-        animationSpec = tween(200),
-        label = "globalSearchBarBorder"
-    )
-
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(10.dp)
 
     LaunchedEffect(isExpanded) {
         if (isExpanded) {
@@ -108,14 +93,9 @@ fun ChromaGlobalExpandingSearchBar(
     Box(
         modifier = modifier
             .width(animatedWidth)
-            .height(40.dp)
+            .height(38.dp)
             .clip(shape)
-            .background(bgColor)
-            .then(
-                if (isExpanded && (isFocused || query.isNotEmpty())) {
-                    Modifier.border(1.dp, borderColor, shape)
-                } else Modifier
-            ),
+            .background(bgColor),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
@@ -195,8 +175,7 @@ fun ChromaGlobalExpandingSearchBar(
                         Box(
                             modifier = Modifier
                                 .size(22.dp)
-                                .clip(CircleShape)
-                                .background(if (isDark) Color.White.copy(0.12f) else Color.Black.copy(0.08f))
+                                .clip(RoundedCornerShape(6.dp))
                                 .clickable { onQueryChange("") },
                             contentAlignment = Alignment.Center
                         ) {
@@ -204,7 +183,7 @@ fun ChromaGlobalExpandingSearchBar(
                                 imageVector = Lucide.X,
                                 contentDescription = "Clear",
                                 tint = colors.textMuted,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(14.dp)
                             )
                         }
                     }
@@ -234,22 +213,16 @@ fun ChromaGlobalInlineSearchBar(
     var isFocused by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    val shape = RoundedCornerShape(22.dp)
-    val bgColor = if (isDark) Color(0xFF16161A) else Color(0xFFEFF2F6)
-    val activeBorderColor = if (isDark) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.12f)
+    val shape = RoundedCornerShape(10.dp)
+    val bgColor = colors.inputBg
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(44.dp)
+            .height(42.dp)
             .clip(shape)
             .background(bgColor)
-            .then(
-                if (isFocused || query.isNotEmpty()) {
-                    Modifier.border(1.dp, activeBorderColor, shape)
-                } else Modifier
-            )
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(
@@ -299,8 +272,7 @@ fun ChromaGlobalInlineSearchBar(
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .clip(CircleShape)
-                        .background(if (isDark) Color.White.copy(0.12f) else Color.Black.copy(0.08f))
+                        .clip(RoundedCornerShape(6.dp))
                         .clickable { onClear() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -308,7 +280,7 @@ fun ChromaGlobalInlineSearchBar(
                         imageVector = Lucide.X,
                         contentDescription = "Clear",
                         tint = colors.textMuted,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                 }
             }
