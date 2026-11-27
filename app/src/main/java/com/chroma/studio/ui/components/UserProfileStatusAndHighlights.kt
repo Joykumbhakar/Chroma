@@ -103,10 +103,6 @@ fun UserProfileStatusSection(
 
     val statusCardBg = if (isDark) Color(0xFF181B22) else Color(0xFFF3F6FA)
 
-    // Real-time presence matching the chat / message screen
-    val presence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(userId)
-    val isUserOnline = presence.online && (profile?.showOnlineStatus != false)
-
     if (statusText.isNotBlank() || isCurrentUser) {
         val statusLower = statusText.lowercase()
         val isMusicActivity = statusEmoji in listOf("🎧", "🎵", "🎶", "🎼") ||
@@ -144,21 +140,16 @@ fun UserProfileStatusSection(
                             tint = if (isDark) Color(0xFF0A84FF) else Color(0xFF007AFF),
                             modifier = Modifier.size(13.dp)
                         )
-                    } else {
-                        OnlineStatusDot(
-                            isOnline = isUserOnline,
-                            size = 6.5.dp,
-                            showPulse = false
+                    } else if (statusEmoji.isBlank()) {
+                        Icon(
+                            imageVector = Lucide.Sparkles,
+                            contentDescription = null,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(12.5.dp)
                         )
                     }
                     Text(
-                        text = if (statusEmoji.isNotBlank() && !isMusicActivity) {
-                            "$statusEmoji $statusText"
-                        } else if (statusEmoji.isNotBlank()) {
-                            "$statusEmoji $statusText"
-                        } else {
-                            statusText
-                        },
+                        text = if (statusEmoji.isNotBlank()) "$statusEmoji $statusText" else statusText,
                         fontSize = 12.5.sp,
                         fontFamily = InterFontFamily,
                         fontWeight = FontWeight.Medium,
@@ -191,10 +182,11 @@ fun UserProfileStatusSection(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    OnlineStatusDot(
-                        isOnline = isUserOnline,
-                        size = 6.5.dp,
-                        showPulse = false
+                    Icon(
+                        imageVector = Lucide.Sparkles,
+                        contentDescription = null,
+                        tint = colors.textMuted.copy(alpha = 0.68f),
+                        modifier = Modifier.size(12.5.dp)
                     )
                     Text(
                         text = "Add status or listening activity",

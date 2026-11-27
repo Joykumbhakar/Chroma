@@ -46,8 +46,13 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Female
+import androidx.compose.material.icons.rounded.Male
+import androidx.compose.material.icons.rounded.Transgender
 import com.composables.icons.lucide.ShieldAlert
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -492,7 +497,7 @@ fun UserProfileHeroSection(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun UserProfileBioDetailsSection(
     profile: UserProfile?,
@@ -563,82 +568,36 @@ fun UserProfileBioDetailsSection(
                     }
                 }
 
-                // Secondary Row: @username + copy + subtle online status dot
-                val bioPresence = com.chroma.studio.data.OnlineStatusManager.rememberUserPresence(userId)
-                val isBioOnline = bioPresence.online && (profile?.showOnlineStatus != false)
-                val liveStatusText = if (isBioOnline) {
-                    "Online"
-                } else if (bioPresence.lastOnline != null && bioPresence.lastOnline > 0L) {
-                    com.chroma.studio.data.OnlineStatusManager.formatWhatsAppLastSeen(bioPresence.lastOnline)
-                } else {
-                    "Offline"
-                }
-
+                // Secondary Row: @username + copy
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("username", "@${profile?.username ?: ""}")
+                            clipboard.setPrimaryClip(clip)
+                            ToastManager.showToast("Username copied to clipboard")
+                        }
+                        .padding(vertical = 1.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("username", "@${profile?.username ?: ""}")
-                                clipboard.setPrimaryClip(clip)
-                                ToastManager.showToast("Username copied to clipboard")
-                            }
-                            .padding(vertical = 1.dp)
-                    ) {
-                        Text(
-                            text = "@${profile?.username ?: "unknown"}",
-                            color = mutedText,
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Normal,
-                            lineHeight = 16.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = ProfileTightTextStyle
-                        )
-                        Icon(
-                            imageVector = Lucide.Copy,
-                            contentDescription = "Copy username",
-                            tint = mutedText.copy(alpha = 0.72f),
-                            modifier = Modifier.size(12.dp)
-                        )
-                    }
-
                     Text(
-                        text = "•",
-                        color = mutedText.copy(alpha = 0.5f),
-                        fontSize = 12.sp,
+                        text = "@${profile?.username ?: "unknown"}",
+                        color = mutedText,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Normal,
+                        lineHeight = 16.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         style = ProfileTightTextStyle
                     )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.5.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isBioOnline) AppleProfileTokens.OnlineGreen
-                                    else mutedText.copy(alpha = 0.45f)
-                                )
-                        )
-                        Text(
-                            text = liveStatusText,
-                            color = if (isBioOnline) AppleProfileTokens.OnlineGreen else mutedText,
-                            fontSize = 12.5.sp,
-                            fontWeight = if (isBioOnline) FontWeight.Medium else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = ProfileTightTextStyle
-                        )
-                    }
+                    Icon(
+                        imageVector = Lucide.Copy,
+                        contentDescription = "Copy username",
+                        tint = mutedText.copy(alpha = 0.72f),
+                        modifier = Modifier.size(12.dp)
+                    )
                 }
             }
 
@@ -672,9 +631,20 @@ fun UserProfileBioDetailsSection(
             }
         }
 
-        // 2. Compact Typographic Profile Information (Role, Location, Birth year, Gender — zero bulky box clutter)
+        // 2. Profile Information: ONLY Role uses subtle pill background; Location, Year (20XX), & Gender Icon stay completely borderless/backgroundless
         val roleText = profile?.role?.trim()?.takeIf { it.isNotBlank() }
-        val metadataItems = remember(locationVisible, office, home, country, dobVisible, genderVisible, profile) {
+        val genderValue = profile?.gender?.trim()?.takeIf { it.isNotBlank() }
+        val genderIcon: ImageVector? = remember(genderVisible, genderValue) {
+            if (!genderVisible || genderValue.isNullOrBlank()) null
+            else when (genderValue.lowercase()) {
+                "male", "man", "boy", "m" -> Icons.Rounded.Male
+                "female", "woman", "girl", "f" -> Icons.Rounded.Female
+                "prefer not to say", "none", "hidden" -> null
+                else -> Icons.Rounded.Transgender
+            }
+        }
+
+        val metadataItems = remember(locationVisible, office, home, country, dobVisible, profile) {
             val list = mutableListOf<Pair<ImageVector, String>>()
             if (locationVisible) {
                 val locText = when {
@@ -691,15 +661,12 @@ fun UserProfileBioDetailsSection(
             val dob = profile?.dateOfBirthAsLong
             if (dobVisible && dob != null && dob > 0L) {
                 val yr = SimpleDateFormat("yyyy", Locale.getDefault()).format(Date(dob))
-                list.add(Lucide.Calendar to "Born $yr")
-            }
-            if (genderVisible && !profile?.gender.isNullOrBlank()) {
-                list.add(Lucide.User to profile.gender.trim())
+                list.add(Lucide.Calendar to yr)
             }
             list
         }
 
-        if (roleText != null || metadataItems.isNotEmpty()) {
+        if (roleText != null || metadataItems.isNotEmpty() || genderIcon != null) {
             Spacer(Modifier.height(10.dp))
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -707,23 +674,37 @@ fun UserProfileBioDetailsSection(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 if (roleText != null) {
+                    val roleIcon = when (roleText.lowercase()) {
+                        "admin", "superadmin", "founder", "ceo", "owner" -> Lucide.Crown
+                        "developer" -> Lucide.Terminal
+                        "designer", "web designer" -> Lucide.Palette
+                        "content creator" -> Lucide.Video
+                        "engineer" -> Lucide.Wrench
+                        else -> Lucide.Briefcase
+                    }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        modifier = Modifier
+                            .align(Alignment.CenterVertically)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(appleBlue.copy(alpha = 0.11f))
+                            .border(0.5.dp, appleBlue.copy(alpha = 0.22f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.5.dp)
                     ) {
                         Icon(
-                            imageVector = Lucide.Briefcase,
+                            imageVector = roleIcon,
                             contentDescription = null,
                             tint = appleBlue,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(12.5.dp)
                         )
                         Text(
                             text = roleText,
                             color = appleBlue,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
                             letterSpacing = (-0.01).em,
-                            lineHeight = 15.sp,
+                            lineHeight = 14.sp,
                             style = ProfileTightTextStyle
                         )
                     }
@@ -732,7 +713,8 @@ fun UserProfileBioDetailsSection(
                 metadataItems.forEach { (icon, text) ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.5.dp),
+                        modifier = Modifier.align(Alignment.CenterVertically)
                     ) {
                         Icon(
                             imageVector = icon,
@@ -751,140 +733,204 @@ fun UserProfileBioDetailsSection(
                         )
                     }
                 }
+
+                if (genderIcon != null) {
+                    Icon(
+                        imageVector = genderIcon,
+                        contentDescription = genderValue,
+                        tint = mutedText,
+                        modifier = Modifier
+                            .align(Alignment.CenterVertically)
+                            .size(15.dp)
+                    )
+                }
             }
         }
 
-        // 3. Cohesive Compact Socials & Website Strip (horizontally scrollable when needed)
+        // 3. Icon-Only Socials & Website Favicon Row (zero background containers)
         val socialLinksMap = profile?.socialLinks ?: emptyMap()
         val ghUrl = socialLinksMap["github"]?.trim()?.takeIf { it.isNotBlank() }
         val igUrl = socialLinksMap["instagram"]?.trim()?.takeIf { it.isNotBlank() }
         val webUrl = socialLinksMap["website"]?.trim()?.takeIf { it.isNotBlank() }
+        val websiteCta = socialLinksMap["website_cta"]?.trim()?.takeIf { it.isNotBlank() }
+            ?: socialLinksMap["website_label"]?.trim()?.takeIf { it.isNotBlank() }
+            ?: "Open"
 
-        if (ghUrl != null || igUrl != null || webUrl != null) {
+        val normalizedWebUrl = remember(webUrl) {
+            webUrl?.let { raw ->
+                if (raw.startsWith("http://", ignoreCase = true) || raw.startsWith("https://", ignoreCase = true)) raw
+                else "https://$raw"
+            }
+        }
+        val faviconUrl = remember(normalizedWebUrl) {
+            normalizedWebUrl?.let { url ->
+                runCatching {
+                    val host = Uri.parse(url).host?.trim()?.takeIf { it.isNotBlank() }
+                    host?.let { "https://www.google.com/s2/favicons?domain=$it&sz=64" }
+                }.getOrNull()
+            }
+        }
+        var showWebsiteSheet by remember { mutableStateOf(false) }
+
+        if (ghUrl != null || igUrl != null || normalizedWebUrl != null) {
             Spacer(Modifier.height(10.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
             ) {
-                if (webUrl != null) {
-                    val displayDomain = webUrl
-                        .removePrefix("https://")
-                        .removePrefix("http://")
-                        .removePrefix("www.")
-                        .removeSuffix("/")
+                if (normalizedWebUrl != null) {
+                    var faviconLoaded by remember(faviconUrl) { mutableStateOf(false) }
+                    var faviconError by remember(faviconUrl) { mutableStateOf(false) }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    Box(
                         modifier = Modifier
-                            .height(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(appleBlue.copy(alpha = 0.09f))
+                            .size(28.dp)
+                            .clip(CircleShape)
                             .clickable {
-                                try {
-                                    val target = if (webUrl.startsWith("http://") || webUrl.startsWith("https://")) webUrl else "https://$webUrl"
-                                    com.chroma.studio.ui.components.InAppBrowserManager.openUrl(target)
-                                } catch (_: Exception) {
-                                    ToastManager.showToast("Could not open link")
-                                }
-                            }
-                            .padding(horizontal = 9.dp)
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                showWebsiteSheet = true
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Lucide.Link2,
-                            contentDescription = "Website",
-                            tint = appleBlue,
-                            modifier = Modifier.size(12.5.dp)
-                        )
-                        Text(
-                            text = displayDomain,
-                            color = appleBlue,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                            style = ProfileTightTextStyle
-                        )
-                        Icon(
-                            imageVector = Lucide.ArrowUpRight,
-                            contentDescription = null,
-                            tint = appleBlue.copy(alpha = 0.65f),
-                            modifier = Modifier.size(11.dp)
-                        )
+                        if (!faviconLoaded || faviconError || faviconUrl == null) {
+                            Icon(
+                                imageVector = Lucide.Globe,
+                                contentDescription = "Website",
+                                tint = colors.textMain,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                        if (faviconUrl != null && !faviconError) {
+                            AsyncImage(
+                                model = faviconUrl,
+                                contentDescription = "Website",
+                                contentScale = ContentScale.Crop,
+                                onSuccess = { faviconLoaded = true },
+                                onError = { faviconError = true },
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .graphicsLayer { alpha = if (faviconLoaded) 1f else 0f }
+                            )
+                        }
                     }
                 }
 
                 if (ghUrl != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    Box(
                         modifier = Modifier
-                            .height(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(AppleProfileTokens.secondaryFill(isDark))
-                            .border(0.5.dp, hairline, RoundedCornerShape(8.dp))
+                            .size(28.dp)
+                            .clip(CircleShape)
                             .clickable {
                                 try {
-                                    val target = if (ghUrl.startsWith("http://") || ghUrl.startsWith("https://")) ghUrl else "https://$ghUrl"
+                                    val target = when {
+                                        ghUrl.startsWith("http://", true) || ghUrl.startsWith("https://", true) -> ghUrl
+                                        ghUrl.contains(".") -> "https://$ghUrl"
+                                        else -> "https://github.com/${ghUrl.removePrefix("@")}"
+                                    }
                                     com.chroma.studio.ui.components.InAppBrowserManager.openUrl(target)
                                 } catch (_: Exception) {
                                     ToastManager.showToast("Could not open GitHub")
                                 }
-                            }
-                            .padding(horizontal = 9.dp)
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_social_github),
                             contentDescription = "GitHub",
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = "GitHub",
-                            color = colors.textMain,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            softWrap = false,
-                            style = ProfileTightTextStyle
+                            colorFilter = ColorFilter.tint(colors.textMain),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
 
                 if (igUrl != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    Box(
                         modifier = Modifier
-                            .height(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(AppleProfileTokens.secondaryFill(isDark))
-                            .border(0.5.dp, hairline, RoundedCornerShape(8.dp))
+                            .size(28.dp)
+                            .clip(CircleShape)
                             .clickable {
                                 try {
-                                    val target = if (igUrl.startsWith("http://") || igUrl.startsWith("https://")) igUrl else "https://$igUrl"
+                                    val target = when {
+                                        igUrl.startsWith("http://", true) || igUrl.startsWith("https://", true) -> igUrl
+                                        igUrl.contains(".") -> "https://$igUrl"
+                                        else -> "https://instagram.com/${igUrl.removePrefix("@")}"
+                                    }
                                     com.chroma.studio.ui.components.InAppBrowserManager.openUrl(target)
                                 } catch (_: Exception) {
                                     ToastManager.showToast("Could not open Instagram")
                                 }
-                            }
-                            .padding(horizontal = 9.dp)
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_social_instagram),
                             contentDescription = "Instagram",
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(20.dp)
                         )
+                    }
+                }
+            }
+        }
+
+        if (showWebsiteSheet && normalizedWebUrl != null) {
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ModalBottomSheet(
+                onDismissRequest = { showWebsiteSheet = false },
+                sheetState = sheetState,
+                containerColor = if (isDark) Color(0xFF1C1C1E) else Color.White,
+                dragHandle = {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 10.dp, bottom = 6.dp)
+                            .width(36.dp)
+                            .height(4.dp)
+                            .clip(CircleShape)
+                            .background(colors.textMuted.copy(alpha = 0.28f))
+                    )
+                }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 8.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = normalizedWebUrl,
+                        color = colors.textMain,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 20.sp,
+                        style = ProfileTightTextStyle
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(appleBlue)
+                            .clickable {
+                                showWebsiteSheet = false
+                                try {
+                                    com.chroma.studio.ui.components.InAppBrowserManager.openUrl(normalizedWebUrl)
+                                } catch (_: Exception) {
+                                    ToastManager.showToast("Could not open link")
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = "Instagram",
-                            color = colors.textMain,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            softWrap = false,
+                            text = websiteCta,
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
                             style = ProfileTightTextStyle
                         )
                     }

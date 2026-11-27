@@ -108,6 +108,7 @@ fun ProfileIdentityScreen(
     var github by remember { mutableStateOf(profile.socialLinks["github"] ?: "") }
     var instagram by remember { mutableStateOf(profile.socialLinks["instagram"] ?: "") }
     var website by remember { mutableStateOf(profile.socialLinks["website"] ?: "") }
+    var websiteCta by remember { mutableStateOf(profile.socialLinks["website_cta"] ?: "Open") }
 
 
     var selectedBannerWorkId by remember { mutableStateOf(profile.bannerWorkId) }
@@ -182,9 +183,14 @@ fun ProfileIdentityScreen(
         coroutineScope.launch {
             isSaving = true
             val newSocialLinks = mutableMapOf<String, String>()
+            profile.socialLinks["phone"]?.takeIf { it.isNotBlank() }?.let { newSocialLinks["phone"] = it }
             if (github.isNotBlank()) newSocialLinks["github"] = github.trim()
             if (instagram.isNotBlank()) newSocialLinks["instagram"] = instagram.trim()
-            if (website.isNotBlank()) newSocialLinks["website"] = website.trim()
+            if (website.isNotBlank()) {
+                newSocialLinks["website"] = website.trim()
+                val cta = websiteCta.trim()
+                if (cta.isNotBlank()) newSocialLinks["website_cta"] = cta
+            }
 
 
             val updated = profile.copy(
@@ -1014,6 +1020,48 @@ fun ProfileIdentityScreen(
                             onValueChange = { website = it },
                             placeholder = "https://yourportfolio.com"
                         )
+
+                        if (website.isNotBlank()) {
+                            AppleSettingsTextFieldRow(
+                                icon = Lucide.ExternalLink,
+                                label = "Website Button Label",
+                                value = websiteCta,
+                                onValueChange = { websiteCta = it },
+                                placeholder = "Open, Hire, Visit..."
+                            )
+
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(listOf("Open", "Visit", "Hire", "Portfolio", "Shop", "Book")) { preset ->
+                                    val isSelected = websiteCta.equals(preset, ignoreCase = true)
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(
+                                                if (isSelected) Color(0xFF007AFF).copy(alpha = 0.14f)
+                                                else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
+                                            )
+                                            .border(
+                                                0.5.dp,
+                                                if (isSelected) Color(0xFF007AFF).copy(alpha = 0.4f) else Color.Transparent,
+                                                RoundedCornerShape(8.dp)
+                                            )
+                                            .clickable { websiteCta = preset }
+                                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    ) {
+                                        Text(
+                                            text = preset,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                            color = if (isSelected) Color(0xFF007AFF) else colors.textMuted
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
