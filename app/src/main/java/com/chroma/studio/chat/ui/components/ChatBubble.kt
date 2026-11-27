@@ -1190,6 +1190,31 @@ private fun MessageBubbleCard(
             }
         }
 
+        if (isOutgoing && message.status.equals("error", ignoreCase = true)) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 3.dp, end = 4.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(enabled = callbacks.onRetry != null) {
+                        callbacks.onRetry?.invoke()
+                    }
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                PhosphorErrorExclamation(
+                    tint = Color(0xFFEF4444),
+                    size = 11.dp
+                )
+                Text(
+                    text = message.errorReason?.takeIf { it.isNotBlank() } ?: "Not delivered • Tap to retry",
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFFEF4444)
+                )
+            }
+        }
+
         if (message.reactions.isNotEmpty()) {
             Spacer(Modifier.height(5.dp))
         }

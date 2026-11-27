@@ -135,24 +135,12 @@ object ChatAdapters {
 
         val timeStr = formatTime(msg.timestamp)
 
-        val otherMembers = if (groupParticipants.isNotEmpty()) {
-            groupParticipants.filter { it != currentUid && it != msg.senderId }
-        } else emptyList()
-        val isGroupMsg = otherMembers.size > 1 || (groupParticipants.size > 2)
-
-        val isDelivered = msg.isDelivered || msg.deliveredTo.isNotEmpty() || msg.isRead || msg.readBy.isNotEmpty() || (isMe && isOtherOnline)
-        val statusStr = when {
-            msg.isPending -> "pending"
-            msg.isError -> "error"
-            isGroupMsg && otherMembers.isNotEmpty() -> when {
-                otherMembers.all { msg.readBy.containsKey(it) } -> "read"
-                msg.readBy.keys.any { it in otherMembers } || msg.deliveredTo.keys.any { it in otherMembers } || msg.isDelivered -> "delivered"
-                else -> "sent"
-            }
-            msg.isRead || msg.readBy.isNotEmpty() -> "read"
-            isDelivered -> "delivered"
-            else -> "sent"
-        }
+        val resolvedStatus = MessageStatusMachine.resolveMessageStatus(
+            msg = msg,
+            currentUid = currentUid,
+            groupParticipants = groupParticipants
+        )
+        val statusStr = resolvedStatus.wireValue
 
         // Aggregate reactions: emoji -> count
         val reactionCounts = mutableMapOf<String, Int>()
@@ -318,7 +306,8 @@ object ChatAdapters {
             musicDurationSec = msg.musicDurationSec,
             deliveredTo = msg.deliveredTo,
             readBy = msg.readBy,
-            fontStyle = msg.fontStyle
+            fontStyle = msg.fontStyle,
+            errorReason = msg.errorReason
         )
     }
 
@@ -329,7 +318,8 @@ object ChatAdapters {
         isOnline: Boolean = false,
         lastSeenTime: Long? = null,
         typingMap: Map<String, String> = emptyMap(),
-        messages: List<ChatMessage> = emptyList()
+        messages: List<ChatMessage> = emptyList(),
+        localOutboxStatus: OutboxRoomStatus? = null
     ): ChatConversation {
         val otherUid = if (room.isGroup) null else room.participants.firstOrNull { it != currentUid }
         val otherProfile = if (otherUid != null) userProfiles[otherUid] else null
@@ -418,24 +408,11 @@ object ChatAdapters {
         } else if (room.lastMessage.isNotBlank() || room.lastMessageTime > 0L) {
             val lastSenderProf = if (room.lastSender != null) userProfiles[room.lastSender] else null
             val senderName = if (room.lastSender == currentUid) "You" else (lastSenderProf?.displayName ?: lastSenderProf?.username ?: chatName)
-            val hasUnreadRecord = otherUid != null && room.unreadCount.containsKey(otherUid)
-            val otherUnread = if (otherUid != null) room.unreadCount[otherUid] ?: 0 else 0
-            val isOtherZeroUnread = hasUnreadRecord && otherUnread == 0
-            val isGroupAllRead = room.isGroup && room.participants.filter { it != currentUid }.let { others ->
-                others.isNotEmpty() && others.all { (room.unreadCount[it] ?: 0) == 0 }
-            }
-            val isGroupAnyDelivered = room.isGroup && room.participants.filter { it != currentUid }.let { others ->
-                others.isNotEmpty() && others.any { (room.unreadCount[it] ?: 0) == 0 }
-            }
-            val isReadStatus = room.lastMessageIsRead || (!room.isGroup && isOtherZeroUnread) || isGroupAllRead
-            val isDeliveredStatus = isReadStatus || room.lastMessageIsDelivered || isGroupAnyDelivered || isOnline
-
-            val computedStatus = when {
-                room.lastSender != currentUid -> if ((room.unreadCount[currentUid] ?: 0) == 0) "read" else "delivered"
-                isReadStatus -> "read"
-                isDeliveredStatus -> "delivered"
-                else -> "sent"
-            }
+            val computedStatus = MessageStatusMachine.resolveRoomPreviewStatus(
+                room = room,
+                currentUid = currentUid,
+                localOutboxStatus = localOutboxStatus
+            ).wireValue
             val previewText = if (room.lastMessage.startsWith("[POLL]:")) {
                 "Poll: " + room.lastMessage.removePrefix("[POLL]:").substringBefore("|||").trim()
             } else {
@@ -448,7 +425,9 @@ object ChatAdapters {
                     senderName = senderName,
                     text = previewText,
                     time = formatSmartTimestamp(room.lastMessageTime),
-                    status = computedStatus
+                    timestamp = room.lastMessageTime,
+                    status = computedStatus,
+                    errorReason = localOutboxStatus?.takeIf { it.status == MessageDeliveryStatus.ERROR }?.errorReason
                 )
             )
         } else {

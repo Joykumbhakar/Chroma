@@ -157,7 +157,8 @@ data class ChatMessage(
     val musicDurationSec: Int = 15,
     val deliveredTo: Map<String, Long> = emptyMap(),
     val readBy: Map<String, Long> = emptyMap(),
-    val fontStyle: String? = null
+    val fontStyle: String? = null,
+    val errorReason: String? = null
 )
 
 @Immutable

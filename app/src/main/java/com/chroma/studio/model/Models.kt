@@ -332,7 +332,9 @@ data class ChatMessage(
     val musicCoverUrl: String? = null,
     val musicAudioUrl: String? = null,
     val musicStartSec: Int = 0,
-    val musicDurationSec: Int = 15
+    val musicDurationSec: Int = 15,
+    @get:com.google.firebase.firestore.Exclude
+    val errorReason: String? = null
 )
 
 @kotlinx.serialization.Serializable

@@ -65,8 +65,8 @@ open class ChromaMessagingService : FirebaseMessagingService() {
         val data = remoteMessage.data
         if (data.isEmpty() && remoteMessage.notification == null) return
 
-        val pushType = data["type"] ?: data["messageType"] ?: data["message_type"] ?: ""
-        if (pushType == "app_update") {
+        val pushKind = com.chroma.studio.chat.data.FcmPayloadClassifier.classify(data)
+        if (pushKind == com.chroma.studio.chat.data.FcmPushKind.APP_UPDATE) {
             com.chroma.studio.data.AppUpdateManager.handleRemotePushPayload(applicationContext, data)
             return
         }
@@ -74,14 +74,18 @@ open class ChromaMessagingService : FirebaseMessagingService() {
         val senderId = data["senderId"] ?: data["sender_id"] ?: data["userId"] ?: ""
         val recipientId = data["recipientId"] ?: data["recipient_id"] ?: ""
         val roomId = data["roomId"] ?: data["room_id"] ?: ""
+        val targetId = data["targetId"] ?: roomId
+        val notificationType = (data["notificationType"] ?: data["type"] ?: "").uppercase()
         val messageType = data["messageType"] ?: data["message_type"] ?: "text"
         val groupName = data["groupName"] ?: ""
         val messageId = data["messageId"] ?: ""
         val senderName = data["senderName"] ?: data["sender_name"] ?: data["title"]
-            ?: remoteMessage.notification?.title ?: "New Message"
+            ?: remoteMessage.notification?.title
+            ?: if (pushKind == com.chroma.studio.chat.data.FcmPushKind.CHAT_MESSAGE) "New Message" else "Oscellion"
         val rawBody = data["body"] ?: data["text"] ?: data["message"] ?: remoteMessage.notification?.body ?: ""
         val body = when {
             rawBody.isNotBlank() -> rawBody
+            pushKind == com.chroma.studio.chat.data.FcmPushKind.SOCIAL_ACTIVITY -> "New activity on Oscellion"
             messageType == "audio" || messageType == "voice" -> "🎤 Voice message"
             messageType == "video" -> "🎥 Sent a video"
             messageType == "image" -> "📷 Sent a photo"
@@ -90,38 +94,57 @@ open class ChromaMessagingService : FirebaseMessagingService() {
         }
         val avatarUrl = data["avatarUrl"] ?: data["avatar_url"] ?: data["senderAvatar"] ?: ""
 
-        // De-duplicate (FCM can redeliver the same message)
-        if (messageId.isNotBlank()) {
+        // De-duplicate (FCM can redeliver the same payload)
+        val dedupToken = messageId.ifBlank { "${pushKind.name}:${notificationType}:${senderId}:${targetId}:${body.hashCode()}" }
+        if (dedupToken.isNotBlank()) {
             synchronized(seenMessageIds) {
-                if (seenMessageIds.containsKey(messageId)) return
-                seenMessageIds[messageId] = true
+                if (seenMessageIds.containsKey(dedupToken)) return
+                seenMessageIds[dedupToken] = true
             }
         }
 
         val currentUserId = ChatStateManager.currentUserId.value ?: FirebaseAuth.getInstance().currentUser?.uid
 
-        // Rule 1: own message -> nothing
+        // Rule 1: own action -> nothing
         if (senderId.isNotBlank() && currentUserId != null && senderId == currentUserId) return
 
         val isForeground = ChatStateManager.isAppInForeground.value
-        val isUserInActiveChat = ChatStateManager.isChatActive(
-            recipientId = senderId.ifBlank { recipientId },
-            roomId = roomId
-        )
+        val notifPrefs = getSharedPreferences("oscellion_notif_prefs", MODE_PRIVATE)
+        val quietMode = notifPrefs.getBoolean("quiet_mode_enabled", false)
+        val masterPushEnabled = notifPrefs.getBoolean("push_notifications_enabled", true)
 
-        // Rule 2: foreground + inside this chat -> no popup, mark read (also sets delivered)
-        if (isForeground && isUserInActiveChat) {
+        // Route non-chat pushes (Like, Follow, Comment, Remix, Mention, etc.) cleanly away from chat notifications
+        if (pushKind == com.chroma.studio.chat.data.FcmPushKind.SOCIAL_ACTIVITY) {
+            if (quietMode || !masterPushEnabled || isForeground) {
+                // In foreground, HomeActivity's real-time notifications listener renders the proper typed Dynamic Island
+                // (Like / Follow / Comment / Remix / StoryReaction), never a Chat bubble.
+                return
+            }
+            ChatNotificationBuilder.showActivityNotification(
+                context = this,
+                notificationType = notificationType,
+                senderId = senderId,
+                senderName = senderName,
+                body = body,
+                avatarUrl = avatarUrl,
+                targetId = targetId
+            )
+            return
+        }
+
+        val isUserViewingThisChat = ChatStateManager.isChatScreenVisible(roomId) ||
+            ChatStateManager.isChatActive(recipientId = senderId.ifBlank { recipientId }, roomId = roomId)
+
+        // Rule 2: foreground + actively viewing this exact chat -> no popup, mark read (also sets delivered)
+        if (isForeground && isUserViewingThisChat) {
             if (roomId.isNotBlank()) runBounded {
                 SupabaseChatRepository().markAsRead(roomId)
             }
             return
         }
 
-        // Check user notification settings (Quiet Mode & DM push preference)
-        val notifPrefs = getSharedPreferences("oscellion_notif_prefs", MODE_PRIVATE)
-        val quietMode = notifPrefs.getBoolean("quiet_mode_enabled", false)
+        // Check DM push preference
         val dmPushEnabled = notifPrefs.getBoolean("push_notifications_dm", true)
-        val masterPushEnabled = notifPrefs.getBoolean("push_notifications_enabled", true)
 
         // Check locked & hidden chats using the canonical security SharedPreferences file
         val secPrefs = getSharedPreferences("chroma_chat_security_prefs", MODE_PRIVATE)
@@ -158,7 +181,7 @@ open class ChromaMessagingService : FirebaseMessagingService() {
                     lastMessagePreview = body,
                     timestamp = pushTs,
                     messageId = messageId.ifBlank { null },
-                    incrementUnread = !(isForeground && isUserInActiveChat),
+                    incrementUnread = !(isForeground && isUserViewingThisChat),
                     userId = currentUserId
                 )
             } catch (_: Exception) {}
@@ -169,18 +192,23 @@ open class ChromaMessagingService : FirebaseMessagingService() {
             return
         }
 
-        // Rule 3: foreground, different screen -> in-app Dynamic Island overlay
+        // Rule 3: foreground, different screen -> in-app Dynamic Island overlay (sound is played once by IosDynamicIslandHost)
         if (isForeground) {
+            val pushTs = data["timestamp"]?.toLongOrNull() ?: System.currentTimeMillis()
             ChatStateManager.emitInAppEvent(
                 ChatInAppEvent(
                     roomId = roomId,
                     senderId = senderId,
                     senderName = if (isLocked) "Locked Chat" else if (groupName.isNotBlank()) "$senderName in $groupName" else senderName,
                     messageText = if (isLocked) "New message" else body,
-                    avatarUrl = if (isLocked) "" else avatarUrl
+                    avatarUrl = if (isLocked) "" else avatarUrl,
+                    timestamp = pushTs,
+                    messageId = messageId
                 )
             )
-            com.chroma.studio.chat.sound.SoundManager.playNotification(this)
+            if (com.chroma.studio.ui.components.DynamicIslandManager.isSuppressed) {
+                com.chroma.studio.chat.sound.SoundManager.playNotification(this)
+            }
             if (roomId.isNotBlank()) runBounded { SupabaseChatRepository().markAsDelivered(roomId, messageId.ifBlank { null }) }
             return
         }

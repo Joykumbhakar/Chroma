@@ -567,7 +567,9 @@ private fun ChatScreenContent(
 
 
 
-    val activeChatBase = remember(activeRoom, activeChatId, currentUid, userProfiles, isActiveOnline, activeLastSeen, activeRoomTyping, mutedChatIds) {
+    val outboxStatuses by (chatViewModel?.outboxRoomStatuses?.collectAsState() ?: remember { mutableStateOf(emptyMap()) })
+
+    val activeChatBase = remember(activeRoom, activeChatId, currentUid, userProfiles, isActiveOnline, activeLastSeen, activeRoomTyping, mutedChatIds, outboxStatuses) {
 
         if (activeRoom != null) {
 
@@ -583,7 +585,9 @@ private fun ChatScreenContent(
 
                 lastSeenTime = activeLastSeen,
 
-                typingMap = activeRoomTyping
+                typingMap = activeRoomTyping,
+
+                localOutboxStatus = outboxStatuses[activeRoom.id]
 
             ).copy(
                 isMuted = mutedChatIds.contains(activeRoom.id),
@@ -638,7 +642,7 @@ private fun ChatScreenContent(
 
 
 
-    var chats by remember(recentRooms, userProfiles, isOtherOnline, otherLastSeen, onlineUsersPresence, typingStatuses, mutedChatIds, blockedUserIds, isInsideChat, activeChatBase) {
+    var chats by remember(recentRooms, userProfiles, isOtherOnline, otherLastSeen, onlineUsersPresence, typingStatuses, mutedChatIds, blockedUserIds, isInsideChat, activeChatBase, outboxStatuses) {
 
         mutableStateOf(
 
@@ -663,7 +667,8 @@ private fun ChatScreenContent(
                                 userProfiles = userProfiles,
                                 isOnline = isOnline,
                                 lastSeenTime = lastSeenTime,
-                                typingMap = roomTyping
+                                typingMap = roomTyping,
+                                localOutboxStatus = outboxStatuses[room.id]
                             ).copy(
                                 isMuted = mutedChatIds.contains(room.id),
                                 isBlocked = !room.isGroup && oUid != null && blockedUserIds.contains(oUid)
@@ -705,7 +710,9 @@ private fun ChatScreenContent(
 
                         lastSeenTime = lastSeenTime,
 
-                        typingMap = roomTyping
+                        typingMap = roomTyping,
+
+                        localOutboxStatus = outboxStatuses[room.id]
 
                     ).copy(
                         isMuted = mutedChatIds.contains(room.id),
@@ -1081,13 +1088,15 @@ private fun ChatScreenContent(
         onDispose { chatSecurityPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
-    // Re-lock all unlocked conversations when app moves to background
-    // (skip while a system Biometric/PIN prompt is active so ConfirmDeviceCredential doesn't trip it)
+    // Re-lock all unlocked conversations when app moves to background,
+    // and mark visible incoming messages as read only when returning to foreground on an active chat.
     val chatLifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
-    DisposableEffect(chatLifecycleOwner) {
+    DisposableEffect(chatLifecycleOwner, isInsideChat, activeChatId) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP && !com.chroma.studio.chat.util.BiometricHelper.isPromptShowing) {
                 unlockedChatSessionIds = emptySet()
+            } else if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME && isInsideChat && !activeChatId.isNullOrBlank()) {
+                chatViewModel?.markActiveRoomReadIfVisible(activeChatId)
             }
         }
         chatLifecycleOwner.lifecycle.addObserver(observer)

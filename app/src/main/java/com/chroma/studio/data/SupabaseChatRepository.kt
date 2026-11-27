@@ -310,7 +310,7 @@ class SupabaseChatRepository {
         }
     }
 
-    suspend fun sendMessage(
+    suspend fun sendMessageDetailed(
         roomId: String,
         text: String,
         imageUrl: String? = null,
@@ -344,8 +344,12 @@ class SupabaseChatRepository {
         musicAudioUrl: String? = null,
         musicStartSec: Int = 0,
         musicDurationSec: Int = 15
-    ): Boolean = withContext(Dispatchers.IO) {
-        val currentUser = auth.currentUser ?: return@withContext false
+    ): com.chroma.studio.chat.data.SendMessageResult = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext com.chroma.studio.chat.data.SendMessageResult.Failure(
+            reason = com.chroma.studio.chat.data.SendFailureReason.UNAUTHENTICATED,
+            userMessage = "Sign in to send messages",
+            isRetryable = false
+        )
         try {
             val messageId = preGeneratedId ?: java.util.UUID.randomUUID().toString()
             val minTimestamp = (roomDeletedAtCache[roomId] ?: 0L) + 1L
@@ -530,12 +534,121 @@ class SupabaseChatRepository {
                 }
             }
 
-            true
+            com.chroma.studio.chat.data.SendMessageResult.Success
+        } catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
+            Log.e("SupabaseChatRepository", "Firestore error sending message (${e.code})", e)
+            when (e.code) {
+                com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED ->
+                    com.chroma.studio.chat.data.SendMessageResult.Failure(
+                        reason = com.chroma.studio.chat.data.SendFailureReason.PERMISSION_DENIED,
+                        userMessage = "You cannot send messages in this conversation right now.",
+                        isRetryable = false
+                    )
+                com.google.firebase.firestore.FirebaseFirestoreException.Code.UNAUTHENTICATED ->
+                    com.chroma.studio.chat.data.SendMessageResult.Failure(
+                        reason = com.chroma.studio.chat.data.SendFailureReason.UNAUTHENTICATED,
+                        userMessage = "Session expired. Please sign in again.",
+                        isRetryable = false
+                    )
+                com.google.firebase.firestore.FirebaseFirestoreException.Code.NOT_FOUND ->
+                    com.chroma.studio.chat.data.SendMessageResult.Failure(
+                        reason = com.chroma.studio.chat.data.SendFailureReason.ROOM_NOT_FOUND,
+                        userMessage = "Conversation unavailable. Tap to retry.",
+                        isRetryable = true
+                    )
+                com.google.firebase.firestore.FirebaseFirestoreException.Code.UNAVAILABLE,
+                com.google.firebase.firestore.FirebaseFirestoreException.Code.DEADLINE_EXCEEDED ->
+                    com.chroma.studio.chat.data.SendMessageResult.Failure(
+                        reason = com.chroma.studio.chat.data.SendFailureReason.NETWORK_OFFLINE,
+                        userMessage = "Connection timed out. Tap to retry.",
+                        isRetryable = true
+                    )
+                else ->
+                    com.chroma.studio.chat.data.SendMessageResult.Failure(
+                        reason = com.chroma.studio.chat.data.SendFailureReason.UNKNOWN,
+                        userMessage = "Failed to send message. Tap to retry.",
+                        isRetryable = true
+                    )
+            }
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error sending message", e)
-            false
+            com.chroma.studio.chat.data.SendMessageResult.Failure(
+                reason = com.chroma.studio.chat.data.SendFailureReason.UNKNOWN,
+                userMessage = "Failed to send message. Tap to retry.",
+                isRetryable = true
+            )
         }
     }
+
+    suspend fun sendMessage(
+        roomId: String,
+        text: String,
+        imageUrl: String? = null,
+        workId: String? = null,
+        preGeneratedId: String? = null,
+        messageType: String = "text",
+        durationSeconds: Int? = null,
+        replyToMessageId: String? = null,
+        storyId: String? = null,
+        storyThumbnailUrl: String? = null,
+        flashVideoId: String? = null,
+        flashVideoThumbnailUrl: String? = null,
+        flashVideoUrl: String? = null,
+        flashVideoCaption: String? = null,
+        flashVideoAuthorUsername: String? = null,
+        flashVideoAuthorAvatarUrl: String? = null,
+        flashVideoDurationMs: Long? = null,
+        isForwarded: Boolean = false,
+        callDuration: String? = null,
+        callType: String? = null,
+        mediaType: String? = null,
+        fontStyle: String? = null,
+        fileName: String? = null,
+        fileSizeBytes: Long? = null,
+        fileExtension: String? = null,
+        musicTrackId: String? = null,
+        musicTitle: String? = null,
+        musicArtist: String? = null,
+        musicAlbum: String? = null,
+        musicCoverUrl: String? = null,
+        musicAudioUrl: String? = null,
+        musicStartSec: Int = 0,
+        musicDurationSec: Int = 15
+    ): Boolean = sendMessageDetailed(
+        roomId = roomId,
+        text = text,
+        imageUrl = imageUrl,
+        workId = workId,
+        preGeneratedId = preGeneratedId,
+        messageType = messageType,
+        durationSeconds = durationSeconds,
+        replyToMessageId = replyToMessageId,
+        storyId = storyId,
+        storyThumbnailUrl = storyThumbnailUrl,
+        flashVideoId = flashVideoId,
+        flashVideoThumbnailUrl = flashVideoThumbnailUrl,
+        flashVideoUrl = flashVideoUrl,
+        flashVideoCaption = flashVideoCaption,
+        flashVideoAuthorUsername = flashVideoAuthorUsername,
+        flashVideoAuthorAvatarUrl = flashVideoAuthorAvatarUrl,
+        flashVideoDurationMs = flashVideoDurationMs,
+        isForwarded = isForwarded,
+        callDuration = callDuration,
+        callType = callType,
+        mediaType = mediaType,
+        fontStyle = fontStyle,
+        fileName = fileName,
+        fileSizeBytes = fileSizeBytes,
+        fileExtension = fileExtension,
+        musicTrackId = musicTrackId,
+        musicTitle = musicTitle,
+        musicArtist = musicArtist,
+        musicAlbum = musicAlbum,
+        musicCoverUrl = musicCoverUrl,
+        musicAudioUrl = musicAudioUrl,
+        musicStartSec = musicStartSec,
+        musicDurationSec = musicDurationSec
+    ) is com.chroma.studio.chat.data.SendMessageResult.Success
 
     suspend fun sendFlashVideoMessage(
         roomId: String,
@@ -575,40 +688,71 @@ class SupabaseChatRepository {
             }
 
             val now = System.currentTimeMillis()
+            val participants = roomParticipantsCache[roomId] ?: run {
+                val roomSnap = try { roomRef.get().await() } catch (_: Exception) { null }
+                val room = roomSnap?.toChatRoomSafe()
+                if (room != null) {
+                    roomParticipantsCache[roomId] = room.participants
+                    roomIsGroupCache[roomId] = room.isGroup
+                    room.participants
+                } else emptyList()
+            }
+            val isGroupRoom = roomIsGroupCache[roomId] ?: (roomId.startsWith("group_") || participants.size > 2)
+
             val docsToUpdate = recentDocs.filter { doc ->
                 val senderId = doc.getString("senderId")
                 @Suppress("UNCHECKED_CAST")
                 val readByMap = doc.get("readBy") as? Map<String, Any?>
                 val userAlreadyRead = readByMap?.containsKey(currentUser.uid) == true
-                val isRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: false
-                senderId != null && senderId != currentUser.uid && (!userAlreadyRead || !isRead)
+                senderId != null && senderId != currentUser.uid && !userAlreadyRead
             }
 
             val batch = firestore.batch()
             val roomUpdates = mutableMapOf<String, Any>(
                 "unreadCount.${currentUser.uid}" to 0
             )
-            // If latest message came from someone else, also mark room-level read/delivered flags
+            // Only mark room-level read/delivered flags if we actually verified the latest doc belongs to the other user
             val latestDoc = recentDocs.firstOrNull()
             val latestSender = latestDoc?.getString("senderId")
-            if (latestSender == null || latestSender != currentUser.uid) {
-                roomUpdates["lastMessageIsRead"] = true
+            if (latestDoc != null && latestSender != null && latestSender != currentUser.uid) {
                 roomUpdates["lastMessageIsDelivered"] = true
+                if (!isGroupRoom) {
+                    roomUpdates["lastMessageIsRead"] = true
+                } else {
+                    @Suppress("UNCHECKED_CAST")
+                    val latestReadBy = (latestDoc.get("readBy") as? Map<String, Any?>)?.keys.orEmpty()
+                    val requiredReaders = participants.filter { it.isNotBlank() && it != latestSender }
+                    if (requiredReaders.isNotEmpty() && requiredReaders.all { it == currentUser.uid || it in latestReadBy }) {
+                        roomUpdates["lastMessageIsRead"] = true
+                    }
+                }
             }
             batch.update(roomRef, roomUpdates)
 
             for (doc in docsToUpdate) {
-                batch.update(
-                    doc.reference,
-                    mapOf(
-                        "isRead" to true,
-                        "read" to true,
-                        "isDelivered" to true,
-                        "delivered" to true,
-                        "readBy.${currentUser.uid}" to now,
-                        "deliveredTo.${currentUser.uid}" to now
-                    )
+                val senderId = doc.getString("senderId") ?: ""
+                @Suppress("UNCHECKED_CAST")
+                val existingDeliveredBy = (doc.get("deliveredTo") as? Map<String, Any?>)?.containsKey(currentUser.uid) == true
+                @Suppress("UNCHECKED_CAST")
+                val existingReadByKeys = (doc.get("readBy") as? Map<String, Any?>)?.keys.orEmpty()
+                val requiredReaders = participants.filter { it.isNotBlank() && it != senderId }
+                val shouldSetGlobalRead = !isGroupRoom ||
+                    (requiredReaders.isNotEmpty() && requiredReaders.all { it == currentUser.uid || it in existingReadByKeys })
+
+                val updates = mutableMapOf<String, Any>(
+                    "isDelivered" to true,
+                    "delivered" to true,
+                    "readBy.${currentUser.uid}" to now
                 )
+                if (!existingDeliveredBy) {
+                    updates["deliveredTo.${currentUser.uid}"] = now
+                }
+                if (shouldSetGlobalRead) {
+                    updates["isRead"] = true
+                    updates["read"] = true
+                    updates["readAt"] = now
+                }
+                batch.update(doc.reference, updates)
             }
             batch.commit().await()
         } catch (e: Exception) {
@@ -663,9 +807,10 @@ class SupabaseChatRepository {
             }
 
             val batch = firestore.batch()
-            val latestSender = recentMessages.firstOrNull()?.getString("senderId")
+            val latestDoc = recentMessages.firstOrNull()
+            val latestSender = latestDoc?.getString("senderId")
             var hasWrites = false
-            if (latestSender == null || latestSender != currentUser.uid) {
+            if (latestDoc != null && latestSender != null && latestSender != currentUser.uid) {
                 batch.update(roomRef, "lastMessageIsDelivered", true)
                 hasWrites = true
             }
@@ -675,6 +820,7 @@ class SupabaseChatRepository {
                     mapOf(
                         "isDelivered" to true,
                         "delivered" to true,
+                        "deliveredAt" to now,
                         "deliveredTo.${currentUser.uid}" to now
                     )
                 )
@@ -749,7 +895,7 @@ class SupabaseChatRepository {
         }
 
         val firestoreListener = query.limit(limit)
-            .addSnapshotListener { snapshot, e ->
+            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snapshot, e ->
                 if (e != null) {
                     Log.w("SupabaseChatRepository", "Listen failed for messages in room $roomId (offline/error): ${e.message}")
                     val cached = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedMessages(
@@ -770,12 +916,14 @@ class SupabaseChatRepository {
                             snapshot.documents.map { doc ->
                                 async {
                                     val rawMsg = doc.toChatMessageSafe() ?: return@async null
+                                    val docHasPendingWrites = doc.metadata.hasPendingWrites()
                                     val docIsRead = doc.getBoolean("isRead") ?: doc.getBoolean("read") ?: rawMsg.isRead
                                     val docIsDelivered = doc.getBoolean("isDelivered") ?: doc.getBoolean("delivered") ?: rawMsg.isDelivered
                                     val msg = rawMsg.copy(
                                         id = if (rawMsg.id.isBlank() || rawMsg.id != doc.id) doc.id else rawMsg.id,
                                         isRead = docIsRead,
-                                        isDelivered = docIsDelivered || docIsRead
+                                        isDelivered = docIsDelivered || docIsRead,
+                                        isPending = docHasPendingWrites
                                     )
 
                                     // Filter out messages deleted by current user for themselves

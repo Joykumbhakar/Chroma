@@ -152,13 +152,19 @@ object FcmPushSender {
         avatarUrl: String = "",
         messageType: String = "text",
         groupName: String = "",
-        messageId: String = ""
+        messageId: String = "",
+        notificationType: String = "MESSAGE",
+        targetId: String = roomId,
+        targetPreviewUrl: String = "",
+        actorHandle: String = ""
     ): FcmResult = withContext(Dispatchers.IO) {
         if (targetFcmToken.isBlank()) return@withContext FcmResult.FAILED
         val token = getAccessToken(context) ?: return@withContext FcmResult.FAILED
 
+        val isChat = notificationType.equals("MESSAGE", ignoreCase = true)
         val body = when {
             messageText.isNotBlank() -> messageText
+            !isChat -> "New notification"
             messageType == "audio" || messageType == "voice" -> "🎤 Voice message"
             messageType == "video" -> "🎥 Sent a video"
             messageType == "image" -> "📷 Sent a photo"
@@ -180,11 +186,15 @@ object FcmPushSender {
             val payload = JSONObject().put("message", JSONObject().apply {
                 put("token", targetFcmToken)
                 put("data", JSONObject().apply {
-                    put("roomId", roomId)
+                    put("notificationType", notificationType)
+                    put("roomId", if (isChat) roomId else "")
+                    put("targetId", targetId)
+                    put("targetPreviewUrl", targetPreviewUrl)
+                    put("actorHandle", actorHandle)
                     put("senderId", senderId)
                     put("senderName", senderName)
                     put("groupName", groupName)
-                    put("title", if (groupName.isNotBlank()) "$senderName in $groupName" else senderName)
+                    put("title", if (isChat && groupName.isNotBlank()) "$senderName in $groupName" else senderName)
                     put("body", body)
                     put("message", body)
                     put("avatarUrl", avatarUrl)
@@ -196,7 +206,7 @@ object FcmPushSender {
                     put("priority", "HIGH")
                     put("ttl", "86400s") // keep retrying for 24h if the phone is off/offline
                     put("direct_boot_ok", true)
-                    put("fcm_options", JSONObject().put("analytics_label", "chat_message"))
+                    put("fcm_options", JSONObject().put("analytics_label", if (isChat) "chat_message" else "social_activity"))
                 })
             })
 

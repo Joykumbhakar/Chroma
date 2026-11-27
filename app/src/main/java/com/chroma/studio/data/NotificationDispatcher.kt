@@ -113,7 +113,9 @@ object NotificationDispatcher {
                         avatarUrl = avatar,
                         messageType = messageType,
                         groupName = groupName ?: "",
-                        messageId = messageId
+                        messageId = messageId,
+                        notificationType = NotificationActionType.MESSAGE.name,
+                        targetId = roomId
                     )
                     if (result == FcmResult.UNREGISTERED) {
                         pushTargetCache.remove("${me.uid}_${uid}_$roomId")
@@ -206,12 +208,16 @@ object NotificationDispatcher {
                     FcmPushSender.sendPushNotification(
                         context = com.chroma.studio.ChromaApp.instance,
                         targetFcmToken = targetFcmToken,
-                        roomId = targetId ?: "",
+                        roomId = "",
                         senderId = currentUid,
                         senderName = pushTitle,
                         messageText = pushBody,
                         avatarUrl = actorAvatarUrl ?: "",
-                        messageType = messageType
+                        messageType = if (type == NotificationActionType.MESSAGE) messageType else type.name.lowercase(),
+                        notificationType = type.name,
+                        targetId = targetId ?: "",
+                        targetPreviewUrl = targetPreviewUrl ?: "",
+                        actorHandle = actorHandle
                     )
                 }
             } catch (e: Exception) {

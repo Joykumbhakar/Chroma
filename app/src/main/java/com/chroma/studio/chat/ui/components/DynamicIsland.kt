@@ -25,13 +25,18 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.ui.components.DynamicIslandManager
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 enum class IslandType {
@@ -85,6 +90,18 @@ fun DynamicNotchIsland(
     var isExpanded by remember { mutableStateOf(false) }
     var isMuted by remember { mutableStateOf(false) }
     var isSpeakerOn by remember { mutableStateOf(false) }
+    val dragCoroutineScope = rememberCoroutineScope()
+    val dragOffsetY = remember { Animatable(0f) }
+
+    // Synchronize live activity (Call / Voice Recording) with global DynamicIslandManager so passive Status toasts never collide
+    LaunchedEffect(isCallActive, isRecording) {
+        DynamicIslandManager.isLiveActivityActive = isCallActive || isRecording
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            DynamicIslandManager.isLiveActivityActive = false
+        }
+    }
 
     // Auto-collapse when active state changes to IDLE
     val activeState = when {
@@ -97,82 +114,79 @@ fun DynamicNotchIsland(
     LaunchedEffect(activeState) {
         if (activeState == "IDLE") {
             isExpanded = false
-        }
-    }
-
-    // Auto-expand dynamically when recording starts
-    LaunchedEffect(isRecording) {
-        if (isRecording) {
+            dragOffsetY.snapTo(0f)
+        } else if (activeState == "RECORDING") {
             isExpanded = true
         }
     }
 
     val isVisible = activeState != "IDLE"
 
-    // Hardware Notch Jelly & Spring & Jump physics
+    // Hardware Notch single-stage spring physics
     val rubberScaleX = remember { Animatable(1f) }
     val rubberScaleY = remember { Animatable(1f) }
     val jumpOffsetY = remember { Animatable(0f) }
     var prevExpanded by remember { mutableStateOf(false) }
+    var prevActiveState by remember { mutableStateOf("IDLE") }
 
-    // Play dynamic island sound when notification appears
+    // Play tactile chime only for high-signal error/warning local banners (not routine copies/pins)
     LaunchedEffect(notification) {
-        if (notification != null) {
+        if (notification != null && (notification.type == IslandType.ERROR || notification.type == IslandType.WARNING)) {
             SoundManager.playDynamicIsland()
         }
     }
 
     LaunchedEffect(notification, isExpanded, activeState) {
         if (isVisible) {
-            if (isExpanded != prevExpanded) {
-                // Expand / Compress Jump & Jelly animation
-                if (isExpanded) {
-                    launch {
-                        jumpOffsetY.animateTo(10f, spring(dampingRatio = 0.52f, stiffness = Spring.StiffnessMediumLow))
-                        jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessLow))
-                    }
-                    launch {
-                        rubberScaleX.animateTo(0.93f, spring(dampingRatio = 0.48f, stiffness = Spring.StiffnessMediumLow))
-                        rubberScaleX.animateTo(1.0f, spring(dampingRatio = 0.60f, stiffness = Spring.StiffnessLow))
-                    }
-                    launch {
-                        rubberScaleY.animateTo(1.12f, spring(dampingRatio = 0.48f, stiffness = Spring.StiffnessMediumLow))
-                        rubberScaleY.animateTo(1.0f, spring(dampingRatio = 0.60f, stiffness = Spring.StiffnessLow))
-                    }
-                } else {
-                    launch {
-                        jumpOffsetY.animateTo(-6f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
-                        jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessLow))
-                    }
-                    launch {
-                        rubberScaleX.animateTo(1.07f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
-                        rubberScaleX.animateTo(1.0f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessLow))
-                    }
-                    launch {
-                        rubberScaleY.animateTo(0.89f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
-                        rubberScaleY.animateTo(1.0f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessLow))
+            val stateChangedFromIdle = prevActiveState == "IDLE" && activeState != "IDLE"
+            val expandToggledAfterEntry = !stateChangedFromIdle && (isExpanded != prevExpanded)
+            prevActiveState = activeState
+            prevExpanded = isExpanded
+
+            if (expandToggledAfterEntry) {
+                coroutineScope {
+                    if (isExpanded) {
+                        launch {
+                            jumpOffsetY.animateTo(5f, tween(65, easing = FastOutSlowInEasing))
+                            jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.60f, stiffness = 420f))
+                        }
+                        launch {
+                            rubberScaleX.animateTo(0.96f, tween(65, easing = FastOutSlowInEasing))
+                            rubberScaleX.animateTo(1f, spring(dampingRatio = 0.56f, stiffness = 380f))
+                        }
+                        launch {
+                            rubberScaleY.animateTo(1.06f, tween(65, easing = FastOutSlowInEasing))
+                            rubberScaleY.animateTo(1f, spring(dampingRatio = 0.56f, stiffness = 380f))
+                        }
+                    } else {
+                        launch {
+                            jumpOffsetY.animateTo(-4f, tween(60, easing = FastOutSlowInEasing))
+                            jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.62f, stiffness = 420f))
+                        }
+                        launch {
+                            rubberScaleX.animateTo(1.04f, tween(60, easing = FastOutSlowInEasing))
+                            rubberScaleX.animateTo(1f, spring(dampingRatio = 0.60f, stiffness = 400f))
+                        }
+                        launch {
+                            rubberScaleY.animateTo(0.94f, tween(60, easing = FastOutSlowInEasing))
+                            rubberScaleY.animateTo(1f, spring(dampingRatio = 0.60f, stiffness = 400f))
+                        }
                     }
                 }
-                prevExpanded = isExpanded
             } else {
-                // Entrance Drop Jump + Jelly Wobble from top notch edge
-                jumpOffsetY.snapTo(-35f)
-                rubberScaleX.snapTo(0.86f)
-                rubberScaleY.snapTo(1.24f)
-                launch {
-                    jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.52f, stiffness = Spring.StiffnessMediumLow))
-                }
-                launch {
-                    rubberScaleX.animateTo(1.09f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
-                    rubberScaleX.animateTo(0.97f, spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessLow))
-                    rubberScaleX.animateTo(1.0f, spring(dampingRatio = 0.70f, stiffness = Spring.StiffnessLow))
-                }
-                launch {
-                    rubberScaleY.animateTo(0.92f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
-                    rubberScaleY.animateTo(1.03f, spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessLow))
-                    rubberScaleY.animateTo(1.0f, spring(dampingRatio = 0.70f, stiffness = Spring.StiffnessLow))
+                // Smooth single-stage entrance drop & rubber-band settle
+                jumpOffsetY.snapTo(-26f)
+                rubberScaleX.snapTo(0.76f)
+                rubberScaleY.snapTo(0.62f)
+                coroutineScope {
+                    launch { jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.62f, stiffness = 450f)) }
+                    launch { rubberScaleX.animateTo(1f, spring(dampingRatio = 0.56f, stiffness = 380f)) }
+                    launch { rubberScaleY.animateTo(1f, spring(dampingRatio = 0.54f, stiffness = 360f)) }
                 }
             }
+        } else {
+            prevActiveState = "IDLE"
+            prevExpanded = false
         }
     }
 
@@ -212,6 +226,8 @@ fun DynamicNotchIsland(
             .fillMaxWidth()
             .statusBarsPadding()
             .padding(top = 8.dp, start = 12.dp, end = 12.dp)
+            .offset { IntOffset(0, dragOffsetY.value.roundToInt()) }
+            .zIndex(998f)
     ) {
         Box(
             modifier = Modifier.fillMaxWidth(),
@@ -229,7 +245,7 @@ fun DynamicNotchIsland(
                     }
                     .animateContentSize(
                         animationSpec = spring(
-                            dampingRatio = 0.54f,
+                            dampingRatio = 0.66f,
                             stiffness = Spring.StiffnessMediumLow
                         )
                     )
@@ -267,7 +283,7 @@ fun DynamicNotchIsland(
                         ),
                         shape = islandShape
                     )
-                    .pointerInput(Unit) {
+                    .pointerInput(activeState, isExpanded) {
                         detectTapGestures(
                             onTap = {
                                 SoundManager.playReaction()
@@ -279,19 +295,47 @@ fun DynamicNotchIsland(
                             },
                             onLongPress = {
                                 SoundManager.playReaction()
-                                isExpanded = !isExpanded
+                                if (activeState == "CALL" || activeState == "RECORDING") {
+                                    isExpanded = !isExpanded
+                                }
                             }
                         )
                     }
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, dragAmount ->
-                            // Swipe up gesture to dismiss notification
-                            if (dragAmount.y < -12 && activeState == "NOTIFICATION") {
+                    .pointerInput(activeState, isExpanded) {
+                        detectDragGestures(
+                            onDrag = { change, dragAmount ->
                                 change.consume()
-                                SoundManager.playReaction()
-                                onDismissNotification()
+                                dragCoroutineScope.launch {
+                                    val nextY = dragOffsetY.value + dragAmount.y * 0.72f
+                                    dragOffsetY.snapTo(nextY.coerceIn(-120f, 44f))
+                                }
+                            },
+                            onDragEnd = {
+                                val dy = dragOffsetY.value
+                                when {
+                                    activeState == "NOTIFICATION" && dy < -28f -> {
+                                        SoundManager.playReaction()
+                                        onDismissNotification()
+                                    }
+                                    (activeState == "CALL" || activeState == "RECORDING") && !isExpanded && dy > 24f -> {
+                                        SoundManager.playReaction()
+                                        isExpanded = true
+                                    }
+                                    (activeState == "CALL" || activeState == "RECORDING") && isExpanded && dy < -28f -> {
+                                        SoundManager.playReaction()
+                                        isExpanded = false
+                                    }
+                                }
+                                dragCoroutineScope.launch {
+                                    dragOffsetY.animateTo(0f, spring(dampingRatio = 0.66f, stiffness = 420f))
+                                }
+                            },
+                            onDragCancel = {
+                                dragCoroutineScope.launch {
+                                    dragOffsetY.animateTo(0f, spring(dampingRatio = 0.66f, stiffness = 420f))
+                                }
                             }
-                        }
+                        )
                     }
                     .padding(
                         horizontal = if (isExpanded) 18.dp else 12.dp,

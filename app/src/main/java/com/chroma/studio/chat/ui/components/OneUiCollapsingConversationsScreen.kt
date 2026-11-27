@@ -929,25 +929,43 @@ fun OneUiCollapsingConversationsScreen(
                                 val isLocked = chat.id in lockedChatIds
                                 val isSelected = chat.id in selectedChatIds
                                 val lastMsg = chat.messages.lastOrNull()
-                                val snippet = when {
+                                val resolvedCurrentUid = currentUser.id.ifBlank {
+                                    com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                                }
+                                val isOutgoing = lastMsg != null && (
+                                    (resolvedCurrentUid.isNotBlank() && lastMsg.senderId == resolvedCurrentUid) ||
+                                        (resolvedCurrentUid.isBlank() && lastMsg.senderName == "You")
+                                    )
+                                val resolvedLastStatus = lastMsg?.status ?: "sent"
+                                val isLastError = isOutgoing && resolvedLastStatus.equals("error", ignoreCase = true)
+                                val baseSnippet = when {
                                     isLocked -> "🔒 Locked conversation"
                                     chat.statusText.contains("typing", ignoreCase = true) ||
                                         chat.statusText.contains("recording", ignoreCase = true) -> chat.statusText
                                     lastMsg != null -> lastMsg.text?.takeIf { it.isNotBlank() }
-                                        ?: lastMsg.fileName
-                                        ?: "Media attachment"
+                                        ?: lastMsg.fileName?.takeIf { it.isNotBlank() }
+                                        ?: when (lastMsg.mediaType) {
+                                            "voice" -> "Voice message (${lastMsg.voiceDuration}s)"
+                                            "image", "image_stack" -> "Photo"
+                                            "video" -> "Video"
+                                            "sticker" -> "Sticker"
+                                            "flash_video" -> "Flash video"
+                                            "music" -> lastMsg.musicTitle?.takeIf { it.isNotBlank() }?.let { "🎵 $it" } ?: "Song"
+                                            "file" -> "Document"
+                                            else -> "Media attachment"
+                                        }
                                     chat.bio.isNotBlank() -> chat.bio
                                     else -> "Tap to start chatting"
                                 }
+                                val snippet = if (isLastError && !isLocked) "Not delivered • $baseSnippet" else baseSnippet
                                 val timeLabel = lastMsg?.time ?: ""
-                                val isOutgoing = lastMsg != null && (lastMsg.senderId == currentUser.id || lastMsg.senderName == "You")
 
                                 OneUiSwipeableConversationItem(
                                     chat = chat,
                                     snippet = snippet,
                                     timeLabel = timeLabel,
                                     isOutgoing = isOutgoing,
-                                    lastMsgStatus = lastMsg?.status ?: "sent",
+                                    lastMsgStatus = resolvedLastStatus,
                                     gradientStyle = gradientStyle,
                                     cardBgColor = cardBgColor,
                                     dividerColor = dividerColor,
@@ -1725,11 +1743,13 @@ private fun OneUiSwipeableConversationItem(
                             )
                         }
 
+                        val isErrorSnippet = isOutgoing && lastMsgStatus.equals("error", ignoreCase = true) && !isLocked
                         Text(
                             text = snippet,
                             fontSize = 13.sp,
-                            fontWeight = if (chat.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
+                            fontWeight = if (chat.unreadCount > 0 || isErrorSnippet) FontWeight.Medium else FontWeight.Normal,
                             color = when {
+                                isErrorSnippet -> Color(0xFFEF4444)
                                 chat.statusText.contains("recording", ignoreCase = true) -> Color(0xFF34C759)
                                 chat.statusText.contains("typing", ignoreCase = true) -> colors.iosBlue
                                 else -> colors.textMuted

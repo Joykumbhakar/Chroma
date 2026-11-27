@@ -16,9 +16,17 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -1227,172 +1235,224 @@ fun IosDynamicIslandHost(
     modifier: Modifier = Modifier,
     isNotchMode: Boolean = false
 ) {
-    if (DynamicIslandManager.isSuppressed) return
+    val activePresentation by DynamicIslandManager.currentPresentation.collectAsState()
+    val isSuppressed = DynamicIslandManager.isSuppressed
+    var renderedPresentation by remember { mutableStateOf<DynamicIslandPresentation?>(null) }
 
-    var currentEvent by remember { mutableStateOf<DynamicIslandEvent?>(null) }
     var isExpanded by remember { mutableStateOf(false) }
     var isComposingReply by remember { mutableStateOf(false) }
     var replyText by remember { mutableStateOf("") }
     var didFollowBack by remember { mutableStateOf(false) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    val animatedOffsetY by animateFloatAsState(
-        targetValue = offsetY,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
-        label = "islandOffsetY"
-    )
+    var isDragging by remember { mutableStateOf(false) }
 
-    // Spring, Jump and Jelly Animatable physics states anchored to top edge (0.5f, 0f)
-    val jumpOffsetY = remember { Animatable(0f) }
-    val jellyScaleX = remember { Animatable(1f) }
-    val jellyScaleY = remember { Animatable(1f) }
+    val dragOffsetY = remember { Animatable(0f) }
+    val dragOffsetX = remember { Animatable(0f) }
+
+    // Smooth single-stage notch-anchored spring physics (0.5f, 0f)
+    val visibilityAlpha = remember { Animatable(0f) }
+    val jumpOffsetY = remember { Animatable(-28f) }
+    val jellyScaleX = remember { Animatable(0.68f) }
+    val jellyScaleY = remember { Animatable(0.45f) }
+
+    var dismissJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var lastChimedInstanceId by remember { mutableLongStateOf(-1L) }
 
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
 
-    suspend fun performDismiss() {
-        try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
-        coroutineScope.launch {
-            launch { jumpOffsetY.animateTo(-35f, tween(160, easing = FastOutLinearInEasing)) }
-            launch { jellyScaleX.animateTo(0.68f, tween(160, easing = FastOutLinearInEasing)) }
-            launch { jellyScaleY.animateTo(0.18f, tween(160, easing = FastOutLinearInEasing)) }
+    DisposableEffect(Unit) {
+        onDispose {
+            DynamicIslandManager.setUserInteracting(false)
         }
-        delay(170L)
-        currentEvent = null
-        isExpanded = false
-        isComposingReply = false
-        replyText = ""
-        didFollowBack = false
-        offsetY = 0f
-        offsetX = 0f
-        jumpOffsetY.snapTo(0f)
-        jellyScaleX.snapTo(1f)
-        jellyScaleY.snapTo(1f)
     }
 
-    fun dismissIsland(invokeEventDismiss: Boolean = false) {
+    LaunchedEffect(isExpanded, isComposingReply, replyText, isDragging, renderedPresentation?.instanceId) {
+        val active = renderedPresentation != null && !isSuppressed
+        DynamicIslandManager.setUserInteracting(
+            active && (isExpanded || isComposingReply || replyText.isNotBlank() || isDragging)
+        )
+    }
+
+    suspend fun animateOutAndClear(targetInstanceId: Long, invokeEventDismiss: Boolean = false) {
+        val current = renderedPresentation
+        if (current == null || current.instanceId != targetInstanceId) return
         if (invokeEventDismiss) {
-            (currentEvent as? DynamicIslandEvent.Status)?.onDismiss?.invoke()
+            (current.event as? DynamicIslandEvent.Status)?.onDismiss?.invoke()
         }
-        coroutineScope.launch {
-            performDismiss()
-        }
-    }
+        try {
+            kotlinx.coroutines.coroutineScope {
+                launch { visibilityAlpha.animateTo(0f, tween(150, easing = FastOutLinearInEasing)) }
+                launch { jumpOffsetY.animateTo(-28f, tween(160, easing = FastOutLinearInEasing)) }
+                launch { jellyScaleX.animateTo(0.64f, tween(160, easing = FastOutLinearInEasing)) }
+                launch { jellyScaleY.animateTo(0.42f, tween(160, easing = FastOutLinearInEasing)) }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Throwable) {}
 
-    LaunchedEffect(Unit) {
-        DynamicIslandManager.events.collect { event ->
-            currentEvent = event
+        // Guard against clearing a newer notification if one arrived mid-dismiss
+        if (renderedPresentation?.instanceId != targetInstanceId) return
+
+        DynamicIslandManager.setUserInteracting(false)
+        DynamicIslandManager.dismissCurrent(expectedInstanceId = targetInstanceId)
+        val promoted = DynamicIslandManager.currentPresentation.value
+        if (promoted == null) {
+            renderedPresentation = null
             isExpanded = false
             isComposingReply = false
             replyText = ""
             didFollowBack = false
-            offsetY = 0f
-            offsetX = 0f
+            isDragging = false
+            dragOffsetY.snapTo(0f)
+            dragOffsetX.snapTo(0f)
+        }
+    }
 
-            // Play Dynamic Island notification sound effect
+    fun dismissIsland(invokeEventDismiss: Boolean = false) {
+        val targetId = renderedPresentation?.instanceId ?: return
+        if (dismissJob?.isActive == true) return
+        dismissJob = coroutineScope.launch {
+            animateOutAndClear(targetInstanceId = targetId, invokeEventDismiss = invokeEventDismiss)
+        }
+    }
+
+    LaunchedEffect(activePresentation?.instanceId, isSuppressed) {
+        val next = activePresentation
+        if (isSuppressed || next == null) {
+            if (renderedPresentation != null && (dismissJob == null || dismissJob?.isActive == false)) {
+                val curId = renderedPresentation?.instanceId
+                if (curId != null) {
+                    animateOutAndClear(targetInstanceId = curId, invokeEventDismiss = false)
+                }
+            }
+            return@LaunchedEffect
+        }
+
+        dismissJob?.cancel()
+        dismissJob = null
+
+        val wasAlreadyVisible = renderedPresentation != null && visibilityAlpha.value > 0.25f
+        renderedPresentation = next
+        isExpanded = false
+        isComposingReply = false
+        replyText = ""
+        didFollowBack = false
+        isDragging = false
+        dragOffsetY.snapTo(0f)
+        dragOffsetX.snapTo(0f)
+
+        // Play notification chime strictly once per unique presentation instanceId
+        if (next.event !is DynamicIslandEvent.Status && lastChimedInstanceId != next.instanceId) {
+            lastChimedInstanceId = next.instanceId
             try {
                 com.chroma.studio.chat.sound.SoundManager.playDynamicIsland(context)
             } catch (_: Throwable) {}
-
             try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
+        }
 
-            // Spring, Jump and Jelly elastic entrance physics anchored to top notch
-            coroutineScope.launch {
-                jumpOffsetY.snapTo(-35f)
-                jellyScaleX.snapTo(0.86f)
-                jellyScaleY.snapTo(1.24f)
+        if (!wasAlreadyVisible) {
+            visibilityAlpha.snapTo(0f)
+            jumpOffsetY.snapTo(-28f)
+            jellyScaleX.snapTo(0.68f)
+            jellyScaleY.snapTo(0.46f)
+        } else {
+            // Subtle morph pulse when promoted directly from queue
+            jellyScaleX.snapTo(0.92f)
+            jellyScaleY.snapTo(1.06f)
+        }
 
-                launch {
-                    jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.52f, stiffness = Spring.StiffnessMediumLow))
-                }
-                launch {
-                    jellyScaleX.animateTo(1.09f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium))
-                    jellyScaleX.animateTo(0.97f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
-                    jellyScaleX.animateTo(1f, spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow))
-                }
-                launch {
-                    jellyScaleY.animateTo(0.92f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium))
-                    jellyScaleY.animateTo(1.03f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
-                    jellyScaleY.animateTo(1f, spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow))
-                }
+        kotlinx.coroutines.coroutineScope {
+            launch { visibilityAlpha.animateTo(1f, tween(170, easing = FastOutSlowInEasing)) }
+            launch {
+                jumpOffsetY.animateTo(
+                    0f,
+                    spring(dampingRatio = 0.62f, stiffness = 460f)
+                )
+            }
+            launch {
+                jellyScaleX.animateTo(
+                    1f,
+                    spring(dampingRatio = 0.56f, stiffness = 380f)
+                )
+            }
+            launch {
+                jellyScaleY.animateTo(
+                    1f,
+                    spring(dampingRatio = 0.54f, stiffness = 360f)
+                )
             }
         }
     }
 
     LaunchedEffect(isExpanded) {
-        if (currentEvent == null) return@LaunchedEffect
+        if (renderedPresentation == null) return@LaunchedEffect
         if (isExpanded) {
-            // EXPAND: Spring, Jump & Jelly stretch downwards from top edge
-            coroutineScope.launch {
+            kotlinx.coroutines.coroutineScope {
                 launch {
-                    jumpOffsetY.animateTo(10f, tween(60, easing = FastOutSlowInEasing))
-                    jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
+                    jumpOffsetY.animateTo(4f, tween(70, easing = FastOutSlowInEasing))
+                    jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.60f, stiffness = 420f))
                 }
                 launch {
-                    jellyScaleX.animateTo(0.93f, tween(60, easing = FastOutSlowInEasing))
-                    jellyScaleX.animateTo(1.05f, spring(dampingRatio = 0.48f, stiffness = Spring.StiffnessMediumLow))
-                    jellyScaleX.animateTo(1f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow))
+                    jellyScaleX.animateTo(0.96f, tween(65, easing = FastOutSlowInEasing))
+                    jellyScaleX.animateTo(1f, spring(dampingRatio = 0.56f, stiffness = 380f))
                 }
                 launch {
-                    jellyScaleY.animateTo(1.12f, tween(60, easing = FastOutSlowInEasing))
-                    jellyScaleY.animateTo(0.96f, spring(dampingRatio = 0.48f, stiffness = Spring.StiffnessMediumLow))
-                    jellyScaleY.animateTo(1f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow))
+                    jellyScaleY.animateTo(1.06f, tween(65, easing = FastOutSlowInEasing))
+                    jellyScaleY.animateTo(1f, spring(dampingRatio = 0.56f, stiffness = 380f))
                 }
             }
         } else {
             isComposingReply = false
-            // COMPRESS: Recoil up into notch with jelly squash
-            coroutineScope.launch {
+            kotlinx.coroutines.coroutineScope {
                 launch {
-                    jumpOffsetY.animateTo(-6f, tween(50, easing = FastOutSlowInEasing))
-                    jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
+                    jellyScaleX.animateTo(1.04f, tween(60, easing = FastOutSlowInEasing))
+                    jellyScaleX.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 420f))
                 }
                 launch {
-                    jellyScaleX.animateTo(1.07f, tween(50, easing = FastOutSlowInEasing))
-                    jellyScaleX.animateTo(0.97f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
-                    jellyScaleX.animateTo(1f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow))
-                }
-                launch {
-                    jellyScaleY.animateTo(0.89f, tween(50, easing = FastOutSlowInEasing))
-                    jellyScaleY.animateTo(1.03f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
-                    jellyScaleY.animateTo(1f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow))
+                    jellyScaleY.animateTo(0.93f, tween(60, easing = FastOutSlowInEasing))
+                    jellyScaleY.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 420f))
                 }
             }
         }
     }
 
-    LaunchedEffect(currentEvent, isExpanded, isComposingReply, replyText.isEmpty(), didFollowBack) {
-        val event = currentEvent ?: return@LaunchedEffect
+    LaunchedEffect(renderedPresentation?.instanceId, isExpanded, isComposingReply, replyText.isEmpty(), didFollowBack, isDragging) {
+        val presentation = renderedPresentation ?: return@LaunchedEffect
+        val event = presentation.event
+        if (isDragging) return@LaunchedEffect
+
         if (isExpanded) {
-            // Do NOT auto-dismiss while user is composing a reply
+            // Do NOT auto-dismiss while user is typing or focused on inline reply
             if (isComposingReply || replyText.isNotEmpty()) {
                 return@LaunchedEffect
             }
-            delay(8000L)
+            delay(8500L)
             isExpanded = false
-            delay(240L)
-            if (currentEvent == event && !isExpanded) {
-                performDismiss()
+            delay(260L)
+            if (renderedPresentation?.instanceId == presentation.instanceId && !isExpanded && !isDragging) {
+                animateOutAndClear(targetInstanceId = presentation.instanceId, invokeEventDismiss = false)
             }
         } else {
             val duration = when (event) {
-                is DynamicIslandEvent.Status -> (event.durationMs).coerceIn(2400L, 4800L)
-                is DynamicIslandEvent.ChatMessage -> 4600L
-                is DynamicIslandEvent.Follow -> if (event.isFollowRequest) 5500L else 4200L
-                is DynamicIslandEvent.Comment -> 4600L
+                is DynamicIslandEvent.Status -> (event.durationMs).coerceIn(2200L, 4800L)
+                is DynamicIslandEvent.ChatMessage -> 4800L
+                is DynamicIslandEvent.Follow -> if (event.isFollowRequest) 5600L else 4200L
+                is DynamicIslandEvent.Comment -> 4800L
                 is DynamicIslandEvent.StoryReaction -> 4400L
                 is DynamicIslandEvent.Like -> 3600L
                 is DynamicIslandEvent.RemixOrDownload -> 3800L
             }
             delay(duration)
-            if (currentEvent == event && !isExpanded) {
-                performDismiss()
+            if (renderedPresentation?.instanceId == presentation.instanceId && !isExpanded && !isDragging) {
+                animateOutAndClear(targetInstanceId = presentation.instanceId, invokeEventDismiss = false)
             }
         }
     }
 
-    currentEvent?.let { event ->
+    val currentPresentationSnapshot = renderedPresentation ?: return
+    val event = currentPresentationSnapshot.event
+    run {
         val islandWidth by animateDpAsState(
             targetValue = if (isExpanded) {
                 when (event) {
@@ -1401,7 +1461,7 @@ fun IosDynamicIslandHost(
                 }
             } else {
                 when (event) {
-                    is DynamicIslandEvent.ChatMessage -> 340.dp
+                    is DynamicIslandEvent.ChatMessage -> 344.dp
                     is DynamicIslandEvent.Follow -> 336.dp
                     is DynamicIslandEvent.Comment -> 336.dp
                     is DynamicIslandEvent.StoryReaction -> 330.dp
@@ -1410,13 +1470,18 @@ fun IosDynamicIslandHost(
                     is DynamicIslandEvent.Status -> if (event.actionLabel != null) 316.dp else if (event.title.length > 22) 292.dp else 252.dp
                 }
             },
-            animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow),
+            animationSpec = spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow),
             label = "islandWidth"
         )
         val islandCorner by animateDpAsState(
             targetValue = if (isExpanded) 28.dp else 24.dp,
-            animationSpec = spring(dampingRatio = 0.60f, stiffness = Spring.StiffnessMediumLow),
+            animationSpec = spring(dampingRatio = 0.66f, stiffness = Spring.StiffnessMediumLow),
             label = "islandCorner"
+        )
+        val islandElevation by animateDpAsState(
+            targetValue = if (isExpanded) 18.dp else 10.dp,
+            animationSpec = tween(200),
+            label = "islandElevation"
         )
 
         val shape = RoundedCornerShape(islandCorner)
@@ -1426,13 +1491,14 @@ fun IosDynamicIslandHost(
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .padding(top = 8.dp, start = 12.dp, end = 12.dp)
-                .offset { IntOffset(offsetX.roundToInt(), animatedOffsetY.roundToInt()) }
+                .offset { IntOffset(dragOffsetX.value.roundToInt(), dragOffsetY.value.roundToInt()) }
                 .zIndex(999f),
             contentAlignment = Alignment.TopCenter
         ) {
             Box(
                 modifier = Modifier
                     .graphicsLayer {
+                        alpha = visibilityAlpha.value.coerceIn(0f, 1f)
                         scaleX = jellyScaleX.value
                         scaleY = jellyScaleY.value
                         translationY = jumpOffsetY.value
@@ -1443,10 +1509,10 @@ fun IosDynamicIslandHost(
                     .wrapContentHeight()
                     .defaultMinSize(minHeight = if (isExpanded) 78.dp else 46.dp)
                     .animateContentSize(
-                        animationSpec = spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow)
+                        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
                     )
                     .shadow(
-                        elevation = if (isExpanded) 16.dp else 8.dp,
+                        elevation = islandElevation,
                         shape = shape,
                         clip = false,
                         spotColor = Color.Black.copy(alpha = 0.50f),
@@ -1475,26 +1541,61 @@ fun IosDynamicIslandHost(
                         ),
                         shape = shape
                     )
-                    .pointerInput(Unit) {
+                    .pointerInput(currentPresentationSnapshot.instanceId, isExpanded, isComposingReply) {
                         detectDragGestures(
+                            onDragStart = {
+                                isDragging = true
+                            },
                             onDrag = { change, dragAmount ->
                                 change.consume()
-                                if (dragAmount.y < 0) {
-                                    offsetY = (offsetY + dragAmount.y).coerceAtLeast(-120f)
+                                coroutineScope.launch {
+                                    // Rubber-band vertical drag: allow pulling down to expand, up to collapse/dismiss
+                                    val nextY = dragOffsetY.value + dragAmount.y * 0.72f
+                                    dragOffsetY.snapTo(nextY.coerceIn(-150f, 52f))
+                                    val nextX = dragOffsetX.value + dragAmount.x * 0.75f
+                                    dragOffsetX.snapTo(nextX.coerceIn(-180f, 180f))
                                 }
-                                offsetX = (offsetX + dragAmount.x).coerceIn(-180f, 180f)
                             },
                             onDragEnd = {
-                                if (offsetY < -10f || abs(offsetX) > 35f) {
-                                    dismissIsland(invokeEventDismiss = true)
-                                } else {
-                                    offsetY = 0f
-                                    offsetX = 0f
+                                val dy = dragOffsetY.value
+                                val dx = dragOffsetX.value
+                                isDragging = false
+                                when {
+                                    !isExpanded && dy > 26f -> {
+                                        // Pull down to smoothly expand Dynamic Island
+                                        try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
+                                        isExpanded = true
+                                        coroutineScope.launch {
+                                            dragOffsetY.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 420f))
+                                            dragOffsetX.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 420f))
+                                        }
+                                    }
+                                    isExpanded && !isComposingReply && dy < -32f && dy > -96f -> {
+                                        // Swipe up gently to collapse expanded card back into compact pill
+                                        try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
+                                        isExpanded = false
+                                        coroutineScope.launch {
+                                            dragOffsetY.animateTo(0f, spring(dampingRatio = 0.68f, stiffness = 420f))
+                                            dragOffsetX.animateTo(0f, spring(dampingRatio = 0.68f, stiffness = 420f))
+                                        }
+                                    }
+                                    dy < -30f || abs(dx) > 70f -> {
+                                        dismissIsland(invokeEventDismiss = true)
+                                    }
+                                    else -> {
+                                        coroutineScope.launch {
+                                            launch { dragOffsetY.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 420f)) }
+                                            launch { dragOffsetX.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 420f)) }
+                                        }
+                                    }
                                 }
                             },
                             onDragCancel = {
-                                offsetY = 0f
-                                offsetX = 0f
+                                isDragging = false
+                                coroutineScope.launch {
+                                    launch { dragOffsetY.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 420f)) }
+                                    launch { dragOffsetX.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = 420f)) }
+                                }
                             }
                         )
                     }
@@ -1504,7 +1605,16 @@ fun IosDynamicIslandHost(
                     }
                     .padding(horizontal = if (isExpanded) 13.dp else 8.dp, vertical = if (isExpanded) 12.dp else 6.dp)
             ) {
-                if (!isExpanded) {
+                AnimatedContent(
+                    targetState = Triple(currentPresentationSnapshot.instanceId, isExpanded, isComposingReply),
+                    transitionSpec = {
+                        (fadeIn(tween(180, easing = FastOutSlowInEasing)) +
+                            scaleIn(initialScale = 0.94f, animationSpec = tween(180, easing = FastOutSlowInEasing)))
+                            .togetherWith(fadeOut(tween(110, easing = FastOutLinearInEasing)))
+                    },
+                    label = "islandInnerMorph"
+                ) { (_, expandedState, _) ->
+                if (!expandedState) {
                     // COMPACT PILL ALERT WITH QUICK ACTION & DISMISS BUTTONS
                     when (event) {
                         is DynamicIslandEvent.ChatMessage -> {
@@ -1816,14 +1926,14 @@ fun IosDynamicIslandHost(
                                     modifier = Modifier.weight(1f)
                                 )
                                 IslandActionPill(
-                                    label = if (event.onReply != null) "Reply" else "View",
+                                    label = if (event.replyText.isNotBlank() && event.onReply != null) "Reply" else "View",
                                     containerColor = Color(0x38FF2D55),
                                     borderColor = Color(0xFFFF2D55).copy(alpha = 0.55f),
                                     textColor = Color(0xFFFF4F70),
                                     height = 26.dp,
                                     horizontalPadding = 10.dp,
                                     onClick = {
-                                        if (event.onReply != null) {
+                                        if (event.replyText.isNotBlank() && event.onReply != null) {
                                             isExpanded = true
                                             isComposingReply = true
                                         } else {
@@ -1996,19 +2106,6 @@ fun IosDynamicIslandHost(
                                             }
                                         )
                                     }
-                                    if (event.onMarkAsRead != null) {
-                                        IslandActionPill(
-                                            label = "Read",
-                                            icon = Lucide.Check,
-                                            containerColor = Color(0xFF252529),
-                                            borderColor = Color.White.copy(alpha = 0.12f),
-                                            textColor = Color(0xFFD1D1D6),
-                                            onClick = {
-                                                event.onMarkAsRead.invoke()
-                                                dismissIsland()
-                                            }
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -2103,19 +2200,6 @@ fun IosDynamicIslandHost(
                                                 dismissIsland()
                                             }
                                         )
-                                        if (event.onMarkAsRead != null) {
-                                            IslandActionPill(
-                                                label = "Read",
-                                                icon = Lucide.Check,
-                                                containerColor = Color(0xFF252529),
-                                                borderColor = Color.White.copy(alpha = 0.12f),
-                                                textColor = Color(0xFFD1D1D6),
-                                                onClick = {
-                                                    event.onMarkAsRead.invoke()
-                                                    dismissIsland()
-                                                }
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -2164,19 +2248,6 @@ fun IosDynamicIslandHost(
                                             modifier = Modifier.weight(1f),
                                             onClick = {
                                                 event.onViewProfile.invoke()
-                                                dismissIsland()
-                                            }
-                                        )
-                                    }
-                                    if (event.onMarkAsRead != null) {
-                                        IslandActionPill(
-                                            label = "Read",
-                                            icon = Lucide.Check,
-                                            containerColor = Color(0xFF252529),
-                                            borderColor = Color.White.copy(alpha = 0.12f),
-                                            textColor = Color(0xFFD1D1D6),
-                                            onClick = {
-                                                event.onMarkAsRead.invoke()
                                                 dismissIsland()
                                             }
                                         )
@@ -2262,19 +2333,6 @@ fun IosDynamicIslandHost(
                                             }
                                         )
                                     }
-                                    if (event.onMarkAsRead != null) {
-                                        IslandActionPill(
-                                            label = "Read",
-                                            icon = Lucide.Check,
-                                            containerColor = Color(0xFF252529),
-                                            borderColor = Color.White.copy(alpha = 0.12f),
-                                            textColor = Color(0xFFD1D1D6),
-                                            onClick = {
-                                                event.onMarkAsRead.invoke()
-                                                dismissIsland()
-                                            }
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -2351,19 +2409,6 @@ fun IosDynamicIslandHost(
                                             textColor = Color.White,
                                             onClick = {
                                                 event.onViewProfile.invoke()
-                                                dismissIsland()
-                                            }
-                                        )
-                                    }
-                                    if (event.onMarkAsRead != null) {
-                                        IslandActionPill(
-                                            label = "Read",
-                                            icon = Lucide.Check,
-                                            containerColor = Color(0xFF252529),
-                                            borderColor = Color.White.copy(alpha = 0.12f),
-                                            textColor = Color(0xFFD1D1D6),
-                                            onClick = {
-                                                event.onMarkAsRead.invoke()
                                                 dismissIsland()
                                             }
                                         )
@@ -2460,6 +2505,7 @@ fun IosDynamicIslandHost(
                             }
                         }
                     }
+                }
                 }
             }
         }
@@ -2677,9 +2723,19 @@ private fun IslandInlineReplyRow(
     onValueChange: (String) -> Unit,
     placeholder: String,
     onSubmit: () -> Unit,
-    onCancel: (() -> Unit)? = null
+    onCancel: (() -> Unit)? = null,
+    autoFocus: Boolean = true
 ) {
     val pillShape = RoundedCornerShape(9999.dp)
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(autoFocus) {
+        if (autoFocus) {
+            delay(90L)
+            try {
+                focusRequester.requestFocus()
+            } catch (_: Throwable) {}
+        }
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -2707,7 +2763,9 @@ private fun IslandInlineReplyRow(
                 cursorBrush = SolidColor(LiquidGlassTokens.AppleSystemBlue),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { onSubmit() }),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
                 decorationBox = { innerTextField ->
                     if (value.isEmpty()) {
                         Text(

@@ -52,13 +52,18 @@ object ChatNotificationBuilder {
 
     // Bump the version if you ever change channel importance/sound: channels are immutable.
     const val CHANNEL_ID = "chat_messages_v2"
+    const val SOCIAL_CHANNEL_ID = "social_activity_v1"
     private const val GROUP_KEY = "com.chroma.studio.CHAT_MESSAGES"
+    private const val SOCIAL_GROUP_KEY = "com.chroma.studio.SOCIAL_ACTIVITY"
     private const val SUMMARY_ID = 0x7001
+    private const val SOCIAL_SUMMARY_ID = 0x7002
     private const val MAX_STACKED = 10
 
     const val KEY_TEXT_REPLY = "key_text_reply"
     const val EXTRA_ROOM_ID = "roomId"
     const val EXTRA_SENDER_ID = "senderId"
+    const val EXTRA_NOTIFICATION_TYPE = "notificationType"
+    const val EXTRA_TARGET_ID = "targetId"
     const val ACTION_REPLY = "com.chroma.studio.action.CHAT_REPLY"
     const val ACTION_MARK_READ = "com.chroma.studio.action.CHAT_MARK_READ"
     const val ACTION_DISMISSED = "com.chroma.studio.action.CHAT_DISMISSED"
@@ -82,6 +87,29 @@ object ChatNotificationBuilder {
             description = "New chat messages"
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 250, 150, 250)
+            enableLights(true)
+            lightColor = Color.parseColor("#7C4DFF")
+            setShowBadge(true)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            setSound(
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+        }
+        nm.createNotificationChannel(channel)
+        ensureActivityChannel(context)
+    }
+
+    fun ensureActivityChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = context.getSystemService(NotificationManager::class.java) ?: return
+        if (nm.getNotificationChannel(SOCIAL_CHANNEL_ID) != null) return
+        val channel = NotificationChannel(SOCIAL_CHANNEL_ID, "Activity & Likes", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Likes, follows, comments, remixes, and studio updates"
+            enableVibration(true)
             enableLights(true)
             lightColor = Color.parseColor("#7C4DFF")
             setShowBadge(true)
@@ -120,6 +148,77 @@ object ChatNotificationBuilder {
         } catch (e: Exception) {
             Log.w(TAG, "Screen wakeup failed: ${e.message}")
         }
+    }
+
+    /**
+     * Shows a clean non-chat device notification (Likes, Follows, Comments, Remixes, Mentions, etc.)
+     * WITHOUT Chat "Reply" or "Mark as read" buttons.
+     */
+    @SuppressLint("MissingPermission")
+    fun showActivityNotification(
+        context: Context,
+        notificationType: String,
+        senderId: String,
+        senderName: String,
+        body: String,
+        avatarUrl: String = "",
+        targetId: String = ""
+    ) {
+        val app = context.applicationContext
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(app, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val nm = NotificationManagerCompat.from(app)
+        if (!nm.areNotificationsEnabled()) return
+        ensureActivityChannel(app)
+
+        val avatar = loadAvatar(avatarUrl, senderName)
+        val title = senderName.ifBlank { "Oscellion" }
+        val cleanBody = body.ifBlank { "New activity on Oscellion" }
+
+        val launch = (app.packageManager.getLaunchIntentForPackage(app.packageName) ?: Intent()).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_NOTIFICATION_TYPE, notificationType)
+            putExtra(EXTRA_TARGET_ID, targetId)
+            putExtra(EXTRA_SENDER_ID, senderId)
+            putExtra("from_notification", true)
+        }
+        val notifKey = "social:${notificationType}:${senderId}:${targetId}:${System.currentTimeMillis() / 15000L}"
+        val notifId = notifKey.hashCode()
+        val contentPi = PendingIntent.getActivity(
+            app, notifId, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(app, SOCIAL_CHANNEL_ID)
+            .setSmallIcon(smallIcon(app))
+            .setColor(Color.parseColor("#7C4DFF"))
+            .setContentTitle(title)
+            .setContentText(cleanBody)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(cleanBody))
+            .setLargeIcon(avatar)
+            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+            .setGroup(SOCIAL_GROUP_KEY)
+            .setContentIntent(contentPi)
+
+        nm.notify(notifId, builder.build())
+
+        val summary = NotificationCompat.Builder(app, SOCIAL_CHANNEL_ID)
+            .setSmallIcon(smallIcon(app))
+            .setColor(Color.parseColor("#7C4DFF"))
+            .setStyle(NotificationCompat.InboxStyle().setSummaryText("New activity"))
+            .setCategory(NotificationCompat.CATEGORY_SOCIAL)
+            .setGroup(SOCIAL_GROUP_KEY)
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            .setContentIntent(contentPi)
+            .build()
+        nm.notify(SOCIAL_SUMMARY_ID, summary)
     }
 
     /** Call from onMessageReceived when the app is in background / killed / screen locked. */

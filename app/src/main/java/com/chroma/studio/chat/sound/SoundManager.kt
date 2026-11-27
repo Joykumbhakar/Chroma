@@ -28,6 +28,20 @@ object SoundManager {
     private val loadedSoundIds = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
 
     private var lastScrubTimestamp = 0L
+    @Volatile
+    private var lastNotificationChimeTimestamp = 0L
+    private const val NOTIFICATION_CHIME_COOLDOWN_MS = 1100L
+
+    private fun acquireNotificationChimeSlot(): Boolean {
+        val now = System.currentTimeMillis()
+        synchronized(this) {
+            if (now - lastNotificationChimeTimestamp < NOTIFICATION_CHIME_COOLDOWN_MS) {
+                return false
+            }
+            lastNotificationChimeTimestamp = now
+            return true
+        }
+    }
 
     fun init(context: Context) {
         if (soundPool != null) return
@@ -139,12 +153,13 @@ object SoundManager {
 
     fun playDynamicIsland(context: Context? = null) {
         if (!isSoundsEnabled) return
+        if (!acquireNotificationChimeSlot()) return
         if (soundPool == null && context != null) {
             init(context)
         }
 
         val pool = soundPool
-        if (pool != null && dynamicIslandSoundId != 0 && isPoolLoaded) {
+        if (pool != null && dynamicIslandSoundId != 0 && (isPoolLoaded || loadedSoundIds.contains(dynamicIslandSoundId))) {
             pool.play(dynamicIslandSoundId, 0.75f, 0.75f, 1, 0, 1.0f)
         } else {
             playRing()
@@ -209,9 +224,10 @@ object SoundManager {
      */
     fun playNotification(context: Context? = null) {
         if (!isSoundsEnabled) return
+        if (!acquireNotificationChimeSlot()) return
         if (context == null) {
             val pool = soundPool
-            if (pool != null && notificationSoundId != 0 && isPoolLoaded) {
+            if (pool != null && notificationSoundId != 0 && (isPoolLoaded || loadedSoundIds.contains(notificationSoundId))) {
                 pool.play(notificationSoundId, 0.85f, 0.85f, 1, 0, 1.0f)
             }
             return

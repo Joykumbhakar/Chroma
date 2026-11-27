@@ -1667,6 +1667,7 @@ private fun IosConversationListRow(
 
     val lastMsg: ChatMessage? = chat.messages.lastOrNull()
     val isOutgoing = lastMsg != null && lastMsg.senderId == currentUserId
+    val isLastMsgError = isOutgoing && lastMsg.status.equals("error", ignoreCase = true)
 
     val lastMsgPreview = when {
         isLocked -> "Locked conversation"
@@ -1676,7 +1677,12 @@ private fun IosConversationListRow(
         }
         lastMsg?.text?.isNotBlank() == true -> sanitizeMessagePreview(lastMsg.text)
         lastMsg?.mediaType == "voice" -> "Voice Message (${lastMsg.voiceDuration}s)"
-        lastMsg?.mediaType == "image" -> "Photo"
+        lastMsg?.mediaType == "image" || lastMsg?.mediaType == "image_stack" -> "Photo"
+        lastMsg?.mediaType == "video" -> "Video"
+        lastMsg?.mediaType == "sticker" -> "Sticker"
+        lastMsg?.mediaType == "flash_video" -> "Flash video"
+        lastMsg?.mediaType == "music" -> lastMsg.musicTitle?.takeIf { it.isNotBlank() }?.let { "🎵 $it" } ?: "Song"
+        lastMsg?.mediaType == "file" -> lastMsg.fileName?.takeIf { it.isNotBlank() } ?: "Document"
         lastMsg?.mediaType == "location" -> "Location shared"
         else -> "No messages yet"
     }
@@ -2025,10 +2031,16 @@ private fun IosConversationListRow(
 
                                 Text(
                                     text = (if (chat.type == "group" && lastMsg != null && lastMsg.senderName.isNotEmpty() && !isOutgoing)
-                                               "${lastMsg.senderName.split(" ").firstOrNull() ?: lastMsg.senderName}: " else "") + lastMsgPreview,
+                                               "${lastMsg.senderName.split(" ").firstOrNull() ?: lastMsg.senderName}: " else "") +
+                                        (if (isLastMsgError) "Not delivered • $lastMsgPreview" else lastMsgPreview),
                                     fontSize = 14.5.sp,
-                                    fontWeight = if (isUnread) FontWeight.Medium else FontWeight.Normal,
-                                    color = if (isUnread) colors.textDark else if (lastMsgPreview == "No messages yet") colors.textMuted.copy(alpha = 0.75f) else colors.textMuted,
+                                    fontWeight = if (isUnread || isLastMsgError) FontWeight.Medium else FontWeight.Normal,
+                                    color = when {
+                                        isLastMsgError -> Color(0xFFEF4444)
+                                        isUnread -> colors.textDark
+                                        lastMsgPreview == "No messages yet" -> colors.textMuted.copy(alpha = 0.75f)
+                                        else -> colors.textMuted
+                                    },
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                     lineHeight = 19.sp

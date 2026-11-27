@@ -207,11 +207,29 @@ private fun AuthenticatedRoute(
                         }
                     }
                     val initialRoomId = intent.getStringExtra("room_id") ?: intent.getStringExtra("roomId")
+                    val initialNotifType = intent.getStringExtra(com.chroma.studio.ChatNotificationBuilder.EXTRA_NOTIFICATION_TYPE)
+                    val initialTargetId = intent.getStringExtra(com.chroma.studio.ChatNotificationBuilder.EXTRA_TARGET_ID)
+                    val initialSenderId = intent.getStringExtra(com.chroma.studio.ChatNotificationBuilder.EXTRA_SENDER_ID)
                     if (!initialRoomId.isNullOrBlank()) {
                         try {
                             navController.navigate("chat/$initialRoomId")
                         } catch (e: Exception) {
                             android.util.Log.e("HomeActivity", "Failed to navigate to initial room", e)
+                        }
+                    } else if (!initialNotifType.isNullOrBlank() && !initialNotifType.equals("MESSAGE", ignoreCase = true)) {
+                        try {
+                            when (initialNotifType.uppercase()) {
+                                "FOLLOW", "FOLLOW_REQUEST" -> {
+                                    if (!initialSenderId.isNullOrBlank()) {
+                                        navController.navigate("userProfile/$initialSenderId")
+                                    } else {
+                                        navController.navigate("notifications_feed")
+                                    }
+                                }
+                                else -> navController.navigate("notifications_feed")
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("HomeActivity", "Failed to navigate from activity notification", e)
                         }
                     }
                 }
@@ -689,6 +707,27 @@ private fun AuthenticatedRoute(
                 // ── Old home bottom sheet state ────────────────────────────
                 var showOldHomeSheet by remember { mutableStateOf(false) }
 
+                // Keep ChatStateManager surface visibility strictly synced to actual visible chat screen + resumed lifecycle
+                val activeSurfaceLifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current
+                var isHomeResumed by remember { mutableStateOf(true) }
+                androidx.compose.runtime.DisposableEffect(activeSurfaceLifecycle) {
+                    val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                        when (event) {
+                            androidx.lifecycle.Lifecycle.Event.ON_RESUME -> isHomeResumed = true
+                            androidx.lifecycle.Lifecycle.Event.ON_PAUSE,
+                            androidx.lifecycle.Lifecycle.Event.ON_STOP -> isHomeResumed = false
+                            else -> Unit
+                        }
+                    }
+                    activeSurfaceLifecycle.lifecycle.addObserver(obs)
+                    onDispose { activeSurfaceLifecycle.lifecycle.removeObserver(obs) }
+                }
+                androidx.compose.runtime.LaunchedEffect(currentRoute, pagerState.currentPage, isInsideChatTab, isHomeResumed) {
+                    val routeActive = currentRoute == "chat/{roomId}" || currentRoute?.startsWith("chat/") == true
+                    val tabActive = (currentRoute == "main" || currentRoute == null) && pagerState.currentPage == 3 && isInsideChatTab
+                    com.chroma.studio.ChatStateManager.setChatSurfaceVisible(isHomeResumed && (routeActive || tabActive))
+                }
+
                 // ── In-App Dynamic Island Notification HUD ──────────────────
                 val currentAuthUidState = com.chroma.studio.ChatStateManager.currentUserId.collectAsState()
                 val currentAuthUid = currentAuthUidState.value
@@ -698,6 +737,12 @@ private fun AuthenticatedRoute(
                     val uidToListen = activeUidKey
                     if (uidToListen != null) {
                         var isInitialSnapshot = true
+                        data class RoomAlertWatermark(
+                            val lastMessageId: String?,
+                            val lastMessageTime: Long,
+                            val lastUnreadCount: Int
+                        )
+                        val roomWatermarks = java.util.concurrent.ConcurrentHashMap<String, RoomAlertWatermark>()
                         val registration = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("chats")
                             .whereArrayContains("participants", uidToListen)
                             .addSnapshotListener { snapshot, e ->
@@ -706,50 +751,89 @@ private fun AuthenticatedRoute(
                                 }
                                 if (isInitialSnapshot) {
                                     isInitialSnapshot = false
+                                    snapshot.documents.forEach { doc ->
+                                        val r = doc.toChatRoomSafe() ?: return@forEach
+                                        val u = r.unreadCount[uidToListen] ?: 0
+                                        roomWatermarks[doc.id] = RoomAlertWatermark(r.lastMessageId, r.lastMessageTime, u)
+                                    }
                                     return@addSnapshotListener
                                 }
-                                snapshot?.documentChanges?.forEach { change ->
+                                snapshot.documentChanges.forEach { change ->
                                     if (change.type == com.google.firebase.firestore.DocumentChange.Type.MODIFIED ||
                                         change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED
                                     ) {
-                                        val room = change.document.toChatRoomSafe() ?: return@forEach
-                                        val unread = room.unreadCount[activeUidKey] ?: 0
-                                        if (unread > 0 && room.lastMessage.isNotBlank()) {
-                                            val currentBackStack = navController.currentBackStackEntry
-                                            val currentRoute = currentBackStack?.destination?.route
-                                            val routeRoomId = currentBackStack?.arguments?.getString("roomId")
-                                            val isViewingInChatRoute = (currentRoute == "chat/{roomId}" || currentRoute?.startsWith("chat/") == true) &&
-                                                (routeRoomId == room.id || chatVm.activeRoomId.value == room.id || com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId == room.id)
-                                            val isViewingInChatTab = (currentRoute == "main" || currentRoute == null) &&
-                                                pagerState.currentPage == 3 &&
-                                                isInsideChatTab &&
-                                                (chatVm.activeRoomId.value == room.id || com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId == room.id)
-                                            val isUserViewingThisRoom = isViewingInChatRoute || isViewingInChatTab || (com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId == room.id)
+                                        // Ignore local latency-compensated optimistic writes (e.g., own markAsDelivered/markAsRead)
+                                        if (change.document.metadata.hasPendingWrites()) return@forEach
 
-                                            if (!isUserViewingThisRoom && room.lastSender != activeUidKey) {
-                                                val senderId: String? = room.lastSender
-                                                val senderProfile: com.chroma.studio.model.UserProfile? = if (senderId != null) chatVm.getUserProfile(senderId) else null
-                                                val senderName = senderProfile?.displayName?.ifBlank { null } ?: if (room.isGroup) (room.name ?: "Group") else "New Message"
-                                                val isAppForeground = com.chroma.studio.ChatStateManager.isAppInForeground.value
-                                                if (isAppForeground) {
-                                                    com.chroma.studio.ChatStateManager.emitInAppEvent(
-                                                        roomId = room.id,
-                                                        senderId = senderId ?: "",
-                                                        senderName = senderName,
-                                                        messageText = room.lastMessage,
-                                                        avatarUrl = senderProfile?.avatarUrl ?: "",
-                                                        isVerified = senderProfile?.verified == true
-                                                    )
-                                                } else {
-                                                    com.chroma.studio.ChatNotificationBuilder.showHeadsUpNotification(
-                                                        context = this@HomeActivity,
-                                                        roomId = room.id,
-                                                        senderId = senderId ?: "",
-                                                        senderName = senderName,
-                                                        messageText = room.lastMessage,
-                                                        avatarUrl = senderProfile?.avatarUrl ?: ""
-                                                    )
-                                                }
+                                        val room = change.document.toChatRoomSafe() ?: return@forEach
+                                        val unread = room.unreadCount[uidToListen] ?: 0
+                                        val prevWatermark = roomWatermarks[room.id]
+                                        val isNewIncomingMessage = unread > 0 &&
+                                            room.lastMessage.isNotBlank() &&
+                                            !room.lastSender.isNullOrBlank() &&
+                                            room.lastSender != uidToListen &&
+                                            (
+                                                prevWatermark == null ||
+                                                    (!room.lastMessageId.isNullOrBlank() && room.lastMessageId != prevWatermark.lastMessageId) ||
+                                                    room.lastMessageTime > prevWatermark.lastMessageTime ||
+                                                    unread > prevWatermark.lastUnreadCount
+                                            )
+
+                                        // Always advance watermark cleanly so follow-up delivery/read updates never re-trigger
+                                        roomWatermarks[room.id] = RoomAlertWatermark(
+                                            lastMessageId = room.lastMessageId ?: prevWatermark?.lastMessageId,
+                                            lastMessageTime = maxOf(room.lastMessageTime, prevWatermark?.lastMessageTime ?: 0L),
+                                            lastUnreadCount = unread
+                                        )
+
+                                        if (!isNewIncomingMessage) return@forEach
+
+                                        // Suppress alerts for muted rooms or quiet/DM-disabled settings
+                                        if (room.id in chatVm.mutedChatIds.value) return@forEach
+                                        val notifPrefs = getSharedPreferences("oscellion_notif_prefs", android.content.Context.MODE_PRIVATE)
+                                        val quietMode = notifPrefs.getBoolean("quiet_mode_enabled", false)
+                                        val masterPush = notifPrefs.getBoolean("push_notifications_enabled", true)
+                                        val dmPush = notifPrefs.getBoolean("push_notifications_dm", true)
+                                        if (quietMode || !masterPush || !dmPush) return@forEach
+
+                                        val currentBackStack = navController.currentBackStackEntry
+                                        val currentRoute = currentBackStack?.destination?.route
+                                        val routeRoomId = currentBackStack?.arguments?.getString("roomId")
+                                        val isViewingInChatRoute = (currentRoute == "chat/{roomId}" || currentRoute?.startsWith("chat/") == true) &&
+                                            (routeRoomId == room.id || chatVm.activeRoomId.value == room.id || com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId == room.id)
+                                        val isViewingInChatTab = (currentRoute == "main" || currentRoute == null) &&
+                                            pagerState.currentPage == 3 &&
+                                            isInsideChatTab &&
+                                            (chatVm.activeRoomId.value == room.id || com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId == room.id)
+                                        val isUserViewingThisRoom = com.chroma.studio.ChatStateManager.isChatScreenVisible(room.id) ||
+                                            isViewingInChatRoute ||
+                                            isViewingInChatTab
+
+                                        if (!isUserViewingThisRoom) {
+                                            val senderId: String = room.lastSender.orEmpty()
+                                            val senderProfile: com.chroma.studio.model.UserProfile? = if (senderId.isNotBlank()) chatVm.getUserProfile(senderId) else null
+                                            val senderName = senderProfile?.displayName?.ifBlank { null } ?: if (room.isGroup) (room.name ?: "Group") else "New Message"
+                                            val isAppForeground = com.chroma.studio.ChatStateManager.isAppInForeground.value
+                                            if (isAppForeground) {
+                                                com.chroma.studio.ChatStateManager.emitInAppEvent(
+                                                    roomId = room.id,
+                                                    senderId = senderId,
+                                                    senderName = senderName,
+                                                    messageText = room.lastMessage,
+                                                    avatarUrl = senderProfile?.avatarUrl ?: "",
+                                                    isVerified = senderProfile?.verified == true,
+                                                    messageId = room.lastMessageId.orEmpty(),
+                                                    timestamp = room.lastMessageTime
+                                                )
+                                            } else {
+                                                com.chroma.studio.ChatNotificationBuilder.showHeadsUpNotification(
+                                                    context = this@HomeActivity,
+                                                    roomId = room.id,
+                                                    senderId = senderId,
+                                                    senderName = senderName,
+                                                    messageText = room.lastMessage,
+                                                    avatarUrl = senderProfile?.avatarUrl ?: ""
+                                                )
                                             }
                                         }
                                     }
@@ -801,8 +885,10 @@ private fun AuthenticatedRoute(
                                     val isAppForeground = com.chroma.studio.ChatStateManager.isAppInForeground.value
                                     if (!isAppForeground) return@forEach
 
-                                    // Play crystal chime / notification sound
-                                    com.chroma.studio.chat.sound.SoundManager.playNotification(this@HomeActivity)
+                                    // Play notification tone only if Dynamic Island overlay is suppressed (otherwise IosDynamicIslandHost chimes once)
+                                    if (com.chroma.studio.ui.components.DynamicIslandManager.isSuppressed) {
+                                        com.chroma.studio.chat.sound.SoundManager.playNotification(this@HomeActivity)
+                                    }
 
                                     fun markRead() {
                                         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
@@ -865,7 +951,7 @@ private fun AuthenticatedRoute(
                                                 targetThumbnail = targetPreviewUrl,
                                                 isVerified = actorVerified,
                                                 onViewProfile = viewActorProfile,
-                                                onMarkAsRead = { markRead() },
+                                                onMarkAsRead = null,
                                                 onClick = {
                                                     markRead()
                                                     if (targetId.isNotBlank()) {
@@ -889,7 +975,7 @@ private fun AuthenticatedRoute(
                                                 isMention = false,
                                                 onReply = if (targetId.isNotBlank() || actorUid.isNotBlank()) ({ text -> sendCommentReply(text) }) else null,
                                                 onViewProfile = viewActorProfile,
-                                                onMarkAsRead = { markRead() },
+                                                onMarkAsRead = null,
                                                 onClick = {
                                                     markRead()
                                                     if (targetId.isNotBlank()) {
@@ -948,7 +1034,7 @@ private fun AuthenticatedRoute(
                                                         } catch (_: Throwable) {}
                                                     }
                                                 }) else null,
-                                                onMarkAsRead = { markRead() },
+                                                onMarkAsRead = null,
                                                 onClick = {
                                                     markRead()
                                                     if (actorUid.isNotBlank()) {
@@ -969,7 +1055,7 @@ private fun AuthenticatedRoute(
                                                 isVerified = actorVerified,
                                                 workThumbnail = targetPreviewUrl,
                                                 onViewProfile = viewActorProfile,
-                                                onMarkAsRead = { markRead() },
+                                                onMarkAsRead = null,
                                                 onClick = {
                                                     markRead()
                                                     if (targetId.isNotBlank()) {
@@ -993,9 +1079,9 @@ private fun AuthenticatedRoute(
                                                 storyThumbnail = targetPreviewUrl,
                                                 isVerified = actorVerified,
                                                 replyText = if (isStoryReply) detailText else "",
-                                                onReply = if (actorUid.isNotBlank()) ({ text -> sendDmReply(text) }) else null,
+                                                onReply = if (isStoryReply && actorUid.isNotBlank()) ({ text -> sendDmReply(text) }) else null,
                                                 onViewProfile = viewActorProfile,
-                                                onMarkAsRead = { markRead() },
+                                                onMarkAsRead = null,
                                                 onClick = {
                                                     markRead()
                                                     navController.navigate("notifications_feed")
@@ -1014,7 +1100,7 @@ private fun AuthenticatedRoute(
                                                 isMention = true,
                                                 onReply = if (targetId.isNotBlank() || actorUid.isNotBlank()) ({ text -> sendCommentReply(text) }) else null,
                                                 onViewProfile = viewActorProfile,
-                                                onMarkAsRead = { markRead() },
+                                                onMarkAsRead = null,
                                                 onClick = {
                                                     markRead()
                                                     if (targetId.isNotBlank()) {
@@ -1037,8 +1123,8 @@ private fun AuthenticatedRoute(
                                                 message = actionText.ifBlank { detailText },
                                                 icon = if (isAppUpdateDrop) com.composables.icons.lucide.Lucide.Rocket else com.composables.icons.lucide.Lucide.Info,
                                                 actionLabel = if (isAppUpdateDrop) "Update" else "View",
-                                                secondaryActionLabel = "Mark Read",
-                                                onSecondaryAction = { markRead() },
+                                                secondaryActionLabel = null,
+                                                onSecondaryAction = null,
                                                 onAction = {
                                                     markRead()
                                                     if (isAppUpdateDrop) {

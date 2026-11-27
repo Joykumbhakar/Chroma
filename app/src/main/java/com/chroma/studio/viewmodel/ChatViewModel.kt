@@ -56,17 +56,31 @@ class ChatViewModel : ViewModel() {
 
     private val _serverMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     private val _localMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    private val _activeRoomId = MutableStateFlow<String?>(null)
+    val activeRoomId: StateFlow<String?> = _activeRoomId.asStateFlow()
+    private val _outboxRoomStatuses = MutableStateFlow<Map<String, com.chroma.studio.chat.data.OutboxRoomStatus>>(emptyMap())
+    val outboxRoomStatuses: StateFlow<Map<String, com.chroma.studio.chat.data.OutboxRoomStatus>> = _outboxRoomStatuses.asStateFlow()
+    private val inFlightSendIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
-    val currentMessages: StateFlow<List<ChatMessage>> = combine(_serverMessages, _localMessages) { server, local ->
-        val serverIds = server.map { it.id }.toSet()
+    val currentMessages: StateFlow<List<ChatMessage>> = combine(_serverMessages, _localMessages, _activeRoomId, _recentChats) { server, local, roomId, rooms ->
+        val uid = currentAuthUserId ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+        val participants = rooms.find { it.id == roomId }?.participants.orEmpty()
+        val localById = local.associateBy { it.id }
+        val serverIds = HashSet<String>(server.size)
+        val reconciledServer = server.map { serverMsg ->
+            serverIds.add(serverMsg.id)
+            com.chroma.studio.chat.data.MessageStatusMachine.mergeMonotonic(
+                previous = localById[serverMsg.id],
+                incoming = serverMsg,
+                currentUid = uid,
+                groupParticipants = participants
+            )
+        }
         val remainingLocal = local.filter { it.id !in serverIds }
-        (server + remainingLocal)
+        (reconciledServer + remainingLocal)
             .distinctBy { it.id }
             .sortedByDescending { it.timestamp }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-    private val _activeRoomId = MutableStateFlow<String?>(null)
-    val activeRoomId: StateFlow<String?> = _activeRoomId.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -497,6 +511,8 @@ class ChatViewModel : ViewModel() {
         _recentChats.value = emptyList()
         _serverMessages.value = emptyList()
         _localMessages.value = emptyList()
+        _outboxRoomStatuses.value = emptyMap()
+        inFlightSendIds.clear()
         _activeRoomId.value = null
         _isLoadingChats.value = false
         _isOtherUserOnline.value = false
@@ -582,7 +598,16 @@ class ChatViewModel : ViewModel() {
             roomId = roomId,
             userId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
             limit = 40
-        )
+        ).map { msg ->
+            if (msg.isPending && msg.id !in inFlightSendIds) {
+                msg.copy(
+                    isPending = false,
+                    isError = true,
+                    errorReason = msg.errorReason ?: "Send interrupted. Tap to retry.",
+                    uploadProgress = null
+                )
+            } else msg
+        }
         _serverMessages.value = cached
         _localMessages.value = emptyList()
 
@@ -631,7 +656,9 @@ class ChatViewModel : ViewModel() {
                 pendingRoomCreations[roomId]?.await()
             } catch (_: Exception) {}
             try {
-                repository.markAsRead(roomId)
+                if (com.chroma.studio.ChatStateManager.isChatScreenVisible(roomId)) {
+                    repository.markAsRead(roomId)
+                }
             } catch (_: Exception) {}
             try {
                 val activeUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
@@ -885,28 +912,48 @@ class ChatViewModel : ViewModel() {
                     // Only update server messages if new messages arrived from server or Firestore cache.
                     // Never wipe out non-empty cached messages if an empty list arrives during offline transitions.
                     if (msgs.isNotEmpty()) {
-                        val minServerTs = msgs.minOfOrNull { it.timestamp } ?: Long.MAX_VALUE
-                        val serverIds = msgs.map { it.id }.toSet()
+                        val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                        val participants = _recentChats.value.find { it.id == roomId }?.participants.orEmpty()
+                        val prevById = _serverMessages.value.associateBy { it.id }
+                        val mergedIncoming = msgs.map { incoming ->
+                            com.chroma.studio.chat.data.MessageStatusMachine.mergeMonotonic(
+                                previous = prevById[incoming.id],
+                                incoming = incoming,
+                                currentUid = currentUserId ?: "",
+                                groupParticipants = participants
+                            )
+                        }
+                        val minServerTs = mergedIncoming.minOfOrNull { it.timestamp } ?: Long.MAX_VALUE
+                        val serverIds = mergedIncoming.map { it.id }.toSet()
                         val preservedOlderLocal = _serverMessages.value.filter {
                             it.id !in serverIds && it.timestamp < minServerTs
                         }
-                        _serverMessages.value = (msgs + preservedOlderLocal)
+                        _serverMessages.value = (mergedIncoming + preservedOlderLocal)
                             .distinctBy { it.id }
                             .sortedByDescending { it.timestamp }
 
+                        // Clear local outbox pending/error badge once Firestore server confirms commit
+                        val activeOutbox = _outboxRoomStatuses.value[roomId]
+                        if (activeOutbox != null) {
+                            val confirmedMatch = mergedIncoming.firstOrNull { it.id == activeOutbox.messageId && !it.isPending }
+                            if (confirmedMatch != null) {
+                                _outboxRoomStatuses.value = _outboxRoomStatuses.value - roomId
+                            }
+                        }
+
                         // WhatsApp-grade immediate eviction of typing indicator on message arrival
-                        val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                         if (currentUserId != null) {
-                            val otherSenders = msgs.map { it.senderId }.filter { it != currentUserId }.toSet()
+                            val otherSenders = mergedIncoming.map { it.senderId }.filter { it != currentUserId }.toSet()
                             otherSenders.forEach { senderId ->
                                 evictUserTypingActivity(roomId, senderId)
                             }
 
                             val isGroupChat = roomId.startsWith("group_") ||
                                 (_recentChats.value.find { it.id == roomId }?.isGroup == true)
-                            // Auto-mark incoming messages as read when user is actively viewing this room, or delivered otherwise
-                            if (_activeRoomId.value == roomId) {
-                                val hasUnreadFromOther = msgs.any {
+                            // ONLY mark messages as read when the chat screen is genuinely foregrounded & visible;
+                            // otherwise ONLY mark as delivered!
+                            if (com.chroma.studio.ChatStateManager.isChatScreenVisible(roomId)) {
+                                val hasUnreadFromOther = mergedIncoming.any {
                                     it.senderId != currentUserId &&
                                         if (isGroupChat) !it.readBy.containsKey(currentUserId) else !it.isRead
                                 }
@@ -916,7 +963,7 @@ class ChatViewModel : ViewModel() {
                                     }
                                 }
                             } else {
-                                val hasUndeliveredFromOther = msgs.any {
+                                val hasUndeliveredFromOther = mergedIncoming.any {
                                     it.senderId != currentUserId &&
                                         if (isGroupChat) !it.deliveredTo.containsKey(currentUserId) else !it.isDelivered
                                 }
@@ -932,7 +979,7 @@ class ChatViewModel : ViewModel() {
                             com.chroma.studio.chat.data.ChatLocalCacheManager.saveMessages(
                                 context = com.chroma.studio.ChromaApp.instance,
                                 roomId = roomId,
-                                messages = msgs,
+                                messages = mergedIncoming,
                                 userId = currentUserId
                             )
                         } catch (e: Exception) {
@@ -945,6 +992,108 @@ class ChatViewModel : ViewModel() {
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 android.util.Log.w("ChatViewModel", "observeMessages error for room $roomId: ${e.message}")
+            }
+        }
+    }
+
+    fun markActiveRoomReadIfVisible(roomId: String? = _activeRoomId.value) {
+        val targetId = roomId?.takeIf { it.isNotBlank() } ?: return
+        if (!com.chroma.studio.ChatStateManager.isChatScreenVisible(targetId)) return
+        val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val hasUnread = _serverMessages.value.any { it.senderId != currentUid && !it.readBy.containsKey(currentUid) && !it.isRead } ||
+            ((_recentChats.value.find { it.id == targetId }?.unreadCount?.get(currentUid) ?: 0) > 0)
+        if (!hasUnread) return
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.markAsRead(targetId)
+        }
+    }
+
+    private fun applyOptimisticRoomSend(
+        roomId: String,
+        msgId: String,
+        currentUserId: String,
+        previewText: String,
+        timestamp: Long
+    ) {
+        inFlightSendIds.add(msgId)
+        _outboxRoomStatuses.value = _outboxRoomStatuses.value + (
+            roomId to com.chroma.studio.chat.data.OutboxRoomStatus(
+                messageId = msgId,
+                status = com.chroma.studio.chat.data.MessageDeliveryStatus.PENDING
+            )
+        )
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            val chat = currentChats.removeAt(index)
+            currentChats.add(
+                0,
+                chat.copy(
+                    lastMessage = previewText,
+                    lastMessageTime = timestamp,
+                    lastSender = currentUserId,
+                    lastMessageId = msgId,
+                    lastMessageIsRead = false,
+                    lastMessageIsDelivered = false
+                )
+            )
+            _recentChats.value = currentChats
+        }
+    }
+
+    private fun handleSendResult(
+        roomId: String,
+        msgId: String,
+        result: com.chroma.studio.chat.data.SendMessageResult,
+        showToastOnFailure: Boolean = true
+    ) {
+        inFlightSendIds.remove(msgId)
+        val success = result is com.chroma.studio.chat.data.SendMessageResult.Success
+        val errorMsg = (result as? com.chroma.studio.chat.data.SendMessageResult.Failure)?.userMessage
+
+        val mapTransform: (ChatMessage) -> ChatMessage = { msg ->
+            if (msg.id == msgId) {
+                msg.copy(
+                    isPending = false,
+                    isError = !success,
+                    errorReason = errorMsg,
+                    uploadProgress = null
+                )
+            } else msg
+        }
+
+        if (_activeRoomId.value == roomId) {
+            _localMessages.value = _localMessages.value.map(mapTransform)
+            _serverMessages.value = _serverMessages.value.map(mapTransform)
+        }
+
+        val updatedMsg = (_localMessages.value.firstOrNull { it.id == msgId }
+            ?: _serverMessages.value.firstOrNull { it.id == msgId })
+        if (updatedMsg != null) {
+            try {
+                com.chroma.studio.chat.data.ChatLocalCacheManager.appendOrUpdateMessage(
+                    com.chroma.studio.ChromaApp.instance,
+                    roomId,
+                    updatedMsg
+                )
+            } catch (_: Exception) {}
+        }
+
+        val currentOutbox = _outboxRoomStatuses.value
+        if (success) {
+            if (currentOutbox[roomId]?.messageId == msgId) {
+                _outboxRoomStatuses.value = currentOutbox - roomId
+            }
+        } else {
+            _outboxRoomStatuses.value = currentOutbox + (
+                roomId to com.chroma.studio.chat.data.OutboxRoomStatus(
+                    messageId = msgId,
+                    status = com.chroma.studio.chat.data.MessageDeliveryStatus.ERROR,
+                    errorReason = errorMsg
+                )
+            )
+            if (showToastOnFailure && !errorMsg.isNullOrBlank()) {
+                com.chroma.studio.ui.components.ToastManager.showToast(errorMsg)
             }
         }
     }
@@ -1019,19 +1168,18 @@ class ChatViewModel : ViewModel() {
             )
         } catch (_: Exception) {}
 
-        // Optimistically update recent chats list
-        val currentChats = _recentChats.value.toMutableList()
-        val index = currentChats.indexOfFirst { it.id == roomId }
-        val previewText = "⚡ Shared a Flash video"
-        if (index != -1) {
-            val chat = currentChats.removeAt(index)
-            currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
-            _recentChats.value = currentChats
-        }
+        // Optimistically update recent chats list (resetting prior read/delivered flags!)
+        applyOptimisticRoomSend(
+            roomId = roomId,
+            msgId = msgId,
+            currentUserId = currentUserId,
+            previewText = "⚡ Shared a Flash video",
+            timestamp = timestamp
+        )
 
         viewModelScope.launch(Dispatchers.IO) {
             try { pendingRoomCreations[roomId]?.await() } catch (_: Exception) {}
-            val success = repository.sendMessage(
+            val result = repository.sendMessageDetailed(
                 roomId = roomId,
                 text = messageText,
                 preGeneratedId = msgId,
@@ -1045,11 +1193,7 @@ class ChatViewModel : ViewModel() {
                 flashVideoAuthorAvatarUrl = flashVideo.authorAvatarUrl,
                 flashVideoDurationMs = flashVideo.duration
             )
-            if (_activeRoomId.value == roomId) {
-                _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = !success) else it
-                }
-            }
+            handleSendResult(roomId, msgId, result)
         }
     }
 
@@ -1095,18 +1239,17 @@ class ChatViewModel : ViewModel() {
             )
         } catch (_: Exception) {}
 
-        val currentChats = _recentChats.value.toMutableList()
-        val index = currentChats.indexOfFirst { it.id == roomId }
-        val previewText = "🎵 ${selection.title}"
-        if (index != -1) {
-            val chat = currentChats.removeAt(index)
-            currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
-            _recentChats.value = currentChats
-        }
+        applyOptimisticRoomSend(
+            roomId = roomId,
+            msgId = msgId,
+            currentUserId = currentUserId,
+            previewText = "🎵 ${selection.title}",
+            timestamp = timestamp
+        )
 
         viewModelScope.launch(Dispatchers.IO) {
             try { pendingRoomCreations[roomId]?.await() } catch (_: Exception) {}
-            val success = repository.sendMessage(
+            val result = repository.sendMessageDetailed(
                 roomId = roomId,
                 text = displayTitle,
                 preGeneratedId = msgId,
@@ -1121,16 +1264,12 @@ class ChatViewModel : ViewModel() {
                 musicStartSec = selection.startSec,
                 musicDurationSec = selection.durationSec
             )
-            if (success) {
+            if (result is com.chroma.studio.chat.data.SendMessageResult.Success) {
                 try {
                     com.chroma.studio.data.MusicRepository.getInstance().incrementTrackUsage(selection.trackId)
                 } catch (_: Exception) {}
             }
-            if (_activeRoomId.value == roomId) {
-                _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = !success) else it
-                }
-            }
+            handleSendResult(roomId, msgId, result)
         }
     }
 
@@ -1185,23 +1324,23 @@ class ChatViewModel : ViewModel() {
             // ignore
         }
 
-        // Optimistically update recent chats list
-        val currentChats = _recentChats.value.toMutableList()
-        val index = currentChats.indexOfFirst { it.id == roomId }
-        if (index != -1) {
-            val chat = currentChats.removeAt(index)
-            val previewText = when {
-                storyThumbnailUrl != null || storyId != null -> "Replied to story: $text"
-                workId != null -> "Shared a work"
-                else -> text
-            }
-            currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
-            _recentChats.value = currentChats
+        // Optimistically update recent chats list (clearing previous message read/delivered flags!)
+        val previewText = when {
+            storyThumbnailUrl != null || storyId != null -> "Replied to story: $text"
+            workId != null -> "Shared a work"
+            else -> text
         }
+        applyOptimisticRoomSend(
+            roomId = roomId,
+            msgId = msgId,
+            currentUserId = currentUserId,
+            previewText = previewText,
+            timestamp = timestamp
+        )
 
         viewModelScope.launch(Dispatchers.IO) {
             try { pendingRoomCreations[roomId]?.await() } catch (_: Exception) {}
-            val success = repository.sendMessage(
+            val result = repository.sendMessageDetailed(
                 roomId = roomId,
                 text = text,
                 workId = workId,
@@ -1212,30 +1351,42 @@ class ChatViewModel : ViewModel() {
                 storyThumbnailUrl = storyThumbnailUrl,
                 fontStyle = fontStyle
             )
-            if (_activeRoomId.value == roomId) {
-                _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = !success) else it
-                }
-            }
+            handleSendResult(roomId, msgId, result)
         }
     }
 
     fun retryMessage(msgId: String) {
         val roomId = _activeRoomId.value ?: return
-        val targetMsg = _localMessages.value.firstOrNull { it.id == msgId } ?: return
+        val targetMsg = _localMessages.value.firstOrNull { it.id == msgId }
+            ?: _serverMessages.value.firstOrNull { it.id == msgId }
+            ?: return
         if (!targetMsg.isError) return
 
-        // Set back to pending
-        _localMessages.value = _localMessages.value.map {
-            if (it.id == msgId) it.copy(isPending = true, isError = false) else it
+        inFlightSendIds.add(msgId)
+        val resetTransform: (ChatMessage) -> ChatMessage = { msg ->
+            if (msg.id == msgId) msg.copy(isPending = true, isError = false, errorReason = null) else msg
         }
+        _localMessages.value = _localMessages.value.map(resetTransform)
+        _serverMessages.value = _serverMessages.value.map(resetTransform)
+        _outboxRoomStatuses.value = _outboxRoomStatuses.value + (
+            roomId to com.chroma.studio.chat.data.OutboxRoomStatus(
+                messageId = msgId,
+                status = com.chroma.studio.chat.data.MessageDeliveryStatus.PENDING
+            )
+        )
 
-        viewModelScope.launch {
-            val success = when (targetMsg.messageType) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try { pendingRoomCreations[roomId]?.await() } catch (_: Exception) {}
+            val uploadFailure = com.chroma.studio.chat.data.SendMessageResult.Failure(
+                reason = com.chroma.studio.chat.data.SendFailureReason.MEDIA_UPLOAD_FAILED,
+                userMessage = "Media upload failed. Tap to retry.",
+                isRetryable = true
+            )
+            val result: com.chroma.studio.chat.data.SendMessageResult = when (targetMsg.messageType) {
                 "audio" -> {
                     val mediaUrl = targetMsg.mediaUrl ?: targetMsg.imageUrl
                     if (mediaUrl != null && (mediaUrl.startsWith("http://") || mediaUrl.startsWith("https://"))) {
-                        repository.sendMessage(
+                        repository.sendMessageDetailed(
                             roomId = roomId,
                             text = targetMsg.text,
                             imageUrl = mediaUrl,
@@ -1248,7 +1399,7 @@ class ChatViewModel : ViewModel() {
                         val audioBytes = java.io.File(mediaUrl).readBytes()
                         val uploadedUrl = repository.uploadAudioToSupabase(audioBytes, "m4a")
                         if (uploadedUrl != null) {
-                            repository.sendMessage(
+                            repository.sendMessageDetailed(
                                 roomId = roomId,
                                 text = targetMsg.text,
                                 imageUrl = uploadedUrl,
@@ -1257,13 +1408,13 @@ class ChatViewModel : ViewModel() {
                                 durationSeconds = targetMsg.durationSeconds,
                                 replyToMessageId = targetMsg.replyToMessageId
                             )
-                        } else false
-                    } else false
+                        } else uploadFailure
+                    } else uploadFailure
                 }
-                "image", "video" -> {
+                "image", "video", "sticker" -> {
                     val mediaUrl = targetMsg.mediaUrl ?: targetMsg.imageUrl
                     if (mediaUrl != null && (mediaUrl.startsWith("http://") || mediaUrl.startsWith("https://"))) {
-                        repository.sendMessage(
+                        repository.sendMessageDetailed(
                             roomId = roomId,
                             text = targetMsg.text,
                             imageUrl = mediaUrl,
@@ -1271,25 +1422,40 @@ class ChatViewModel : ViewModel() {
                             messageType = targetMsg.messageType,
                             replyToMessageId = targetMsg.replyToMessageId
                         )
-                    } else if (mediaUrl != null && java.io.File(mediaUrl).exists()) {
-                        val bytes = java.io.File(mediaUrl).readBytes()
-                        val ext = if (targetMsg.messageType == "video") "mp4" else "jpg"
-                        val uploadedUrl = if (targetMsg.messageType == "video") {
-                            repository.uploadVideoToSupabase(bytes, ext)
-                        } else {
-                            repository.uploadImageToSupabase(bytes, ext)
-                        }
-                        if (uploadedUrl != null) {
-                            repository.sendMessage(
-                                roomId = roomId,
-                                text = targetMsg.text,
-                                imageUrl = uploadedUrl,
-                                preGeneratedId = msgId,
-                                messageType = targetMsg.messageType,
-                                replyToMessageId = targetMsg.replyToMessageId
-                            )
-                        } else false
-                    } else false
+                    } else if (!mediaUrl.isNullOrBlank()) {
+                        val parsedUri = android.net.Uri.parse(mediaUrl)
+                        val bytes = try {
+                            if (parsedUri.scheme == "file" && !parsedUri.path.isNullOrBlank()) {
+                                java.io.File(parsedUri.path!!).takeIf { it.exists() }?.readBytes()
+                            } else if (parsedUri.scheme == "content") {
+                                com.chroma.studio.ChromaApp.instance.contentResolver.openInputStream(parsedUri)?.use { it.readBytes() }
+                            } else {
+                                java.io.File(mediaUrl).takeIf { it.exists() }?.readBytes()
+                            }
+                        } catch (_: Exception) { null }
+                        if (bytes != null && bytes.isNotEmpty()) {
+                            val ext = when (targetMsg.messageType) {
+                                "video" -> "mp4"
+                                "sticker" -> "png"
+                                else -> "jpg"
+                            }
+                            val uploadedUrl = when (targetMsg.messageType) {
+                                "video" -> repository.uploadVideoToSupabase(bytes, ext)
+                                "sticker" -> repository.uploadImageToSupabase(bytes, "png")
+                                else -> repository.uploadImageToSupabase(bytes, ext)
+                            }
+                            if (uploadedUrl != null) {
+                                repository.sendMessageDetailed(
+                                    roomId = roomId,
+                                    text = targetMsg.text,
+                                    imageUrl = uploadedUrl,
+                                    preGeneratedId = msgId,
+                                    messageType = targetMsg.messageType,
+                                    replyToMessageId = targetMsg.replyToMessageId
+                                )
+                            } else uploadFailure
+                        } else uploadFailure
+                    } else uploadFailure
                 }
                 "file" -> {
                     val sourceUriStr = targetMsg.mediaUrl ?: targetMsg.imageUrl
@@ -1297,7 +1463,7 @@ class ChatViewModel : ViewModel() {
                     val ext = (targetMsg.fileExtension?.takeIf { it.isNotBlank() }
                         ?: resolvedName.substringAfterLast('.', "bin")).lowercase()
                     if (sourceUriStr != null && (sourceUriStr.startsWith("http://") || sourceUriStr.startsWith("https://"))) {
-                        repository.sendMessage(
+                        repository.sendMessageDetailed(
                             roomId = roomId,
                             text = targetMsg.text,
                             imageUrl = sourceUriStr,
@@ -1333,7 +1499,7 @@ class ChatViewModel : ViewModel() {
                             )
                             if (uploadedUrl != null) {
                                 updateLocalUploadProgress(msgId, 100)
-                                repository.sendMessage(
+                                repository.sendMessageDetailed(
                                     roomId = roomId,
                                     text = targetMsg.text,
                                     imageUrl = uploadedUrl,
@@ -1344,30 +1510,40 @@ class ChatViewModel : ViewModel() {
                                     fileSizeBytes = targetMsg.fileSizeBytes ?: bytes.size.toLong(),
                                     fileExtension = ext.uppercase()
                                 )
-                            } else false
-                        } else false
-                    } else false
+                            } else uploadFailure
+                        } else uploadFailure
+                    } else uploadFailure
                 }
                 else -> {
-                    repository.sendMessage(
-                        roomId,
-                        targetMsg.text,
+                    repository.sendMessageDetailed(
+                        roomId = roomId,
+                        text = targetMsg.text,
                         workId = targetMsg.workId,
                         preGeneratedId = msgId,
-                        replyToMessageId = targetMsg.replyToMessageId
+                        messageType = targetMsg.messageType.ifBlank { "text" },
+                        replyToMessageId = targetMsg.replyToMessageId,
+                        storyId = targetMsg.storyId,
+                        storyThumbnailUrl = targetMsg.storyThumbnailUrl,
+                        flashVideoId = targetMsg.flashVideoId,
+                        flashVideoThumbnailUrl = targetMsg.flashVideoThumbnailUrl,
+                        flashVideoUrl = targetMsg.flashVideoUrl,
+                        flashVideoCaption = targetMsg.flashVideoCaption,
+                        flashVideoAuthorUsername = targetMsg.flashVideoAuthorUsername,
+                        flashVideoAuthorAvatarUrl = targetMsg.flashVideoAuthorAvatarUrl,
+                        flashVideoDurationMs = targetMsg.flashVideoDurationMs,
+                        fontStyle = targetMsg.fontStyle,
+                        musicTrackId = targetMsg.musicTrackId,
+                        musicTitle = targetMsg.musicTitle,
+                        musicArtist = targetMsg.musicArtist,
+                        musicAlbum = targetMsg.musicAlbum,
+                        musicCoverUrl = targetMsg.musicCoverUrl,
+                        musicAudioUrl = targetMsg.musicAudioUrl,
+                        musicStartSec = targetMsg.musicStartSec,
+                        musicDurationSec = targetMsg.musicDurationSec
                     )
                 }
             }
-            if (success) {
-                _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = false, uploadProgress = null) else it
-                }
-            } else {
-                _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
-                }
-                com.chroma.studio.ui.components.ToastManager.showToast("Message failed to send. Tap to retry.")
-            }
+            handleSendResult(roomId, msgId, result)
         }
     }
 
@@ -1464,20 +1640,21 @@ class ChatViewModel : ViewModel() {
             // ignore
         }
 
-        // Optimistically update recent chats list
-        val currentChats = _recentChats.value.toMutableList()
-        val index = currentChats.indexOfFirst { it.id == roomId }
-        if (index != -1) {
-            val chat = currentChats.removeAt(index)
-            val durationText = String.format("%d:%02d", durationSeconds / 60, durationSeconds % 60)
-            currentChats.add(0, chat.copy(lastMessage = "🎤 Voice message ($durationText)", lastMessageTime = timestamp))
-            _recentChats.value = currentChats
-        }
+        // Optimistically update recent chats list (clearing previous read/delivered flags)
+        val durationText = String.format("%d:%02d", durationSeconds / 60, durationSeconds % 60)
+        applyOptimisticRoomSend(
+            roomId = roomId,
+            msgId = msgId,
+            currentUserId = currentUserId,
+            previewText = "🎤 Voice message ($durationText)",
+            timestamp = timestamp
+        )
 
         viewModelScope.launch(Dispatchers.IO) {
+            try { pendingRoomCreations[roomId]?.await() } catch (_: Exception) {}
             val audioUrl = repository.uploadAudioToSupabase(audioBytes, "m4a")
-            if (audioUrl != null) {
-                val success = repository.sendMessage(
+            val result = if (audioUrl != null) {
+                repository.sendMessageDetailed(
                     roomId = roomId,
                     text = "",
                     imageUrl = audioUrl,
@@ -1486,16 +1663,14 @@ class ChatViewModel : ViewModel() {
                     durationSeconds = durationSeconds,
                     replyToMessageId = replyToMessageId
                 )
-                if (_activeRoomId.value == roomId) {
-                    _localMessages.value = _localMessages.value.map {
-                        if (it.id == msgId) it.copy(isPending = false, isError = !success) else it
-                    }
-                }
-            } else if (_activeRoomId.value == roomId) {
-                _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = true) else it
-                }
+            } else {
+                com.chroma.studio.chat.data.SendMessageResult.Failure(
+                    reason = com.chroma.studio.chat.data.SendFailureReason.MEDIA_UPLOAD_FAILED,
+                    userMessage = "Voice note upload failed. Tap to retry.",
+                    isRetryable = true
+                )
             }
+            handleSendResult(roomId, msgId, result)
         }
     }
 
@@ -1701,11 +1876,12 @@ class ChatViewModel : ViewModel() {
             }
         }
 
+        try { pendingRoomCreations[roomId]?.await() } catch (_: Exception) {}
         if (mediaUrl != null) {
             if (_activeRoomId.value == roomId && trackProgress != null) {
                 updateLocalUploadProgress(msgId, 100)
             }
-            val success = repository.sendMessage(
+            val result = repository.sendMessageDetailed(
                 roomId = roomId,
                 text = text,
                 imageUrl = mediaUrl,
@@ -1716,20 +1892,18 @@ class ChatViewModel : ViewModel() {
                 fileSizeBytes = fileSizeBytes,
                 fileExtension = if (messageType == "file") extLower.uppercase() else null
             )
-            if (_activeRoomId.value == roomId) {
-                _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = !success, uploadProgress = null) else it
-                }
-            }
+            handleSendResult(roomId, msgId, result)
         } else {
-            if (_activeRoomId.value == roomId) {
-                _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
-                }
-            }
-            if (messageType == "file") {
-                com.chroma.studio.ui.components.ToastManager.showToast("File upload failed. Tap message to retry.")
-            }
+            val failMsg = if (messageType == "file") "File upload failed. Tap message to retry." else "Media upload failed. Tap to retry."
+            handleSendResult(
+                roomId = roomId,
+                msgId = msgId,
+                result = com.chroma.studio.chat.data.SendMessageResult.Failure(
+                    reason = com.chroma.studio.chat.data.SendFailureReason.MEDIA_UPLOAD_FAILED,
+                    userMessage = failMsg,
+                    isRetryable = true
+                )
+            )
         }
     }
 
@@ -1785,14 +1959,14 @@ class ChatViewModel : ViewModel() {
         } catch (_: Exception) {
         }
 
-        val currentChats = _recentChats.value.toMutableList()
-        val index = currentChats.indexOfFirst { it.id == roomId }
-        if (index != -1) {
-            val chat = currentChats.removeAt(index)
-            val previewText = if (caption.isNotBlank()) caption else if (messageType == "video") "Video" else "Image"
-            currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
-            _recentChats.value = currentChats
-        }
+        val previewText = if (caption.isNotBlank()) caption else if (messageType == "video") "Video" else "Image"
+        applyOptimisticRoomSend(
+            roomId = roomId,
+            msgId = msgId,
+            currentUserId = currentUserId,
+            previewText = previewText,
+            timestamp = timestamp
+        )
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             if (messageType == "image" || messageType == "video") {
@@ -1820,10 +1994,16 @@ class ChatViewModel : ViewModel() {
                     replyToMessageId = replyToMessageId,
                     scaleMinPct = 12
                 )
-            } else if (_activeRoomId.value == roomId) {
-                _localMessages.value = _localMessages.value.map {
-                    if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
-                }
+            } else {
+                handleSendResult(
+                    roomId = roomId,
+                    msgId = msgId,
+                    result = com.chroma.studio.chat.data.SendMessageResult.Failure(
+                        reason = com.chroma.studio.chat.data.SendFailureReason.MEDIA_UPLOAD_FAILED,
+                        userMessage = "Could not read selected media. Tap to retry.",
+                        isRetryable = true
+                    )
+                )
             }
         }
     }
@@ -1892,22 +2072,22 @@ class ChatViewModel : ViewModel() {
             // ignore
         }
 
-        // Optimistically update recent chats list
-        val currentChats = _recentChats.value.toMutableList()
-        val index = currentChats.indexOfFirst { it.id == roomId }
-        if (index != -1) {
-            val chat = currentChats.removeAt(index)
-            val previewText = if (messageType == "file") {
-                com.chroma.studio.chat.data.formatFileRoomPreview(text, null)
-            } else if (text.isNotBlank()) text else when (messageType) {
-                "video" -> "Video"
-                "sticker" -> "Sticker"
-                "audio" -> "Audio"
-                else -> "Image"
-            }
-            currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
-            _recentChats.value = currentChats
+        // Optimistically update recent chats list (resetting previous read/delivered flags)
+        val previewText = if (messageType == "file") {
+            com.chroma.studio.chat.data.formatFileRoomPreview(text, null)
+        } else if (text.isNotBlank()) text else when (messageType) {
+            "video" -> "Video"
+            "sticker" -> "Sticker"
+            "audio" -> "Audio"
+            else -> "Image"
         }
+        applyOptimisticRoomSend(
+            roomId = roomId,
+            msgId = msgId,
+            currentUserId = currentUserId,
+            previewText = previewText,
+            timestamp = timestamp
+        )
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             uploadAndCommitMedia(
@@ -1982,19 +2162,13 @@ class ChatViewModel : ViewModel() {
                 )
             } catch (_: Exception) {}
 
-            val currentChats = _recentChats.value.toMutableList()
-            val roomIdx = currentChats.indexOfFirst { it.id == roomId }
-            if (roomIdx != -1) {
-                val chat = currentChats.removeAt(roomIdx)
-                currentChats.add(
-                    0,
-                    chat.copy(
-                        lastMessage = com.chroma.studio.chat.data.formatFileRoomPreview(file.name, null),
-                        lastMessageTime = timestamp
-                    )
-                )
-                _recentChats.value = currentChats
-            }
+            applyOptimisticRoomSend(
+                roomId = roomId,
+                msgId = msgId,
+                currentUserId = currentUserId,
+                previewText = com.chroma.studio.chat.data.formatFileRoomPreview(file.name, null),
+                timestamp = timestamp
+            )
 
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 updateLocalUploadProgress(msgId, 5)
@@ -2009,23 +2183,29 @@ class ChatViewModel : ViewModel() {
                 }
 
                 if (bytes == null || bytes.isEmpty()) {
-                    if (_activeRoomId.value == roomId) {
-                        _localMessages.value = _localMessages.value.map {
-                            if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
-                        }
-                    }
-                    com.chroma.studio.ui.components.ToastManager.showToast("Could not read '${file.name}'.")
+                    handleSendResult(
+                        roomId = roomId,
+                        msgId = msgId,
+                        result = com.chroma.studio.chat.data.SendMessageResult.Failure(
+                            reason = com.chroma.studio.chat.data.SendFailureReason.MEDIA_UPLOAD_FAILED,
+                            userMessage = "Could not read '${file.name}'.",
+                            isRetryable = true
+                        )
+                    )
                     return@launch
                 }
 
                 if (bytes.size.toLong() > com.chroma.studio.chat.media.ChatMediaLimiter.MAX_FILE_SIZE_BYTES) {
                     val formatted = com.chroma.studio.chat.media.ChatMediaLimiter.formatFileSize(bytes.size.toLong())
-                    com.chroma.studio.ui.components.ToastManager.showToast("'${file.name}' exceeds 100 MB limit ($formatted).")
-                    if (_activeRoomId.value == roomId) {
-                        _localMessages.value = _localMessages.value.map {
-                            if (it.id == msgId) it.copy(isPending = false, isError = true, uploadProgress = null) else it
-                        }
-                    }
+                    handleSendResult(
+                        roomId = roomId,
+                        msgId = msgId,
+                        result = com.chroma.studio.chat.data.SendMessageResult.Failure(
+                            reason = com.chroma.studio.chat.data.SendFailureReason.MEDIA_UPLOAD_FAILED,
+                            userMessage = "'${file.name}' exceeds 100 MB limit ($formatted).",
+                            isRetryable = false
+                        )
+                    )
                     return@launch
                 }
 
