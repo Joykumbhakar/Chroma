@@ -2,276 +2,357 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Oscellion — Creative Studio & Encrypted Social Network</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Oscellion — Create • Share • Explore</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #090D16;
-      --card-bg: #121826;
-      --accent: #0381FE;
-      --accent-hover: #006EDB;
-      --text-primary: #F8FAFC;
-      --text-muted: #94A3B8;
-      --border: rgba(255, 255, 255, 0.08);
+      --bg: #FAFCFF;
+      --surface: #FFFFFF;
+      --pill-well: #EFF1F6;
+      --accent: #0064FA;
+      --accent-dark: #0054E3;
+      --text-primary: #050814;
+      --text-body: #596075;
+      --text-muted: #727A91;
+      --border: #E7ECF4;
+      --shadow-card: 0 10px 28px -6px rgba(15, 35, 80, 0.08), 0 3px 10px -2px rgba(15, 35, 80, 0.04);
+      --shadow-cta: 0 12px 24px -6px rgba(0, 98, 245, 0.42), 0 4px 10px -2px rgba(0, 98, 245, 0.22);
     }
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background-color: var(--bg);
       color: var(--text-primary);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       line-height: 1.6;
-      padding: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+    .ambient-waves {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 0;
+    }
+    .wave-glow-tl {
+      position: absolute;
+      top: -96px;
+      left: -96px;
+      width: 440px;
+      height: 440px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(147,197,253,0.28) 0%, rgba(219,234,254,0.14) 48%, rgba(255,255,255,0) 76%);
+      animation: ambientGlowTL 9.5s ease-in-out infinite alternate;
+    }
+    .wave-glow-br {
+      position: absolute;
+      bottom: -96px;
+      right: -96px;
+      width: 390px;
+      height: 390px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(147,197,253,0.24) 0%, rgba(219,234,254,0.10) 52%, rgba(255,255,255,0) 76%);
+      animation: ambientGlowBR 11s ease-in-out infinite alternate;
+    }
+    .wave-svg-tl {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: min(82vw, 440px);
+      height: auto;
+      transform-origin: 0% 0%;
+      animation: waveBreathTL 12s ease-in-out infinite alternate;
+    }
+    .wave-svg-br {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: min(68vw, 360px);
+      height: auto;
+      transform-origin: 100% 100%;
+      animation: waveBreathBR 13.5s ease-in-out infinite alternate;
+    }
+    @keyframes ambientGlowTL {
+      0% { transform: translate(0px, 0px) scale(1); opacity: 0.85; }
+      100% { transform: translate(12px, 14px) scale(1.06); opacity: 1; }
+    }
+    @keyframes ambientGlowBR {
+      0% { transform: translate(0px, 0px) scale(1); opacity: 0.85; }
+      100% { transform: translate(-12px, -14px) scale(1.07); opacity: 1; }
+    }
+    @keyframes waveBreathTL {
+      0% { transform: scale(1, 1) rotate(0deg); }
+      100% { transform: scale(1.03, 1.02) rotate(0.6deg); }
+    }
+    @keyframes waveBreathBR {
+      0% { transform: scale(1, 1) rotate(0deg); }
+      100% { transform: scale(1.03, 1.03) rotate(-0.6deg); }
     }
     .container {
-      max-width: 980px;
+      position: relative;
+      z-index: 10;
+      max-width: 960px;
       margin: 0 auto;
-      padding: 40px 24px 80px;
+      padding: 56px 24px 80px;
     }
     header {
       text-align: center;
-      padding: 60px 0 30px;
+      padding: 20px 0 40px;
     }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 16px;
-      border-radius: 999px;
-      background: rgba(3, 129, 254, 0.12);
-      color: #38BDF8;
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 24px;
+    .eyebrow {
+      font-size: 20px;
+      color: var(--text-body);
+      margin-bottom: 4px;
+      letter-spacing: -0.01em;
     }
     h1 {
-      font-size: clamp(36px, 6vw, 56px);
-      font-weight: 800;
-      letter-spacing: -1.5px;
-      line-height: 1.15;
-      margin-bottom: 16px;
-      background: linear-gradient(180deg, #FFFFFF 0%, #CBD5E1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      font-family: 'Poppins', 'Inter', sans-serif;
+      font-size: clamp(44px, 6vw, 56px);
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      line-height: 1.08;
+      color: var(--text-primary);
     }
+    .tagline {
+      margin-top: 10px;
+      font-size: 16px;
+      color: var(--text-body);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .tagline-dot { color: var(--text-muted); font-size: 12px; }
     .subtitle {
-      font-size: 18px;
-      color: var(--text-muted);
-      max-width: 620px;
-      margin: 0 auto 36px;
+      font-size: 15px;
+      color: var(--text-body);
+      max-width: 560px;
+      margin: 14px auto 0;
     }
     .cta-card {
-      background: var(--card-bg);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(12px);
       border: 1px solid var(--border);
-      border-radius: 28px;
+      border-radius: 32px;
       padding: 36px 28px;
       text-align: center;
-      max-width: 600px;
-      margin: 0 auto 60px;
-      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+      max-width: 540px;
+      margin: 0 auto 56px;
+      box-shadow: var(--shadow-card);
     }
     .download-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 12px;
-      background: var(--accent);
-      color: #fff;
-      font-size: 17px;
-      font-weight: 700;
-      padding: 16px 40px;
+      width: 100%;
+      max-width: 340px;
+      height: 58px;
+      background: linear-gradient(180deg, #0E76FF 0%, #0064FA 52%, #0054E3 100%);
+      color: #FFFFFF;
+      font-size: 16.5px;
+      font-weight: 500;
       border-radius: 999px;
       text-decoration: none;
       transition: all 0.2s ease;
-      box-shadow: 0 4px 20px rgba(3, 129, 254, 0.35);
+      box-shadow: var(--shadow-cta);
     }
     .download-btn:hover {
-      background: var(--accent-hover);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(3, 129, 254, 0.5);
+      background: linear-gradient(180deg, #1A7EFF 0%, #0068FF 52%, #0059EB 100%);
+      box-shadow: 0 14px 28px -6px rgba(0, 98, 245, 0.5), 0 6px 12px -2px rgba(0, 98, 245, 0.28);
+      transform: translateY(-1px);
     }
     .apk-meta {
       display: flex;
       justify-content: center;
-      gap: 16px;
+      gap: 12px;
       flex-wrap: wrap;
       margin-top: 18px;
       font-size: 13px;
       color: var(--text-muted);
     }
-    .apk-meta span {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-      margin-bottom: 60px;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 18px;
+      margin-bottom: 48px;
     }
     .feature-card {
-      background: var(--card-bg);
+      background: rgba(255, 255, 255, 0.92);
       border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 28px 24px;
+      border-radius: 24px;
+      padding: 26px 24px;
+      box-shadow: var(--shadow-card);
     }
     .feature-card h3 {
-      font-size: 19px;
-      font-weight: 700;
+      font-family: 'Poppins', 'Inter', sans-serif;
+      font-size: 17px;
+      font-weight: 600;
       margin-bottom: 8px;
-      color: #fff;
+      color: var(--text-primary);
     }
     .feature-card p {
-      font-size: 14px;
-      color: var(--text-muted);
+      font-size: 13.5px;
+      color: var(--text-body);
       line-height: 1.55;
     }
     .steps-section {
-      background: var(--card-bg);
+      background: rgba(255, 255, 255, 0.92);
       border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 36px 30px;
-      margin-bottom: 60px;
+      border-radius: 28px;
+      padding: 32px 28px;
+      margin-bottom: 48px;
+      box-shadow: var(--shadow-card);
     }
     .steps-section h2 {
-      font-size: 24px;
-      font-weight: 700;
-      margin-bottom: 24px;
-      letter-spacing: -0.5px;
-    }
-    .step-item {
-      display: flex;
-      gap: 18px;
-      margin-bottom: 20px;
-    }
-    .step-num {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: rgba(3, 129, 254, 0.15);
-      color: var(--accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 14px;
-      flex-shrink: 0;
-    }
-    .step-text h4 {
-      font-size: 16px;
+      font-family: 'Poppins', 'Inter', sans-serif;
+      font-size: 21px;
       font-weight: 600;
-      margin-bottom: 4px;
+      margin-bottom: 22px;
+      letter-spacing: -0.02em;
     }
-    .step-text p {
-      font-size: 13.5px;
-      color: var(--text-muted);
+    .step-item { display: flex; gap: 16px; margin-bottom: 18px; }
+    .step-num {
+      width: 32px; height: 32px; border-radius: 999px;
+      background: var(--pill-well); color: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; font-size: 13.5px; flex-shrink: 0;
     }
+    .step-text h4 { font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+    .step-text p { font-size: 13.5px; color: var(--text-body); }
     .checksum-box {
-      background: #0B0F19;
-      padding: 16px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
+      background: var(--pill-well);
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid #E5E8F0;
       font-family: monospace;
       font-size: 12px;
-      color: #38BDF8;
+      color: #0062FA;
       word-break: break-all;
-      margin-top: 14px;
+      margin-top: 10px;
     }
     footer {
       text-align: center;
-      padding-top: 40px;
-      border-top: 1px solid var(--border);
+      padding-top: 28px;
+      border-top: 1px solid #DCE2EC;
       font-size: 13px;
-      color: #64748B;
+      color: var(--text-muted);
     }
   </style>
 </head>
 <body>
+  <div class="ambient-waves" aria-hidden="true">
+    <div class="wave-glow-tl"></div>
+    <div class="wave-glow-br"></div>
+    <svg class="wave-svg-tl" viewBox="0 0 360 300" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet">
+      <defs>
+        <linearGradient id="tl-soft" x1="0" y1="0" x2="260" y2="270" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#D9E8FF" stop-opacity="0.72" />
+          <stop offset="55%" stop-color="#E7F0FF" stop-opacity="0.48" />
+          <stop offset="100%" stop-color="#F6F9FF" stop-opacity="0" />
+        </linearGradient>
+        <linearGradient id="tl-outer" x1="15" y1="0" x2="245" y2="210" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#C8E0FF" stop-opacity="0.78" />
+          <stop offset="52%" stop-color="#DCEBFF" stop-opacity="0.62" />
+          <stop offset="100%" stop-color="#EEF5FF" stop-opacity="0.28" />
+        </linearGradient>
+        <linearGradient id="tl-inner" x1="-10" y1="10" x2="180" y2="175" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#9BC5FF" stop-opacity="0.92" />
+          <stop offset="45%" stop-color="#94C0FF" stop-opacity="0.88" />
+          <stop offset="100%" stop-color="#CFE3FF" stop-opacity="0.68" />
+        </linearGradient>
+      </defs>
+      <path d="M-40 -40 H310 C285 95 232 162 140 202 C82 227 36 250 -40 296 Z" fill="url(#tl-soft)" />
+      <path d="M-40 -40 H262 C242 78 195 136 105 170 C54 190 22 206 -40 242 Z" fill="url(#tl-outer)" />
+      <path d="M-40 -40 H194 C178 72 135 126 58 158 C30 170 13 182 -40 212 Z" fill="url(#tl-inner)" />
+    </svg>
+    <svg class="wave-svg-br" viewBox="0 0 320 260" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMaxYMax meet">
+      <defs>
+        <linearGradient id="br-outer" x1="315" y1="65" x2="80" y2="255" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#C9E0FF" stop-opacity="0.62" />
+          <stop offset="55%" stop-color="#DCEBFF" stop-opacity="0.58" />
+          <stop offset="100%" stop-color="#EEF5FF" stop-opacity="0.22" />
+        </linearGradient>
+        <linearGradient id="br-inner" x1="320" y1="130" x2="155" y2="260" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#A8CEFF" stop-opacity="0.82" />
+          <stop offset="48%" stop-color="#8BBDFD" stop-opacity="0.90" />
+          <stop offset="100%" stop-color="#76AEFF" stop-opacity="0.95" />
+        </linearGradient>
+      </defs>
+      <path d="M360 300 V30 C295 48 256 88 228 144 C202 197 156 232 56 266 L44 300 Z" fill="url(#br-outer)" />
+      <path d="M360 300 V96 C296 116 258 150 232 194 C211 229 188 248 146 268 L136 300 Z" fill="url(#br-inner)" />
+    </svg>
+  </div>
+
   <div class="container">
     <header>
-      <div class="badge">✨ Stable Production Release • v1.0.0</div>
+      <p class="eyebrow">Welcome to</p>
       <h1>Oscellion</h1>
-      <p class="subtitle">Where creativity meets community. Multi-layer GPU shader gradients, generative art, and end-to-end encrypted messaging.</p>
+      <div class="tagline">
+        <span>Create</span>
+        <span class="tagline-dot" aria-hidden="true">&#8226;</span>
+        <span>Share</span>
+        <span class="tagline-dot" aria-hidden="true">&#8226;</span>
+        <span>Explore</span>
+      </div>
+      <p class="subtitle">Multi-layer GPU shader gradients, Flash reels, generative art, and end-to-end encrypted messaging for Android.</p>
     </header>
 
     <div class="cta-card">
-      <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 10px;">Download Oscellion APK</h2>
-      <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 24px;">Direct Android package download with APK Signature Scheme v2 verification.</p>
+      <h2 style="font-family: 'Poppins', sans-serif; font-size: 20px; font-weight: 600; margin-bottom: 8px;">Download Oscellion for Android</h2>
+      <p style="font-size: 13.5px; color: var(--text-body); margin-bottom: 24px;">Direct production signed Android package with APK Signature Scheme v2 verification.</p>
       <a href="app-release.apk" class="download-btn" download>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download APK (171 MB)
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>Download Release APK</span>
       </a>
       <div class="apk-meta">
-        <span>📦 Version: 1.0.0</span>
+        <span>Version 1.4.7</span>
         <span>•</span>
-        <span>🤖 Android 8.0+ (Oreo to Android 15)</span>
+        <span>Android 8.0+</span>
         <span>•</span>
-        <span>🛡️ v2 Signed</span>
+        <span>v2 Signed</span>
       </div>
     </div>
 
     <div class="features-grid">
       <div class="feature-card">
-        <h3>🎨 Multi-Layer Shader Studio</h3>
-        <p>4 real-time GPU rendering engines: Linear, Radial, Sweep Conic, and procedural Noise Shaders. Infinite stackable layers with developer handoff to CSS, SVG, and GLSL.</p>
+        <h3>Multi-Layer Shader Studio</h3>
+        <p>Real-time GPU rendering engines for Linear, Radial, Sweep Conic, and Noise shaders with developer handoff to CSS, SVG, and GLSL.</p>
       </div>
       <div class="feature-card">
-        <h3>🔐 End-to-End Encrypted Chat</h3>
-        <p>Client-side cryptographic encryption with AES-GCM and RSA-2048 key exchange. Real-time audio voice notes with live frequency waveforms.</p>
+        <h3>End-to-End Encrypted Chat</h3>
+        <p>Client-side AES-GCM and RSA-2048 messaging, real-time audio/video calls, and live voice waveforms.</p>
       </div>
       <div class="feature-card">
-        <h3>🔑 Dual Login & Oscellion ID</h3>
-        <p>Connect with Google One-Tap or create a custom Oscellion email ID (<code>username@oscellion.com</code>) with a password for flexible cross-device sign-in.</p>
-      </div>
-      <div class="feature-card">
-        <h3>⚡ 24h Instant Drops & Stories</h3>
-        <p>Share daily creative highlights, audio notes, and gradient experiments with synchronized progress bars and interactive reactions.</p>
-      </div>
-      <div class="feature-card">
-        <h3>🌐 Community & Remix Engine</h3>
-        <p>Fork any creator's artwork into your studio canvas with one tap, customize engine parameters, and publish remixes with original attribution.</p>
-      </div>
-      <div class="feature-card">
-        <h3>✨ Samsung One UI Aesthetics</h3>
-        <p>Precision 26dp squircles, hairline 0.5dp professional borders, borderless pill buttons, and true OLED dark and daylight themes.</p>
+        <h3>Oscellion ID &amp; Web Sync</h3>
+        <p>Connect with Google or set up your @username Oscellion ID to keep creations, stories, and conversations synced across Android and Web.</p>
       </div>
     </div>
 
     <div class="steps-section">
-      <h2>How to Sideload & Install the APK</h2>
+      <h2>How to Install the Signed APK</h2>
       <div class="step-item">
         <div class="step-num">1</div>
         <div class="step-text">
-          <h4>Download the APK file</h4>
-          <p>Tap the download button above. If Chrome or Samsung Internet shows "File might be harmful", tap <strong>Download anyway</strong>.</p>
+          <h4>Download the APK</h4>
+          <p>Tap the Download button above to save the signed Android package onto your phone.</p>
         </div>
       </div>
       <div class="step-item">
         <div class="step-num">2</div>
         <div class="step-text">
-          <h4>Enable "Install Unknown Apps"</h4>
-          <p>Open the downloaded APK from your notification bar or Files app. If prompted by Android, tap <strong>Settings</strong> and toggle on <strong>Allow from this source</strong>.</p>
+          <h4>Allow Installation</h4>
+          <p>Open the downloaded APK and allow installing apps from your browser when prompted by Android.</p>
         </div>
       </div>
-      <div class="step-item">
+      <div class="step-item" style="margin-bottom: 0;">
         <div class="step-num">3</div>
         <div class="step-text">
-          <h4>Install & Open</h4>
-          <p>Tap <strong>Install</strong> on the package installer dialog, then launch Oscellion to start creating immediately.</p>
-        </div>
-      </div>
-
-      <div style="margin-top: 24px;">
-        <h4 style="font-size: 14px; color: var(--text-muted); margin-bottom: 6px;">SHA-256 Hash Verification:</h4>
-        <div class="checksum-box">
-          1FB5B87C6B1803062B0B8BD80CE5914801F65F5B40696961DC7E8E67447C8141
+          <h4>Install &amp; Sign In</h4>
+          <p>Tap Install and launch Oscellion to create, share, and explore.</p>
         </div>
       </div>
     </div>
